@@ -1,17 +1,18 @@
-// Zero-dependency test harness. Run with: node test/engine.test.js
+// Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine.js';
 import { DECK_LIST, CARDS, SLOT, MP_MAX } from '../src/constants.js';
+import type { CardId } from '../src/constants.js';
 
 let passed = 0;
 let failed = 0;
-function check(name, cond, extra = '') {
+function check(name: string, cond: boolean, extra: string | undefined = ''): void {
   if (cond) { passed++; }
   else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
 }
-function eq(name, a, b) { check(name, a === b, `expected ${b}, got ${a}`); }
+function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
 
 // Find a hand index for a card id, drawing/arranging as needed by stuffing the hand.
-function giveCard(game, cardId) {
+function giveCard(game: Game, cardId: CardId): number {
   game.hand.push(cardId);
   return game.hand.length - 1;
 }
@@ -19,7 +20,7 @@ function giveCard(game, cardId) {
 // --- deck composition -------------------------------------------------------
 eq('deck has 15 cards', DECK_LIST.length, 15);
 {
-  const counts = {};
+  const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
   eq('3 Low Heal', counts.lowHeal, 3);
   eq('2 High Heal', counts.highHeal, 2);
@@ -64,7 +65,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   g.start();
   g.enemy.poison = 5;
   g.enemy.hp = 100;
-  const seq = [];
+  const seq: number[] = [];
   // Run ticks only, isolate poison by neutralizing the attack each time.
   for (let i = 0; i < 5; i++) {
     const before = g.enemy.hp;
@@ -82,7 +83,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   const g = new Game(3);
   const ranger = g.members[SLOT.LEFT];
   ranger.hp = 1; ranger.regen = 4;
-  const healed = [];
+  const healed: number[] = [];
   for (let i = 0; i < 4; i++) {
     const before = ranger.hp;
     if (ranger.regen > 0) { ranger.hp = Math.min(ranger.maxHP, ranger.hp + ranger.regen); ranger.regen -= 1; }
@@ -98,7 +99,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
 {
   const g = new Game(4);
   g.refresh = 3; g.mp = 0;
-  const gains = [];
+  const gains: number[] = [];
   for (let i = 0; i < 3; i++) {
     if (g.refresh > 0) { const gain = g.refresh; g.mp += gain; g.refresh -= 1; gains.push(gain); }
   }
@@ -152,9 +153,10 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   const idx = giveCard(g, 'ability');
   g.playCard(idx, SLOT.CENTER); // tank
   eq('taunt set to 3', g.members[SLOT.CENTER].taunt, 3);
-  check('telegraph retargeted to include tank', g.telegraph.targets.includes(SLOT.CENTER));
-  if (g.telegraph.type === 'single' || g.telegraph.type === 'hidden') {
-    check('single/hidden taunt -> tank only', g.telegraph.targets[0] === SLOT.CENTER);
+  const tel = g.telegraph!;
+  check('telegraph retargeted to include tank', tel.targets.includes(SLOT.CENTER));
+  if (tel.type === 'single' || tel.type === 'hidden') {
+    check('single/hidden taunt -> tank only', tel.targets[0] === SLOT.CENTER);
   }
   // new telegraphs while taunting also target tank
   const tg = g._generateTelegraph(3);

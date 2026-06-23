@@ -1,5 +1,7 @@
 // Small seedable PRNG (mulberry32) so fights are reproducible from a seed.
-export function makeRng(seed) {
+export type Rng = () => number;
+
+export function makeRng(seed: number): Rng {
   let a = seed >>> 0;
   return function rng() {
     a |= 0;
@@ -11,7 +13,7 @@ export function makeRng(seed) {
 }
 
 // Fisher–Yates, in place, using the provided rng.
-export function shuffle(arr, rng) {
+export function shuffle<T>(arr: T[], rng: Rng): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -20,7 +22,7 @@ export function shuffle(arr, rng) {
 }
 
 // entries: [[key, weight], ...] -> returns a key with probability weight/total.
-export function weightedPick(entries, rng) {
+export function weightedPick<K>(entries: Array<[K, number]>, rng: Rng): K {
   const total = entries.reduce((s, [, w]) => s + w, 0);
   let r = rng() * total;
   for (const [k, w] of entries) {

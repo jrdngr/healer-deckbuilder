@@ -14,14 +14,84 @@ import {
   ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
   POISON_BASE, TAUNT_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
 } from './constants.js';
+import type { Slot, AttackType, CardId, MemberId, AbilityId, CardDef } from './constants.js';
 import { makeRng, shuffle, weightedPick } from './rng.js';
+import type { Rng } from './rng.js';
+
+export type Phase = 'idle' | 'player' | 'over';
+export type Status = 'playing' | 'win' | 'loss';
+
+export interface Member {
+  slot: Slot;
+  id: MemberId;
+  name: string;
+  maxHP: number;
+  damage: number;
+  ability: AbilityId;
+  hp: number;
+  alive: boolean;
+  shield: boolean; // pending shield (blocks next instance)
+  regen: number;   // regen stack
+  taunt: number;   // taunt turns remaining (tank only)
+}
+
+export interface Enemy {
+  hp: number;
+  maxHP: number;
+  poison: number;
+  enraged: boolean;
+}
+
+export interface Telegraph {
+  type: AttackType;
+  hidden: boolean;
+  damage: number;
+  targets: Slot[];
+  enraged: boolean;
+  forTurn: number;
+}
+
+export interface LogEntry {
+  text: string;
+  kind: string;
+  turn: number;
+}
+
+// One line spec for the telegraph overlay. Hidden attacks carry null damage.
+export interface AttackSpec {
+  slot: Slot;
+  damage: number | null;
+  hidden: boolean;
+}
+
+export interface PlayResult {
+  ok: boolean;
+  reason?: string;
+}
 
 export class Game {
-  constructor(seed = Date.now()) {
+  seed: number;
+  rng: Rng;
+  members: Member[];
+  enemy: Enemy;
+  mp: number;
+  mageCharge: number;
+  refresh: number;
+  drawPile: CardId[];
+  discardPile: CardId[];
+  hand: CardId[];
+  turn: number;
+  phase: Phase;
+  status: Status;
+  cardPlayedThisPhase: boolean;
+  telegraph: Telegraph | null;
+  log: LogEntry[];
+
+  constructor(seed: number = Date.now()) {
     this.seed = seed >>> 0;
     this.rng = makeRng(this.seed);
 
-    this.members = MEMBER_DEFS.map((d) => ({
+    this.members = MEMBER_DEFS.map((d): Member => ({
       slot: d.slot, id: d.id, name: d.name, maxHP: d.maxHP, damage: d.damage,
       ability: d.ability,
       hp: d.maxHP, alive: true,
@@ -40,8 +110,8 @@ export class Game {
     this.discardPile = [];
     this.hand = [];
 
-    this.turn = 1;          // turn whose enemy phase is current/next to run
-    this.phase = 'idle';    // 'idle' | 'player' | 'over'
+    this.turn = 1;           // turn whose enemy phase is current/next to run
+    this.phase = 'idle';     // 'idle' | 'player' | 'over'
     this.status = 'playing'; // 'playing' | 'win' | 'loss'
     this.cardPlayedThisPhase = false;
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
@@ -50,50 +120,50 @@ export class Game {
 
   // ---- helpers -------------------------------------------------------------
 
-  get tank() { return this.members[SLOT.CENTER]; }
-  get mage() { return this.members[SLOT.RIGHT]; }
-  get ranger() { return this.members[SLOT.LEFT]; }
+  get tank(): Member { return this.members[SLOT.CENTER]; }
+  get mage(): Member { return this.members[SLOT.RIGHT]; }
+  get ranger(): Member { return this.members[SLOT.LEFT]; }
 
-  livingMembers() { return this.members.filter((m) => m.alive); }
-  allDead() { return this.members.every((m) => !m.alive); }
+  livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
+  allDead(): boolean { return this.members.every((m) => !m.alive); }
 
-  _log(text, kind = 'info') { this.log.push({ text, kind, turn: this.turn }); }
+  _log(text: string, kind: string = 'info'): void { this.log.push({ text, kind, turn: this.turn }); }
 
-  isEnraged(turn) { return turn >= ENRAGE_TURN; }
+  isEnraged(turn: number): boolean { return turn >= ENRAGE_TURN; }
 
   // Per-target damage for an attack type at a given turn (round up on enrage).
-  attackDamage(type, turn) {
+  attackDamage(type: AttackType, turn: number): number {
     const base = ATTACK_BASE_DAMAGE[type];
     return this.isEnraged(turn) ? Math.ceil(base * ENRAGE_MULT) : base;
   }
 
-  tankTaunting() { return this.tank.alive && this.tank.taunt > 0; }
+  tankTaunting(): boolean { return this.tank.alive && this.tank.taunt > 0; }
 
   // ---- telegraph generation ------------------------------------------------
 
-  _pickType(turn) {
+  _pickType(turn: number): AttackType {
     const w = this.isEnraged(turn) ? TYPE_WEIGHTS.enraged : TYPE_WEIGHTS.normal;
-    return weightedPick(Object.entries(w), this.rng);
+    return weightedPick(Object.entries(w) as Array<[AttackType, number]>, this.rng);
   }
 
-  _pickPrimary(type) {
+  _pickPrimary(type: AttackType): Slot {
     if (this.tankTaunting()) return SLOT.CENTER;
     const weights = type === 'hidden' ? SLOT_WEIGHTS.hidden : SLOT_WEIGHTS.normal;
-    return weightedPick(weights.map((wt, i) => [i, wt]), this.rng);
+    return weightedPick(weights.map((wt, i): [Slot, number] => [i as Slot, wt]), this.rng);
   }
 
   // Resolve the set of target slots for a type given a chosen primary slot.
-  _geometry(type, primary) {
+  _geometry(type: AttackType, primary: Slot): Slot[] {
     if (type === 'single' || type === 'hidden') return [primary];
     if (type === 'aoe') return [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT];
     // two-target: primary + one adjacent. center -> random edge; edge -> center.
-    let second;
+    let second: Slot;
     if (primary === SLOT.CENTER) second = this.rng() < 0.5 ? SLOT.LEFT : SLOT.RIGHT;
     else second = SLOT.CENTER;
     return [primary, second];
   }
 
-  _generateTelegraph(turn) {
+  _generateTelegraph(turn: number): Telegraph {
     const type = this._pickType(turn);
     const primary = this._pickPrimary(type);
     const targets = this._geometry(type, primary);
@@ -110,19 +180,19 @@ export class Game {
   // Lines to draw for the standing telegraph. [] when the game is over / no telegraph.
   // Each entry: { slot, damage, hidden }. Hidden attacks fan out to every living
   // member with unknown (null) damage; known attacks hit their living targets.
-  attackTargets() {
+  attackTargets(): AttackSpec[] {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
     if (t.hidden) {
-      return this.livingMembers().map((m) => ({ slot: m.slot, damage: null, hidden: true }));
+      return this.livingMembers().map((m): AttackSpec => ({ slot: m.slot, damage: null, hidden: true }));
     }
     return t.targets
       .filter((slot) => this.members[slot]?.alive)
-      .map((slot) => ({ slot, damage: t.damage, hidden: false }));
+      .map((slot): AttackSpec => ({ slot, damage: t.damage, hidden: false }));
   }
 
   // Recompute the standing telegraph's targets with the Tank forced as primary.
-  _retargetTelegraphToTank() {
+  _retargetTelegraphToTank(): void {
     if (!this.telegraph) return;
     const t = this.telegraph;
     t.targets = this._geometry(t.type, SLOT.CENTER);
@@ -130,7 +200,7 @@ export class Game {
 
   // ---- lifecycle -----------------------------------------------------------
 
-  start() {
+  start(): this {
     this._log('Combat begins.', 'system');
     // First telegraph is generated before turn 1's enemy phase.
     this.telegraph = this._generateTelegraph(this.turn);
@@ -139,7 +209,7 @@ export class Game {
     return this;
   }
 
-  _killMember(m) {
+  _killMember(m: Member): void {
     m.alive = false;
     m.hp = 0;
     m.shield = false;
@@ -149,7 +219,7 @@ export class Game {
     this._log(`${m.name} has fallen!`, 'death');
   }
 
-  _damageEnemy(amount, source) {
+  _damageEnemy(amount: number, source: string): void {
     if (amount <= 0) return;
     this.enemy.hp = Math.max(0, this.enemy.hp - amount);
     this._log(`${source} deals ${amount} to the enemy. (${this.enemy.hp}/${this.enemy.maxHP})`, 'enemy-dmg');
@@ -160,7 +230,7 @@ export class Game {
     }
   }
 
-  _healMember(m, amount) {
+  _healMember(m: Member, amount: number): number {
     if (!m.alive || amount <= 0) return 0;
     const before = m.hp;
     m.hp = Math.min(m.maxHP, m.hp + amount);
@@ -169,7 +239,7 @@ export class Game {
 
   // ---- enemy phase ---------------------------------------------------------
 
-  _runEnemyPhase() {
+  _runEnemyPhase(): void {
     if (this.turn === ENRAGE_TURN && !this.enemy.enraged) {
       this.enemy.enraged = true;
       this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');
@@ -215,7 +285,7 @@ export class Game {
     this.telegraph = this._generateTelegraph(this.turn + 1);
   }
 
-  _resolveAttack() {
+  _resolveAttack(): void {
     const t = this.telegraph;
     if (!t) return;
     const label = t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
@@ -239,7 +309,7 @@ export class Game {
 
   // ---- player phase --------------------------------------------------------
 
-  _startPlayerPhase() {
+  _startPlayerPhase(): void {
     // Mage charge ticks first, before the player can act.
     if (this.mage.alive) {
       this.mageCharge = Math.min(CHARGE_MAX, this.mageCharge + 1);
@@ -249,17 +319,17 @@ export class Game {
     this.phase = 'player';
   }
 
-  _drawOne() {
+  _drawOne(): CardId | null {
     if (this.drawPile.length === 0) {
       if (this.discardPile.length === 0) return null;
       this.drawPile = shuffle(this.discardPile, this.rng);
       this.discardPile = [];
       this._log('Reshuffled discard into draw pile.', 'system');
     }
-    return this.drawPile.shift();
+    return this.drawPile.shift() ?? null;
   }
 
-  _drawTo(n) {
+  _drawTo(n: number): void {
     while (this.hand.length < n) {
       const c = this._drawOne();
       if (c == null) break;
@@ -269,7 +339,7 @@ export class Game {
 
   // Validate whether a hand card can currently be played. Returns null if ok,
   // otherwise a short reason string.
-  canPlay(handIndex, target) {
+  canPlay(handIndex: number, target: number | null): string | null {
     if (this.phase !== 'player') return 'not your phase';
     const cardId = this.hand[handIndex];
     if (cardId == null) return 'no such card';
@@ -278,12 +348,12 @@ export class Game {
     switch (card.target) {
       case 'single':
       case 'ability': {
-        const m = this.members[target];
+        const m = target == null ? undefined : this.members[target];
         if (!m || !m.alive) return 'target must be a living member';
         break;
       }
       case 'dead': {
-        const m = this.members[target];
+        const m = target == null ? undefined : this.members[target];
         if (!m || m.alive) return 'target must be a dead member';
         if (this.livingMembers().length === 0) return 'no living member remains';
         break;
@@ -295,7 +365,7 @@ export class Game {
   }
 
   // target: a slot index for single/ability/dead cards; ignored otherwise.
-  playCard(handIndex, target = null) {
+  playCard(handIndex: number, target: number | null = null): PlayResult {
     const reason = this.canPlay(handIndex, target);
     if (reason) return { ok: false, reason };
 
@@ -310,34 +380,34 @@ export class Game {
     return { ok: true };
   }
 
-  _applyCard(cardId, card, target) {
+  _applyCard(cardId: CardId, card: CardDef, target: number | null): void {
     switch (cardId) {
       case 'lowHeal':
       case 'highHeal': {
-        const m = this.members[target];
-        const healed = this._healMember(m, card.heal);
+        const m = this.members[target as number];
+        const healed = this._healMember(m, card.heal ?? 0);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         break;
       }
       case 'aoeHeal': {
-        for (const m of this.livingMembers()) this._healMember(m, card.heal);
+        for (const m of this.livingMembers()) this._healMember(m, card.heal ?? 0);
         this._log(`AoE Heal: all living members heal up to ${card.heal}.`, 'heal');
         break;
       }
       case 'regen': {
-        const m = this.members[target];
-        m.regen += card.regen;
+        const m = this.members[target as number];
+        m.regen += card.regen ?? 0;
         this._log(`Regen on ${m.name} (stack ${m.regen}).`, 'status');
         break;
       }
       case 'shield': {
-        const m = this.members[target];
+        const m = this.members[target as number];
         m.shield = true; // does not stack
         this._log(`Shield raised on ${m.name}.`, 'status');
         break;
       }
       case 'resurrect': {
-        const m = this.members[target];
+        const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
         m.shield = false; m.regen = 0; m.taunt = 0;
@@ -346,12 +416,12 @@ export class Game {
         break;
       }
       case 'refresh': {
-        this.refresh += card.refresh;
+        this.refresh += card.refresh ?? 0;
         this._log(`Refresh primed (MP-regen stack ${this.refresh}).`, 'status');
         break;
       }
       case 'ability': {
-        this._fireAbility(this.members[target]);
+        this._fireAbility(this.members[target as number]);
         break;
       }
       default:
@@ -359,7 +429,7 @@ export class Game {
     }
   }
 
-  _fireAbility(m) {
+  _fireAbility(m: Member): void {
     switch (m.ability) {
       case 'poison': {
         this.enemy.poison += POISON_BASE;
@@ -384,11 +454,11 @@ export class Game {
     }
   }
 
-  canSkip() {
+  canSkip(): boolean {
     return this.phase === 'player' && !this.cardPlayedThisPhase;
   }
 
-  skipTurn() {
+  skipTurn(): PlayResult {
     if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
     const before = this.mp;
     this.mp = Math.min(MP_MAX, this.mp + SKIP_REGEN);
@@ -397,15 +467,15 @@ export class Game {
     return { ok: true };
   }
 
-  endTurn() {
+  endTurn(): PlayResult {
     if (this.phase !== 'player') return { ok: false, reason: 'not your phase' };
     this._endTurnInternal();
     return { ok: true };
   }
 
-  _endTurnInternal() {
+  _endTurnInternal(): void {
     // Discard the whole hand (no Retain in the prototype).
-    while (this.hand.length) this.discardPile.push(this.hand.pop());
+    while (this.hand.length) this.discardPile.push(this.hand.pop() as CardId);
 
     // Party phase: living members auto-attack in slot order.
     this._runPartyPhase();
@@ -417,7 +487,7 @@ export class Game {
     if (this.status === 'playing') this._startPlayerPhase();
   }
 
-  _runPartyPhase() {
+  _runPartyPhase(): void {
     let total = 0;
     for (const m of this.members) {
       if (!m.alive) continue;

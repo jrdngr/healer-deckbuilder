@@ -1,10 +1,39 @@
 // All tunable values from the spec's "Numbers" section live here.
 // Slots are 0,1,2 == spec slots 1,2,3 == Ranger (left), Tank (center), Mage (right).
 
-export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 };
+export type Slot = 0 | 1 | 2;
+export type AttackType = 'single' | 'two' | 'aoe' | 'hidden';
+export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
+export type MemberId = 'ranger' | 'tank' | 'mage';
+export type AbilityId = 'poison' | 'taunt' | 'bolt';
+export type CardId =
+  | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
+  | 'regen' | 'shield' | 'resurrect' | 'refresh';
+
+export interface MemberDef {
+  slot: Slot;
+  id: MemberId;
+  name: string;
+  maxHP: number;
+  damage: number;
+  ability: AbilityId;
+}
+
+export interface CardDef {
+  id: CardId;
+  name: string;
+  cost: number;
+  target: CardTarget;
+  desc: string;
+  heal?: number;
+  regen?: number;
+  refresh?: number;
+}
+
+export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 } as const;
 
 // Fixed party layout. `ability` names which ability the Ability card fires for this member.
-export const MEMBER_DEFS = [
+export const MEMBER_DEFS: MemberDef[] = [
   { slot: 0, id: 'ranger', name: 'Ranger', maxHP: 8, damage: 3, ability: 'poison' },
   { slot: 1, id: 'tank', name: 'Tank', maxHP: 12, damage: 1, ability: 'taunt' },
   { slot: 2, id: 'mage', name: 'Mage', maxHP: 6, damage: 5, ability: 'bolt' },
@@ -13,16 +42,16 @@ export const MEMBER_DEFS = [
 export const ENEMY_MAX_HP = 100;
 
 // Base (pre-enrage) per-target damage by attack type.
-export const ATTACK_BASE_DAMAGE = { single: 4, two: 3, aoe: 2, hidden: 4 };
+export const ATTACK_BASE_DAMAGE: Record<AttackType, number> = { single: 4, two: 3, aoe: 2, hidden: 4 };
 
 // Attack-type selection weights.
-export const TYPE_WEIGHTS = {
+export const TYPE_WEIGHTS: Record<'normal' | 'enraged', Record<AttackType, number>> = {
   normal: { single: 60, two: 20, aoe: 10, hidden: 10 },
   enraged: { single: 30, two: 35, aoe: 25, hidden: 10 },
 };
 
 // Primary-slot weights, indexed by slot. Hidden attack uses its own profile.
-export const SLOT_WEIGHTS = {
+export const SLOT_WEIGHTS: Record<'normal' | 'hidden', number[]> = {
   normal: [25, 50, 25],
   hidden: [40, 20, 40],
 };
@@ -45,7 +74,7 @@ export const HAND_SIZE = 4;
 // Card definitions. `target` drives the UI's targeting flow.
 //   'single' -> one living member, 'all' -> no pick, 'dead' -> one dead member,
 //   'none'   -> no pick, 'ability' -> one living member (fires their ability).
-export const CARDS = {
+export const CARDS: Record<CardId, CardDef> = {
   ability: { id: 'ability', name: 'Ability', cost: 2, target: 'ability',
     desc: 'Fire a chosen living member\'s ability.' },
   lowHeal: { id: 'lowHeal', name: 'Low Heal', cost: 1, target: 'single', heal: 2,
@@ -65,7 +94,7 @@ export const CARDS = {
 };
 
 // The fixed 15-card deck.
-export const DECK_LIST = [
+export const DECK_LIST: CardId[] = [
   'lowHeal', 'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
   'aoeHeal', 'aoeHeal',

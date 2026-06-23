@@ -5,7 +5,12 @@
   "type": "module",
   "description": "Prototype for the Healer Deckbuilder core battle loop.",
   "scripts": {
-    "test": "node test/engine.test.js",
-    "serve": "node server.js"
+    "test": "tsx test/engine.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
   }
 }
