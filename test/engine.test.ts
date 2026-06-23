@@ -1,7 +1,7 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
-import { Game } from '../src/engine.js';
-import { DECK_LIST, CARDS, SLOT, MP_MAX } from '../src/constants.js';
-import type { CardId } from '../src/constants.js';
+import { Game } from '../src/engine';
+import { DECK_LIST, CARDS, SLOT, MP_MAX } from '../src/constants';
+import type { CardId } from '../src/constants';
 
 let passed = 0;
 let failed = 0;

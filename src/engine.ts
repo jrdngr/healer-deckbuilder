@@ -13,10 +13,10 @@ import {
   MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
   ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
   POISON_BASE, TAUNT_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
-} from './constants.js';
-import type { Slot, AttackType, CardId, MemberId, AbilityId, CardDef } from './constants.js';
-import { makeRng, shuffle, weightedPick } from './rng.js';
-import type { Rng } from './rng.js';
+} from './constants';
+import type { Slot, AttackType, CardId, MemberId, AbilityId, CardDef } from './constants';
+import { makeRng, shuffle, weightedPick } from './rng';
+import type { Rng } from './rng';
 
 export type Phase = 'idle' | 'player' | 'over';
 export type Status = 'playing' | 'win' | 'loss';

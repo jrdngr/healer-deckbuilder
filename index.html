@@ -4,81 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Healer Deckbuilder — Prototype</title>
-  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>Healer Deckbuilder <span class="tag">prototype</span></h1>
-    <div class="newgame">
-      <label>Seed <input id="seed-input" type="number" /></label>
-      <button id="new-game">New Fight</button>
-    </div>
-  </header>
-
-  <main>
-    <!-- Enemy -->
-    <section class="enemy" id="enemy">
-      <div class="enemy-head">
-        <h2>Enemy <span id="enrage-flag" class="enrage hidden">ENRAGED</span></h2>
-        <div class="bar enemy-bar"><div class="bar-fill" id="enemy-hp-fill"></div>
-          <span class="bar-label" id="enemy-hp-label"></span></div>
-        <div class="enemy-status" id="enemy-status"></div>
-      </div>
-    </section>
-
-    <!-- Party -->
-    <section class="party" id="party"></section>
-
-    <!-- Mana -->
-    <section class="controls">
-      <div class="bar mp-bar">
-        <div class="bar-fill" id="mp-fill"></div>
-        <span class="bar-label" id="mp-label"></span>
-        <span class="refresh-pill hidden" id="refresh-pill"></span>
-      </div>
-    </section>
-
-    <!-- Hand -->
-    <section class="hand-wrap">
-      <h3 id="hand-prompt">Your hand</h3>
-      <div class="hand-area">
-        <div class="pile draw-pile" id="draw-pile" title="Draw pile">
-          <span class="pile-count" id="draw-count">0</span>
-          <span class="pile-label">Draw</span>
-        </div>
-        <div class="hand" id="hand"></div>
-        <div class="pile discard-pile" id="discard-pile" title="Discard pile">
-          <span class="pile-count" id="discard-count">0</span>
-          <span class="pile-label">Discard</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Actions -->
-    <section class="buttons">
-      <button id="skip-btn" class="danger" title="Play no cards, rest to regain MP, then end your turn">Rest</button>
-      <button id="end-btn" class="primary">End Turn</button>
-      <button id="cancel-btn" class="hidden">Cancel targeting</button>
-    </section>
-
-    <!-- Log -->
-    <section class="log-wrap">
-      <h3>Combat log</h3>
-      <ul class="log" id="log"></ul>
-    </section>
-
-    <!-- Enemy attack lines, drawn over the layout -->
-    <svg class="attack-lines" id="attack-lines" aria-hidden="true"></svg>
-  </main>
-
-  <div class="overlay hidden" id="overlay">
-    <div class="overlay-card">
-      <h2 id="overlay-title"></h2>
-      <p id="overlay-text"></p>
-      <button id="overlay-again" class="primary">New Fight</button>
-    </div>
-  </div>
-
-  <script type="module" src="src/ui.js"></script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
