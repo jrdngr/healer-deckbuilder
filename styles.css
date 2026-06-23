@@ -14,6 +14,7 @@
   --taunt: #f2c14e;
   --danger: #e85d5d;
   --gold: #f2c14e;
+  --unknown: #b388ff;
 }
 
 * { box-sizing: border-box; }
@@ -39,13 +40,12 @@ body {
 
 main {
   max-width: 980px; margin: 0 auto; padding: 16px;
-  display: grid; gap: 14px;
+  display: grid; gap: 14px; position: relative;
 }
 
 /* Enemy */
 .enemy {
   background: var(--panel); border-radius: 10px; padding: 14px;
-  display: grid; grid-template-columns: 1fr 280px; gap: 16px;
 }
 .enemy-head h2 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
 .enrage { font-size: 11px; background: var(--danger); color: #fff; padding: 1px 8px; border-radius: 10px; animation: pulse 1.2s infinite; }
@@ -57,17 +57,16 @@ main {
 .enemy-bar .bar-fill { background: var(--enemy); }
 .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px #000; }
 
-/* Telegraph */
-.telegraph {
-  background: var(--panel-2); border-radius: 8px; padding: 10px 12px;
-  border: 1px dashed #3a4150; font-size: 13px; min-height: 90px;
+/* Enemy attack lines (SVG overlay drawn over the layout) */
+.attack-lines {
+  position: absolute; inset: 0; pointer-events: none; z-index: 5; overflow: visible;
 }
-.telegraph h4 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
-.telegraph .tg-shape { font-size: 15px; font-weight: 700; }
-.telegraph .tg-dmg { color: var(--danger); font-weight: 700; }
-.telegraph .tg-targets { margin-top: 4px; color: var(--muted); }
-.telegraph.concealed { border-color: #5a4a2a; color: var(--gold); }
-.telegraph.enraged { border-color: var(--danger); }
+.atk-line { stroke: var(--danger); stroke-width: 3; }
+.hidden-line { stroke: var(--unknown); stroke-width: 3; stroke-dasharray: 7 6; }
+.atk-badge { fill: #1a0d0d; stroke: var(--danger); stroke-width: 1.5; }
+.hidden-badge { fill: #160d22; stroke: var(--unknown); }
+.atk-text { fill: #fff; font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.hidden-text { fill: var(--unknown); }
 
 /* Party — portrait cards */
 .party { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

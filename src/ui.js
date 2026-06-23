@@ -104,8 +104,6 @@ function render() {
   $('enrage-flag').classList.toggle('hidden', !e.enraged);
   $('enemy-status').textContent = e.poison > 0 ? `☠ Poison ${e.poison}` : '';
 
-  renderTelegraph();
-
   // Party
   const party = $('party');
   party.innerHTML = '';
@@ -152,26 +150,64 @@ function render() {
 
   renderHand(over);
   renderLog();
+  renderAttackLines();
 }
 
-function renderTelegraph() {
-  const tg = $('telegraph');
-  const t = game.telegraph;
-  tg.className = 'telegraph';
-  if (game.status !== 'playing' || !t) { tg.innerHTML = '<h4>Next enemy attack</h4><div>—</div>'; return; }
-  if (t.hidden) {
-    tg.classList.add('concealed');
-    tg.innerHTML = `<h4>Next enemy attack</h4>
-      <div class="tg-shape">??? Concealed</div>
-      <div class="tg-targets">This enemy reveals nothing. Keep a Shield up.</div>`;
-    return;
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+// Draw the standing telegraph as line(s) from the enemy to each target it will
+// hit, with the damage at each line's center. Concealed attacks draw dotted
+// purple lines to every living member with "???" for the damage.
+function renderAttackLines() {
+  const svg = $('attack-lines');
+  svg.innerHTML = '';
+  if (!game) return;
+  const specs = game.attackTargets();
+  if (specs.length === 0) return;
+
+  const main = document.querySelector('main');
+  const mainRect = main.getBoundingClientRect();
+  const enemyRect = $('enemy').getBoundingClientRect();
+  const partyChildren = $('party').children;
+
+  svg.setAttribute('viewBox', `0 0 ${mainRect.width} ${mainRect.height}`);
+  svg.setAttribute('width', mainRect.width);
+  svg.setAttribute('height', mainRect.height);
+
+  // Enemy anchor: bottom-center of the enemy panel.
+  const ex = enemyRect.left + enemyRect.width / 2 - mainRect.left;
+  const ey = enemyRect.bottom - mainRect.top;
+
+  for (const spec of specs) {
+    const memberEl = partyChildren[spec.slot];
+    if (!memberEl) continue;
+    const mr = memberEl.getBoundingClientRect();
+    const tx = mr.left + mr.width / 2 - mainRect.left;
+    const ty = mr.top - mainRect.top; // top-center of the member card
+
+    const line = document.createElementNS(SVGNS, 'line');
+    line.setAttribute('x1', ex); line.setAttribute('y1', ey);
+    line.setAttribute('x2', tx); line.setAttribute('y2', ty);
+    line.setAttribute('class', spec.hidden ? 'atk-line hidden-line' : 'atk-line');
+    svg.appendChild(line);
+
+    // Damage badge at the midpoint of the line.
+    const mx = (ex + tx) / 2;
+    const my = (ey + ty) / 2;
+    const label = spec.hidden ? '???' : String(spec.damage);
+    const w = spec.hidden ? 36 : 26;
+    const rect = document.createElementNS(SVGNS, 'rect');
+    rect.setAttribute('x', mx - w / 2); rect.setAttribute('y', my - 11);
+    rect.setAttribute('width', w); rect.setAttribute('height', 22); rect.setAttribute('rx', 6);
+    rect.setAttribute('class', spec.hidden ? 'atk-badge hidden-badge' : 'atk-badge');
+    svg.appendChild(rect);
+
+    const text = document.createElementNS(SVGNS, 'text');
+    text.setAttribute('x', mx); text.setAttribute('y', my);
+    text.setAttribute('class', spec.hidden ? 'atk-text hidden-text' : 'atk-text');
+    text.textContent = label;
+    svg.appendChild(text);
   }
-  if (t.enraged) tg.classList.add('enraged');
-  const shapeName = { single: 'Single target', two: 'Two-target', aoe: 'AoE (all three)' }[t.type] || t.type;
-  const names = t.targets.map((s) => game.members[s].name).join(', ');
-  tg.innerHTML = `<h4>Next enemy attack${t.enraged ? ' (enraged)' : ''}</h4>
-    <div class="tg-shape">${shapeName} · <span class="tg-dmg">${t.damage} dmg</span> each</div>
-    <div class="tg-targets">Targets: ${names}</div>`;
 }
 
 function renderHand(over) {
@@ -249,5 +285,6 @@ $('new-game').addEventListener('click', () => {
   newGame(Number.isFinite(v) ? v : NaN);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearTargeting(); });
+window.addEventListener('resize', () => { if (game) renderAttackLines(); });
 
 newGame(NaN);
