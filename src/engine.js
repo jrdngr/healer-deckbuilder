@@ -1,0 +1,413 @@
+// Core battle engine for the Healer Deckbuilder prototype.
+// Pure logic, no DOM. Drives one handcrafted fight end to end.
+//
+// Phase cycle per turn: enemy phase -> player phase -> party phase.
+// The UI drives it by calling:
+//   new Game(seed); game.start();          // runs turn 1's enemy phase, opens player phase
+//   game.playCard(handIndex, target);      // during player phase
+//   game.skipTurn();                        // regen MP instead of playing (before any card)
+//   game.endTurn();                         // discard, party phase, then next enemy + player phases
+// Read state off the public fields; read game.log for a running event feed.
+
+import {
+  MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
+  ENRAGE_TURN, ENRAGE_MULT, MP_START, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
+  POISON_BASE, TAUNT_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
+} from './constants.js';
+import { makeRng, shuffle, weightedPick } from './rng.js';
+
+export class Game {
+  constructor(seed = Date.now()) {
+    this.seed = seed >>> 0;
+    this.rng = makeRng(this.seed);
+
+    this.members = MEMBER_DEFS.map((d) => ({
+      slot: d.slot, id: d.id, name: d.name, maxHP: d.maxHP, damage: d.damage,
+      ability: d.ability,
+      hp: d.maxHP, alive: true,
+      shield: false, // pending shield (blocks next instance)
+      regen: 0,      // regen stack
+      taunt: 0,      // taunt turns remaining (tank only)
+    }));
+
+    this.enemy = { hp: ENEMY_MAX_HP, maxHP: ENEMY_MAX_HP, poison: 0, enraged: false };
+
+    this.mp = MP_START;
+    this.mageCharge = 0;
+    this.refresh = 0; // player-level MP-regen stack
+
+    this.drawPile = shuffle([...DECK_LIST], this.rng);
+    this.discardPile = [];
+    this.hand = [];
+
+    this.turn = 1;          // turn whose enemy phase is current/next to run
+    this.phase = 'idle';    // 'idle' | 'player' | 'over'
+    this.status = 'playing'; // 'playing' | 'win' | 'loss'
+    this.cardPlayedThisPhase = false;
+    this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
+    this.log = [];
+  }
+
+  // ---- helpers -------------------------------------------------------------
+
+  get tank() { return this.members[SLOT.CENTER]; }
+  get mage() { return this.members[SLOT.RIGHT]; }
+  get ranger() { return this.members[SLOT.LEFT]; }
+
+  livingMembers() { return this.members.filter((m) => m.alive); }
+  allDead() { return this.members.every((m) => !m.alive); }
+
+  _log(text, kind = 'info') { this.log.push({ text, kind, turn: this.turn }); }
+
+  isEnraged(turn) { return turn >= ENRAGE_TURN; }
+
+  // Per-target damage for an attack type at a given turn (round up on enrage).
+  attackDamage(type, turn) {
+    const base = ATTACK_BASE_DAMAGE[type];
+    return this.isEnraged(turn) ? Math.ceil(base * ENRAGE_MULT) : base;
+  }
+
+  tankTaunting() { return this.tank.alive && this.tank.taunt > 0; }
+
+  // ---- telegraph generation ------------------------------------------------
+
+  _pickType(turn) {
+    const w = this.isEnraged(turn) ? TYPE_WEIGHTS.enraged : TYPE_WEIGHTS.normal;
+    return weightedPick(Object.entries(w), this.rng);
+  }
+
+  _pickPrimary(type) {
+    if (this.tankTaunting()) return SLOT.CENTER;
+    const weights = type === 'hidden' ? SLOT_WEIGHTS.hidden : SLOT_WEIGHTS.normal;
+    return weightedPick(weights.map((wt, i) => [i, wt]), this.rng);
+  }
+
+  // Resolve the set of target slots for a type given a chosen primary slot.
+  _geometry(type, primary) {
+    if (type === 'single' || type === 'hidden') return [primary];
+    if (type === 'aoe') return [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT];
+    // two-target: primary + one adjacent. center -> random edge; edge -> center.
+    let second;
+    if (primary === SLOT.CENTER) second = this.rng() < 0.5 ? SLOT.LEFT : SLOT.RIGHT;
+    else second = SLOT.CENTER;
+    return [primary, second];
+  }
+
+  _generateTelegraph(turn) {
+    const type = this._pickType(turn);
+    const primary = this._pickPrimary(type);
+    const targets = this._geometry(type, primary);
+    return {
+      type,
+      hidden: type === 'hidden',
+      damage: this.attackDamage(type, turn),
+      targets,
+      enraged: this.isEnraged(turn),
+      forTurn: turn,
+    };
+  }
+
+  // Recompute the standing telegraph's targets with the Tank forced as primary.
+  _retargetTelegraphToTank() {
+    if (!this.telegraph) return;
+    const t = this.telegraph;
+    t.targets = this._geometry(t.type, SLOT.CENTER);
+  }
+
+  // ---- lifecycle -----------------------------------------------------------
+
+  start() {
+    this._log('Combat begins.', 'system');
+    // First telegraph is generated before turn 1's enemy phase.
+    this.telegraph = this._generateTelegraph(this.turn);
+    this._runEnemyPhase();
+    if (this.status === 'playing') this._startPlayerPhase();
+    return this;
+  }
+
+  _killMember(m) {
+    m.alive = false;
+    m.hp = 0;
+    m.shield = false;
+    m.regen = 0;
+    m.taunt = 0;
+    if (m.id === 'mage') this.mageCharge = 0;
+    this._log(`${m.name} has fallen!`, 'death');
+  }
+
+  _damageEnemy(amount, source) {
+    if (amount <= 0) return;
+    this.enemy.hp = Math.max(0, this.enemy.hp - amount);
+    this._log(`${source} deals ${amount} to the enemy. (${this.enemy.hp}/${this.enemy.maxHP})`, 'enemy-dmg');
+    if (this.enemy.hp <= 0 && this.status === 'playing') {
+      this.status = 'win';
+      this.phase = 'over';
+      this._log('The enemy is defeated. Victory!', 'win');
+    }
+  }
+
+  _healMember(m, amount) {
+    if (!m.alive || amount <= 0) return 0;
+    const before = m.hp;
+    m.hp = Math.min(m.maxHP, m.hp + amount);
+    return m.hp - before;
+  }
+
+  // ---- enemy phase ---------------------------------------------------------
+
+  _runEnemyPhase() {
+    if (this.turn === ENRAGE_TURN && !this.enemy.enraged) {
+      this.enemy.enraged = true;
+      this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');
+    }
+
+    // 1) start-of-turn status ticks: Poison -> Regen -> Refresh.
+    if (this.enemy.poison > 0) {
+      const dmg = this.enemy.poison;
+      this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
+      this.enemy.poison -= 1;
+      if (this.status === 'win') return; // poison can finish the enemy
+    }
+    for (const m of this.members) {
+      if (m.alive && m.regen > 0) {
+        const healed = this._healMember(m, m.regen);
+        this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
+        m.regen -= 1;
+      }
+    }
+    if (this.refresh > 0) {
+      const gain = this.refresh;
+      this.mp += gain;
+      this._log(`Refresh restores ${gain} MP. (MP ${this.mp})`, 'mp');
+      this.refresh -= 1;
+    }
+
+    // 2) the attack itself (executes the standing telegraph).
+    this._resolveAttack();
+    if (this.allDead()) {
+      this.status = 'loss';
+      this.phase = 'over';
+      this._log('The whole party has fallen. Defeat.', 'loss');
+      return;
+    }
+
+    // 3) decrement Taunt now that this enemy turn's attack has resolved.
+    if (this.tank.alive && this.tank.taunt > 0) {
+      this.tank.taunt -= 1;
+      if (this.tank.taunt === 0) this._log('Taunt fades from the Tank.', 'status');
+    }
+
+    // 4) telegraph the next turn's attack (with correct enrage state baked in).
+    this.telegraph = this._generateTelegraph(this.turn + 1);
+  }
+
+  _resolveAttack() {
+    const t = this.telegraph;
+    if (!t) return;
+    const label = t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
+      : t.type === 'aoe' ? 'AoE attack' : 'Attack';
+    for (const slot of t.targets) {
+      const m = this.members[slot];
+      if (!m || !m.alive) {
+        this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
+        continue;
+      }
+      if (m.shield) {
+        m.shield = false;
+        this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
+        continue;
+      }
+      m.hp = Math.max(0, m.hp - t.damage);
+      this._log(`${label} hits ${m.name} for ${t.damage}. (${m.hp}/${m.maxHP})`, 'hit');
+      if (m.hp <= 0) this._killMember(m);
+    }
+  }
+
+  // ---- player phase --------------------------------------------------------
+
+  _startPlayerPhase() {
+    // Mage charge ticks first, before the player can act.
+    if (this.mage.alive) {
+      this.mageCharge = Math.min(CHARGE_MAX, this.mageCharge + 1);
+    }
+    this._drawTo(HAND_SIZE);
+    this.cardPlayedThisPhase = false;
+    this.phase = 'player';
+  }
+
+  _drawOne() {
+    if (this.drawPile.length === 0) {
+      if (this.discardPile.length === 0) return null;
+      this.drawPile = shuffle(this.discardPile, this.rng);
+      this.discardPile = [];
+      this._log('Reshuffled discard into draw pile.', 'system');
+    }
+    return this.drawPile.shift();
+  }
+
+  _drawTo(n) {
+    while (this.hand.length < n) {
+      const c = this._drawOne();
+      if (c == null) break;
+      this.hand.push(c);
+    }
+  }
+
+  // Validate whether a hand card can currently be played. Returns null if ok,
+  // otherwise a short reason string.
+  canPlay(handIndex, target) {
+    if (this.phase !== 'player') return 'not your phase';
+    const cardId = this.hand[handIndex];
+    if (cardId == null) return 'no such card';
+    const card = CARDS[cardId];
+    if (this.mp < card.cost) return 'not enough MP';
+    switch (card.target) {
+      case 'single':
+      case 'ability': {
+        const m = this.members[target];
+        if (!m || !m.alive) return 'target must be a living member';
+        break;
+      }
+      case 'dead': {
+        const m = this.members[target];
+        if (!m || m.alive) return 'target must be a dead member';
+        if (this.livingMembers().length === 0) return 'no living member remains';
+        break;
+      }
+      default:
+        break; // 'all' / 'none' need no target
+    }
+    return null;
+  }
+
+  // target: a slot index for single/ability/dead cards; ignored otherwise.
+  playCard(handIndex, target = null) {
+    const reason = this.canPlay(handIndex, target);
+    if (reason) return { ok: false, reason };
+
+    const cardId = this.hand[handIndex];
+    const card = CARDS[cardId];
+    this.mp -= card.cost;
+    this.hand.splice(handIndex, 1);
+    this.discardPile.push(cardId);
+    this.cardPlayedThisPhase = true;
+
+    this._applyCard(cardId, card, target);
+    return { ok: true };
+  }
+
+  _applyCard(cardId, card, target) {
+    switch (cardId) {
+      case 'lowHeal':
+      case 'highHeal': {
+        const m = this.members[target];
+        const healed = this._healMember(m, card.heal);
+        this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
+        break;
+      }
+      case 'aoeHeal': {
+        for (const m of this.livingMembers()) this._healMember(m, card.heal);
+        this._log(`AoE Heal: all living members heal up to ${card.heal}.`, 'heal');
+        break;
+      }
+      case 'regen': {
+        const m = this.members[target];
+        m.regen += card.regen;
+        this._log(`Regen on ${m.name} (stack ${m.regen}).`, 'status');
+        break;
+      }
+      case 'shield': {
+        const m = this.members[target];
+        m.shield = true; // does not stack
+        this._log(`Shield raised on ${m.name}.`, 'status');
+        break;
+      }
+      case 'resurrect': {
+        const m = this.members[target];
+        m.alive = true;
+        m.hp = Math.ceil(m.maxHP / 2);
+        m.shield = false; m.regen = 0; m.taunt = 0;
+        if (m.id === 'mage') this.mageCharge = 0;
+        this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
+        break;
+      }
+      case 'refresh': {
+        this.refresh += card.refresh;
+        this._log(`Refresh primed (MP-regen stack ${this.refresh}).`, 'status');
+        break;
+      }
+      case 'ability': {
+        this._fireAbility(this.members[target]);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  _fireAbility(m) {
+    switch (m.ability) {
+      case 'poison': {
+        this.enemy.poison += POISON_BASE;
+        this._log(`${m.name} fires Poison Arrow (Poison ${this.enemy.poison}).`, 'status');
+        break;
+      }
+      case 'taunt': {
+        this.tank.taunt = TAUNT_TURNS;
+        this._retargetTelegraphToTank();
+        this._log(`${m.name} Taunts for ${TAUNT_TURNS} enemy turns.`, 'status');
+        break;
+      }
+      case 'bolt': {
+        const dmg = BOLT_BASE + this.mageCharge;
+        this._log(`${m.name} casts Lightning Bolt (base ${BOLT_BASE} + Charge ${this.mageCharge}).`, 'status');
+        this.mageCharge = 0;
+        this._damageEnemy(dmg, 'Lightning Bolt');
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  canSkip() {
+    return this.phase === 'player' && !this.cardPlayedThisPhase;
+  }
+
+  skipTurn() {
+    if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
+    this.mp += SKIP_REGEN;
+    this._log(`Skipped to regen +${SKIP_REGEN} MP. (MP ${this.mp})`, 'mp');
+    this._endTurnInternal();
+    return { ok: true };
+  }
+
+  endTurn() {
+    if (this.phase !== 'player') return { ok: false, reason: 'not your phase' };
+    this._endTurnInternal();
+    return { ok: true };
+  }
+
+  _endTurnInternal() {
+    // Discard the whole hand (no Retain in the prototype).
+    while (this.hand.length) this.discardPile.push(this.hand.pop());
+
+    // Party phase: living members auto-attack in slot order.
+    this._runPartyPhase();
+    if (this.status !== 'playing') return; // enemy died -> no further enemy phase
+
+    // Advance to the next turn.
+    this.turn += 1;
+    this._runEnemyPhase();
+    if (this.status === 'playing') this._startPlayerPhase();
+  }
+
+  _runPartyPhase() {
+    let total = 0;
+    for (const m of this.members) {
+      if (!m.alive) continue;
+      total += m.damage;
+    }
+    if (total > 0) this._damageEnemy(total, 'Party auto-attack');
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "healer-deckbuilder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Prototype for the Healer Deckbuilder core battle loop.",
+  "scripts": {
+    "test": "node test/engine.test.js",
+    "serve": "node server.js"
+  }
+}

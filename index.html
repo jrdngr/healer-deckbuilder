@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Healer Deckbuilder — Prototype</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Healer Deckbuilder <span class="tag">prototype</span></h1>
+    <div class="newgame">
+      <label>Seed <input id="seed-input" type="number" /></label>
+      <button id="new-game">New Fight</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Enemy -->
+    <section class="enemy" id="enemy">
+      <div class="enemy-head">
+        <h2>Enemy <span id="enrage-flag" class="enrage hidden">ENRAGED</span></h2>
+        <div class="bar enemy-bar"><div class="bar-fill" id="enemy-hp-fill"></div>
+          <span class="bar-label" id="enemy-hp-label"></span></div>
+        <div class="enemy-status" id="enemy-status"></div>
+      </div>
+      <div class="telegraph" id="telegraph"></div>
+    </section>
+
+    <!-- Party -->
+    <section class="party" id="party"></section>
+
+    <!-- Controls / resources -->
+    <section class="controls">
+      <div class="resources">
+        <div class="res mp">MP <strong id="mp">0</strong></div>
+        <div class="res">Turn <strong id="turn">1</strong></div>
+        <div class="res">Charge <strong id="charge">0</strong></div>
+        <div class="res">Refresh <strong id="refresh">0</strong></div>
+        <div class="res">Draw <strong id="draw-count">0</strong> / Discard <strong id="discard-count">0</strong></div>
+      </div>
+      <div class="buttons">
+        <button id="skip-btn" title="Play no cards, regain MP">Skip &amp; Regen (+5 MP)</button>
+        <button id="end-btn" class="primary">End Turn</button>
+        <button id="cancel-btn" class="hidden">Cancel targeting</button>
+      </div>
+    </section>
+
+    <!-- Hand -->
+    <section class="hand-wrap">
+      <h3 id="hand-prompt">Your hand</h3>
+      <div class="hand" id="hand"></div>
+    </section>
+
+    <!-- Log -->
+    <section class="log-wrap">
+      <h3>Combat log</h3>
+      <ul class="log" id="log"></ul>
+    </section>
+  </main>
+
+  <div class="overlay hidden" id="overlay">
+    <div class="overlay-card">
+      <h2 id="overlay-title"></h2>
+      <p id="overlay-text"></p>
+      <button id="overlay-again" class="primary">New Fight</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/ui.js"></script>
+</body>
+</html>
