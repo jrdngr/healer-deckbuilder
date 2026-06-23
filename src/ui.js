@@ -184,13 +184,17 @@ function renderHand(over) {
     const affordable = game.mp >= card.cost && !over;
     el.className = 'card' + (affordable ? '' : ' unaffordable')
       + (selected && selected.handIndex === i ? ' selected' : '');
+    const heal = card.heal != null ? `<div class="heal" title="Healing">${card.heal}</div>` : '';
     el.innerHTML = `
       <div class="cost">${card.cost}</div>
+      ${heal}
       <div class="cname">${card.name}</div>
       <div class="cdesc">${card.desc}</div>`;
     el.addEventListener('click', () => onCardClick(i));
     hand.appendChild(el);
   }
+  $('draw-count').textContent = game.drawPile.length;
+  $('discard-count').textContent = game.discardPile.length;
   const prompt = $('hand-prompt');
   if (selected) {
     prompt.classList.add('targeting');
