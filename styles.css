@@ -69,24 +69,34 @@ main {
 .telegraph.concealed { border-color: #5a4a2a; color: var(--gold); }
 .telegraph.enraged { border-color: var(--danger); }
 
-/* Party */
+/* Party — portrait cards */
 .party { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .member {
-  background: var(--panel); border-radius: 10px; padding: 12px;
-  border: 2px solid transparent; position: relative; transition: border-color .15s;
+  background: var(--panel); border-radius: 12px; padding: 16px 12px 12px;
+  border: 2px solid #2c3340; position: relative; transition: border-color .15s, transform .12s;
+  width: 100%; max-width: 210px; min-height: 300px; margin-inline: auto;
+  display: flex; flex-direction: column; gap: 8px;
+  box-shadow: 0 6px 14px rgba(0,0,0,.45);
 }
-.member h3 { margin: 0 0 2px; font-size: 15px; }
-.member .role { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
-.member .stats { font-size: 12px; color: var(--muted); margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap; }
-.member .badges { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; min-height: 22px; }
-.badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 600; }
+.member h3 { margin: 0; font-size: 16px; text-align: center; }
+/* ATK value in a red diamond, top-right corner */
+.member .atk {
+  position: absolute; top: -10px; right: -10px; width: 30px; height: 30px;
+  background: var(--danger); transform: rotate(45deg); border-radius: 4px;
+  border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center;
+}
+.member .atk span { transform: rotate(-45deg); font-weight: 700; font-size: 14px; color: #2a0a0a; }
+.member .badges { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; min-height: 22px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
 .badge.shield { background: var(--shield); color: #06243a; }
 .badge.regen { background: var(--regen); color: #06351a; }
 .badge.taunt { background: var(--taunt); color: #3a2c06; }
+.member .charge { font-size: 12px; font-weight: 600; color: var(--gold); }
+.member .ability { font-size: 12px; color: var(--muted); margin-top: auto; line-height: 1.35; }
 .member.dead { opacity: .5; }
 .member.dead::after {
-  content: "DEAD"; position: absolute; top: 10px; right: 12px;
-  color: var(--danger); font-weight: 700; font-size: 12px; letter-spacing: 1px;
+  content: "DEAD"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--danger); font-weight: 700; font-size: 20px; letter-spacing: 2px;
 }
 .member.targeted-by-enemy { border-color: var(--danger); }
 .member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }

@@ -1,6 +1,6 @@
 // Browser controller: renders Game state and wires up player actions.
 import { Game } from './engine.js';
-import { CARDS } from './constants.js';
+import { CARDS, POISON_BASE, TAUNT_TURNS, BOLT_BASE, CHARGE_MAX } from './constants.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -8,10 +8,11 @@ let game = null;
 let selected = null;     // { handIndex, card } when a target-needing card is chosen
 let lastLogLen = 0;
 
-const ROLE = {
-  ranger: 'Ranger — medium HP / medium dmg',
-  tank: 'Tank — high HP / low dmg',
-  mage: 'Mage — low HP / high dmg',
+// Short flavor of each member's ability, shown on their card.
+const ABILITY = {
+  ranger: `Poison Arrow — stack Poison ${POISON_BASE} on the enemy.`,
+  tank: `Taunt — force the enemy onto the Tank for ${TAUNT_TURNS} turns.`,
+  mage: `Lightning Bolt — deal ${BOLT_BASE} + Charge to the enemy.`,
 };
 
 function newGame(seed) {
@@ -123,13 +124,16 @@ function render() {
 
     const hpPct = (m.hp / m.maxHP) * 100;
     const low = hpPct <= 34;
+    const charge = m.id === 'mage'
+      ? `<div class="charge">⚡ Charge ${game.mageCharge}/${CHARGE_MAX}</div>` : '';
     el.innerHTML = `
+      <div class="atk" title="Attack"><span>${m.damage}</span></div>
       <h3>${m.name}</h3>
-      <div class="role">${ROLE[m.id]}</div>
       <div class="bar"><div class="bar-fill" style="width:${hpPct}%;${low ? 'background:var(--hp-low);' : ''}"></div>
         <span class="bar-label">${m.hp} / ${m.maxHP}</span></div>
-      <div class="stats"><span>ATK ${m.damage}</span>${m.id === 'mage' ? `<span>Charge ${game.mageCharge}</span>` : ''}</div>
-      <div class="badges">${badges.join('')}</div>`;
+      <div class="badges">${badges.join('')}</div>
+      ${charge}
+      <div class="ability">${ABILITY[m.id]}</div>`;
     el.addEventListener('click', () => onMemberClick(m.slot));
     party.appendChild(el);
   }
