@@ -1,6 +1,6 @@
 // Zero-dependency test harness. Run with: node test/engine.test.js
 import { Game } from '../src/engine.js';
-import { DECK_LIST, CARDS, SLOT } from '../src/constants.js';
+import { DECK_LIST, CARDS, SLOT, MP_MAX } from '../src/constants.js';
 
 let passed = 0;
 let failed = 0;
@@ -195,6 +195,51 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   check('skip added at least +5 MP (minus any refresh noise)', g.mp >= mpBefore); // sanity
 }
 
+// --- MP is capped at MP_MAX ------------------------------------------------
+{
+  eq('MP_MAX is 10', MP_MAX, 10);
+  const g = new Game(15);
+  g.start();
+  g.mp = MP_MAX - 1; // 9; resting adds +5 but must clamp to 10
+  g.skipTurn();
+  check('rest never exceeds MP_MAX', g.mp <= MP_MAX, `got ${g.mp}`);
+  // refresh tick also clamps
+  const g2 = new Game(16);
+  g2.start();
+  g2.mp = MP_MAX; g2.refresh = 3;
+  g2._runEnemyPhase(); // applies one refresh tick among other things
+  check('refresh tick never exceeds MP_MAX', g2.mp <= MP_MAX, `got ${g2.mp}`);
+}
+
+// --- attackTargets() builds the right line specs ---------------------------
+{
+  const g = new Game(17);
+  g.start();
+  // known single -> 1 line carrying the telegraph damage
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  let lines = g.attackTargets();
+  eq('single -> 1 line', lines.length, 1);
+  eq('single line damage', lines[0].damage, 4);
+  check('single line not hidden', lines[0].hidden === false);
+  // aoe -> 3 lines
+  g.telegraph = { type: 'aoe', hidden: false, damage: 2, targets: [0, 1, 2], enraged: false, forTurn: 2 };
+  eq('aoe -> 3 lines', g.attackTargets().length, 3);
+  // a dead targeted slot is filtered out
+  g._killMember(g.members[SLOT.LEFT]);
+  g.telegraph = { type: 'two', hidden: false, damage: 3, targets: [SLOT.LEFT, SLOT.CENTER], enraged: false, forTurn: 2 };
+  lines = g.attackTargets();
+  eq('dead target filtered', lines.length, 1);
+  eq('surviving target is center', lines[0].slot, SLOT.CENTER);
+  // hidden -> one line per living member, unknown damage
+  const g2 = new Game(18);
+  g2.start();
+  g2.telegraph = { type: 'hidden', hidden: true, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  const hl = g2.attackTargets();
+  eq('hidden -> all living lines', hl.length, 3);
+  check('hidden line damage is null', hl[0].damage === null);
+  check('hidden line flagged hidden', hl[0].hidden === true);
+}
+
 // --- loss: party wipe ends immediately -------------------------------------
 {
   const g = new Game(11);
@@ -258,6 +303,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
       }
       if (!acted && g.canSkip() && g.mp < 3) g.skipTurn();
       else g.endTurn();
+      check(`game seed ${seed} MP within cap`, g.mp <= MP_MAX, `got ${g.mp}`);
       guard++;
     }
     check(`game seed ${seed} terminates`, g.status !== 'playing', `guard=${guard}`);

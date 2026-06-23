@@ -11,7 +11,7 @@
 
 import {
   MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
-  ENRAGE_TURN, ENRAGE_MULT, MP_START, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
+  ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
   POISON_BASE, TAUNT_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
 } from './constants.js';
 import { makeRng, shuffle, weightedPick } from './rng.js';
@@ -107,6 +107,20 @@ export class Game {
     };
   }
 
+  // Lines to draw for the standing telegraph. [] when the game is over / no telegraph.
+  // Each entry: { slot, damage, hidden }. Hidden attacks fan out to every living
+  // member with unknown (null) damage; known attacks hit their living targets.
+  attackTargets() {
+    const t = this.telegraph;
+    if (this.status !== 'playing' || !t) return [];
+    if (t.hidden) {
+      return this.livingMembers().map((m) => ({ slot: m.slot, damage: null, hidden: true }));
+    }
+    return t.targets
+      .filter((slot) => this.members[slot]?.alive)
+      .map((slot) => ({ slot, damage: t.damage, hidden: false }));
+  }
+
   // Recompute the standing telegraph's targets with the Tank forced as primary.
   _retargetTelegraphToTank() {
     if (!this.telegraph) return;
@@ -176,9 +190,9 @@ export class Game {
       }
     }
     if (this.refresh > 0) {
-      const gain = this.refresh;
-      this.mp += gain;
-      this._log(`Refresh restores ${gain} MP. (MP ${this.mp})`, 'mp');
+      const before = this.mp;
+      this.mp = Math.min(MP_MAX, this.mp + this.refresh);
+      this._log(`Refresh restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this.refresh -= 1;
     }
 
@@ -376,8 +390,9 @@ export class Game {
 
   skipTurn() {
     if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
-    this.mp += SKIP_REGEN;
-    this._log(`Skipped to regen +${SKIP_REGEN} MP. (MP ${this.mp})`, 'mp');
+    const before = this.mp;
+    this.mp = Math.min(MP_MAX, this.mp + SKIP_REGEN);
+    this._log(`Rested to regen +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
     this._endTurnInternal();
     return { ok: true };
   }

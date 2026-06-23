@@ -31,6 +31,7 @@ export const ENRAGE_TURN = 11; // first enraged enemy turn (turn 11 onward)
 export const ENRAGE_MULT = 1.25;
 
 export const MP_START = 10;
+export const MP_MAX = 10; // hard cap; MP never exceeds this
 export const SKIP_REGEN = 5;
 
 // Ability values.
