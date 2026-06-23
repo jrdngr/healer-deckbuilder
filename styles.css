@@ -46,6 +46,7 @@ main {
 /* Enemy */
 .enemy {
   background: var(--panel); border-radius: 10px; padding: 14px;
+  width: 50%; margin-inline: auto;
 }
 .enemy-head h2 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
 .enrage { font-size: 11px; background: var(--danger); color: #fff; padding: 1px 8px; border-radius: 10px; animation: pulse 1.2s infinite; }
@@ -68,12 +69,13 @@ main {
 .atk-text { fill: #fff; font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
 .hidden-text { fill: var(--unknown); }
 
-/* Party — portrait cards */
-.party { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+/* Party — portrait cards. Big gap above pushes the enemy away; shorter cards
+   reclaim most of their internal empty space and donate it to that gap. */
+.party { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 110px; }
 .member {
   background: var(--panel); border-radius: 12px; padding: 16px 12px 12px;
   border: 2px solid #2c3340; position: relative; transition: border-color .15s, transform .12s;
-  width: 100%; max-width: 210px; min-height: 300px; margin-inline: auto;
+  width: 100%; max-width: 210px; min-height: 190px; margin-inline: auto;
   display: flex; flex-direction: column; gap: 8px;
   box-shadow: 0 6px 14px rgba(0,0,0,.45);
 }
@@ -101,10 +103,9 @@ main {
 .member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }
 .member.valid-target:hover { background: var(--panel-2); }
 
-/* Controls — MP bar above the action buttons */
-.controls { display: flex; flex-direction: column; gap: 12px;
-  background: var(--panel); border-radius: 10px; padding: 12px 14px; }
-.mp-bar { height: 26px; }
+/* Controls — centered MP bar at half width */
+.controls { display: flex; justify-content: center; }
+.mp-bar { width: 50%; height: 26px; }
 .mp-bar .bar-fill { background: var(--mp); }
 .refresh-pill {
   position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
