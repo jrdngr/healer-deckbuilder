@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CARDS } from '../constants';
 import type { Slot, CardDef } from '../constants';
 import type { Game } from '../engine';
@@ -9,6 +9,7 @@ import { Hand } from './Hand';
 import { Actions } from './Actions';
 import { CombatLog } from './CombatLog';
 import { GameOverlay } from './GameOverlay';
+import { AttackLines } from './AttackLines';
 
 interface Selected {
   handIndex: number;
@@ -25,6 +26,7 @@ interface BattleScreenProps {
 
 export function BattleScreen({ game, playCard, skipTurn, endTurn, newGameRandom }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   // A fresh Game instance (newGame) means any pending targeting is stale.
   useEffect(() => { setSelected(null); }, [game]);
@@ -68,7 +70,7 @@ export function BattleScreen({ game, playCard, skipTurn, endTurn, newGameRandom 
   const onSkip = () => { setSelected(null); skipTurn(); };
 
   return (
-    <main>
+    <main ref={mainRef}>
       <EnemyPanel game={game} />
       <Party game={game} isValidTarget={isValidTarget} onMemberClick={onMemberClick} />
       <ManaBar game={game} />
@@ -86,6 +88,7 @@ export function BattleScreen({ game, playCard, skipTurn, endTurn, newGameRandom 
         onCancel={() => setSelected(null)}
       />
       <CombatLog game={game} />
+      <AttackLines game={game} containerRef={mainRef} />
       <GameOverlay game={game} onNewFight={newGameRandom} />
     </main>
   );
