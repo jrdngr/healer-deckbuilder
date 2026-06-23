@@ -19,6 +19,13 @@ no-build prototype of a single battle loop: plain HTML/CSS + vanilla ES-module J
   mechanics can be unit-tested directly without a browser. Put new logic in the engine, not
   the UI, whenever it can be tested in isolation.
 
+## Visual verification — do not use the Chrome DevTools plugin
+
+- Do **not** use the Chrome DevTools MCP plugin (or other browser-automation tooling) to
+  verify UI changes. The maintainer verifies visual/UI changes manually.
+- For UI work, make the change, ensure tests still pass, and leave visual confirmation to
+  the maintainer rather than driving a browser yourself.
+
 ## Do not touch the design doc
 
 - `docs/healer-deckbuilder-spec.md` is a **historical artifact**. Do not reference it as a
