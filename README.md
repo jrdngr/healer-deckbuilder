@@ -9,15 +9,16 @@ The full design is in [`docs/healer-deckbuilder-spec.md`](docs/healer-deckbuilde
 
 ## Run it
 
-It's plain HTML/CSS + vanilla ES-module JavaScript — **no build step, no dependencies**.
-ES modules must be served over HTTP (not opened as `file://`):
+The UI is **React + Vite + TypeScript**. Install dependencies once, then start the dev
+server (hot module reloading):
 
 ```bash
-node server.js          # or: npm run serve
-# open http://localhost:8080
+npm install
+npm run dev        # then open the printed URL (default http://localhost:5173)
 ```
 
-(Any static server works, e.g. `python3 -m http.server 8080`.)
+Production build: `npm run build` (type-checks, then bundles to `dist/`); preview it with
+`npm run preview`.
 
 ## How to play
 
@@ -59,21 +60,23 @@ healing you may need. **That offense-vs-survival squeeze is what the prototype t
 
 ```
 docs/healer-deckbuilder-spec.md   the design document
-index.html, styles.css            the UI shell
-server.js                          tiny zero-dep static server
+index.html, vite.config.ts        Vite entry + config
+styles.css                        global UI styles
 src/
-  constants.js   all tunable values from the spec's Numbers section
-  rng.js         seedable PRNG + shuffle/weighted-pick helpers
-  engine.js      pure battle engine (no DOM) — the source of truth
-  ui.js          browser controller: renders state, handles input
+  constants.ts        all tunable values and shared types
+  rng.ts              seedable PRNG + shuffle/weighted-pick helpers
+  engine.ts           pure battle engine (no DOM) — the source of truth
+  useGame.ts          React hook binding the engine to the UI
+  App.tsx, main.tsx   app entry + screen seam
+  components/         React components (battle UI)
 test/
-  engine.test.js zero-dependency test harness
+  engine.test.ts      the test harness (runs via tsx)
 ```
 
 The engine is pure and DOM-free, so the mechanics are unit-tested directly:
 
 ```bash
-node test/engine.test.js     # or: npm test
+npm test     # runs tsx test/engine.test.ts
 ```
 
 Covers deck composition, the round-up enrage damage, the Poison/Regen/Refresh decay
