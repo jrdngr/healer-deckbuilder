@@ -79,10 +79,11 @@ main {
   display: flex; flex-direction: column; gap: 8px;
   box-shadow: 0 6px 14px rgba(0,0,0,.45);
 }
-.member h3 { margin: 0; font-size: 16px; text-align: center; }
-/* ATK value in a red diamond, top-right corner */
+/* Name is centered; pad so it never runs under the ATK diamond in the corner. */
+.member h3 { margin: 0; font-size: 16px; text-align: center; padding: 0 32px; }
+/* ATK value in a red diamond, inset in the top-right corner */
 .member .atk {
-  position: absolute; top: -10px; right: -10px; width: 30px; height: 30px;
+  position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
   background: var(--danger); transform: rotate(45deg); border-radius: 4px;
   border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center;
 }
@@ -132,23 +133,24 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 150px; }
 .card {
   width: 132px; min-height: 150px; background: var(--panel); border: 1px solid #3a4150; border-radius: 9px;
-  padding: 12px 10px 10px; cursor: pointer; transition: transform .1s, border-color .12s; position: relative;
+  /* top padding reserves a strip for the cost/heal badges so text starts below them */
+  padding: 44px 10px 10px; cursor: pointer; transition: transform .1s, border-color .12s; position: relative;
   box-shadow: 0 4px 10px rgba(0,0,0,.4);
 }
 .card:hover { transform: translateY(-3px); }
-/* Mana cost: blue square, top-left */
+/* Mana cost: blue square, inset in the top-left corner */
 .card .cost {
-  position: absolute; top: -8px; left: -8px; width: 26px; height: 26px; border-radius: 6px;
+  position: absolute; top: 10px; left: 10px; width: 26px; height: 26px; border-radius: 6px;
   background: var(--mp); color: #06243a; display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 13px; border: 2px solid var(--bg);
 }
-/* Healing value: green circle, top-right */
+/* Healing value: green circle, inset in the top-right corner */
 .card .heal {
-  position: absolute; top: -8px; right: -8px; width: 26px; height: 26px; border-radius: 50%;
+  position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 50%;
   background: var(--hp); color: #06351a; display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: 13px; border: 2px solid var(--bg);
 }
-.card .cname { font-weight: 700; font-size: 13px; margin: 2px 0 6px; }
+.card .cname { font-weight: 700; font-size: 13px; margin: 0 0 6px; }
 .card .cdesc { font-size: 11px; color: var(--muted); }
 .card.unaffordable { opacity: .45; cursor: not-allowed; }
 .card.unaffordable:hover { transform: none; }
