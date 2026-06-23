@@ -102,12 +102,16 @@ main {
 .member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }
 .member.valid-target:hover { background: var(--panel-2); }
 
-/* Controls */
-.controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+/* Controls — MP bar above the action buttons */
+.controls { display: flex; flex-direction: column; gap: 12px;
   background: var(--panel); border-radius: 10px; padding: 12px 14px; }
-.resources { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
-.res strong { color: var(--ink); font-size: 15px; }
-.res.mp strong { color: var(--mp); }
+.mp-bar { height: 26px; }
+.mp-bar .bar-fill { background: var(--mp); }
+.refresh-pill {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
+  background: var(--regen); color: #06351a;
+}
 .buttons { display: flex; gap: 8px; }
 
 button {
@@ -118,6 +122,8 @@ button:hover:not(:disabled) { background: #303644; }
 button:disabled { opacity: .4; cursor: not-allowed; }
 button.primary { background: var(--accent); color: #08101f; border-color: var(--accent); }
 button.primary:hover:not(:disabled) { background: #8bbcff; }
+button.danger { background: var(--danger); color: #2a0a0a; border-color: var(--danger); }
+button.danger:hover:not(:disabled) { background: #f07a7a; }
 
 /* Hand */
 .hand-wrap h3 { margin: 0 0 8px; font-size: 14px; }

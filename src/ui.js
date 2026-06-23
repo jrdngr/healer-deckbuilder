@@ -1,6 +1,6 @@
 // Browser controller: renders Game state and wires up player actions.
 import { Game } from './engine.js';
-import { CARDS, POISON_BASE, TAUNT_TURNS, BOLT_BASE, CHARGE_MAX } from './constants.js';
+import { CARDS, POISON_BASE, TAUNT_TURNS, BOLT_BASE, CHARGE_MAX, MP_MAX } from './constants.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -138,13 +138,12 @@ function render() {
     party.appendChild(el);
   }
 
-  // Resources
-  $('mp').textContent = game.mp;
-  $('turn').textContent = game.turn;
-  $('charge').textContent = game.mageCharge;
-  $('refresh').textContent = game.refresh;
-  $('draw-count').textContent = game.drawPile.length;
-  $('discard-count').textContent = game.discardPile.length;
+  // MP bar (+ Refresh pill when MP-regen is pending)
+  $('mp-fill').style.width = `${(game.mp / MP_MAX) * 100}%`;
+  $('mp-label').textContent = `MP ${game.mp} / ${MP_MAX}`;
+  const pill = $('refresh-pill');
+  pill.classList.toggle('hidden', game.refresh <= 0);
+  if (game.refresh > 0) pill.textContent = `⟳ +${game.refresh}`;
 
   // Buttons
   $('skip-btn').disabled = over || !game.canSkip();
