@@ -64,6 +64,37 @@ export interface AttackSpec {
   hidden: boolean;
 }
 
+// Structured, ordered record of everything that happened during a single action
+// (start / playCard / skipTurn / endTurn). The UI replays this list to drive its
+// animations. Each event carries the *post-event* values it touches (e.g. a hit
+// records the target's resulting HP) so the view can stage numbers/bars to the
+// exact moment each effect lands without re-deriving any engine math. Pure data —
+// no DOM, no timing.
+export type GameEvent =
+  // --- enemy phase ---
+  | { kind: 'enrage' }
+  | { kind: 'poisonTick'; amount: number; enemyHp: number }
+  | { kind: 'regenTick'; slot: Slot; amount: number; hp: number }
+  | { kind: 'refreshTick'; amount: number; mp: number }
+  | { kind: 'enemyAttack'; slot: Slot; amount: number; hp: number;
+      result: 'hit' | 'shield' | 'whiff'; killed: boolean; hidden: boolean }
+  // --- party phase (one per attacking member, left to right) ---
+  | { kind: 'partyAttack'; slot: Slot; amount: number; enemyHp: number }
+  // --- healing / buffs / spells ---
+  | { kind: 'heal'; slot: Slot; amount: number; hp: number }
+  | { kind: 'regenApplied'; slot: Slot; stack: number }
+  | { kind: 'shieldApplied'; slot: Slot }
+  | { kind: 'resurrect'; slot: Slot; hp: number }
+  | { kind: 'refreshPrimed'; stack: number }
+  | { kind: 'rest'; amount: number; mp: number }
+  // --- abilities ---
+  | { kind: 'poisonApplied'; slot: Slot; amount: number; poison: number }
+  | { kind: 'taunt'; slot: Slot; turns: number }
+  | { kind: 'bolt'; slot: Slot; amount: number; enemyHp: number }
+  // --- terminal flourishes ---
+  | { kind: 'defeatEnemy' }
+  | { kind: 'wipe' };
+
 export interface PlayResult {
   ok: boolean;
   reason?: string;
@@ -86,6 +117,7 @@ export class Game {
   cardPlayedThisPhase: boolean;
   telegraph: Telegraph | null;
   log: LogEntry[];
+  events: GameEvent[]; // animation feed for the most recent action (see GameEvent)
 
   constructor(seed: number = Date.now()) {
     this.seed = seed >>> 0;
@@ -116,6 +148,7 @@ export class Game {
     this.cardPlayedThisPhase = false;
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
     this.log = [];
+    this.events = [];
   }
 
   // ---- helpers -------------------------------------------------------------
@@ -128,6 +161,8 @@ export class Game {
   allDead(): boolean { return this.members.every((m) => !m.alive); }
 
   _log(text: string, kind: string = 'info'): void { this.log.push({ text, kind, turn: this.turn }); }
+
+  _emit(e: GameEvent): void { this.events.push(e); }
 
   isEnraged(turn: number): boolean { return turn >= ENRAGE_TURN; }
 
@@ -201,6 +236,7 @@ export class Game {
   // ---- lifecycle -----------------------------------------------------------
 
   start(): this {
+    this.events = [];
     this._log('Combat begins.', 'system');
     // First telegraph is generated before turn 1's enemy phase.
     this.telegraph = this._generateTelegraph(this.turn);
@@ -227,6 +263,7 @@ export class Game {
       this.status = 'win';
       this.phase = 'over';
       this._log('The enemy is defeated. Victory!', 'win');
+      this._emit({ kind: 'defeatEnemy' });
     }
   }
 
@@ -243,12 +280,14 @@ export class Game {
     if (this.turn === ENRAGE_TURN && !this.enemy.enraged) {
       this.enemy.enraged = true;
       this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');
+      this._emit({ kind: 'enrage' });
     }
 
     // 1) start-of-turn status ticks: Poison -> Regen -> Refresh.
     if (this.enemy.poison > 0) {
       const dmg = this.enemy.poison;
       this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
+      this._emit({ kind: 'poisonTick', amount: dmg, enemyHp: this.enemy.hp });
       this.enemy.poison -= 1;
       if (this.status === 'win') return; // poison can finish the enemy
     }
@@ -256,6 +295,7 @@ export class Game {
       if (m.alive && m.regen > 0) {
         const healed = this._healMember(m, m.regen);
         this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
+        this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
         m.regen -= 1;
       }
     }
@@ -263,6 +303,7 @@ export class Game {
       const before = this.mp;
       this.mp = Math.min(MP_MAX, this.mp + this.refresh);
       this._log(`Refresh restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
+      this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
       this.refresh -= 1;
     }
 
@@ -272,6 +313,7 @@ export class Game {
       this.status = 'loss';
       this.phase = 'over';
       this._log('The whole party has fallen. Defeat.', 'loss');
+      this._emit({ kind: 'wipe' });
       return;
     }
 
@@ -294,16 +336,20 @@ export class Game {
       const m = this.members[slot];
       if (!m || !m.alive) {
         this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
+        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden });
         continue;
       }
       if (m.shield) {
         m.shield = false;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
+        this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
         continue;
       }
       m.hp = Math.max(0, m.hp - t.damage);
       this._log(`${label} hits ${m.name} for ${t.damage}. (${m.hp}/${m.maxHP})`, 'hit');
-      if (m.hp <= 0) this._killMember(m);
+      const killed = m.hp <= 0;
+      this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
+      if (killed) this._killMember(m);
     }
   }
 
@@ -369,6 +415,7 @@ export class Game {
     const reason = this.canPlay(handIndex, target);
     if (reason) return { ok: false, reason };
 
+    this.events = [];
     const cardId = this.hand[handIndex];
     const card = CARDS[cardId];
     this.mp -= card.cost;
@@ -387,10 +434,14 @@ export class Game {
         const m = this.members[target as number];
         const healed = this._healMember(m, card.heal ?? 0);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
+        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         break;
       }
       case 'aoeHeal': {
-        for (const m of this.livingMembers()) this._healMember(m, card.heal ?? 0);
+        for (const m of this.livingMembers()) {
+          const healed = this._healMember(m, card.heal ?? 0);
+          this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        }
         this._log(`AoE Heal: all living members heal up to ${card.heal}.`, 'heal');
         break;
       }
@@ -398,12 +449,14 @@ export class Game {
         const m = this.members[target as number];
         m.regen += card.regen ?? 0;
         this._log(`Regen on ${m.name} (stack ${m.regen}).`, 'status');
+        this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         break;
       }
       case 'shield': {
         const m = this.members[target as number];
         m.shield = true; // does not stack
         this._log(`Shield raised on ${m.name}.`, 'status');
+        this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
       }
       case 'resurrect': {
@@ -413,11 +466,13 @@ export class Game {
         m.shield = false; m.regen = 0; m.taunt = 0;
         if (m.id === 'mage') this.mageCharge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
+        this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
       }
       case 'refresh': {
         this.refresh += card.refresh ?? 0;
         this._log(`Refresh primed (MP-regen stack ${this.refresh}).`, 'status');
+        this._emit({ kind: 'refreshPrimed', stack: this.refresh });
         break;
       }
       case 'ability': {
@@ -434,12 +489,14 @@ export class Game {
       case 'poison': {
         this.enemy.poison += POISON_BASE;
         this._log(`${m.name} fires Poison Arrow (Poison ${this.enemy.poison}).`, 'status');
+        this._emit({ kind: 'poisonApplied', slot: m.slot, amount: POISON_BASE, poison: this.enemy.poison });
         break;
       }
       case 'taunt': {
         this.tank.taunt = TAUNT_TURNS;
         this._retargetTelegraphToTank();
         this._log(`${m.name} Taunts for ${TAUNT_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_TURNS });
         break;
       }
       case 'bolt': {
@@ -447,6 +504,7 @@ export class Game {
         this._log(`${m.name} casts Lightning Bolt (base ${BOLT_BASE} + Charge ${this.mageCharge}).`, 'status');
         this.mageCharge = 0;
         this._damageEnemy(dmg, 'Lightning Bolt');
+        this._emit({ kind: 'bolt', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
         break;
       }
       default:
@@ -460,15 +518,18 @@ export class Game {
 
   skipTurn(): PlayResult {
     if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
+    this.events = [];
     const before = this.mp;
     this.mp = Math.min(MP_MAX, this.mp + SKIP_REGEN);
     this._log(`Rested to regen +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
+    this._emit({ kind: 'rest', amount: this.mp - before, mp: this.mp });
     this._endTurnInternal();
     return { ok: true };
   }
 
   endTurn(): PlayResult {
     if (this.phase !== 'player') return { ok: false, reason: 'not your phase' };
+    this.events = [];
     this._endTurnInternal();
     return { ok: true };
   }
@@ -488,11 +549,14 @@ export class Game {
   }
 
   _runPartyPhase(): void {
-    let total = 0;
+    // Each living member strikes in slot order (left -> center -> right) so the UI
+    // can play three attacks in sequence. The enemy HP steps down per hit; the
+    // total is unchanged from a single combined strike.
     for (const m of this.members) {
-      if (!m.alive) continue;
-      total += m.damage;
+      if (!m.alive || m.damage <= 0) continue;
+      this._damageEnemy(m.damage, `${m.name}`);
+      this._emit({ kind: 'partyAttack', slot: m.slot, amount: m.damage, enemyHp: this.enemy.hp });
+      if (this.status !== 'playing') break; // a strike can finish the enemy
     }
-    if (total > 0) this._damageEnemy(total, 'Party auto-attack');
   }
 }

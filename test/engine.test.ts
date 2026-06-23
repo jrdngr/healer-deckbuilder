@@ -287,6 +287,127 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   eq('heal capped at maxHP', tank.hp, tank.maxHP);
 }
 
+// --- events: party phase strikes left-to-right, enemy HP steps down ---------
+{
+  const g = new Game(20);
+  g.start();
+  g.enemy.hp = 100;
+  g.endTurn();
+  const party = g.events.filter((e) => e.kind === 'partyAttack');
+  eq('party emits one event per living member', party.length, 3);
+  check('party events ordered left-to-right',
+    JSON.stringify(party.map((e: any) => e.slot)) === JSON.stringify([0, 1, 2]));
+  // ranger 3, tank 1, mage 5 -> running enemy HP 97, 96, 91
+  check('party enemyHp steps down per strike',
+    JSON.stringify(party.map((e: any) => e.enemyHp)) === JSON.stringify([97, 96, 91]),
+    JSON.stringify(party.map((e: any) => e.enemyHp)));
+}
+
+// --- events: heal records amount + resulting HP ----------------------------
+{
+  const g = new Game(21);
+  g.start();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 4;
+  g.mp = 10;
+  const idx = giveCard(g, 'highHeal'); // heals 8, tank maxHP 12
+  g.events = [];
+  g.playCard(idx, SLOT.CENTER);
+  const heal = g.events.find((e) => e.kind === 'heal') as any;
+  check('heal event emitted', !!heal);
+  eq('heal event amount', heal.amount, 8);
+  eq('heal event resulting hp', heal.hp, 12);
+}
+
+// --- events: aoe heal emits one heal event per living member ----------------
+{
+  const g = new Game(22);
+  g.start();
+  for (const m of g.members) m.hp = 1;
+  g.mp = 10;
+  const idx = giveCard(g, 'aoeHeal');
+  g.events = [];
+  g.playCard(idx, null);
+  eq('aoe heal emits per-member events', g.events.filter((e) => e.kind === 'heal').length, 3);
+}
+
+// --- events: bolt, poison, taunt, shield, regen, refresh, resurrect ---------
+{
+  const g = new Game(23);
+  g.start();
+  g.mageCharge = 2; g.enemy.hp = 100; g.mp = 10;
+  let idx = giveCard(g, 'ability');
+  g.events = [];
+  g.playCard(idx, SLOT.RIGHT); // bolt: 3 + 2 = 5
+  const bolt = g.events.find((e) => e.kind === 'bolt') as any;
+  check('bolt event emitted', !!bolt);
+  eq('bolt event amount', bolt.amount, 5);
+  eq('bolt event enemyHp', bolt.enemyHp, 95);
+
+  idx = giveCard(g, 'ability');
+  g.events = [];
+  g.playCard(idx, SLOT.LEFT); // poison arrow
+  const pois = g.events.find((e) => e.kind === 'poisonApplied') as any;
+  check('poison event emitted', !!pois);
+  eq('poison event amount', pois.amount, 5);
+
+  idx = giveCard(g, 'ability');
+  g.events = [];
+  g.playCard(idx, SLOT.CENTER); // taunt
+  check('taunt event emitted', g.events.some((e) => e.kind === 'taunt'));
+
+  g.mp = 10;
+  idx = giveCard(g, 'shield');
+  g.events = [];
+  g.playCard(idx, SLOT.CENTER);
+  check('shield event emitted', g.events.some((e) => e.kind === 'shieldApplied'));
+
+  g.mp = 10;
+  idx = giveCard(g, 'regen');
+  g.events = [];
+  g.playCard(idx, SLOT.LEFT);
+  check('regen event emitted', g.events.some((e) => e.kind === 'regenApplied'));
+
+  g.mp = 10;
+  idx = giveCard(g, 'refresh');
+  g.events = [];
+  g.playCard(idx, null);
+  check('refresh event emitted', g.events.some((e) => e.kind === 'refreshPrimed'));
+
+  g._killMember(g.members[SLOT.RIGHT]);
+  g.mp = 10;
+  idx = giveCard(g, 'resurrect');
+  g.events = [];
+  g.playCard(idx, SLOT.RIGHT);
+  check('resurrect event emitted', g.events.some((e) => e.kind === 'resurrect'));
+}
+
+// --- events: enemy attack records result + kill flag ------------------------
+{
+  const g = new Game(24);
+  g.start();
+  const mage = g.members[SLOT.RIGHT];
+  mage.hp = 2;
+  g.events = [];
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.RIGHT], enraged: false, forTurn: 2 };
+  g._resolveAttack();
+  const atk = g.events.find((e) => e.kind === 'enemyAttack') as any;
+  check('enemy attack event emitted', !!atk);
+  eq('enemy attack result is hit', atk.result, 'hit');
+  check('enemy attack flags the kill', atk.killed === true);
+}
+
+// --- events: rest emits a rest event with the MP gained ---------------------
+{
+  const g = new Game(25);
+  g.start();
+  g.mp = 2;
+  g.skipTurn();
+  const rest = g.events.find((e) => e.kind === 'rest') as any;
+  check('rest event emitted', !!rest);
+  eq('rest event amount', rest.amount, 5);
+}
+
 // --- full game smoke test: never throws, terminates ------------------------
 {
   for (let seed = 100; seed < 110; seed++) {
