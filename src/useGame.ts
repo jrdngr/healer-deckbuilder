@@ -142,13 +142,15 @@ export function useGame(initialSeed?: number): GameController {
         if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
       }, entry.at);
     }
-    // When the last effect has faded, snap the view to the engine and unlock.
+    // Unlock once the action has played out (paceEnd) rather than waiting for the
+    // cosmetic fade-out (total) — the lingering particles/numbers finish on their
+    // own. This roughly halves the input delay after the enemy's attack lands.
     schedule(() => {
       setView(snapshot(g));
       animatingRef.current = false;
       setAnimating(false);
       onDone?.();
-    }, timeline.total + 100);
+    }, timeline.paceEnd + 100);
   }, [schedule, applyPatch, spawnFx]);
 
   // Live, non-blocking playback for the player's own card plays. The result is

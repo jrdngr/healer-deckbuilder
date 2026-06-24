@@ -82,11 +82,25 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   check('resurrect raises a pillar', fxTypes(tl).includes('pillar'));
 }
 
+// --- input resumes at the pacing end, before the cosmetic fade-out ----------
+{
+  const events: GameEvent[] = [
+    { kind: 'partyAttack', slot: 0, amount: 3, enemyHp: 97 },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
+  ];
+  const tl = buildTimeline(events);
+  check('input resumes before the full fade-out', tl.paceEnd < tl.total);
+  // Every display patch must land by the pacing end, so HP is current on unlock.
+  const lastPatchAt = Math.max(...tl.entries.filter((e) => e.patch).map((e) => e.at));
+  check('all HP patches land by the pacing end', lastPatchAt <= tl.paceEnd, `${lastPatchAt} > ${tl.paceEnd}`);
+}
+
 // --- empty feed yields an empty, zero-length timeline -----------------------
 {
   const tl = buildTimeline([]);
   eq('no entries', tl.entries.length, 0);
   eq('zero total', tl.total, 0);
+  eq('zero paceEnd', tl.paceEnd, 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

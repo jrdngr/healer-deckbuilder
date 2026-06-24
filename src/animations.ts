@@ -44,7 +44,9 @@ export interface TimelineEntry {
 
 export interface Timeline {
   entries: TimelineEntry[];
-  total: number;       // ms until every effect has finished
+  total: number;       // ms until every effect has finished fading
+  paceEnd: number;     // ms until the action's pacing ends — input can resume here,
+                       // ahead of the cosmetic fade-out captured by `total`
 }
 
 // A spawned effect: a spec plus a stable id for React keys and removal.
@@ -310,11 +312,14 @@ export function buildTimeline(events: GameEvent[]): Timeline {
     }
   }
 
-  // The sequence is done only once the last-spawned effect has also faded out.
+  // `paceEnd` is where the action has finished playing out (the cursor); input can
+  // resume here. `total` waits for the last effect to also finish fading out — used
+  // only to know when nothing is left on screen.
+  const paceEnd = t;
   let maxEnd = t;
   for (const e of entries) {
     if (!e.fx) continue;
     for (const f of e.fx) maxEnd = Math.max(maxEnd, e.at + FX_DURATION[f.type]);
   }
-  return { entries, total: maxEnd };
+  return { entries, total: maxEnd, paceEnd };
 }
