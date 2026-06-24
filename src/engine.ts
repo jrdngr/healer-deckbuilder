@@ -516,6 +516,11 @@ export class Game {
     return this.phase === 'player' && !this.cardPlayedThisPhase;
   }
 
+  // MP a rest would actually recover right now, accounting for the MP_MAX cap.
+  restAmount(): number {
+    return Math.min(MP_MAX, this.mp + SKIP_REGEN) - this.mp;
+  }
+
   skipTurn(): PlayResult {
     if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
     this.events = [];

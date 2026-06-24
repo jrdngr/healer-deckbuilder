@@ -11,17 +11,19 @@ interface ActionsProps {
 
 export function Actions({ game, animating, hasSelection, onSkip, onEndTurn, onCancel }: ActionsProps) {
   const over = game.status !== 'playing';
+  // Until the player commits a card this turn, ending the turn also rests for MP,
+  // so the primary button doubles as Rest and advertises the MP it will recover.
+  const resting = game.canSkip();
   return (
     <section className="buttons">
       <button
-        className="danger"
-        disabled={over || animating || !game.canSkip()}
-        onClick={onSkip}
-        title="Play no cards, rest to regain MP, then end your turn"
+        className="primary"
+        disabled={over || animating}
+        onClick={resting ? onSkip : onEndTurn}
+        title={resting ? 'Play no cards, rest to regain MP, then end your turn' : undefined}
       >
-        Rest
+        {resting ? `Rest & End Turn (+${game.restAmount()} MP)` : 'End Turn'}
       </button>
-      <button className="primary" disabled={over || animating} onClick={onEndTurn}>End Turn</button>
       {hasSelection && <button onClick={onCancel}>Cancel targeting</button>}
     </section>
   );

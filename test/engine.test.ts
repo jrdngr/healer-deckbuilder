@@ -192,6 +192,15 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   g2.members[SLOT.LEFT].hp = 1;
   g2.playCard(idx, SLOT.LEFT);
   check('cannot skip after playing a card', !g2.canSkip());
+  // restAmount reflects what a rest would actually recover, clamped to MP_MAX
+  const g3 = new Game(10);
+  g3.start();
+  g3.mp = 0;
+  eq('restAmount is full SKIP_REGEN when far from cap', g3.restAmount(), 5);
+  g3.mp = MP_MAX - 2; // 8; +5 would overshoot, so only 2 is recoverable
+  eq('restAmount clamps to MP_MAX', g3.restAmount(), 2);
+  g3.mp = MP_MAX;
+  eq('restAmount is 0 at full MP', g3.restAmount(), 0);
   // skip on first game
   g.skipTurn();
   check('skip added at least +5 MP (minus any refresh noise)', g.mp >= mpBefore); // sanity
