@@ -243,6 +243,42 @@ export class Game {
     t.targets = this._geometry(t.type, SLOT.CENTER);
   }
 
+  // ---- next-turn predictions (for the bar telegraphs) ----------------------
+  // Pure reads of the standing telegraph and status stacks, previewing what next
+  // turn will do so the UI can paint it as coloured bar segments.
+
+  // HP a member will lose to the next enemy attack: the post-Defense hit, 0 when
+  // Shielded (the blow is absorbed) or untargeted, and null when the attack is
+  // Hidden (damage unknown until it lands). Capped at the member's current HP.
+  predictedDamage(slot: Slot): number | null {
+    const t = this.telegraph;
+    if (this.status !== 'playing' || !t) return 0;
+    const m = this.members[slot];
+    if (!m || !m.alive || !t.targets.includes(slot)) return 0;
+    if (t.hidden) return null;
+    if (m.shield) return 0;
+    return Math.min(m.hp, this._effectiveDamage(m, t.damage));
+  }
+
+  // HP a member will regenerate at the start of their next turn (the current Regen
+  // stack), capped by the room left under maxHP.
+  predictedRegen(slot: Slot): number {
+    const m = this.members[slot];
+    if (!m || !m.alive || m.regen <= 0) return 0;
+    return Math.min(m.regen, m.maxHP - m.hp);
+  }
+
+  // MP that Refresh will restore on the next enemy phase (the current stack),
+  // capped by the room left under MP_MAX.
+  predictedRefresh(): number {
+    return Math.min(this.refresh, MP_MAX - this.mp);
+  }
+
+  // Enemy HP the next Poison tick will remove (the current stack), capped by its HP.
+  predictedPoison(): number {
+    return Math.min(this.enemy.poison, this.enemy.hp);
+  }
+
   // ---- lifecycle -----------------------------------------------------------
 
   start(): this {

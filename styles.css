@@ -13,6 +13,8 @@
   --regen: #7fe6a4;
   --taunt: #f2c14e;
   --defense: #aeb9cc;
+  --mp-pending: #aecbff; /* lighter blue: MP a Refresh tick will restore next turn */
+  --poison-dark: #2e8b4f; /* dark green: enemy HP the next Poison tick will remove */
   --danger: #e85d5d;
   --gold: #f2c14e;
   --unknown: #b388ff;
@@ -55,8 +57,18 @@ main {
 .enemy-status { margin-top: 8px; font-size: 13px; color: var(--gold); min-height: 18px; }
 
 .bar { position: relative; height: 22px; background: #11141a; border-radius: 6px; overflow: hidden; border: 1px solid #000; }
-.bar-fill { height: 100%; background: var(--hp); transition: width .25s ease; }
-.enemy-bar .bar-fill { background: var(--enemy); }
+/* The fill is a row of coloured segments anchored from the left: the current
+   value pinned at left:0 (so it depletes from the right), then telegraphed
+   next-turn changes (incoming damage / pending heals) offset to sit after it. */
+.bar-track { position: absolute; inset: 0; }
+.seg { position: absolute; top: 0; bottom: 0; transition: width .25s ease, left .25s ease; }
+.seg.hp { background: var(--hp); }
+.seg.incoming { background: var(--danger); }   /* enemy damage that will land next turn */
+.seg.regen-pending { background: var(--regen); } /* lighter green: regen heal next turn */
+.seg.mp { background: var(--mp); }
+.seg.refresh-pending { background: var(--mp-pending); }
+.seg.enemy { background: var(--enemy); }
+.seg.poison-pending { background: var(--poison-dark); }
 .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px #000; }
 
 /* Enemy attack lines (SVG overlay drawn over the layout) */
@@ -109,7 +121,6 @@ main {
 /* Controls — centered MP bar at half width */
 .controls { display: flex; justify-content: center; }
 .mp-bar { width: 50%; height: 26px; }
-.mp-bar .bar-fill { background: var(--mp); }
 .refresh-pill {
   position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
   font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;

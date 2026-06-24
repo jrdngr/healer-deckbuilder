@@ -95,7 +95,7 @@ export function BattleScreen({
 
   return (
     <main ref={mainRef}>
-      <EnemyPanel game={game} displayHp={view.enemyHp} />
+      <EnemyPanel game={game} displayHp={view.enemyHp} animating={animating} />
       <Party
         game={game}
         view={view}
@@ -103,7 +103,7 @@ export function BattleScreen({
         isValidTarget={isValidTarget}
         onMemberClick={onMemberClick}
       />
-      <ManaBar game={game} />
+      <ManaBar game={game} animating={animating} />
       <Hand
         game={game}
         disabled={animating}

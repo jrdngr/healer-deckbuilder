@@ -17,10 +17,12 @@ export function Party({ game, view, animating, isValidTarget, onMemberClick }: P
   return (
     <section className="party">
       {game.members.map((m) => {
-        // Hide the "targeted" outline while a sequence plays; it reflects the
-        // next turn's telegraph, which shouldn't glow during the current attack.
+        // Hide the telegraph (targeted outline + bar chunks) while a sequence
+        // plays or the fight is over; it reflects the next turn, which shouldn't
+        // show during the current attack.
+        const showTelegraph = !animating && !over;
         const targetedByEnemy =
-          !animating && !over && !!tg && !tg.hidden && tg.targets.includes(m.slot) && m.alive;
+          showTelegraph && !!tg && !tg.hidden && tg.targets.includes(m.slot) && m.alive;
         return (
           <MemberCard
             key={m.slot}
@@ -29,6 +31,8 @@ export function Party({ game, view, animating, isValidTarget, onMemberClick }: P
             displayDead={view.memberDead[m.slot]}
             mageCharge={game.mageCharge}
             targetedByEnemy={targetedByEnemy}
+            incomingDamage={showTelegraph ? (game.predictedDamage(m.slot) ?? 0) : 0}
+            pendingRegen={showTelegraph ? game.predictedRegen(m.slot) : 0}
             validTarget={isValidTarget(m.slot)}
             onClick={() => onMemberClick(m.slot)}
           />
