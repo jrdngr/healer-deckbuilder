@@ -1,15 +1,34 @@
-// Binds the imperative, mutate-in-place Game engine to React.
+// Binds the imperative, mutate-in-place Game engine to React, and plays back the
+// engine's event feed as animations.
 //
 // The engine mutates state in place and returns nothing, so React can't "see"
-// changes by reference. We keep the single Game instance in a ref and force a
-// re-render after each action via a tick reducer. Components read the (mutated)
-// instance fresh on every render — the same "render everything from state" model
-// the old vanilla UI used, but now with React reconciliation doing the diffing.
-import { useCallback, useReducer, useRef } from 'react';
+// changes by reference — we keep the single Game instance in a ref and force a
+// re-render after each action. On top of that, every action emits an ordered list
+// of GameEvents (see engine.ts). We turn that into a timeline (see animations.ts)
+// and walk it with timers: spawning visual effects, staging the HP/death values
+// the bars show so they move in step with the effects, and shaking the screen.
+// While a sequence is playing, input is gated (`animating`); when it finishes the
+// staged view snaps back to the engine, which already holds the same final state.
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Game } from './engine';
+import { buildTimeline, FX_DURATION } from './animations';
+import type { Timeline, DisplayPatch, FxInstance, FxSpec } from './animations';
+
+// Staged display values overlaid on the engine while an animation plays. Only the
+// things that should move in step with effects live here; everything else (MP,
+// charge, badges, hand, telegraph) reads the engine directly and updates at once.
+export interface BattleView {
+  enemyHp: number;
+  memberHp: number[];    // length 3
+  memberDead: boolean[]; // length 3
+}
 
 export interface GameController {
   game: Game;
+  view: BattleView;
+  fx: FxInstance[];
+  animating: boolean;
+  shakeTick: number;
   /** Start a fresh fight. Returns the seed actually used (random when omitted). */
   newGame: (seed?: number) => number;
   playCard: (handIndex: number, target: number | null) => void;
@@ -27,39 +46,128 @@ function createGame(seed?: number): Game {
   return g;
 }
 
+function snapshot(g: Game): BattleView {
+  return {
+    enemyHp: g.enemy.hp,
+    memberHp: g.members.map((m) => m.hp),
+    memberDead: g.members.map((m) => !m.alive),
+  };
+}
+
 export function useGame(initialSeed?: number): GameController {
   const ref = useRef<Game | null>(null);
   if (ref.current === null) ref.current = createGame(initialSeed);
 
   const [, force] = useReducer((x: number) => x + 1, 0);
+  const [view, setView] = useState<BattleView>(() => snapshot(ref.current!));
+  const [fx, setFx] = useState<FxInstance[]>([]);
+  const [animating, setAnimating] = useState(false);
+  const [shakeTick, setShakeTick] = useState(0);
+
+  // A ref mirrors `animating` so the dispatch guard sees it synchronously.
+  const animatingRef = useRef(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const fxId = useRef(0);
+
+  const clearTimers = useCallback(() => {
+    for (const t of timers.current) clearTimeout(t);
+    timers.current = [];
+  }, []);
+
+  // Cancel any in-flight animation timers if the component unmounts.
+  useEffect(() => clearTimers, [clearTimers]);
+
+  const schedule = useCallback((fn: () => void, ms: number) => {
+    timers.current.push(setTimeout(fn, ms));
+  }, []);
+
+  const applyPatch = useCallback((p: DisplayPatch) => {
+    setView((v) => {
+      const next: BattleView = {
+        enemyHp: v.enemyHp,
+        memberHp: [...v.memberHp],
+        memberDead: [...v.memberDead],
+      };
+      if (p.enemyHp != null) next.enemyHp = p.enemyHp;
+      if (p.memberHp) next.memberHp[p.memberHp.slot] = p.memberHp.hp;
+      if (p.memberDead != null) next.memberDead[p.memberDead] = true;
+      if (p.memberAlive != null) next.memberDead[p.memberAlive] = false;
+      return next;
+    });
+  }, []);
+
+  const spawnFx = useCallback((spec: FxSpec) => {
+    const id = fxId.current++;
+    setFx((cur) => [...cur, { id, spec }]);
+    schedule(() => setFx((cur) => cur.filter((f) => f.id !== id)), FX_DURATION[spec.type] + 40);
+  }, [schedule]);
+
+  const play = useCallback((timeline: Timeline) => {
+    const g = ref.current!;
+    for (const entry of timeline.entries) {
+      schedule(() => {
+        if (entry.patch) applyPatch(entry.patch);
+        if (entry.shake) setShakeTick((x) => x + 1);
+        if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
+      }, entry.at);
+    }
+    // When the last effect has faded, snap the view back to the engine and unlock.
+    schedule(() => {
+      setView(snapshot(g));
+      setFx([]);
+      animatingRef.current = false;
+      setAnimating(false);
+    }, timeline.total + 100);
+  }, [schedule, applyPatch, spawnFx]);
+
+  // Run an engine mutation, then animate whatever events it produced.
+  const dispatch = useCallback((run: () => void) => {
+    const g = ref.current!;
+    if (animatingRef.current) return; // ignore input while a sequence plays
+    timers.current = []; // the prior sequence is done; its timers have all fired
+    run();
+    const timeline = buildTimeline(g.events);
+    if (timeline.entries.length === 0) {
+      setView(snapshot(g));
+      force();
+      return;
+    }
+    animatingRef.current = true;
+    setAnimating(true);
+    force(); // refresh the engine-backed fields (hand, MP, badges) right away
+    play(timeline);
+  }, [play]);
 
   const newGame = useCallback((seed?: number): number => {
+    clearTimers();
     const g = createGame(seed);
     ref.current = g;
+    animatingRef.current = false;
+    setAnimating(false);
+    setFx([]);
+    setView(snapshot(g));
+    setShakeTick(0);
     force();
     return g.seed;
-  }, []);
+  }, [clearTimers]);
 
   const playCard = useCallback((handIndex: number, target: number | null) => {
     const g = ref.current!;
     if (g.status !== 'playing' || g.phase !== 'player') return;
-    g.playCard(handIndex, target);
-    force();
-  }, []);
+    dispatch(() => g.playCard(handIndex, target));
+  }, [dispatch]);
 
   const skipTurn = useCallback(() => {
     const g = ref.current!;
     if (!g.canSkip()) return;
-    g.skipTurn();
-    force();
-  }, []);
+    dispatch(() => g.skipTurn());
+  }, [dispatch]);
 
   const endTurn = useCallback(() => {
     const g = ref.current!;
     if (g.status !== 'playing') return;
-    g.endTurn();
-    force();
-  }, []);
+    dispatch(() => g.endTurn());
+  }, [dispatch]);
 
-  return { game: ref.current, newGame, playCard, skipTurn, endTurn };
+  return { game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn };
 }

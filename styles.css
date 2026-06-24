@@ -194,3 +194,136 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .overlay-card p { color: var(--muted); margin: 0 0 18px; }
 
 .hidden { display: none !important; }
+
+/* ===========================================================================
+   Battle FX layer — projectiles, particle bursts, floating numbers, rings,
+   shields, pillars and glows. Spawned/removed by useGame; positioned by FxLayer
+   (logical anchors -> measured coordinates). Sits above the telegraph lines and
+   below the win/lose overlay. All effects are pointer-transparent.
+   =========================================================================== */
+.fx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 8; overflow: visible; }
+.fx { position: absolute; pointer-events: none; will-change: transform, opacity; }
+
+/* Projectile — a glowing comet flung from one anchor to another. */
+.fx-proj {
+  width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #fff 10%, currentColor 55%, transparent 72%);
+  box-shadow: 0 0 14px 4px currentColor, 0 0 4px 1px #fff;
+  animation: fx-proj var(--dur, 280ms) cubic-bezier(.45,.05,.55,1) forwards;
+}
+@keyframes fx-proj {
+  0%   { transform: translate(0, 0) scale(.6); opacity: 0; }
+  14%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1.1); opacity: .85; }
+}
+
+/* Beam — a lightning flash drawn along its length (rotated inline by FxLayer). */
+.fx-beam {
+  height: 6px; transform-origin: left center; border-radius: 4px;
+  background: linear-gradient(90deg, transparent, currentColor 18%, #fff 50%, currentColor 82%, transparent);
+  box-shadow: 0 0 18px 5px currentColor;
+  animation: fx-beam var(--dur, 360ms) ease-out forwards;
+}
+@keyframes fx-beam {
+  0%   { opacity: 0; filter: brightness(2.4); }
+  12%  { opacity: 1; }
+  45%  { opacity: 1; filter: brightness(1.5); }
+  60%  { opacity: .7; filter: brightness(1.8); }
+  100% { opacity: 0; filter: brightness(1); }
+}
+
+/* Burst — a ring of particles flying outward from a point. */
+.fx-burst { width: 0; height: 0; }
+.fx-particle {
+  position: absolute; left: 0; top: 0; width: 7px; height: 7px; margin: -3.5px;
+  border-radius: 50%; background: currentColor; box-shadow: 0 0 8px 1px currentColor;
+  animation: fx-particle 650ms cubic-bezier(.2,.6,.3,1) forwards;
+}
+@keyframes fx-particle {
+  0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+  70%  { opacity: .9; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.15); opacity: 0; }
+}
+
+/* Floating number / label — pops then drifts upward and fades. */
+.fx-float {
+  font-weight: 800; font-size: 18px; color: currentColor; white-space: nowrap;
+  text-shadow: 0 2px 4px #000, 0 0 8px currentColor;
+  animation: fx-float 850ms ease-out forwards;
+}
+.fx-float.big { font-size: 27px; }
+@keyframes fx-float {
+  0%   { transform: translate(-50%, 8px) scale(.7); opacity: 0; }
+  18%  { transform: translate(-50%, 0) scale(1.18); opacity: 1; }
+  34%  { transform: translate(-50%, -6px) scale(1); }
+  100% { transform: translate(-50%, -46px) scale(1); opacity: 0; }
+}
+
+/* Ring — an expanding shockwave. */
+.fx-ring {
+  width: 26px; height: 26px; margin: -13px; border-radius: 50%;
+  border: 3px solid currentColor; box-shadow: 0 0 12px currentColor, inset 0 0 8px currentColor;
+  animation: fx-ring 520ms ease-out forwards;
+}
+@keyframes fx-ring {
+  0%   { transform: scale(.3); opacity: .9; }
+  100% { transform: scale(3.3); opacity: 0; }
+}
+
+/* Shield — a bubble that forms and shatters over a card. */
+.fx-shield {
+  width: 66px; height: 80px; margin: -40px 0 0 -33px; border-radius: 42% 42% 46% 46%;
+  border: 2px solid currentColor;
+  background: radial-gradient(circle, color-mix(in srgb, currentColor 38%, transparent), transparent 70%);
+  box-shadow: 0 0 18px currentColor, inset 0 0 16px currentColor;
+  animation: fx-shield 720ms ease-out forwards;
+}
+@keyframes fx-shield {
+  0%   { transform: scale(.5); opacity: 0; }
+  25%  { transform: scale(1.06); opacity: .95; }
+  60%  { transform: scale(1); opacity: .8; }
+  100% { transform: scale(1.04); opacity: 0; }
+}
+
+/* Pillar — a beam of light that rises on a resurrected member. */
+.fx-pillar {
+  width: 62px; height: 168px; margin: -126px 0 0 -31px; transform-origin: bottom center;
+  border-radius: 30px; filter: blur(2px);
+  background: linear-gradient(to top, currentColor, transparent);
+  box-shadow: 0 0 30px currentColor;
+  animation: fx-pillar 760ms ease-out forwards;
+}
+@keyframes fx-pillar {
+  0%   { transform: scaleY(.1); opacity: 0; }
+  30%  { transform: scaleY(1); opacity: .9; }
+  100% { transform: scaleY(1.06); opacity: 0; }
+}
+
+/* Glow — a soft pulse of color over a card or the mana bar. */
+.fx-glow {
+  width: 150px; height: 150px; margin: -75px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, currentColor 52%, transparent), transparent 65%);
+  animation: fx-glow 620ms ease-out forwards;
+}
+@keyframes fx-glow {
+  0%   { transform: scale(.5); opacity: 0; }
+  30%  { transform: scale(1); opacity: .85; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+
+/* Screen shake — punched on the whole board on each shake beat. */
+.shake { animation: board-shake .3s cubic-bezier(.36,.07,.19,.97); }
+@keyframes board-shake {
+  10%, 90% { transform: translate(-1px, 0); }
+  20%, 80% { transform: translate(2px, 1px); }
+  30%, 50%, 70% { transform: translate(-4px, 0); }
+  40%, 60% { transform: translate(4px, -1px); }
+}
+
+/* The hand is locked and dimmed while a sequence plays. */
+.hand-area.busy { opacity: .5; filter: saturate(.7); pointer-events: none; transition: opacity .15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .shake { animation: none; }
+}
