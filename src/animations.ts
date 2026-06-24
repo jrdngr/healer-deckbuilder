@@ -88,23 +88,10 @@ const SLOT_COLOR: Record<Slot, string> = { 0: '#a8e85d', 1: '#cdd6e6', 2: '#b388
 
 const TRAVEL = 240; // projectile flight time before impact lands
 
-// One-time pause before the player's first witnessed enemy attack, so the opening
-// blow doesn't land the instant the party finishes its strikes. Applied by useGame
-// via buildTimeline's enemyLeadIn option (see BuildOpts), once per fight.
-export const FIRST_ENEMY_ATTACK_LEAD_IN = 2000;
-
-export interface BuildOpts {
-  // Extra delay (ms) inserted right before the first enemyAttack event, if any.
-  enemyLeadIn?: number;
-}
-
-export function buildTimeline(events: GameEvent[], opts: BuildOpts = {}): Timeline {
+export function buildTimeline(events: GameEvent[]): Timeline {
   const entries: TimelineEntry[] = [];
   let t = 0;
   const push = (e: TimelineEntry): void => { entries.push(e); };
-
-  const enemyLeadIn = opts.enemyLeadIn ?? 0;
-  let leadInApplied = false;
 
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
@@ -151,8 +138,6 @@ export function buildTimeline(events: GameEvent[], opts: BuildOpts = {}): Timeli
       }
 
       case 'enemyAttack': {
-        // Hold a beat before the very first enemy attack of the fight.
-        if (enemyLeadIn > 0 && !leadInApplied) { t += enemyLeadIn; leadInApplied = true; }
         const color = ev.hidden ? C.unknown : C.enemy;
         push({ at: t, fx: [{ type: 'projectile', from: 'enemy', to: ev.slot, color }] });
         const impact = t + TRAVEL;

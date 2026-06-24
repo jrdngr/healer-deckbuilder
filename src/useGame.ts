@@ -9,9 +9,10 @@
 // the bars show so they move in step with the effects, and shaking the screen.
 // While a sequence is playing, input is gated (`animating`); when it finishes the
 // staged view snaps back to the engine, which already holds the same final state.
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { Game } from './engine';
-import { buildTimeline, FX_DURATION, FIRST_ENEMY_ATTACK_LEAD_IN } from './animations';
+import type { GameEvent } from './engine';
+import { buildTimeline, FX_DURATION } from './animations';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec } from './animations';
 
 // Staged display values overlaid on the engine while an animation plays. Only the
@@ -54,12 +55,30 @@ function snapshot(g: Game): BattleView {
   };
 }
 
+// The board as it stood before turn 1's enemy phase: everything at full health.
+// We start the view here so the opening attack animates the first hit landing,
+// rather than loading straight into the already-damaged aftermath.
+function preStartView(g: Game): BattleView {
+  return {
+    enemyHp: g.enemy.maxHP,
+    memberHp: g.members.map((m) => m.maxHP),
+    memberDead: g.members.map(() => false),
+  };
+}
+
 export function useGame(initialSeed?: number): GameController {
   const ref = useRef<Game | null>(null);
-  if (ref.current === null) ref.current = createGame(initialSeed);
+  // The first enemy phase (turn 1) runs inside start(); capture its events so the
+  // opening effect can animate that attack instead of the board loading damaged.
+  const openingEvents = useRef<GameEvent[]>([]);
+  if (ref.current === null) {
+    const g = createGame(initialSeed);
+    ref.current = g;
+    openingEvents.current = g.events.slice();
+  }
 
   const [, force] = useReducer((x: number) => x + 1, 0);
-  const [view, setView] = useState<BattleView>(() => snapshot(ref.current!));
+  const [view, setView] = useState<BattleView>(() => preStartView(ref.current!));
   const [fx, setFx] = useState<FxInstance[]>([]);
   const [animating, setAnimating] = useState(false);
   const [shakeTick, setShakeTick] = useState(0);
@@ -68,8 +87,8 @@ export function useGame(initialSeed?: number): GameController {
   const animatingRef = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fxId = useRef(0);
-  // Once-per-fight: the first enemy attack the player witnesses gets a lead-in.
-  const firstEnemyAttack = useRef(true);
+  // Guards the one-shot opening animation against React StrictMode's double mount.
+  const openingDone = useRef(false);
 
   const clearTimers = useCallback(() => {
     for (const t of timers.current) clearTimeout(t);
@@ -114,7 +133,7 @@ export function useGame(initialSeed?: number): GameController {
   // Staged, blocking playback for end-of-turn sequences (party + enemy phases).
   // The view is held at its pre-action values and patched forward step by step so
   // bars move with each effect; input stays locked until the sequence finishes.
-  const playStaged = useCallback((timeline: Timeline) => {
+  const playStaged = useCallback((timeline: Timeline, onDone?: () => void) => {
     const g = ref.current!;
     for (const entry of timeline.entries) {
       schedule(() => {
@@ -128,6 +147,7 @@ export function useGame(initialSeed?: number): GameController {
       setView(snapshot(g));
       animatingRef.current = false;
       setAnimating(false);
+      onDone?.();
     }, timeline.total + 100);
   }, [schedule, applyPatch, spawnFx]);
 
@@ -152,13 +172,7 @@ export function useGame(initialSeed?: number): GameController {
     const g = ref.current!;
     if (animatingRef.current) return; // a staged sequence is mid-play — block input
     run();
-    // Give the player a beat before the first enemy attack they see this fight.
-    let enemyLeadIn = 0;
-    if (firstEnemyAttack.current && g.events.some((e) => e.kind === 'enemyAttack')) {
-      enemyLeadIn = FIRST_ENEMY_ATTACK_LEAD_IN;
-      firstEnemyAttack.current = false;
-    }
-    const timeline = buildTimeline(g.events, { enemyLeadIn });
+    const timeline = buildTimeline(g.events);
     if (staged || g.status !== 'playing') {
       // The view already holds the pre-action HP (every path leaves it synced to
       // the engine); the timeline patches it forward in step with the effects.
@@ -175,19 +189,46 @@ export function useGame(initialSeed?: number): GameController {
     }
   }, [playStaged, playLive]);
 
+  // Animate the captured turn-1 enemy phase as a staged sequence, with the view
+  // starting at full health (set by the caller) so the opening blow lands on
+  // screen like any other attack.
+  const playOpening = useCallback((events: GameEvent[]) => {
+    const timeline = buildTimeline(events);
+    if (timeline.entries.length === 0) {
+      setView(snapshot(ref.current!));
+      animatingRef.current = false;
+      setAnimating(false);
+      openingDone.current = true;
+      return;
+    }
+    animatingRef.current = true;
+    setAnimating(true);
+    force();
+    playStaged(timeline, () => { openingDone.current = true; });
+  }, [playStaged]);
+
+  // Play the opening attack once on mount. A layout effect so the board is locked
+  // (and the next telegraph hidden) before the first paint — otherwise the
+  // full-health board would flash for a frame. Re-runs harmlessly under
+  // StrictMode's double mount: the captured events are replayed until the
+  // sequence actually completes (openingDone), since the first pass's timers get
+  // cancelled between the simulated unmount and remount.
+  useLayoutEffect(() => {
+    if (!openingDone.current) playOpening(openingEvents.current);
+  }, [playOpening]);
+
   const newGame = useCallback((seed?: number): number => {
     clearTimers();
     const g = createGame(seed);
     ref.current = g;
     animatingRef.current = false;
-    firstEnemyAttack.current = true;
-    setAnimating(false);
     setFx([]);
-    setView(snapshot(g));
     setShakeTick(0);
+    setView(preStartView(g)); // full health; the opening attack patches it down
     force();
+    playOpening(g.events.slice());
     return g.seed;
-  }, [clearTimers]);
+  }, [clearTimers, playOpening]);
 
   const playCard = useCallback((handIndex: number, target: number | null) => {
     const g = ref.current!;
