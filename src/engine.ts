@@ -187,7 +187,14 @@ export class Game {
   _pickPrimary(type: AttackType): Slot {
     if (this.tankTaunting()) return SLOT.CENTER;
     const weights = type === 'hidden' ? SLOT_WEIGHTS.hidden : SLOT_WEIGHTS.normal;
-    return weightedPick(weights.map((wt, i): [Slot, number] => [i as Slot, wt]), this.rng);
+    // Never aim the primary at a fallen member: a dead primary leaves single/hidden
+    // attacks with no telegraph line to show and makes the blow whiff on a corpse.
+    // Re-roll against the living slots' relative weights instead.
+    const living = weights
+      .map((wt, i): [Slot, number] => [i as Slot, wt])
+      .filter(([slot]) => this.members[slot].alive);
+    if (living.length === 0) return SLOT.CENTER; // unreachable: telegraphs only generate while someone lives
+    return weightedPick(living, this.rng);
   }
 
   // Resolve the set of target slots for a type given a chosen primary slot.

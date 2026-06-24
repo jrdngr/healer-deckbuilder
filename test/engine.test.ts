@@ -124,6 +124,29 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
     `atkIdx=${atkIdx} regIdx=${regIdx}`);
 }
 
+// --- enemy never aims its primary at a dead square (no invisible telegraph) ----
+{
+  const g = new Game(31);
+  g.start();
+  g._killMember(g.members[SLOT.LEFT]); // ranger falls
+  for (let i = 0; i < 300; i++) {
+    const single = g._pickPrimary('single');
+    const hidden = g._pickPrimary('hidden');
+    check('single primary is a living slot', g.members[single].alive && single !== SLOT.LEFT);
+    check('hidden primary is a living slot', g.members[hidden].alive && hidden !== SLOT.LEFT);
+  }
+  // End to end: a generated single/hidden telegraph always resolves onto a living
+  // member, and a single telegraph always shows at least one line (never invisible).
+  for (let i = 0; i < 300; i++) {
+    const tel = g._generateTelegraph(2);
+    if (tel.type === 'single' || tel.type === 'hidden') {
+      g.telegraph = tel;
+      check('single/hidden telegraph lands on a living member', g.members[tel.targets[0]].alive);
+      if (tel.type === 'single') check('single telegraph stays visible', g.attackTargets().length > 0);
+    }
+  }
+}
+
 // --- taunt also grants the tank Defense, reducing incoming hits by 1 ---------
 {
   const g = new Game(40);
