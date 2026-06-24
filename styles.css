@@ -12,6 +12,7 @@
   --shield: #7fd0ff;
   --regen: #7fe6a4;
   --taunt: #f2c14e;
+  --defense: #aeb9cc;
   --danger: #e85d5d;
   --gold: #f2c14e;
   --unknown: #b388ff;
@@ -92,6 +93,7 @@ main {
 .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
 .badge.shield { background: var(--shield); color: #06243a; }
 .badge.regen { background: var(--regen); color: #06351a; }
+.badge.defense { background: var(--defense); color: #1c2430; }
 .badge.taunt { background: var(--taunt); color: #3a2c06; }
 .member .charge { font-size: 12px; font-weight: 600; color: var(--gold); }
 .member .ability { font-size: 12px; color: var(--muted); margin-top: auto; line-height: 1.35; }

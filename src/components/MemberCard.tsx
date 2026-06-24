@@ -1,11 +1,11 @@
-import { CHARGE_MAX, POISON_BASE, TAUNT_TURNS, BOLT_BASE } from '../constants';
+import { CHARGE_MAX, POISON_BASE, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE } from '../constants';
 import type { MemberId } from '../constants';
 import type { Member } from '../engine';
 
 // Short flavor of each member's ability, shown on their card.
 const ABILITY: Record<MemberId, string> = {
   ranger: `Poison Arrow — stack Poison ${POISON_BASE} on the enemy.`,
-  tank: `Taunt — force the enemy onto the Tank for ${TAUNT_TURNS} turns.`,
+  tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
   mage: `Lightning Bolt — deal ${BOLT_BASE} + Charge to the enemy.`,
 };
 
@@ -40,6 +40,7 @@ export function MemberCard({
       <div className="badges">
         {m.shield && <span className="badge shield">🛡 Shield</span>}
         {m.regen > 0 && <span className="badge regen">♻ Regen {m.regen}</span>}
+        {m.defense > 0 && <span className="badge defense">🪖 Def {m.defense}</span>}
         {m.id === 'tank' && m.taunt > 0 && <span className="badge taunt">⚔ Taunt {m.taunt}</span>}
       </div>
       {m.id === 'mage' && <div className="charge">⚡ Charge {mageCharge}/{CHARGE_MAX}</div>}

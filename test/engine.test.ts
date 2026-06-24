@@ -101,6 +101,41 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
     JSON.stringify(healed));
 }
 
+// --- taunt also grants the tank Defense, reducing incoming hits by 1 ---------
+{
+  const g = new Game(40);
+  g.start();
+  const tank = g.members[SLOT.CENTER];
+  g.mp = 10;
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
+  eq('defense set on cast', tank.defense, 3);
+  tank.hp = tank.maxHP;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  g.events = [];
+  g._resolveAttack();
+  eq('defense reduces the hit by 1', tank.hp, tank.maxHP - 3);
+  const atk = g.events.find((e) => e.kind === 'enemyAttack') as any;
+  eq('enemyAttack amount reflects reduced damage', atk.amount, 3);
+  const spec = g.attackTargets().find((s) => s.slot === SLOT.CENTER) as any;
+  eq('telegraph preview shows reduced damage on the tank', spec.damage, 3);
+}
+
+// --- Defense lasts 3 enemy turns, then fades --------------------------------
+{
+  const g = new Game(41);
+  g.start();
+  const tank = g.members[SLOT.CENTER];
+  g.mp = 10;
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt -> defense 3
+  eq('defense starts at 3', tank.defense, 3);
+  tank.hp = tank.maxHP; g.endTurn();
+  eq('defense after 1 enemy turn', tank.defense, 2);
+  tank.hp = tank.maxHP; g.endTurn();
+  eq('defense after 2 enemy turns', tank.defense, 1);
+  tank.hp = tank.maxHP; g.endTurn();
+  eq('defense after 3 enemy turns', tank.defense, 0);
+}
+
 // --- refresh returns 2x cost over 3,2,1 ------------------------------------
 {
   const g = new Game(4);

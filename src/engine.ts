@@ -12,7 +12,7 @@
 import {
   MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
   ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
-  POISON_BASE, TAUNT_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
+  POISON_BASE, TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
 } from './constants';
 import type { Slot, AttackType, CardId, MemberId, AbilityId, CardDef } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
@@ -33,6 +33,7 @@ export interface Member {
   shield: boolean; // pending shield (blocks next instance)
   regen: number;   // regen stack
   taunt: number;   // taunt turns remaining (tank only)
+  defense: number; // Defense turns remaining: incoming hits reduced by DEFENSE_AMOUNT
 }
 
 export interface Enemy {
@@ -130,6 +131,7 @@ export class Game {
       shield: false, // pending shield (blocks next instance)
       regen: 0,      // regen stack
       taunt: 0,      // taunt turns remaining (tank only)
+      defense: 0,    // Defense turns remaining
     }));
 
     this.enemy = { hp: ENEMY_MAX_HP, maxHP: ENEMY_MAX_HP, poison: 0, enraged: false };
@@ -223,7 +225,7 @@ export class Game {
     }
     return t.targets
       .filter((slot) => this.members[slot]?.alive)
-      .map((slot): AttackSpec => ({ slot, damage: t.damage, hidden: false }));
+      .map((slot): AttackSpec => ({ slot, damage: this._effectiveDamage(this.members[slot], t.damage), hidden: false }));
   }
 
   // Recompute the standing telegraph's targets with the Tank forced as primary.
@@ -251,6 +253,7 @@ export class Game {
     m.shield = false;
     m.regen = 0;
     m.taunt = 0;
+    m.defense = 0;
     if (m.id === 'mage') this.mageCharge = 0;
     this._log(`${m.name} has fallen!`, 'death');
   }
@@ -272,6 +275,12 @@ export class Game {
     const before = m.hp;
     m.hp = Math.min(m.maxHP, m.hp + amount);
     return m.hp - before;
+  }
+
+  // Damage a member actually takes from a raw attack value, after their Defense
+  // (if any). Floored at 0 so a fully-absorbed hit can't heal.
+  _effectiveDamage(m: Member, raw: number): number {
+    return m.defense > 0 ? Math.max(0, raw - DEFENSE_AMOUNT) : raw;
   }
 
   // ---- enemy phase ---------------------------------------------------------
@@ -317,10 +326,16 @@ export class Game {
       return;
     }
 
-    // 3) decrement Taunt now that this enemy turn's attack has resolved.
+    // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
     if (this.tank.alive && this.tank.taunt > 0) {
       this.tank.taunt -= 1;
       if (this.tank.taunt === 0) this._log('Taunt fades from the Tank.', 'status');
+    }
+    for (const m of this.members) {
+      if (m.alive && m.defense > 0) {
+        m.defense -= 1;
+        if (m.defense === 0) this._log(`Defense fades from ${m.name}.`, 'status');
+      }
     }
 
     // 4) telegraph the next turn's attack (with correct enrage state baked in).
@@ -345,10 +360,11 @@ export class Game {
         this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
         continue;
       }
-      m.hp = Math.max(0, m.hp - t.damage);
-      this._log(`${label} hits ${m.name} for ${t.damage}. (${m.hp}/${m.maxHP})`, 'hit');
+      const dmg = this._effectiveDamage(m, t.damage);
+      m.hp = Math.max(0, m.hp - dmg);
+      this._log(`${label} hits ${m.name} for ${dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       const killed = m.hp <= 0;
-      this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
+      this._emit({ kind: 'enemyAttack', slot, amount: dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
       if (killed) this._killMember(m);
     }
   }
@@ -463,7 +479,7 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.regen = 0; m.taunt = 0;
+        m.shield = false; m.regen = 0; m.taunt = 0; m.defense = 0;
         if (m.id === 'mage') this.mageCharge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
@@ -494,8 +510,9 @@ export class Game {
       }
       case 'taunt': {
         this.tank.taunt = TAUNT_TURNS;
+        this.tank.defense = DEFENSE_TURNS;
         this._retargetTelegraphToTank();
-        this._log(`${m.name} Taunts for ${TAUNT_TURNS} enemy turns.`, 'status');
+        this._log(`${m.name} Taunts and braces (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_TURNS });
         break;
       }

@@ -68,6 +68,8 @@ export const BOLT_BASE = 3;
 export const CHARGE_MAX = 10;
 export const POISON_BASE = 5;
 export const TAUNT_TURNS = 3;
+export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
+export const DEFENSE_TURNS = 3;  // enemy turns Defense lasts (granted alongside Taunt)
 
 export const HAND_SIZE = 3;
 
