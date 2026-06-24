@@ -8,7 +8,7 @@ import { BattleScreen } from './components/BattleScreen';
 type Screen = 'battle';
 
 export function App() {
-  const { game, newGame, playCard, skipTurn, endTurn } = useGame();
+  const { game, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn } = useGame();
   const [seedField, setSeedField] = useState<string>(String(game.seed));
   const [screen] = useState<Screen>('battle');
 
@@ -29,6 +29,10 @@ export function App() {
       {screen === 'battle' && (
         <BattleScreen
           game={game}
+          view={view}
+          fx={fx}
+          animating={animating}
+          shakeTick={shakeTick}
           playCard={playCard}
           skipTurn={skipTurn}
           endTurn={endTurn}

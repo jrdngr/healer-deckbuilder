@@ -5,6 +5,7 @@ import { Card } from './Card';
 
 interface HandProps {
   game: Game;
+  disabled: boolean; // dim the hand while an animation sequence plays
   selectedIndex: number | null;
   selectedCard: CardDef | null;
   onCardClick: (handIndex: number) => void;
@@ -17,14 +18,14 @@ function promptFor(card: CardDef): string {
   return `Select ${kind} for ${card.name} — or Cancel`;
 }
 
-export function Hand({ game, selectedIndex, selectedCard, onCardClick }: HandProps) {
+export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick }: HandProps) {
   const over = game.status !== 'playing';
   return (
     <section className="hand-wrap">
       <h3 id="hand-prompt" className={selectedCard ? 'targeting' : undefined}>
         {selectedCard ? promptFor(selectedCard) : 'Your hand'}
       </h3>
-      <div className="hand-area">
+      <div className={`hand-area${disabled ? ' busy' : ''}`}>
         <div className="pile draw-pile" title="Draw pile">
           <span className="pile-count">{game.drawPile.length}</span>
           <span className="pile-label">Draw</span>
@@ -32,7 +33,7 @@ export function Hand({ game, selectedIndex, selectedCard, onCardClick }: HandPro
         <div className="hand">
           {game.hand.map((cardId, i) => {
             const card = CARDS[cardId];
-            const affordable = game.mp >= card.cost && !over;
+            const affordable = game.mp >= card.cost && !over && !disabled;
             return (
               <Card
                 key={i}

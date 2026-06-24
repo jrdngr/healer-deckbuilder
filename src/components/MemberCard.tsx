@@ -11,16 +11,22 @@ const ABILITY: Record<MemberId, string> = {
 
 interface MemberCardProps {
   member: Member;
+  // HP / death the card shows; staged by the animator so the bar and the DEAD
+  // overlay land in step with the hit (or heal / resurrect) effect.
+  displayHp: number;
+  displayDead: boolean;
   mageCharge: number;
   targetedByEnemy: boolean;
   validTarget: boolean;
   onClick: () => void;
 }
 
-export function MemberCard({ member: m, mageCharge, targetedByEnemy, validTarget, onClick }: MemberCardProps) {
-  const hpPct = (m.hp / m.maxHP) * 100;
+export function MemberCard({
+  member: m, displayHp, displayDead, mageCharge, targetedByEnemy, validTarget, onClick,
+}: MemberCardProps) {
+  const hpPct = (displayHp / m.maxHP) * 100;
   const low = hpPct <= 34;
-  const cls = ['member', !m.alive && 'dead', targetedByEnemy && 'targeted-by-enemy', validTarget && 'valid-target']
+  const cls = ['member', displayDead && 'dead', targetedByEnemy && 'targeted-by-enemy', validTarget && 'valid-target']
     .filter(Boolean).join(' ');
 
   return (
@@ -29,7 +35,7 @@ export function MemberCard({ member: m, mageCharge, targetedByEnemy, validTarget
       <h3>{m.name}</h3>
       <div className="bar">
         <div className="bar-fill" style={{ width: `${hpPct}%`, background: low ? 'var(--hp-low)' : undefined }} />
-        <span className="bar-label">{m.hp} / {m.maxHP}</span>
+        <span className="bar-label">{displayHp} / {m.maxHP}</span>
       </div>
       <div className="badges">
         {m.shield && <span className="badge shield">🛡 Shield</span>}
