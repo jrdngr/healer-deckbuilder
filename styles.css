@@ -56,7 +56,7 @@ main {
 @keyframes pulse { 50% { opacity: .55; } }
 .enemy-status { margin-top: 8px; font-size: 13px; color: var(--gold); min-height: 18px; }
 
-.bar { position: relative; height: 22px; background: #11141a; border-radius: 6px; overflow: hidden; border: 1px solid #000; }
+.bar { position: relative; height: 22px; background: #11141a; overflow: hidden; border: 1px solid #000; }
 /* The fill is a row of coloured segments anchored from the left: the current
    value pinned at left:0 (so it depletes from the right), then telegraphed
    next-turn changes (incoming damage / pending heals) offset to sit after it. */
