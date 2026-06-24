@@ -442,7 +442,7 @@ export class Game {
           const healed = this._healMember(m, card.heal ?? 0);
           this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         }
-        this._log(`AoE Heal: all living members heal up to ${card.heal}.`, 'heal');
+        this._log(`Group Heal: all living members heal up to ${card.heal}.`, 'heal');
         break;
       }
       case 'regen': {

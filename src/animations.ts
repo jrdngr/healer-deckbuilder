@@ -184,7 +184,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'heal': {
-        // Gather a run of consecutive heals (AoE Heal emits one per member) and
+        // Gather a run of consecutive heals (Group Heal emits one per member) and
         // cascade them so they land together rather than dragging out one by one.
         const run: typeof ev[] = [ev];
         while (i + 1 < events.length && events[i + 1].kind === 'heal') run.push(events[++i] as typeof ev);

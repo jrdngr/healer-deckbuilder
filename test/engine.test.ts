@@ -22,15 +22,21 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
 {
   const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
-  eq('3 Low Heal', counts.lowHeal, 3);
-  eq('2 High Heal', counts.highHeal, 2);
-  eq('2 AoE Heal', counts.aoeHeal, 2);
+  eq('3 Quick Heal', counts.lowHeal, 3);
+  eq('2 Heal', counts.highHeal, 2);
+  eq('2 Group Heal', counts.aoeHeal, 2);
   eq('2 Regen', counts.regen, 2);
   eq('2 Refresh', counts.refresh, 2);
   eq('2 Ability', counts.ability, 2);
   eq('1 Shield', counts.shield, 1);
   eq('1 Resurrect', counts.resurrect, 1);
 }
+
+// --- card heal values -------------------------------------------------------
+eq('Quick Heal heals 1', CARDS.lowHeal.heal, 1);
+eq('Heal heals 4', CARDS.highHeal.heal, 4);
+eq('Group Heal heals 2', CARDS.aoeHeal.heal, 2);
+eq('Regen stack 2', CARDS.regen.regen, 2);
 
 // --- enrage damage rounds up ------------------------------------------------
 {
@@ -290,7 +296,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   g.start();
   const tank = g.members[SLOT.CENTER];
   tank.hp = tank.maxHP - 1;
-  const idx = giveCard(g, 'highHeal'); // heals 8
+  const idx = giveCard(g, 'highHeal'); // heals 4
   g.mp = 10;
   g.playCard(idx, SLOT.CENTER);
   eq('heal capped at maxHP', tank.hp, tank.maxHP);
@@ -319,13 +325,13 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   const tank = g.members[SLOT.CENTER];
   tank.hp = 4;
   g.mp = 10;
-  const idx = giveCard(g, 'highHeal'); // heals 8, tank maxHP 12
+  const idx = giveCard(g, 'highHeal'); // heals 4, tank maxHP 12
   g.events = [];
   g.playCard(idx, SLOT.CENTER);
   const heal = g.events.find((e) => e.kind === 'heal') as any;
   check('heal event emitted', !!heal);
-  eq('heal event amount', heal.amount, 8);
-  eq('heal event resulting hp', heal.hp, 12);
+  eq('heal event amount', heal.amount, 4);
+  eq('heal event resulting hp', heal.hp, 8);
 }
 
 // --- events: aoe heal emits one heal event per living member ----------------
