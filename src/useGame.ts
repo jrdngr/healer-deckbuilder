@@ -77,8 +77,15 @@ export function useGame(initialSeed?: number): GameController {
   // Cancel any in-flight animation timers if the component unmounts.
   useEffect(() => clearTimers, [clearTimers]);
 
+  // Run `fn` after `ms`, tracking the timer so it can be cancelled (newGame /
+  // unmount) and dropping it from the list once it fires, so the list only ever
+  // holds pending timers even across many overlapping live card animations.
   const schedule = useCallback((fn: () => void, ms: number) => {
-    timers.current.push(setTimeout(fn, ms));
+    const id = setTimeout(() => {
+      timers.current = timers.current.filter((t) => t !== id);
+      fn();
+    }, ms);
+    timers.current.push(id);
   }, []);
 
   const applyPatch = useCallback((p: DisplayPatch) => {
@@ -102,7 +109,10 @@ export function useGame(initialSeed?: number): GameController {
     schedule(() => setFx((cur) => cur.filter((f) => f.id !== id)), FX_DURATION[spec.type] + 40);
   }, [schedule]);
 
-  const play = useCallback((timeline: Timeline) => {
+  // Staged, blocking playback for end-of-turn sequences (party + enemy phases).
+  // The view is held at its pre-action values and patched forward step by step so
+  // bars move with each effect; input stays locked until the sequence finishes.
+  const playStaged = useCallback((timeline: Timeline) => {
     const g = ref.current!;
     for (const entry of timeline.entries) {
       schedule(() => {
@@ -111,32 +121,51 @@ export function useGame(initialSeed?: number): GameController {
         if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
       }, entry.at);
     }
-    // When the last effect has faded, snap the view back to the engine and unlock.
+    // When the last effect has faded, snap the view to the engine and unlock.
     schedule(() => {
       setView(snapshot(g));
-      setFx([]);
       animatingRef.current = false;
       setAnimating(false);
     }, timeline.total + 100);
   }, [schedule, applyPatch, spawnFx]);
 
-  // Run an engine mutation, then animate whatever events it produced.
-  const dispatch = useCallback((run: () => void) => {
+  // Live, non-blocking playback for the player's own card plays. The result is
+  // already reflected on the bars; we just layer the effects and shakes on top
+  // without locking input, so cards can be chained freely. Display patches are
+  // skipped here (the view already holds the final values).
+  const playLive = useCallback((timeline: Timeline) => {
+    for (const entry of timeline.entries) {
+      schedule(() => {
+        if (entry.shake) setShakeTick((x) => x + 1);
+        if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
+      }, entry.at);
+    }
+  }, [schedule, spawnFx]);
+
+  // Run an engine mutation, then animate the events it produced. `staged` actions
+  // (end turn / rest) lock input and step the view through the enemy/party phase;
+  // unstaged actions (playing a card) keep input responsive. A play that ends the
+  // fight is always staged so the win/lose flourish lands before the result card.
+  const dispatch = useCallback((run: () => void, staged: boolean) => {
     const g = ref.current!;
-    if (animatingRef.current) return; // ignore input while a sequence plays
-    timers.current = []; // the prior sequence is done; its timers have all fired
+    if (animatingRef.current) return; // a staged sequence is mid-play — block input
     run();
     const timeline = buildTimeline(g.events);
-    if (timeline.entries.length === 0) {
+    if (staged || g.status !== 'playing') {
+      // The view already holds the pre-action HP (every path leaves it synced to
+      // the engine); the timeline patches it forward in step with the effects.
+      if (timeline.entries.length === 0) { setView(snapshot(g)); force(); return; }
+      animatingRef.current = true;
+      setAnimating(true);
+      force();
+      playStaged(timeline);
+    } else {
+      // Reflect the play immediately, then play its effects live over the top.
       setView(snapshot(g));
       force();
-      return;
+      if (timeline.entries.length > 0) playLive(timeline);
     }
-    animatingRef.current = true;
-    setAnimating(true);
-    force(); // refresh the engine-backed fields (hand, MP, badges) right away
-    play(timeline);
-  }, [play]);
+  }, [playStaged, playLive]);
 
   const newGame = useCallback((seed?: number): number => {
     clearTimers();
@@ -154,19 +183,19 @@ export function useGame(initialSeed?: number): GameController {
   const playCard = useCallback((handIndex: number, target: number | null) => {
     const g = ref.current!;
     if (g.status !== 'playing' || g.phase !== 'player') return;
-    dispatch(() => g.playCard(handIndex, target));
+    dispatch(() => g.playCard(handIndex, target), false); // live: don't lock input
   }, [dispatch]);
 
   const skipTurn = useCallback(() => {
     const g = ref.current!;
     if (!g.canSkip()) return;
-    dispatch(() => g.skipTurn());
+    dispatch(() => g.skipTurn(), true); // ends the turn -> staged enemy/party phase
   }, [dispatch]);
 
   const endTurn = useCallback(() => {
     const g = ref.current!;
     if (g.status !== 'playing') return;
-    dispatch(() => g.endTurn());
+    dispatch(() => g.endTurn(), true); // staged enemy/party phase
   }, [dispatch]);
 
   return { game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn };
