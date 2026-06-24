@@ -17,23 +17,14 @@ interface MemberCardProps {
   displayDead: boolean;
   mageCharge: number;
   targetedByEnemy: boolean;
-  // Next-turn telegraph chunks (0 when nothing is incoming / a sequence is playing).
-  incomingDamage: number; // HP the next enemy attack will remove (red)
-  pendingRegen: number;   // HP regen will restore next turn (lighter green)
   validTarget: boolean;
   onClick: () => void;
 }
 
 export function MemberCard({
-  member: m, displayHp, displayDead, mageCharge, targetedByEnemy,
-  incomingDamage, pendingRegen, validTarget, onClick,
+  member: m, displayHp, displayDead, mageCharge, targetedByEnemy, validTarget, onClick,
 }: MemberCardProps) {
-  // Split the current HP into a safe (green) chunk and the part the next attack
-  // will eat (red, at the right end); the regen heal rides past it toward maxHP.
-  const dmg = Math.min(incomingDamage, displayHp);
-  const safe = displayHp - dmg;
-  const regen = Math.min(pendingRegen, m.maxHP - displayHp);
-  const pct = (v: number) => (v / m.maxHP) * 100;
+  const hpPct = (displayHp / m.maxHP) * 100;
   const cls = ['member', displayDead && 'dead', targetedByEnemy && 'targeted-by-enemy', validTarget && 'valid-target']
     .filter(Boolean).join(' ');
 
@@ -43,9 +34,7 @@ export function MemberCard({
       <h3>{m.name}</h3>
       <div className="bar">
         <div className="bar-track">
-          <div className="seg hp" style={{ left: 0, width: `${pct(safe)}%` }} />
-          {dmg > 0 && <div className="seg incoming" style={{ left: `${pct(safe)}%`, width: `${pct(dmg)}%` }} />}
-          {regen > 0 && <div className="seg regen-pending" style={{ left: `${pct(safe + dmg)}%`, width: `${pct(regen)}%` }} />}
+          <div className="seg hp" style={{ left: 0, width: `${hpPct}%` }} />
         </div>
         <span className="bar-label">{displayHp} / {m.maxHP}</span>
       </div>

@@ -63,8 +63,6 @@ main {
 .bar-track { position: absolute; inset: 0; }
 .seg { position: absolute; top: 0; bottom: 0; transition: width .25s ease, left .25s ease; }
 .seg.hp { background: var(--hp); }
-.seg.incoming { background: var(--danger); }   /* enemy damage that will land next turn */
-.seg.regen-pending { background: var(--regen); } /* lighter green: regen heal next turn */
 .seg.mp { background: var(--mp); }
 .seg.refresh-pending { background: var(--mp-pending); }
 .seg.enemy { background: var(--enemy); }

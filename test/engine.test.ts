@@ -508,32 +508,6 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
 {
   const g = new Game(50);
   g.start();
-  const tank = g.members[SLOT.CENTER];
-  // predictedDamage: a targeted member loses the telegraphed (post-defense) amount.
-  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
-  eq('predictedDamage on targeted slot', g.predictedDamage(SLOT.CENTER), 4);
-  eq('predictedDamage on untargeted slot', g.predictedDamage(SLOT.LEFT), 0);
-  tank.hp = 3;
-  eq('predictedDamage capped at current HP', g.predictedDamage(SLOT.CENTER), 3);
-  tank.hp = tank.maxHP;
-  tank.shield = true;
-  eq('predictedDamage 0 when shielded', g.predictedDamage(SLOT.CENTER), 0);
-  tank.shield = false;
-  tank.defense = 2; // turns remaining; reduces the hit by DEFENSE_AMOUNT (1)
-  eq('predictedDamage reduced by defense', g.predictedDamage(SLOT.CENTER), 3);
-  tank.defense = 0;
-  g.telegraph = { type: 'hidden', hidden: true, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
-  check('predictedDamage null when hidden', g.predictedDamage(SLOT.CENTER) === null);
-
-  // predictedRegen: current stack, capped by the room under maxHP.
-  const r = g.members[SLOT.LEFT];
-  r.hp = r.maxHP; r.regen = 2;
-  eq('predictedRegen 0 when full', g.predictedRegen(SLOT.LEFT), 0);
-  r.hp = r.maxHP - 1;
-  eq('predictedRegen limited to room', g.predictedRegen(SLOT.LEFT), 1);
-  r.hp = 1;
-  eq('predictedRegen is the full stack when there is room', g.predictedRegen(SLOT.LEFT), 2);
-
   // predictedRefresh: current stack, capped by the room under MP_MAX.
   g.mp = MP_MAX; g.refresh = 3;
   eq('predictedRefresh 0 at MP cap', g.predictedRefresh(), 0);
