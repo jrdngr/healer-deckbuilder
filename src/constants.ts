@@ -69,7 +69,7 @@ export const CHARGE_MAX = 10;
 export const POISON_BASE = 5;
 export const TAUNT_TURNS = 3;
 
-export const HAND_SIZE = 4;
+export const HAND_SIZE = 3;
 
 // Card definitions. `target` drives the UI's targeting flow.
 //   'single' -> one living member, 'all' -> no pick, 'dead' -> one dead member,
