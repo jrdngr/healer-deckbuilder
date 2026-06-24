@@ -11,7 +11,7 @@
 // staged view snaps back to the engine, which already holds the same final state.
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Game } from './engine';
-import { buildTimeline, FX_DURATION } from './animations';
+import { buildTimeline, FX_DURATION, FIRST_ENEMY_ATTACK_LEAD_IN } from './animations';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec } from './animations';
 
 // Staged display values overlaid on the engine while an animation plays. Only the
@@ -68,6 +68,8 @@ export function useGame(initialSeed?: number): GameController {
   const animatingRef = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fxId = useRef(0);
+  // Once-per-fight: the first enemy attack the player witnesses gets a lead-in.
+  const firstEnemyAttack = useRef(true);
 
   const clearTimers = useCallback(() => {
     for (const t of timers.current) clearTimeout(t);
@@ -150,7 +152,13 @@ export function useGame(initialSeed?: number): GameController {
     const g = ref.current!;
     if (animatingRef.current) return; // a staged sequence is mid-play — block input
     run();
-    const timeline = buildTimeline(g.events);
+    // Give the player a beat before the first enemy attack they see this fight.
+    let enemyLeadIn = 0;
+    if (firstEnemyAttack.current && g.events.some((e) => e.kind === 'enemyAttack')) {
+      enemyLeadIn = FIRST_ENEMY_ATTACK_LEAD_IN;
+      firstEnemyAttack.current = false;
+    }
+    const timeline = buildTimeline(g.events, { enemyLeadIn });
     if (staged || g.status !== 'playing') {
       // The view already holds the pre-action HP (every path leaves it synced to
       // the engine); the timeline patches it forward in step with the effects.
@@ -172,6 +180,7 @@ export function useGame(initialSeed?: number): GameController {
     const g = createGame(seed);
     ref.current = g;
     animatingRef.current = false;
+    firstEnemyAttack.current = true;
     setAnimating(false);
     setFx([]);
     setView(snapshot(g));

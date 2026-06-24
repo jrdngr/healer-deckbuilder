@@ -1,5 +1,5 @@
 // Tests for the pure animation timeline builder. Run via: npm test.
-import { buildTimeline, FX_DURATION } from '../src/animations';
+import { buildTimeline, FX_DURATION, FIRST_ENEMY_ATTACK_LEAD_IN } from '../src/animations';
 import type { GameEvent } from '../src/engine';
 
 let passed = 0;
@@ -80,6 +80,38 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   const tl = buildTimeline(events);
   check('resurrect revives in the view', tl.entries.some((e) => e.patch?.memberAlive === 2));
   check('resurrect raises a pillar', fxTypes(tl).includes('pillar'));
+}
+
+// --- enemy lead-in delays the first enemy attack, nothing else --------------
+{
+  const events: GameEvent[] = [
+    { kind: 'partyAttack', slot: 0, amount: 3, enemyHp: 97 },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
+    { kind: 'enemyAttack', slot: 0, amount: 4, hp: 4, result: 'hit', killed: false, hidden: false },
+  ];
+  const enemyProj = (tl: ReturnType<typeof buildTimeline>) =>
+    tl.entries.filter((e) => e.fx?.some((f) => f.type === 'projectile' && f.from === 'enemy')).map((e) => e.at);
+  const partyProj = (tl: ReturnType<typeof buildTimeline>) =>
+    tl.entries.find((e) => e.fx?.some((f) => f.type === 'projectile' && f.to === 'enemy'))!.at;
+
+  const base = buildTimeline(events);
+  const led = buildTimeline(events, { enemyLeadIn: FIRST_ENEMY_ATTACK_LEAD_IN });
+
+  check('party strike timing is untouched by the lead-in', partyProj(base) === partyProj(led));
+  const [b0, b1] = enemyProj(base);
+  const [l0, l1] = enemyProj(led);
+  eq('first enemy attack is pushed back by the lead-in', l0 - b0, FIRST_ENEMY_ATTACK_LEAD_IN);
+  eq('the lead-in applies only once', l1 - b1, FIRST_ENEMY_ATTACK_LEAD_IN);
+  check('spacing between the two enemy attacks is preserved', l1 - l0 === b1 - b0);
+  eq('total grows by exactly the lead-in', led.total - base.total, FIRST_ENEMY_ATTACK_LEAD_IN);
+}
+
+// --- with no enemy attack, the lead-in option is a no-op --------------------
+{
+  const events: GameEvent[] = [{ kind: 'heal', slot: 0, amount: 3, hp: 8 }];
+  const base = buildTimeline(events);
+  const led = buildTimeline(events, { enemyLeadIn: FIRST_ENEMY_ATTACK_LEAD_IN });
+  eq('lead-in does nothing without an enemy attack', led.total, base.total);
 }
 
 // --- empty feed yields an empty, zero-length timeline -----------------------
