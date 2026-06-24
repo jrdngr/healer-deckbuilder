@@ -101,6 +101,29 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
     JSON.stringify(healed));
 }
 
+// --- regen ticks at the start of the player phase, after the enemy attacks -----
+{
+  const g = new Game(30);
+  g.start();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 5;
+  g.mp = 10;
+  const idx = giveCard(g, 'regen'); // regen 2
+  g.playCard(idx, SLOT.CENTER);
+  eq('regen primed to 2', tank.regen, 2);
+  // Force a telegraph that spares the tank, so the only change to its HP across the
+  // turn is the regen heal (isolating the tick's timing).
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
+  g.endTurn();
+  eq('regen healed +2 at player-phase start', tank.hp, 7);
+  eq('regen stack decremented to 1', tank.regen, 1);
+  // The heal must land after the enemy attack in the event feed, not before it.
+  const atkIdx = g.events.findIndex((e) => e.kind === 'enemyAttack');
+  const regIdx = g.events.findIndex((e) => e.kind === 'regenTick');
+  check('regenTick lands after the enemy attack', atkIdx >= 0 && regIdx > atkIdx,
+    `atkIdx=${atkIdx} regIdx=${regIdx}`);
+}
+
 // --- taunt also grants the tank Defense, reducing incoming hits by 1 ---------
 {
   const g = new Game(40);

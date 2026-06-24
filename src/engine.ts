@@ -75,10 +75,11 @@ export type GameEvent =
   // --- enemy phase ---
   | { kind: 'enrage' }
   | { kind: 'poisonTick'; amount: number; enemyHp: number }
-  | { kind: 'regenTick'; slot: Slot; amount: number; hp: number }
   | { kind: 'refreshTick'; amount: number; mp: number }
   | { kind: 'enemyAttack'; slot: Slot; amount: number; hp: number;
       result: 'hit' | 'shield' | 'whiff'; killed: boolean; hidden: boolean }
+  // --- player phase start (regen resolves after the enemy's blow has landed) ---
+  | { kind: 'regenTick'; slot: Slot; amount: number; hp: number }
   // --- party phase (one per attacking member, left to right) ---
   | { kind: 'partyAttack'; slot: Slot; amount: number; enemyHp: number }
   // --- healing / buffs / spells ---
@@ -292,21 +293,14 @@ export class Game {
       this._emit({ kind: 'enrage' });
     }
 
-    // 1) start-of-turn status ticks: Poison -> Regen -> Refresh.
+    // 1) start-of-turn status ticks: Poison -> Refresh. (Regen ticks at the start
+    // of the player phase instead, so its heal lands after the enemy's blow.)
     if (this.enemy.poison > 0) {
       const dmg = this.enemy.poison;
       this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
       this._emit({ kind: 'poisonTick', amount: dmg, enemyHp: this.enemy.hp });
       this.enemy.poison -= 1;
       if (this.status === 'win') return; // poison can finish the enemy
-    }
-    for (const m of this.members) {
-      if (m.alive && m.regen > 0) {
-        const healed = this._healMember(m, m.regen);
-        this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
-        this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
-        m.regen -= 1;
-      }
     }
     if (this.refresh > 0) {
       const before = this.mp;
@@ -372,7 +366,17 @@ export class Game {
   // ---- player phase --------------------------------------------------------
 
   _startPlayerPhase(): void {
-    // Mage charge ticks first, before the player can act.
+    // Regen ticks at the start of the player's turn — after the enemy has attacked,
+    // so the heal lands on the damage just taken rather than pre-empting the blow.
+    for (const m of this.members) {
+      if (m.alive && m.regen > 0) {
+        const healed = this._healMember(m, m.regen);
+        this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
+        this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
+        m.regen -= 1;
+      }
+    }
+    // Mage charge ticks before the player can act.
     if (this.mage.alive) {
       this.mageCharge = Math.min(CHARGE_MAX, this.mageCharge + 1);
     }
