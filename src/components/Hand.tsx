@@ -1,5 +1,5 @@
-import { CARDS } from '../constants';
-import type { CardDef } from '../constants';
+import { resolveCard } from '../constants';
+import type { ResolvedCard } from '../constants';
 import type { Game } from '../engine';
 import { Card } from './Card';
 
@@ -7,11 +7,11 @@ interface HandProps {
   game: Game;
   disabled: boolean; // dim the hand while an animation sequence plays
   selectedIndex: number | null;
-  selectedCard: CardDef | null;
+  selectedCard: ResolvedCard | null;
   onCardClick: (handIndex: number) => void;
 }
 
-function promptFor(card: CardDef): string {
+function promptFor(card: ResolvedCard): string {
   const kind = card.target === 'dead' ? 'a dead member'
     : card.target === 'ability' ? 'a living member (fires their ability)'
     : 'a living member';
@@ -31,12 +31,12 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
           <span className="pile-label">Draw</span>
         </div>
         <div className="hand">
-          {game.hand.map((cardId, i) => {
-            const card = CARDS[cardId];
+          {game.hand.map((dc, i) => {
+            const card = resolveCard(dc);
             const affordable = game.mp >= card.cost && !over && !disabled;
             return (
               <Card
-                key={i}
+                key={dc.uid}
                 card={card}
                 affordable={affordable}
                 selected={selectedIndex === i}

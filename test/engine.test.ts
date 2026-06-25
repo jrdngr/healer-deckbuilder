@@ -1,7 +1,7 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT } from '../src/constants';
-import type { CardId } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER } from '../src/constants';
+import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -12,8 +12,11 @@ function check(name: string, cond: boolean, extra: string | undefined = ''): voi
 function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
 
 // Find a hand index for a card id, drawing/arranging as needed by stuffing the hand.
-function giveCard(game: Game, cardId: CardId): number {
-  game.hand.push(cardId);
+// Cards in the hand are now DeckCard instances; give each a unique negative uid so
+// it can't collide with the run deck's positional uids.
+let testUid = -1;
+function giveCard(game: Game, cardId: CardId, upgrades: ModifierId[] = []): number {
+  game.hand.push(makeDeckCard(cardId, testUid--, upgrades));
   return game.hand.length - 1;
 }
 
@@ -569,7 +572,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
       const living = g.livingMembers().sort((a, b) => (a.hp / a.maxHP) - (b.hp / b.maxHP));
       let acted = false;
       for (let i = 0; i < g.hand.length; i++) {
-        const card = CARDS[g.hand[i]];
+        const card = CARDS[g.hand[i].id];
         if (card.target === 'single' && g.mp >= card.cost && living.length) {
           if (g.playCard(i, living[0].slot).ok) { acted = true; break; }
         }
@@ -581,6 +584,69 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     }
     check(`game seed ${seed} terminates`, g.status !== 'playing', `guard=${guard}`);
   }
+}
+
+// --- BattleConfig parameterization -----------------------------------------
+{
+  // Default config reproduces the original fight.
+  const g = new Game(1);
+  eq('default start MP = MP_MAX', g.mp, MP_MAX);
+  eq('default maxMana = MP_MAX', g.maxMana, MP_MAX);
+  eq('default handSize 3', g.handSize, 3);
+  eq('default party size 3', g.members.length, 3);
+  eq('default abilityPower 0', g.members[0].abilityPower, 0);
+}
+{
+  // Custom healer: bigger pool (start = max), larger hand.
+  const cfg = defaultBattleConfig();
+  cfg.healer = { maxMana: 14, handSize: 5, restRegen: 3, passiveMp: 0 };
+  const g = new Game(2, cfg);
+  g.start();
+  eq('custom start MP = maxMana', g.mp, 14);
+  eq('custom hand draws handSize', g.hand.length, 5);
+}
+{
+  // Passive MP lands at the start of the player phase, capped at maxMana.
+  const cfg = defaultBattleConfig();
+  cfg.healer = { ...DEFAULT_HEALER, maxMana: 10, passiveMp: 3 };
+  const g = new Game(3, cfg);
+  g.start();
+  g.mp = 0;     // spend everything
+  g.endTurn();  // party + enemy phase, then next player phase grants passive MP
+  check('passive MP grants at player phase start',
+    g.status !== 'playing' || g.mp >= 3, `mp=${g.mp}`);
+}
+{
+  // Ability power scales poison strength (Ranger).
+  const cfg = defaultBattleConfig();
+  cfg.party = cfg.party.map((p) => ({ ...p, abilityPower: 2 }));
+  const g = new Game(4, cfg);
+  g.start();
+  g.playCard(giveCard(g, 'ability'), SLOT.LEFT);
+  eq('poison strength includes abilityPower', g.enemy.poison, POISON_BASE + 2);
+}
+{
+  // Ability power scales bolt damage (Mage).
+  const cfg = defaultBattleConfig();
+  cfg.party = cfg.party.map((p) => ({ ...p, abilityPower: 3 }));
+  const g = new Game(5, cfg);
+  g.start();
+  const before = g.enemy.hp;
+  const charge = g.mageCharge;
+  g.playCard(giveCard(g, 'ability'), SLOT.RIGHT);
+  eq('bolt damage includes abilityPower', before - g.enemy.hp,
+    BOLT_BASE + 3 + BOLT_CHARGE_MULT * charge);
+}
+{
+  // Custom party stats and enemy HP feed straight through.
+  const cfg = defaultBattleConfig();
+  cfg.party[SLOT.LEFT] = { maxHP: 20, damage: 7, abilityPower: 0 };
+  cfg.enemy = { maxHP: 50, actionsPerTurn: 1 };
+  const g = new Game(6, cfg);
+  eq('custom member maxHP', g.members[SLOT.LEFT].maxHP, 20);
+  eq('custom member starts at full', g.members[SLOT.LEFT].hp, 20);
+  eq('custom member damage', g.members[SLOT.LEFT].damage, 7);
+  eq('custom enemy maxHP', g.enemy.maxHP, 50);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

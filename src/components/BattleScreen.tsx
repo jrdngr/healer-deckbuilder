@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { CARDS } from '../constants';
-import type { Slot, CardDef } from '../constants';
+import { resolveCard } from '../constants';
+import type { Slot, ResolvedCard } from '../constants';
 import type { Game } from '../engine';
 import type { BattleView } from '../useGame';
 import type { FxInstance } from '../animations';
@@ -16,7 +16,7 @@ import { FxLayer } from './FxLayer';
 
 interface Selected {
   handIndex: number;
-  card: CardDef;
+  card: ResolvedCard;
 }
 
 interface BattleScreenProps {
@@ -67,7 +67,7 @@ export function BattleScreen({
 
   const onCardClick = (handIndex: number) => {
     if (animating || game.status !== 'playing' || game.phase !== 'player') return;
-    const card = CARDS[game.hand[handIndex]];
+    const card = resolveCard(game.hand[handIndex]);
     if (game.mp < card.cost) return; // unaffordable
     // No-target cards play immediately.
     if (card.target === 'all' || card.target === 'none') {

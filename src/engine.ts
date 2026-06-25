@@ -10,12 +10,15 @@
 // Read state off the public fields; read game.log for a running event feed.
 
 import {
-  MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
-  ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
-  POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS,
-  TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
+  MEMBER_DEFS, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
+  ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
+  POISON_BASE, POISON_TURNS,
+  TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SLOT,
+  defaultBattleConfig, resolveCard,
 } from './constants';
-import type { Slot, AttackType, CardId, MemberId, AbilityId, CardDef } from './constants';
+import type {
+  Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard,
+} from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
 
@@ -29,6 +32,7 @@ export interface Member {
   maxHP: number;
   damage: number;
   ability: AbilityId;
+  abilityPower: number; // run bonus added to the member's base ability strength
   hp: number;
   alive: boolean;
   shield: boolean; // pending shield (blocks next instance)
@@ -108,15 +112,20 @@ export interface PlayResult {
 export class Game {
   seed: number;
   rng: Rng;
+  config: BattleConfig;
   members: Member[];
   enemy: Enemy;
   mp: number;
+  maxMana: number;   // MP cap (healer stat); starting MP equals this
+  handSize: number;  // cards drawn each player phase (healer stat)
+  restRegen: number; // MP regained on rest (healer stat)
+  passiveMp: number; // MP gained at the start of each player phase (healer stat)
   mageCharge: number;
   refresh: number;      // Refresh strength: MP restored per turn while active
   refreshTurns: number; // enemy turns of Refresh remaining
-  drawPile: CardId[];
-  discardPile: CardId[];
-  hand: CardId[];
+  drawPile: DeckCard[];
+  discardPile: DeckCard[];
+  hand: DeckCard[];
   turn: number;
   phase: Phase;
   status: Status;
@@ -125,29 +134,43 @@ export class Game {
   log: LogEntry[];
   events: GameEvent[]; // animation feed for the most recent action (see GameEvent)
 
-  constructor(seed: number = Date.now()) {
+  constructor(seed: number = Date.now(), config: BattleConfig = defaultBattleConfig()) {
     this.seed = seed >>> 0;
     this.rng = makeRng(this.seed);
+    this.config = config;
 
-    this.members = MEMBER_DEFS.map((d): Member => ({
-      slot: d.slot, id: d.id, name: d.name, maxHP: d.maxHP, damage: d.damage,
-      ability: d.ability,
-      hp: d.maxHP, alive: true,
-      shield: false, // pending shield (blocks next instance)
-      regen: 0,      // Regen strength
-      regenTurns: 0, // Regen turns remaining
-      taunt: 0,      // taunt turns remaining (tank only)
-      defense: 0,    // Defense turns remaining
-    }));
+    this.members = config.party.map((p, slot): Member => {
+      const d = MEMBER_DEFS[slot];
+      return {
+        slot: d.slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
+        ability: d.ability, abilityPower: p.abilityPower,
+        hp: p.maxHP, alive: true,
+        shield: false, // pending shield (blocks next instance)
+        regen: 0,      // Regen strength
+        regenTurns: 0, // Regen turns remaining
+        taunt: 0,      // taunt turns remaining (tank only)
+        defense: 0,    // Defense turns remaining
+      };
+    });
 
-    this.enemy = { hp: ENEMY_MAX_HP, maxHP: ENEMY_MAX_HP, poison: 0, poisonTurns: 0, enraged: false };
+    this.enemy = {
+      hp: config.enemy.maxHP, maxHP: config.enemy.maxHP,
+      poison: 0, poisonTurns: 0, enraged: false,
+    };
 
-    this.mp = MP_START;
+    this.maxMana = config.healer.maxMana;
+    this.handSize = config.healer.handSize;
+    this.restRegen = config.healer.restRegen;
+    this.passiveMp = config.healer.passiveMp;
+
+    this.mp = this.maxMana; // starting MP each fight equals the cap
     this.mageCharge = 0;
     this.refresh = 0;      // Refresh strength
     this.refreshTurns = 0; // Refresh turns remaining
 
-    this.drawPile = shuffle([...DECK_LIST], this.rng);
+    // Battle uses fresh instances of the run deck (shuffled) — never the run's
+    // own array — so reshuffles here don't disturb the persistent deck.
+    this.drawPile = shuffle(config.deck.map((c) => ({ ...c })), this.rng);
     this.discardPile = [];
     this.hand = [];
 
@@ -257,7 +280,7 @@ export class Game {
   // active), capped by the room left under MP_MAX.
   predictedRefresh(): number {
     if (this.refreshTurns <= 0) return 0;
-    return Math.min(this.refresh, MP_MAX - this.mp);
+    return Math.min(this.refresh, this.maxMana - this.mp);
   }
 
   // Enemy HP the next Poison tick will remove (its strength while active), capped by its HP.
@@ -311,8 +334,10 @@ export class Game {
 
   // Damage a member actually takes from a raw attack value, after their Defense
   // (if any). Floored at 0 so a fully-absorbed hit can't heal.
+  // Only the Tank gets Defense (via its Taunt ability), so the tank's abilityPower
+  // scales the reduction. Other members never have defense > 0 here.
   _effectiveDamage(m: Member, raw: number): number {
-    return m.defense > 0 ? Math.max(0, raw - DEFENSE_AMOUNT) : raw;
+    return m.defense > 0 ? Math.max(0, raw - (DEFENSE_AMOUNT + m.abilityPower)) : raw;
   }
 
   // ---- enemy phase ---------------------------------------------------------
@@ -336,7 +361,7 @@ export class Game {
     }
     if (this.refreshTurns > 0) {
       const before = this.mp;
-      this.mp = Math.min(MP_MAX, this.mp + this.refresh);
+      this.mp = Math.min(this.maxMana, this.mp + this.refresh);
       this._log(`Refresh restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
       this.refreshTurns -= 1;
@@ -410,16 +435,23 @@ export class Game {
         if (m.regenTurns === 0) m.regen = 0;
       }
     }
+    // Passive MP income (healer upgrade) lands at the start of the player phase.
+    if (this.passiveMp > 0 && this.mp < this.maxMana) {
+      const before = this.mp;
+      this.mp = Math.min(this.maxMana, this.mp + this.passiveMp);
+      this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
+      this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
+    }
     // Mage charge ticks before the player can act.
     if (this.mage.alive) {
       this.mageCharge = Math.min(CHARGE_MAX, this.mageCharge + 1);
     }
-    this._drawTo(HAND_SIZE);
+    this._drawTo(this.handSize);
     this.cardPlayedThisPhase = false;
     this.phase = 'player';
   }
 
-  _drawOne(): CardId | null {
+  _drawOne(): DeckCard | null {
     if (this.drawPile.length === 0) {
       if (this.discardPile.length === 0) return null;
       this.drawPile = shuffle(this.discardPile, this.rng);
@@ -441,9 +473,9 @@ export class Game {
   // otherwise a short reason string.
   canPlay(handIndex: number, target: number | null): string | null {
     if (this.phase !== 'player') return 'not your phase';
-    const cardId = this.hand[handIndex];
-    if (cardId == null) return 'no such card';
-    const card = CARDS[cardId];
+    const dc = this.hand[handIndex];
+    if (dc == null) return 'no such card';
+    const card = resolveCard(dc);
     if (this.mp < card.cost) return 'not enough MP';
     switch (card.target) {
       case 'single':
@@ -470,19 +502,19 @@ export class Game {
     if (reason) return { ok: false, reason };
 
     this.events = [];
-    const cardId = this.hand[handIndex];
-    const card = CARDS[cardId];
+    const dc = this.hand[handIndex];
+    const card = resolveCard(dc);
     this.mp -= card.cost;
     this.hand.splice(handIndex, 1);
-    this.discardPile.push(cardId);
+    this.discardPile.push(dc);
     this.cardPlayedThisPhase = true;
 
-    this._applyCard(cardId, card, target);
+    this._applyCard(card, target);
     return { ok: true };
   }
 
-  _applyCard(cardId: CardId, card: CardDef, target: number | null): void {
-    switch (cardId) {
+  _applyCard(card: ResolvedCard, target: number | null): void {
+    switch (card.id) {
       case 'lowHeal':
       case 'highHeal': {
         const m = this.members[target as number];
@@ -503,7 +535,7 @@ export class Game {
         const m = this.members[target as number];
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
         m.regen = Math.max(m.regen, card.regen ?? 0);
-        m.regenTurns = REGEN_TURNS;
+        m.regenTurns = card.regenTurns;
         this._log(`Regen on ${m.name} (${m.regen}/turn for ${m.regenTurns}).`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         break;
@@ -528,7 +560,7 @@ export class Game {
       case 'refresh': {
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
         this.refresh = Math.max(this.refresh, card.refresh ?? 0);
-        this.refreshTurns = REFRESH_TURNS;
+        this.refreshTurns = card.refreshTurns;
         this._log(`Refresh primed (${this.refresh} MP/turn for ${this.refreshTurns}).`, 'status');
         this._emit({ kind: 'refreshPrimed', stack: this.refresh });
         break;
@@ -545,11 +577,12 @@ export class Game {
   _fireAbility(m: Member): void {
     switch (m.ability) {
       case 'poison': {
+        const strength = POISON_BASE + m.abilityPower;
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
-        this.enemy.poison = Math.max(this.enemy.poison, POISON_BASE);
+        this.enemy.poison = Math.max(this.enemy.poison, strength);
         this.enemy.poisonTurns = POISON_TURNS;
         this._log(`${m.name} fires Poison Arrow (${this.enemy.poison}/turn for ${this.enemy.poisonTurns}).`, 'status');
-        this._emit({ kind: 'poisonApplied', slot: m.slot, amount: POISON_BASE, poison: this.enemy.poison });
+        this._emit({ kind: 'poisonApplied', slot: m.slot, amount: strength, poison: this.enemy.poison });
         break;
       }
       case 'taunt': {
@@ -561,8 +594,9 @@ export class Game {
         break;
       }
       case 'bolt': {
-        const dmg = BOLT_BASE + BOLT_CHARGE_MULT * this.mageCharge;
-        this._log(`${m.name} casts Lightning Bolt (base ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge ${this.mageCharge}).`, 'status');
+        const base = BOLT_BASE + m.abilityPower;
+        const dmg = base + BOLT_CHARGE_MULT * this.mageCharge;
+        this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${this.mageCharge}).`, 'status');
         this.mageCharge = 0;
         this._damageEnemy(dmg, 'Lightning Bolt');
         this._emit({ kind: 'bolt', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
@@ -577,16 +611,16 @@ export class Game {
     return this.phase === 'player' && !this.cardPlayedThisPhase;
   }
 
-  // MP a rest would actually recover right now, accounting for the MP_MAX cap.
+  // MP a rest would actually recover right now, accounting for the MP cap.
   restAmount(): number {
-    return Math.min(MP_MAX, this.mp + SKIP_REGEN) - this.mp;
+    return Math.min(this.maxMana, this.mp + this.restRegen) - this.mp;
   }
 
   skipTurn(): PlayResult {
     if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
     this.events = [];
     const before = this.mp;
-    this.mp = Math.min(MP_MAX, this.mp + SKIP_REGEN);
+    this.mp = Math.min(this.maxMana, this.mp + this.restRegen);
     this._log(`Rested to regen +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
     this._emit({ kind: 'rest', amount: this.mp - before, mp: this.mp });
     this._endTurnInternal();
@@ -601,8 +635,15 @@ export class Game {
   }
 
   _endTurnInternal(): void {
-    // Discard the whole hand (no Retain in the prototype).
-    while (this.hand.length) this.discardPile.push(this.hand.pop() as CardId);
+    // Discard the hand from the end (same ordering the prototype used, so existing
+    // seeds reshuffle identically), keeping any Retain cards in hand for next phase.
+    const kept: DeckCard[] = [];
+    while (this.hand.length) {
+      const dc = this.hand.pop() as DeckCard;
+      if (resolveCard(dc).retain) kept.push(dc);
+      else this.discardPile.push(dc);
+    }
+    this.hand = kept;
 
     // Party phase: living members auto-attack in slot order.
     this._runPartyPhase();

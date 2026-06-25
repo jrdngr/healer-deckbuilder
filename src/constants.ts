@@ -99,7 +99,7 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
 };
 
-// The fixed 15-card deck.
+// The fixed 15-card starting deck.
 export const DECK_LIST: CardId[] = [
   'lowHeal', 'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
@@ -110,3 +110,118 @@ export const DECK_LIST: CardId[] = [
   'shield',
   'resurrect',
 ];
+
+// ---------------------------------------------------------------------------
+// Run / battle configuration
+//
+// The engine used to read the party, deck, and player resources straight from
+// the constants above. To support a multi-battle run (persistent deck, card
+// upgrades, party/healer progression, a two-action boss), the Game constructor
+// now takes a BattleConfig. `defaultBattleConfig()` reproduces the original
+// single fight, so `new Game(seed)` behaves exactly as before.
+// ---------------------------------------------------------------------------
+
+// Card upgrade modifiers. Cards carry up to two of these in their upgrade slots.
+export type ModifierId = 'efficient' | 'potent' | 'lingering' | 'retain';
+
+// A concrete card instance in the run deck: a base card id plus the upgrade
+// modifiers applied to it. `uid` is a stable identity for picking it in shops.
+export interface DeckCard {
+  uid: number;
+  id: CardId;
+  upgrades: ModifierId[]; // length 0..2
+}
+
+export interface PartyMemberConfig {
+  maxHP: number;
+  damage: number;
+  abilityPower: number; // bonus added to the member's base ability strength
+}
+
+export interface HealerConfig {
+  maxMana: number;   // MP cap; starting MP each fight equals this
+  handSize: number;
+  restRegen: number; // MP regained on rest
+  passiveMp: number; // MP gained at the start of each player phase
+}
+
+export interface EnemyConfig {
+  maxHP: number;
+  actionsPerTurn: number; // 1 for normal fights; 2 for the boss (2nd untelegraphed)
+}
+
+export interface BattleConfig {
+  deck: DeckCard[];
+  party: PartyMemberConfig[]; // length 3, indexed by slot
+  healer: HealerConfig;
+  enemy: EnemyConfig;
+}
+
+export const DEFAULT_HEALER: HealerConfig = {
+  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 0,
+};
+
+export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, actionsPerTurn: 1 };
+
+export const MAX_UPGRADE_SLOTS = 2;
+
+export function makeDeckCard(id: CardId, uid: number, upgrades: ModifierId[] = []): DeckCard {
+  return { uid, id, upgrades: [...upgrades] };
+}
+
+export function defaultParty(): PartyMemberConfig[] {
+  return MEMBER_DEFS.map((d) => ({ maxHP: d.maxHP, damage: d.damage, abilityPower: 0 }));
+}
+
+// The original 15-card deck as concrete instances (uid = position).
+export function defaultDeck(): DeckCard[] {
+  return DECK_LIST.map((id, i) => makeDeckCard(id, i));
+}
+
+export function defaultBattleConfig(): BattleConfig {
+  return {
+    deck: defaultDeck(),
+    party: defaultParty(),
+    healer: { ...DEFAULT_HEALER },
+    enemy: { ...DEFAULT_ENEMY },
+  };
+}
+
+// A card's effective stats after its upgrade modifiers are folded in. The engine
+// and UI both read cards through resolveCard so base values and upgrades stay in
+// one place. (Modifier effects are layered on in resolveCard below.)
+export interface ResolvedCard {
+  id: CardId;
+  name: string;
+  cost: number;
+  target: CardTarget;
+  desc: string;
+  heal?: number;
+  regen?: number;
+  refresh?: number;
+  regenTurns: number;
+  refreshTurns: number;
+  retain: boolean;
+  upgrades: ModifierId[];
+}
+
+export function resolveCard(card: DeckCard): ResolvedCard {
+  const base = CARDS[card.id];
+  const r: ResolvedCard = {
+    id: base.id,
+    name: base.name,
+    cost: base.cost,
+    target: base.target,
+    desc: base.desc,
+    heal: base.heal,
+    regen: base.regen,
+    refresh: base.refresh,
+    regenTurns: REGEN_TURNS,
+    refreshTurns: REFRESH_TURNS,
+    retain: false,
+    upgrades: card.upgrades,
+  };
+  // Modifier effects are applied in a later commit; for now cards resolve to
+  // their base stats.
+  return r;
+}
