@@ -1,44 +1,64 @@
 import { useState } from 'react';
-import { useGame } from './useGame';
+import { useRun } from './useRun';
+import type { Run } from './run';
+import { FIGHT_COUNT, NODES_PER_BRANCH } from './constants';
 import { Topbar } from './components/Topbar';
-import { BattleScreen } from './components/BattleScreen';
+import { FightScreen } from './components/FightScreen';
+import { MapScreen } from './components/MapScreen';
+import { NodeScreen } from './components/NodeScreen';
+import { RunOverScreen } from './components/RunOverScreen';
 
-// The only screen for now. This is the seam where map / events / rewards screens
-// will slot in as the game grows.
-type Screen = 'battle';
+// A short label for where the player is in the run, shown in the topbar.
+function progressLabel(run: Run): string {
+  if (run.status === 'won') return 'Run complete';
+  if (run.status === 'lost') return 'Run over';
+  const loc = run.location;
+  if (loc.kind === 'fight') {
+    return loc.fightIndex === FIGHT_COUNT - 1 ? 'Boss fight' : `Fight ${loc.fightIndex + 1} / ${FIGHT_COUNT}`;
+  }
+  if (loc.kind === 'forkChoice') return 'Choose a path';
+  return `Node ${loc.index + 1} / ${NODES_PER_BRANCH}`;
+}
 
 export function App() {
-  const { game, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn } = useGame();
-  const [seedField, setSeedField] = useState<string>(String(game.seed));
-  const [screen] = useState<Screen>('battle');
+  const { run, act, newRun } = useRun();
+  const [seedField, setSeedField] = useState<string>(String(run.seed));
 
-  // New Fight from the topbar: use the typed seed if valid, else random.
-  const onNewFight = () => {
+  const startNewRun = (seed?: number) => setSeedField(String(newRun(seed)));
+  const onNewRun = () => {
     const v = parseInt(seedField, 10);
-    const seed = newGame(Number.isFinite(v) ? v : undefined);
-    setSeedField(String(seed));
+    startNewRun(Number.isFinite(v) ? v : undefined);
   };
-  // Random restart (overlay "New Fight").
-  const newGameRandom = () => {
-    setSeedField(String(newGame()));
-  };
+
+  let screen;
+  if (run.status !== 'playing') {
+    screen = <RunOverScreen run={run} onNewRun={() => startNewRun()} />;
+  } else if (run.location.kind === 'fight') {
+    // Keyed so each fight remounts with a fresh battle from its own config.
+    screen = (
+      <FightScreen
+        key={`fight-${run.location.fightIndex}-${run.seed}`}
+        run={run}
+        onWin={() => act((r) => r.winFight())}
+        onLose={() => act((r) => r.loseFight())}
+      />
+    );
+  } else if (run.location.kind === 'forkChoice') {
+    screen = <MapScreen run={run} onChoose={(b) => act((r) => r.chooseBranch(b))} />;
+  } else {
+    screen = <NodeScreen run={run} act={act} onDone={() => act((r) => r.completeNode())} />;
+  }
 
   return (
     <>
-      <Topbar seedField={seedField} onSeedChange={setSeedField} onNewFight={onNewFight} />
-      {screen === 'battle' && (
-        <BattleScreen
-          game={game}
-          view={view}
-          fx={fx}
-          animating={animating}
-          shakeTick={shakeTick}
-          playCard={playCard}
-          skipTurn={skipTurn}
-          endTurn={endTurn}
-          newGameRandom={newGameRandom}
-        />
-      )}
+      <Topbar
+        seedField={seedField}
+        onSeedChange={setSeedField}
+        onNewRun={onNewRun}
+        gold={run.gold}
+        progress={progressLabel(run)}
+      />
+      {screen}
     </>
   );
 }

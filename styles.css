@@ -336,3 +336,47 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 @media (prefers-reduced-motion: reduce) {
   .shake { animation: none; }
 }
+
+/* ---- Run HUD (topbar) ---------------------------------------------------- */
+.run-status { display: flex; gap: 16px; align-items: center; font-size: 13px; }
+.run-progress { color: var(--muted); }
+.run-gold { color: var(--gold); font-weight: 700; }
+
+/* ---- Card upgrade pips --------------------------------------------------- */
+.card-upgrades { position: absolute; bottom: 8px; right: 8px; display: flex; gap: 4px; }
+.upgrade-pip { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); border: 1px solid var(--bg); }
+.upgrade-pip.efficient { background: var(--mp); }
+.upgrade-pip.potent { background: var(--hp); }
+.upgrade-pip.lingering { background: var(--regen); }
+.upgrade-pip.retain { background: var(--gold); }
+
+/* ---- Map (fork choice) --------------------------------------------------- */
+.map-screen { text-align: center; }
+.map-title { margin: 8px 0 4px; }
+.map-sub { color: var(--muted); margin: 0 0 18px; font-size: 13px; }
+.map-forks { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.map-branch {
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 12px; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.map-nodes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.map-node {
+  background: var(--panel-2); border: 1px solid #333a47; border-radius: 9px; padding: 12px;
+  display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto;
+  column-gap: 10px; align-items: center; text-align: left;
+}
+.map-node-icon { grid-row: 1 / span 2; font-size: 22px; text-align: center; }
+.map-node-label { font-weight: 700; font-size: 14px; }
+.map-node-desc { font-size: 11px; color: var(--muted); }
+.map-take { align-self: stretch; }
+
+/* ---- Node + run-over cards ----------------------------------------------- */
+.node-screen, .runover-screen { display: grid; place-items: center; min-height: 50vh; }
+.node-card {
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 14px;
+  padding: 28px 36px; text-align: center; max-width: 460px;
+}
+.node-icon { font-size: 40px; display: block; margin-bottom: 6px; }
+.node-card p { color: var(--muted); }
+.node-placeholder { font-style: italic; opacity: .7; }
+.runover-stats { color: var(--gold) !important; font-weight: 700; }

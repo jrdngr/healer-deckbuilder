@@ -28,11 +28,12 @@ interface BattleScreenProps {
   playCard: (handIndex: number, target: number | null) => void;
   skipTurn: () => void;
   endTurn: () => void;
-  newGameRandom: () => void;
+  // Resolve the fight within the run (win -> advance, loss -> run over).
+  onBattleEnd: () => void;
 }
 
 export function BattleScreen({
-  game, view, fx, animating, shakeTick, playCard, skipTurn, endTurn, newGameRandom,
+  game, view, fx, animating, shakeTick, playCard, skipTurn, endTurn, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -124,7 +125,7 @@ export function BattleScreen({
       {!animating && <AttackLines game={game} containerRef={mainRef} />}
       <FxLayer fx={fx} containerRef={mainRef} />
       {/* Let the victory/defeat flourish play before the result card drops in. */}
-      {!animating && <GameOverlay game={game} onNewFight={newGameRandom} />}
+      {!animating && <GameOverlay game={game} onContinue={onBattleEnd} />}
     </main>
   );
 }

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { Game } from './engine';
 import type { GameEvent } from './engine';
+import type { BattleConfig } from './constants';
 import { buildTimeline, FX_DURATION } from './animations';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec } from './animations';
 
@@ -41,8 +42,8 @@ function randomSeed(): number {
   return (Math.random() * 1e9) | 0;
 }
 
-function createGame(seed?: number): Game {
-  const g = new Game(Number.isFinite(seed) ? (seed as number) : randomSeed());
+function createGame(seed?: number, config?: BattleConfig): Game {
+  const g = new Game(Number.isFinite(seed) ? (seed as number) : randomSeed(), config);
   g.start();
   return g;
 }
@@ -66,13 +67,16 @@ function preStartView(g: Game): BattleView {
   };
 }
 
-export function useGame(initialSeed?: number): GameController {
+export function useGame(initialSeed?: number, config?: BattleConfig): GameController {
   const ref = useRef<Game | null>(null);
+  // The battle config is captured once on mount; the run remounts this hook (via a
+  // keyed FightScreen) for each new fight, so each fight gets its own config.
+  const configRef = useRef(config);
   // The first enemy phase (turn 1) runs inside start(); capture its events so the
   // opening effect can animate that attack instead of the board loading damaged.
   const openingEvents = useRef<GameEvent[]>([]);
   if (ref.current === null) {
-    const g = createGame(initialSeed);
+    const g = createGame(initialSeed, configRef.current);
     ref.current = g;
     openingEvents.current = g.events.slice();
   }
@@ -221,7 +225,7 @@ export function useGame(initialSeed?: number): GameController {
 
   const newGame = useCallback((seed?: number): number => {
     clearTimers();
-    const g = createGame(seed);
+    const g = createGame(seed, configRef.current);
     ref.current = g;
     animatingRef.current = false;
     setFx([]);
