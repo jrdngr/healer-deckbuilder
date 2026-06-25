@@ -45,8 +45,10 @@ main {
   display: grid; gap: 14px; position: relative;
 }
 
-/* Enemy */
-.enemy {
+/* Enemy. Scope to the section: the HP fill div is `.seg.enemy`, so an unscoped
+   `.enemy` rule bled onto it — its 14px padding floored the fill at 28px under
+   border-box, leaving a red chunk on the bar even at 0 HP. */
+section.enemy {
   background: var(--panel); padding: 14px;
   width: 50%; margin-inline: auto;
 }
