@@ -12,7 +12,8 @@
 import {
   MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
   ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
-  POISON_BASE, TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
+  POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS,
+  TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
 } from './constants';
 import type { Slot, AttackType, CardId, MemberId, AbilityId, CardDef } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
@@ -31,7 +32,8 @@ export interface Member {
   hp: number;
   alive: boolean;
   shield: boolean; // pending shield (blocks next instance)
-  regen: number;   // regen stack
+  regen: number;      // Regen strength: HP healed per turn while active
+  regenTurns: number; // player phases of Regen remaining
   taunt: number;   // taunt turns remaining (tank only)
   defense: number; // Defense turns remaining: incoming hits reduced by DEFENSE_AMOUNT
 }
@@ -39,7 +41,8 @@ export interface Member {
 export interface Enemy {
   hp: number;
   maxHP: number;
-  poison: number;
+  poison: number;      // Poison strength: damage dealt per turn while active
+  poisonTurns: number; // enemy turns of Poison remaining
   enraged: boolean;
 }
 
@@ -109,7 +112,8 @@ export class Game {
   enemy: Enemy;
   mp: number;
   mageCharge: number;
-  refresh: number;
+  refresh: number;      // Refresh strength: MP restored per turn while active
+  refreshTurns: number; // enemy turns of Refresh remaining
   drawPile: CardId[];
   discardPile: CardId[];
   hand: CardId[];
@@ -130,16 +134,18 @@ export class Game {
       ability: d.ability,
       hp: d.maxHP, alive: true,
       shield: false, // pending shield (blocks next instance)
-      regen: 0,      // regen stack
+      regen: 0,      // Regen strength
+      regenTurns: 0, // Regen turns remaining
       taunt: 0,      // taunt turns remaining (tank only)
       defense: 0,    // Defense turns remaining
     }));
 
-    this.enemy = { hp: ENEMY_MAX_HP, maxHP: ENEMY_MAX_HP, poison: 0, enraged: false };
+    this.enemy = { hp: ENEMY_MAX_HP, maxHP: ENEMY_MAX_HP, poison: 0, poisonTurns: 0, enraged: false };
 
     this.mp = MP_START;
     this.mageCharge = 0;
-    this.refresh = 0; // player-level MP-regen stack
+    this.refresh = 0;      // Refresh strength
+    this.refreshTurns = 0; // Refresh turns remaining
 
     this.drawPile = shuffle([...DECK_LIST], this.rng);
     this.discardPile = [];
@@ -247,14 +253,16 @@ export class Game {
   // Pure reads of the status stacks, previewing what next turn will do so the UI
   // can paint it as coloured bar segments.
 
-  // MP that Refresh will restore on the next enemy phase (the current stack),
-  // capped by the room left under MP_MAX.
+  // MP that Refresh will restore on the next enemy phase (its strength while
+  // active), capped by the room left under MP_MAX.
   predictedRefresh(): number {
+    if (this.refreshTurns <= 0) return 0;
     return Math.min(this.refresh, MP_MAX - this.mp);
   }
 
-  // Enemy HP the next Poison tick will remove (the current stack), capped by its HP.
+  // Enemy HP the next Poison tick will remove (its strength while active), capped by its HP.
   predictedPoison(): number {
+    if (this.enemy.poisonTurns <= 0) return 0;
     return Math.min(this.enemy.poison, this.enemy.hp);
   }
 
@@ -275,6 +283,7 @@ export class Game {
     m.hp = 0;
     m.shield = false;
     m.regen = 0;
+    m.regenTurns = 0;
     m.taunt = 0;
     m.defense = 0;
     if (m.id === 'mage') this.mageCharge = 0;
@@ -317,19 +326,21 @@ export class Game {
 
     // 1) start-of-turn status ticks: Poison -> Refresh. (Regen ticks at the start
     // of the player phase instead, so its heal lands after the enemy's blow.)
-    if (this.enemy.poison > 0) {
+    if (this.enemy.poisonTurns > 0) {
       const dmg = this.enemy.poison;
       this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
       this._emit({ kind: 'poisonTick', amount: dmg, enemyHp: this.enemy.hp });
-      this.enemy.poison -= 1;
+      this.enemy.poisonTurns -= 1;
+      if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
       if (this.status === 'win') return; // poison can finish the enemy
     }
-    if (this.refresh > 0) {
+    if (this.refreshTurns > 0) {
       const before = this.mp;
       this.mp = Math.min(MP_MAX, this.mp + this.refresh);
       this._log(`Refresh restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
-      this.refresh -= 1;
+      this.refreshTurns -= 1;
+      if (this.refreshTurns === 0) this.refresh = 0;
     }
 
     // 2) the attack itself (executes the standing telegraph).
@@ -391,11 +402,12 @@ export class Game {
     // Regen ticks at the start of the player's turn — after the enemy has attacked,
     // so the heal lands on the damage just taken rather than pre-empting the blow.
     for (const m of this.members) {
-      if (m.alive && m.regen > 0) {
+      if (m.alive && m.regenTurns > 0) {
         const healed = this._healMember(m, m.regen);
         this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
         this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
-        m.regen -= 1;
+        m.regenTurns -= 1;
+        if (m.regenTurns === 0) m.regen = 0;
       }
     }
     // Mage charge ticks before the player can act.
@@ -489,8 +501,10 @@ export class Game {
       }
       case 'regen': {
         const m = this.members[target as number];
-        m.regen += card.regen ?? 0;
-        this._log(`Regen on ${m.name} (stack ${m.regen}).`, 'status');
+        // Re-applying refreshes the duration and keeps the stronger value (no stacking).
+        m.regen = Math.max(m.regen, card.regen ?? 0);
+        m.regenTurns = REGEN_TURNS;
+        this._log(`Regen on ${m.name} (${m.regen}/turn for ${m.regenTurns}).`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         break;
       }
@@ -505,15 +519,17 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.regen = 0; m.taunt = 0; m.defense = 0;
+        m.shield = false; m.regen = 0; m.regenTurns = 0; m.taunt = 0; m.defense = 0;
         if (m.id === 'mage') this.mageCharge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
       }
       case 'refresh': {
-        this.refresh += card.refresh ?? 0;
-        this._log(`Refresh primed (MP-regen stack ${this.refresh}).`, 'status');
+        // Re-applying refreshes the duration and keeps the stronger value (no stacking).
+        this.refresh = Math.max(this.refresh, card.refresh ?? 0);
+        this.refreshTurns = REFRESH_TURNS;
+        this._log(`Refresh primed (${this.refresh} MP/turn for ${this.refreshTurns}).`, 'status');
         this._emit({ kind: 'refreshPrimed', stack: this.refresh });
         break;
       }
@@ -529,8 +545,10 @@ export class Game {
   _fireAbility(m: Member): void {
     switch (m.ability) {
       case 'poison': {
-        this.enemy.poison += POISON_BASE;
-        this._log(`${m.name} fires Poison Arrow (Poison ${this.enemy.poison}).`, 'status');
+        // Re-applying refreshes the duration and keeps the stronger value (no stacking).
+        this.enemy.poison = Math.max(this.enemy.poison, POISON_BASE);
+        this.enemy.poisonTurns = POISON_TURNS;
+        this._log(`${m.name} fires Poison Arrow (${this.enemy.poison}/turn for ${this.enemy.poisonTurns}).`, 'status');
         this._emit({ kind: 'poisonApplied', slot: m.slot, amount: POISON_BASE, poison: this.enemy.poison });
         break;
       }

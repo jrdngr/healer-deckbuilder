@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS } from '../src/constants';
 import type { CardId } from '../src/constants';
 
 let passed = 0;
@@ -36,7 +36,8 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
 eq('Quick Heal heals 1', CARDS.lowHeal.heal, 1);
 eq('Heal heals 4', CARDS.highHeal.heal, 4);
 eq('Group Heal heals 2', CARDS.aoeHeal.heal, 2);
-eq('Regen stack 2', CARDS.regen.regen, 2);
+eq('Regen strength 1', CARDS.regen.regen, 1);
+eq('Refresh strength 2', CARDS.refresh.refresh, 2);
 
 // --- enrage damage rounds up ------------------------------------------------
 {
@@ -65,39 +66,46 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
   eq('single hits 1', g._geometry('single', SLOT.LEFT).length, 1);
 }
 
-// --- poison decay schedule 5,4,3,2,1 = 15 ----------------------------------
+// --- poison: flat 3/turn for 5 turns = 15, then stops ----------------------
 {
   const g = new Game(2);
   g.start();
-  g.enemy.poison = 5;
+  g.enemy.poison = POISON_BASE; g.enemy.poisonTurns = POISON_TURNS;
   g.enemy.hp = 100;
   const seq: number[] = [];
-  // Run ticks only, isolate poison by neutralizing the attack each time.
-  for (let i = 0; i < 5; i++) {
+  // Simulate the engine's poison tick (flat strength, gated on the turn counter).
+  for (let i = 0; i < 6; i++) {
     const before = g.enemy.hp;
-    // simulate just the poison tick portion
-    if (g.enemy.poison > 0) { g.enemy.hp -= g.enemy.poison; g.enemy.poison -= 1; }
+    if (g.enemy.poisonTurns > 0) {
+      g.enemy.hp -= g.enemy.poison;
+      g.enemy.poisonTurns -= 1;
+      if (g.enemy.poisonTurns === 0) g.enemy.poison = 0;
+    }
     seq.push(before - g.enemy.hp);
   }
   eq('poison schedule sum', seq.reduce((a, b) => a + b, 0), 15);
-  check('poison decays 5..1', JSON.stringify(seq) === JSON.stringify([5, 4, 3, 2, 1]),
+  check('poison is flat 3,3,3,3,3 then 0', JSON.stringify(seq) === JSON.stringify([3, 3, 3, 3, 3, 0]),
     JSON.stringify(seq));
 }
 
-// --- regen decay schedule 4,3,2,1 = 10, capped at maxHP --------------------
+// --- regen: flat strength for its duration, capped at maxHP ----------------
 {
   const g = new Game(3);
   const ranger = g.members[SLOT.LEFT];
-  ranger.hp = 1; ranger.regen = 4;
+  ranger.hp = 6; ranger.regen = 1; ranger.regenTurns = REGEN_TURNS; // maxHP 8
   const healed: number[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < REGEN_TURNS; i++) {
     const before = ranger.hp;
-    if (ranger.regen > 0) { ranger.hp = Math.min(ranger.maxHP, ranger.hp + ranger.regen); ranger.regen -= 1; }
+    if (ranger.regenTurns > 0) {
+      ranger.hp = Math.min(ranger.maxHP, ranger.hp + ranger.regen);
+      ranger.regenTurns -= 1;
+      if (ranger.regenTurns === 0) ranger.regen = 0;
+    }
     healed.push(ranger.hp - before);
   }
-  // ranger maxHP 8, starts 1: +4 ->5, +3 ->8 (cap), +2 ->8 (no room), +1 ->8
+  // ranger starts 6: +1 ->7, +1 ->8 (cap), +1 ->8 (no room)
   eq('regen capped total', ranger.hp, 8);
-  check('regen ticks respect cap', JSON.stringify(healed) === JSON.stringify([4, 3, 0, 0]),
+  check('regen ticks respect cap', JSON.stringify(healed) === JSON.stringify([1, 1, 0]),
     JSON.stringify(healed));
 }
 
@@ -108,20 +116,37 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
   const tank = g.members[SLOT.CENTER];
   tank.hp = 5;
   g.mp = 10;
-  const idx = giveCard(g, 'regen'); // regen 2
+  const idx = giveCard(g, 'regen'); // regen 1 for 3 turns
   g.playCard(idx, SLOT.CENTER);
-  eq('regen primed to 2', tank.regen, 2);
+  eq('regen primed strength 1', tank.regen, 1);
+  eq('regen primed duration 3', tank.regenTurns, REGEN_TURNS);
   // Force a telegraph that spares the tank, so the only change to its HP across the
   // turn is the regen heal (isolating the tick's timing).
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
   g.endTurn();
-  eq('regen healed +2 at player-phase start', tank.hp, 7);
-  eq('regen stack decremented to 1', tank.regen, 1);
+  eq('regen healed +1 at player-phase start', tank.hp, 6);
+  eq('regen duration decremented to 2', tank.regenTurns, REGEN_TURNS - 1);
+  eq('regen strength unchanged', tank.regen, 1);
   // The heal must land after the enemy attack in the event feed, not before it.
   const atkIdx = g.events.findIndex((e) => e.kind === 'enemyAttack');
   const regIdx = g.events.findIndex((e) => e.kind === 'regenTick');
   check('regenTick lands after the enemy attack', atkIdx >= 0 && regIdx > atkIdx,
     `atkIdx=${atkIdx} regIdx=${regIdx}`);
+}
+
+// --- stacking is non-additive: re-applying refreshes duration, keeps max strength ---
+{
+  const g = new Game(31);
+  g.start();
+  const tank = g.members[SLOT.CENTER];
+  g.mp = 10;
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
+  eq('regen first cast strength', tank.regen, 1);
+  tank.regenTurns -= 1; // simulate a tick elapsing
+  // Re-apply: duration resets to full, strength stays the max (not 1+1=2).
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
+  eq('regen re-cast keeps strength (no stacking)', tank.regen, 1);
+  eq('regen re-cast refreshes duration', tank.regenTurns, REGEN_TURNS);
 }
 
 // --- enemy never aims its primary at a dead square (no invisible telegraph) ----
@@ -182,16 +207,20 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
   eq('defense after 3 enemy turns', tank.defense, 0);
 }
 
-// --- refresh returns 2x cost over 3,2,1 ------------------------------------
+// --- refresh: flat 2 MP/turn for 3 turns = 6, then stops -------------------
 {
   const g = new Game(4);
-  g.refresh = 3; g.mp = 0;
+  g.refresh = 2; g.refreshTurns = REFRESH_TURNS; g.mp = 0;
   const gains: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    if (g.refresh > 0) { const gain = g.refresh; g.mp += gain; g.refresh -= 1; gains.push(gain); }
+  for (let i = 0; i < REFRESH_TURNS + 1; i++) {
+    if (g.refreshTurns > 0) {
+      const gain = g.refresh; g.mp += gain; g.refreshTurns -= 1;
+      if (g.refreshTurns === 0) g.refresh = 0;
+      gains.push(gain);
+    }
   }
   eq('refresh total = 2x cost', g.mp, 6);
-  check('refresh schedule 3,2,1', JSON.stringify(gains) === JSON.stringify([3, 2, 1]));
+  check('refresh schedule 2,2,2', JSON.stringify(gains) === JSON.stringify([2, 2, 2]));
 }
 
 // --- lightning bolt = base + charge, resets charge -------------------------
@@ -304,7 +333,7 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
   // refresh tick also clamps
   const g2 = new Game(16);
   g2.start();
-  g2.mp = MP_MAX; g2.refresh = 3;
+  g2.mp = MP_MAX; g2.refresh = 2; g2.refreshTurns = REFRESH_TURNS;
   g2._runEnemyPhase(); // applies one refresh tick among other things
   check('refresh tick never exceeds MP_MAX', g2.mp <= MP_MAX, `got ${g2.mp}`);
 }
@@ -445,7 +474,7 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
   g.playCard(idx, SLOT.LEFT); // poison arrow
   const pois = g.events.find((e) => e.kind === 'poisonApplied') as any;
   check('poison event emitted', !!pois);
-  eq('poison event amount', pois.amount, 5);
+  eq('poison event amount', pois.amount, POISON_BASE);
 
   idx = giveCard(g, 'ability');
   g.events = [];
@@ -508,19 +537,25 @@ eq('Regen stack 2', CARDS.regen.regen, 2);
 {
   const g = new Game(50);
   g.start();
-  // predictedRefresh: current stack, capped by the room under MP_MAX.
-  g.mp = MP_MAX; g.refresh = 3;
+  // predictedRefresh: per-turn strength while active, capped by the room under MP_MAX.
+  g.refresh = 2; g.refreshTurns = REFRESH_TURNS;
+  g.mp = MP_MAX;
   eq('predictedRefresh 0 at MP cap', g.predictedRefresh(), 0);
-  g.mp = MP_MAX - 2;
-  eq('predictedRefresh limited to room', g.predictedRefresh(), 2);
+  g.mp = MP_MAX - 1;
+  eq('predictedRefresh limited to room', g.predictedRefresh(), 1);
   g.mp = 0;
-  eq('predictedRefresh is the full stack', g.predictedRefresh(), 3);
+  eq('predictedRefresh is the strength', g.predictedRefresh(), 2);
+  g.refreshTurns = 0;
+  eq('predictedRefresh 0 once expired', g.predictedRefresh(), 0);
 
-  // predictedPoison: current stack, capped by enemy HP.
-  g.enemy.hp = 100; g.enemy.poison = 5;
-  eq('predictedPoison is the full stack', g.predictedPoison(), 5);
-  g.enemy.hp = 3;
-  eq('predictedPoison capped at enemy HP', g.predictedPoison(), 3);
+  // predictedPoison: per-turn strength while active, capped by enemy HP.
+  g.enemy.poison = 3; g.enemy.poisonTurns = POISON_TURNS;
+  g.enemy.hp = 100;
+  eq('predictedPoison is the strength', g.predictedPoison(), 3);
+  g.enemy.hp = 2;
+  eq('predictedPoison capped at enemy HP', g.predictedPoison(), 2);
+  g.enemy.poisonTurns = 0;
+  eq('predictedPoison 0 once expired', g.predictedPoison(), 0);
 }
 
 // --- full game smoke test: never throws, terminates ------------------------

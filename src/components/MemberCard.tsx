@@ -1,10 +1,10 @@
-import { CHARGE_MAX, POISON_BASE, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE } from '../constants';
+import { CHARGE_MAX, POISON_BASE, POISON_TURNS, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE } from '../constants';
 import type { MemberId } from '../constants';
 import type { Member } from '../engine';
 
 // Short flavor of each member's ability, shown on their card.
 const ABILITY: Record<MemberId, string> = {
-  ranger: `Poison Arrow — stack Poison ${POISON_BASE} on the enemy.`,
+  ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
   tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
   mage: `Lightning Bolt — deal ${BOLT_BASE} + Charge to the enemy.`,
 };

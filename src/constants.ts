@@ -66,7 +66,10 @@ export const SKIP_REGEN = 5;
 // Ability values.
 export const BOLT_BASE = 3;
 export const CHARGE_MAX = 10;
-export const POISON_BASE = 5;
+export const POISON_BASE = 3;   // Poison strength: damage dealt per enemy turn.
+export const POISON_TURNS = 5;  // enemy turns Poison lasts
+export const REGEN_TURNS = 3;   // player phases Regen lasts
+export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
 export const TAUNT_TURNS = 3;
 export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
 export const DEFENSE_TURNS = 3;  // enemy turns Defense lasts (granted alongside Taunt)
@@ -85,14 +88,14 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Heal a member for 4.' },
   aoeHeal: { id: 'aoeHeal', name: 'Group Heal', cost: 3, target: 'all', heal: 2,
     desc: 'Heal all living members for 2.' },
-  regen: { id: 'regen', name: 'Regen', cost: 2, target: 'single', regen: 2,
-    desc: 'Regen 2: heal 2/1 over 2 enemy turns.' },
+  regen: { id: 'regen', name: 'Regen', cost: 2, target: 'single', regen: 1,
+    desc: 'Regen 1: heal 1 HP per turn for 3 enemy turns.' },
   shield: { id: 'shield', name: 'Shield', cost: 3, target: 'single',
     desc: 'Fully block the next attack instance on a member.' },
   resurrect: { id: 'resurrect', name: 'Resurrect', cost: 6, target: 'dead',
     desc: 'Revive a dead member to 50% max HP.' },
-  refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 3,
-    desc: 'MP-Regen 3: return 3/2/1 MP over 3 enemy turns.' },
+  refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 2,
+    desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
 };
 
 // The fixed 15-card deck.
