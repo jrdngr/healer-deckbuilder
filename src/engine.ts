@@ -192,6 +192,16 @@ export class Game {
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
   allDead(): boolean { return this.members.every((m) => !m.alive); }
 
+  // If the whole party is down, end the fight in a loss. Returns whether it did.
+  _checkWipe(): boolean {
+    if (!this.allDead()) return false;
+    this.status = 'loss';
+    this.phase = 'over';
+    this._log('The whole party has fallen. Defeat.', 'loss');
+    this._emit({ kind: 'wipe' });
+    return true;
+  }
+
   _log(text: string, kind: string = 'info'): void { this.log.push({ text, kind, turn: this.turn }); }
 
   _emit(e: GameEvent): void { this.events.push(e); }
@@ -370,12 +380,15 @@ export class Game {
 
     // 2) the attack itself (executes the standing telegraph).
     this._resolveAttack();
-    if (this.allDead()) {
-      this.status = 'loss';
-      this.phase = 'over';
-      this._log('The whole party has fallen. Defeat.', 'loss');
-      this._emit({ kind: 'wipe' });
-      return;
+    if (this._checkWipe()) return;
+
+    // 2b) boss second action: an extra strike this same enemy phase that was
+    // never telegraphed (generated fresh, not shown as the standing telegraph),
+    // so the player can't see it coming. Resolves while this turn's taunt /
+    // defense still hold.
+    if (this.config.enemy.actionsPerTurn >= 2) {
+      this._resolveAttack(this._generateTelegraph(this.turn));
+      if (this._checkWipe()) return;
     }
 
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
@@ -394,8 +407,9 @@ export class Game {
     this.telegraph = this._generateTelegraph(this.turn + 1);
   }
 
-  _resolveAttack(): void {
-    const t = this.telegraph;
+  // Resolve an enemy attack. Defaults to the standing telegraph, but the boss's
+  // second action passes a freshly generated (untelegraphed) one.
+  _resolveAttack(t: Telegraph | null = this.telegraph): void {
     if (!t) return;
     const label = t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
       : t.type === 'aoe' ? 'AoE attack' : 'Attack';

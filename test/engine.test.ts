@@ -698,5 +698,33 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('plain card left hand', !g.hand.some((c) => c.uid === -101));
 }
 
+// --- boss two-action enemy phase --------------------------------------------
+{
+  // Same seed, normal vs. boss: the boss strikes twice per phase, so the party
+  // takes strictly more damage in the opening enemy phase.
+  const seed = 12345;
+  const normalCfg = defaultBattleConfig();
+  const bossCfg = defaultBattleConfig();
+  bossCfg.enemy = { maxHP: 100, actionsPerTurn: 2 };
+  const gn = new Game(seed, normalCfg); gn.start();
+  const gb = new Game(seed, bossCfg); gb.start();
+  const lost = (g: Game) => g.members.reduce((s, m) => s + (m.maxHP - m.hp), 0);
+  check('boss deals more total damage in one phase', lost(gb) > lost(gn),
+    `normal=${lost(gn)} boss=${lost(gb)}`);
+  const attacks = gb.events.filter((e) => e.kind === 'enemyAttack').length;
+  check('boss emits >= 2 enemy attacks in opening phase', attacks >= 2, `got ${attacks}`);
+}
+{
+  // The boss resolves two separate attacks during a mid-fight enemy phase too,
+  // not only on the opening phase.
+  const cfg = defaultBattleConfig();
+  cfg.enemy = { maxHP: 100, actionsPerTurn: 2 };
+  const g = new Game(999, cfg);
+  g.start();
+  g.endTurn(); // party phase, then a full boss enemy phase
+  const attacks = g.events.filter((e) => e.kind === 'enemyAttack').length;
+  check('boss resolves two actions mid-fight', attacks >= 2, `got ${attacks}`);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
