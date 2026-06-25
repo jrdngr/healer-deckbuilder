@@ -428,3 +428,23 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .member-stats { font-size: 11px; color: var(--muted); }
 
 .leave-btn { justify-self: start; width: max-content; }
+
+/* ---- Events -------------------------------------------------------------- */
+.event-screen { display: grid; place-items: center; }
+.event-card {
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 14px;
+  padding: 26px 30px; max-width: 620px; width: 100%;
+}
+.event-card h2 { margin: 0 0 10px; }
+.event-text { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+.event-choices { display: flex; flex-direction: column; gap: 10px; }
+.event-choice {
+  text-align: left; display: flex; flex-direction: column; gap: 3px;
+  background: var(--panel-2); border: 1px solid #333a47; border-radius: 9px; padding: 12px 14px;
+  color: var(--ink); cursor: pointer;
+}
+.event-choice:hover { border-color: var(--accent); }
+.choice-label { font-weight: 700; font-size: 14px; }
+.choice-detail { font-size: 11px; color: var(--muted); }
+.event-pick h3 { margin: 4px 0 12px; font-size: 15px; }
+.event-result p { font-size: 15px; margin: 0 0 16px; }

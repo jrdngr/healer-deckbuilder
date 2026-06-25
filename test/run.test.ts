@@ -3,7 +3,7 @@ import { Run } from '../src/run';
 import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
-  defaultDeck, MAX_UPGRADE_SLOTS,
+  defaultDeck, MAX_UPGRADE_SLOTS, EVENTS,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
@@ -227,6 +227,19 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const after = run.party[slot];
   const changed = after.maxHP !== snapshot.maxHP || after.damage !== snapshot.damage || after.abilityPower !== snapshot.abilityPower;
   check('shrine member boost changed a stat', changed, `def ${def.id}`);
+}
+
+{
+  // Event catalog & rollEvent stay within the defined set.
+  eq('three sample events', EVENTS.length, 3);
+  const ids = new Set(EVENTS.map((e) => e.id));
+  let inSet = true;
+  for (let seed = 0; seed < 30; seed++) {
+    const e = new Run(seed).rollEvent();
+    if (!ids.has(e.id)) inSet = false;
+  }
+  check('rollEvent always returns a defined event', inSet);
+  check('every event has 2-3 choices', EVENTS.every((e) => e.choices.length >= 2 && e.choices.length <= 3));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

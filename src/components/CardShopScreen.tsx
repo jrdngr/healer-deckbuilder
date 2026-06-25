@@ -1,11 +1,12 @@
 import { resolveCard, makeDeckCard } from '../constants';
 import type { Run } from '../run';
+import type { RunAct } from '../useRun';
 import { Card } from './Card';
 import { ShopFrame } from './ShopFrame';
 
 interface CardShopScreenProps {
   run: Run;
-  act: (fn: (run: Run) => void) => void;
+  act: RunAct;
   onDone: () => void;
 }
 

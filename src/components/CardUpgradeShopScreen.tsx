@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { MODIFIERS, canApplyModifier } from '../constants';
 import type { Run } from '../run';
+import type { RunAct } from '../useRun';
 import { ShopFrame } from './ShopFrame';
 import { DeckPicker } from './DeckPicker';
 
 interface CardUpgradeShopScreenProps {
   run: Run;
-  act: (fn: (run: Run) => void) => void;
+  act: RunAct;
   onDone: () => void;
 }
 

@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { MEMBER_DEFS } from '../constants';
 import type { Slot } from '../constants';
 import type { Run } from '../run';
+import type { RunAct } from '../useRun';
 import { ShopFrame } from './ShopFrame';
 
 interface PartyUpgradeShopScreenProps {
   run: Run;
-  act: (fn: (run: Run) => void) => void;
+  act: RunAct;
   onDone: () => void;
 }
 
