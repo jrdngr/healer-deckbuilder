@@ -380,3 +380,51 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .node-card p { color: var(--muted); }
 .node-placeholder { font-style: italic; opacity: .7; }
 .runover-stats { color: var(--gold) !important; font-weight: 700; }
+
+/* ---- Shops --------------------------------------------------------------- */
+.shop-screen { max-width: 980px; }
+.shop-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.shop-head h2 { margin: 0; }
+.shop-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.shop-head .run-gold { font-size: 16px; }
+.shop-hint { color: var(--muted); font-size: 13px; margin: 0; }
+.shop-empty { color: var(--muted); font-style: italic; }
+.shop-offers { display: flex; flex-wrap: wrap; gap: 14px; }
+
+/* Card-shop offers: a card plus a price tag. */
+.shop-offer { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.offer-price { color: var(--gold); font-weight: 700; font-size: 13px; }
+
+/* Modifier / upgrade offers: a clickable info button. */
+.mod-offer {
+  width: 200px; text-align: left; display: flex; flex-direction: column; gap: 4px;
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 10px; padding: 12px 14px;
+  color: var(--ink); cursor: pointer;
+}
+.mod-offer:hover:not(:disabled) { border-color: var(--accent); }
+.mod-offer.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(110,168,254,.35); }
+.mod-offer:disabled { opacity: .45; cursor: not-allowed; }
+.mod-offer .mod-name { font-weight: 700; font-size: 14px; }
+.mod-offer .mod-desc { font-size: 11px; color: var(--muted); }
+.mod-offer .offer-price { margin-top: 2px; }
+/* Rarity accents on the left edge. */
+.mod-offer.common { border-left: 4px solid var(--muted); }
+.mod-offer.uncommon { border-left: 4px solid var(--accent); }
+.mod-offer.rare { border-left: 4px solid var(--gold); }
+
+.upgrade-target { margin-top: 16px; border-top: 1px solid #2a2f3a; padding-top: 14px; }
+.upgrade-target h3 { margin: 0 0 10px; font-size: 15px; }
+.deck-picker { display: flex; flex-wrap: wrap; gap: 12px; }
+
+.member-row { display: flex; gap: 12px; }
+.member-pick {
+  flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 10px; padding: 12px 14px;
+  color: var(--ink); cursor: pointer;
+}
+.member-pick:hover:not(:disabled) { border-color: var(--accent); }
+.member-pick:disabled { opacity: .5; cursor: not-allowed; }
+.member-name { font-weight: 700; }
+.member-stats { font-size: 11px; color: var(--muted); }
+
+.leave-btn { justify-self: start; width: max-content; }
