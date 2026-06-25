@@ -1,4 +1,4 @@
-import { CHARGE_MAX, POISON_BASE, POISON_TURNS, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE } from '../constants';
+import { CHARGE_MAX, POISON_BASE, POISON_TURNS, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE, BOLT_CHARGE_MULT } from '../constants';
 import type { MemberId } from '../constants';
 import type { Member } from '../engine';
 
@@ -6,7 +6,7 @@ import type { Member } from '../engine';
 const ABILITY: Record<MemberId, string> = {
   ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
   tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
-  mage: `Lightning Bolt — deal ${BOLT_BASE} + Charge to the enemy.`,
+  mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
 };
 
 interface MemberCardProps {

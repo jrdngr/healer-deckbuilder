@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT } from '../src/constants';
 import type { CardId } from '../src/constants';
 
 let passed = 0;
@@ -232,7 +232,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const idx = giveCard(g, 'ability');
   const res = g.playCard(idx, SLOT.RIGHT); // mage
   check('bolt played', res.ok, res.reason);
-  eq('bolt dealt base+charge', g.enemy.hp, 100 - (3 + 4));
+  eq('bolt dealt base + mult×charge', g.enemy.hp, 100 - (BOLT_BASE + BOLT_CHARGE_MULT * 4));
   eq('charge reset after firing', g.mageCharge, 0);
 }
 
@@ -463,11 +463,11 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.mageCharge = 2; g.enemy.hp = 100; g.mp = 10;
   let idx = giveCard(g, 'ability');
   g.events = [];
-  g.playCard(idx, SLOT.RIGHT); // bolt: 3 + 2 = 5
+  g.playCard(idx, SLOT.RIGHT); // bolt: 5 + 2×2 = 9
   const bolt = g.events.find((e) => e.kind === 'bolt') as any;
   check('bolt event emitted', !!bolt);
-  eq('bolt event amount', bolt.amount, 5);
-  eq('bolt event enemyHp', bolt.enemyHp, 95);
+  eq('bolt event amount', bolt.amount, BOLT_BASE + BOLT_CHARGE_MULT * 2);
+  eq('bolt event enemyHp', bolt.enemyHp, 100 - (BOLT_BASE + BOLT_CHARGE_MULT * 2));
 
   idx = giveCard(g, 'ability');
   g.events = [];

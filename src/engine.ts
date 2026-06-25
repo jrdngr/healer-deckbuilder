@@ -11,7 +11,7 @@
 
 import {
   MEMBER_DEFS, ENEMY_MAX_HP, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
-  ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, CHARGE_MAX,
+  ENRAGE_TURN, ENRAGE_MULT, MP_START, MP_MAX, SKIP_REGEN, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, HAND_SIZE, CARDS, DECK_LIST, SLOT,
 } from './constants';
@@ -561,8 +561,8 @@ export class Game {
         break;
       }
       case 'bolt': {
-        const dmg = BOLT_BASE + this.mageCharge;
-        this._log(`${m.name} casts Lightning Bolt (base ${BOLT_BASE} + Charge ${this.mageCharge}).`, 'status');
+        const dmg = BOLT_BASE + BOLT_CHARGE_MULT * this.mageCharge;
+        this._log(`${m.name} casts Lightning Bolt (base ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge ${this.mageCharge}).`, 'status');
         this.mageCharge = 0;
         this._damageEnemy(dmg, 'Lightning Bolt');
         this._emit({ kind: 'bolt', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });

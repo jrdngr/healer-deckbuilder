@@ -64,8 +64,9 @@ export const MP_MAX = 10; // hard cap; MP never exceeds this
 export const SKIP_REGEN = 5;
 
 // Ability values.
-export const BOLT_BASE = 3;
-export const CHARGE_MAX = 10;
+export const BOLT_BASE = 5;
+export const BOLT_CHARGE_MULT = 2; // Lightning Bolt adds this much damage per Charge
+export const CHARGE_MAX = 5;
 export const POISON_BASE = 3;   // Poison strength: damage dealt per enemy turn.
 export const POISON_TURNS = 5;  // enemy turns Poison lasts
 export const REGEN_TURNS = 3;   // player phases Regen lasts
