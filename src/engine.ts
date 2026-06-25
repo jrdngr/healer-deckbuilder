@@ -323,16 +323,23 @@ export class Game {
     this._log(`${m.name} has fallen!`, 'death');
   }
 
-  _damageEnemy(amount: number, source: string): void {
-    if (amount <= 0) return;
+  // Returns true on the blow that actually finishes the enemy, so the caller can
+  // emit `defeatEnemy` *after* its own hit event. The hit event carries the new
+  // (zeroed) enemyHp, and the animator replays events in order: emitting the hit
+  // first lets the bar empty to 0 before the DEFEATED flourish plays. (Emitting
+  // the defeat here, before the hit, left the bar showing a red chunk during the
+  // flourish until the killing strike landed a beat later.)
+  _damageEnemy(amount: number, source: string): boolean {
+    if (amount <= 0) return false;
     this.enemy.hp = Math.max(0, this.enemy.hp - amount);
     this._log(`${source} deals ${amount} to the enemy. (${this.enemy.hp}/${this.enemy.maxHP})`, 'enemy-dmg');
     if (this.enemy.hp <= 0 && this.status === 'playing') {
       this.status = 'win';
       this.phase = 'over';
       this._log('The enemy is defeated. Victory!', 'win');
-      this._emit({ kind: 'defeatEnemy' });
+      return true;
     }
+    return false;
   }
 
   _healMember(m: Member, amount: number): number {
@@ -363,8 +370,9 @@ export class Game {
     // of the player phase instead, so its heal lands after the enemy's blow.)
     if (this.enemy.poisonTurns > 0) {
       const dmg = this.enemy.poison;
-      this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
+      const killed = this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
       this._emit({ kind: 'poisonTick', amount: dmg, enemyHp: this.enemy.hp });
+      if (killed) this._emit({ kind: 'defeatEnemy' });
       this.enemy.poisonTurns -= 1;
       if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
       if (this.status === 'win') return; // poison can finish the enemy
@@ -612,8 +620,9 @@ export class Game {
         const dmg = base + BOLT_CHARGE_MULT * this.mageCharge;
         this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${this.mageCharge}).`, 'status');
         this.mageCharge = 0;
-        this._damageEnemy(dmg, 'Lightning Bolt');
+        const killed = this._damageEnemy(dmg, 'Lightning Bolt');
         this._emit({ kind: 'bolt', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
+        if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
       default:
@@ -675,8 +684,9 @@ export class Game {
     // total is unchanged from a single combined strike.
     for (const m of this.members) {
       if (!m.alive || m.damage <= 0) continue;
-      this._damageEnemy(m.damage, `${m.name}`);
+      const killed = this._damageEnemy(m.damage, `${m.name}`);
       this._emit({ kind: 'partyAttack', slot: m.slot, amount: m.damage, enemyHp: this.enemy.hp });
+      if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
   }

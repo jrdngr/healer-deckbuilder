@@ -389,6 +389,14 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.endTurn();
   eq('enemy at 0', g.enemy.hp, 0);
   eq('status win', g.status, 'win');
+  // The killing hit's event (carrying the zeroed enemyHp) must be emitted before
+  // defeatEnemy, so the bar empties to 0 before the DEFEATED flourish plays —
+  // otherwise the flourish lands while a red HP chunk is still on screen.
+  const killIdx = g.events.findIndex((e) => e.kind === 'partyAttack' && (e as any).enemyHp === 0);
+  const defeatIdx = g.events.findIndex((e) => e.kind === 'defeatEnemy');
+  check('killing hit carries enemyHp 0', killIdx >= 0);
+  check('hit emitted before defeatEnemy', killIdx >= 0 && defeatIdx === killIdx + 1,
+    `killIdx=${killIdx} defeatIdx=${defeatIdx}`);
 }
 
 // --- whiff: attack on dead slot does nothing, others still land ------------

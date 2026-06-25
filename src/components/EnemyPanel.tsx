@@ -9,7 +9,8 @@ interface EnemyPanelProps {
 export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
   const e = game.enemy;
   // Single red fill anchored at the left so it depletes from the right. Clamp to
-  // [0, 100] so a really low (or zero) HP still renders as a thin, valid sliver.
+  // [0, 100] so an out-of-range displayHp (overkill below 0, or a stale value
+  // above max) still maps to a valid width — 0 HP renders as an empty bar.
   const pct = Math.max(0, Math.min(100, (displayHp / e.maxHP) * 100));
   return (
     <section className="enemy">
