@@ -286,6 +286,11 @@ export const NODES_PER_BRANCH = 2;
 
 export const GOLD_PER_FIGHT = 50;    // awarded for winning a (non-final) fight
 
+// Enemy HP scales up each fight: the first fight is easiest, every later fight
+// adds ENEMY_HP_PER_FIGHT. (Fight 0..4 -> 50/75/100/125/150, the boss last.)
+export const ENEMY_BASE_HP = 50;
+export const ENEMY_HP_PER_FIGHT = 25;
+
 // Storefront sizes per shop type.
 export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerUpgrade: 3 } as const;
 

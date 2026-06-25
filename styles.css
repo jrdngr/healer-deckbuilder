@@ -369,6 +369,7 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .map-node-label { font-weight: 700; font-size: 14px; }
 .map-node-desc { font-size: 11px; color: var(--muted); }
 .map-take { align-self: stretch; }
+.start-branch { max-width: 320px; margin: 0 auto; }
 
 /* ---- Node + run-over cards ----------------------------------------------- */
 .node-screen, .runover-screen { display: grid; place-items: center; min-height: 50vh; }

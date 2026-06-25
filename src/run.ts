@@ -7,7 +7,7 @@
 // reproducible from its seed.
 
 import {
-  ENEMY_MAX_HP, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
+  ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
@@ -27,8 +27,10 @@ export interface Fork { branches: Branch[]; }  // length BRANCHES_PER_FORK
 
 export type RunStatus = 'playing' | 'won' | 'lost';
 
-// Where the player currently is in the run.
+// Where the player currently is in the run. The run opens on 'start' (the map),
+// from which the player manually enters the first fight.
 export type RunLocation =
+  | { kind: 'start' }
   | { kind: 'fight'; fightIndex: number }
   | { kind: 'forkChoice'; forkIndex: number }
   | { kind: 'node'; forkIndex: number; branch: number; index: number; nodeType: NodeType };
@@ -64,6 +66,13 @@ export class Run {
     this.nextUid = this.deck.length; // new cards continue the uid sequence
     this.map = this._generateMap();
     this.status = 'playing';
+    this.location = { kind: 'start' };
+    this.nodeContent = null;
+  }
+
+  // Leave the opening map and enter the first fight.
+  beginRun(): void {
+    if (this.location.kind !== 'start') return;
     this.location = { kind: 'fight', fightIndex: 0 };
     this.nodeContent = null;
   }
@@ -91,8 +100,18 @@ export class Run {
 
   // ---- progression ---------------------------------------------------------
 
+  // The current fight's index (0 when not at a fight).
+  get fightIndex(): number {
+    return this.location.kind === 'fight' ? this.location.fightIndex : 0;
+  }
+
   get isBossFight(): boolean {
     return this.location.kind === 'fight' && this.location.fightIndex === FIGHT_COUNT - 1;
+  }
+
+  // Enemy HP escalates each fight: ENEMY_BASE_HP on the first, +ENEMY_HP_PER_FIGHT thereafter.
+  enemyMaxHP(): number {
+    return ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * this.fightIndex;
   }
 
   // Build the config for the fight at the current location.
@@ -101,7 +120,7 @@ export class Run {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
       party: this.party.map((p) => ({ ...p })),
       healer: { ...this.healer },
-      enemy: { maxHP: ENEMY_MAX_HP, actionsPerTurn: this.isBossFight ? 2 : 1 },
+      enemy: { maxHP: this.enemyMaxHP(), actionsPerTurn: this.isBossFight ? 2 : 1 },
     };
   }
 

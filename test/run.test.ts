@@ -3,7 +3,7 @@ import { Run } from '../src/run';
 import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
-  defaultDeck, MAX_UPGRADE_SLOTS, EVENTS,
+  defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
@@ -43,16 +43,20 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 // --- initial state ----------------------------------------------------------
 {
   const run = new Run(1);
-  eq('starts at fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
+  eq('starts on the map (start screen)', run.location.kind, 'start');
   eq('starts with 0 gold', run.gold, 0);
   eq('starts with default deck size', run.deck.length, defaultDeck().length);
-  eq('not boss at fight 0', run.isBossFight, false);
   eq('default healer maxMana', run.healer.maxMana, DEFAULT_HEALER.maxMana);
+  // beginRun enters the first fight.
+  run.beginRun();
+  eq('beginRun -> fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
+  eq('not boss at fight 0', run.isBossFight, false);
 }
 
 // --- progression through the run --------------------------------------------
 {
   const run = new Run(3);
+  run.beginRun();
   // Win fight 0 -> fork 0, gold awarded.
   run.winFight();
   eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
@@ -69,6 +73,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 {
   // Drive all the way to the boss and win the run.
   const run = new Run(4);
+  run.beginRun();
   for (let f = 0; f < FIGHT_COUNT - 1; f++) {
     check(`fight ${f} is not boss`, !run.isBossFight);
     run.winFight();
@@ -81,6 +86,25 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('boss battle config has two actions', run.toBattleConfig().enemy.actionsPerTurn, 2);
   run.winFight();
   eq('beating boss wins the run', run.status, 'won');
+}
+{
+  // Enemy HP escalates each fight: 50 + 25 * fightIndex.
+  const run = new Run(77);
+  run.beginRun();
+  const seen: number[] = [];
+  for (let f = 0; f < FIGHT_COUNT; f++) {
+    seen.push(run.toBattleConfig().enemy.maxHP);
+    if (f < FIGHT_COUNT - 1) {
+      run.winFight();
+      run.chooseBranch(0);
+      run.completeNode();
+      run.completeNode();
+    }
+  }
+  eq('fight 1 enemy HP is 50', seen[0], ENEMY_BASE_HP);
+  check('HP rises by 25 each fight',
+    seen.every((hp, i) => hp === ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * i), seen.join(','));
+  eq('boss HP is 150', seen[FIGHT_COUNT - 1], ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * (FIGHT_COUNT - 1));
 }
 {
   // Losing any fight loses the run.
