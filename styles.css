@@ -14,7 +14,6 @@
   --taunt: #f2c14e;
   --defense: #aeb9cc;
   --mp-pending: #aecbff; /* lighter blue: MP a Refresh tick will restore next turn */
-  --poison-dark: #2e8b4f; /* dark green: enemy HP the next Poison tick will remove */
   --danger: #e85d5d;
   --gold: #f2c14e;
   --unknown: #b388ff;
@@ -66,7 +65,6 @@ main {
 .seg.mp { background: var(--mp); }
 .seg.refresh-pending { background: var(--mp-pending); }
 .seg.enemy { background: var(--enemy); }
-.seg.poison-pending { background: var(--poison-dark); }
 .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px #000; }
 
 /* Enemy attack lines (SVG overlay drawn over the layout) */

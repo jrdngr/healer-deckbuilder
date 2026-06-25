@@ -95,7 +95,7 @@ export function BattleScreen({
 
   return (
     <main ref={mainRef}>
-      <EnemyPanel game={game} displayHp={view.enemyHp} animating={animating} />
+      <EnemyPanel game={game} displayHp={view.enemyHp} />
       <Party
         game={game}
         view={view}
