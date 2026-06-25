@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -647,6 +647,55 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('custom member starts at full', g.members[SLOT.LEFT].hp, 20);
   eq('custom member damage', g.members[SLOT.LEFT].damage, 7);
   eq('custom enemy maxHP', g.enemy.maxHP, 50);
+}
+
+// --- card upgrade modifiers -------------------------------------------------
+{
+  // Efficient: -1 cost per stack, floored at 0.
+  eq('efficient -1 cost', resolveCard(makeDeckCard('highHeal', 1, ['efficient'])).cost, CARDS.highHeal.cost - 1);
+  eq('efficient stacks', resolveCard(makeDeckCard('highHeal', 1, ['efficient', 'efficient'])).cost, CARDS.highHeal.cost - 2);
+  eq('efficient floors at 0', resolveCard(makeDeckCard('lowHeal', 1, ['efficient', 'efficient'])).cost, 0);
+}
+{
+  // Potent: +1 to the present strength stat; stacks.
+  eq('potent +heal', resolveCard(makeDeckCard('highHeal', 1, ['potent'])).heal, (CARDS.highHeal.heal ?? 0) + 1);
+  eq('potent +regen', resolveCard(makeDeckCard('regen', 1, ['potent'])).regen, (CARDS.regen.regen ?? 0) + 1);
+  eq('potent +refresh', resolveCard(makeDeckCard('refresh', 1, ['potent'])).refresh, (CARDS.refresh.refresh ?? 0) + 1);
+  eq('potent stacks', resolveCard(makeDeckCard('highHeal', 1, ['potent', 'potent'])).heal, (CARDS.highHeal.heal ?? 0) + 2);
+}
+{
+  // Lingering: +1 duration on Regen/Refresh.
+  eq('lingering +regen turns', resolveCard(makeDeckCard('regen', 1, ['lingering'])).regenTurns, REGEN_TURNS + 1);
+  eq('lingering +refresh turns', resolveCard(makeDeckCard('refresh', 1, ['lingering'])).refreshTurns, REFRESH_TURNS + 1);
+}
+{
+  // Eligibility gating and slot limits.
+  check('potent ineligible on shield', !MODIFIERS.potent.eligible('shield'));
+  check('potent eligible on refresh', MODIFIERS.potent.eligible('refresh'));
+  check('lingering ineligible on highHeal', !MODIFIERS.lingering.eligible('highHeal'));
+  check('lingering eligible on regen', MODIFIERS.lingering.eligible('regen'));
+  check('retain eligible on anything', MODIFIERS.retain.eligible('shield'));
+  check('two open slots applies', canApplyModifier(makeDeckCard('regen', 1, []), 'lingering'));
+  check('one open slot applies', canApplyModifier(makeDeckCard('regen', 1, ['lingering']), 'lingering'));
+  check('full slots reject', !canApplyModifier(makeDeckCard('regen', 1, ['lingering', 'lingering']), 'lingering'));
+}
+{
+  // Potent regen strength flows into gameplay.
+  const g = new Game(7);
+  g.start();
+  const tank = g.tank; tank.hp = 1;
+  g.playCard(giveCard(g, 'regen', ['potent']), SLOT.CENTER);
+  eq('potent regen strength applied', tank.regen, (CARDS.regen.regen ?? 0) + 1);
+}
+{
+  // Retain keeps the card in hand after end of turn; a plain card is discarded.
+  const g = new Game(8);
+  g.start();
+  g.hand = [];
+  g.hand.push(makeDeckCard('shield', -100, ['retain']), makeDeckCard('lowHeal', -101, []));
+  g.endTurn();
+  check('retained card stays in hand', g.hand.some((c) => c.uid === -100));
+  check('plain card left hand', !g.hand.some((c) => c.uid === -101));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

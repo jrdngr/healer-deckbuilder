@@ -205,23 +205,86 @@ export interface ResolvedCard {
   upgrades: ModifierId[];
 }
 
+// ---------------------------------------------------------------------------
+// Rarity (shared by every shop) and the card upgrade modifiers.
+// ---------------------------------------------------------------------------
+
+export type Rarity = 'common' | 'uncommon' | 'rare';
+export const RARITY_PRICE: Record<Rarity, number> = { common: 25, uncommon: 50, rare: 75 };
+// Lower rarities show up more often in storefronts.
+export const RARITY_WEIGHT: Record<Rarity, number> = { common: 60, uncommon: 30, rare: 10 };
+
+// Modifier magnitudes (per stacked copy).
+export const MOD_EFFICIENT_COST = 1;   // -1 mana cost
+export const MOD_POTENT_STRENGTH = 1;  // +1 to heal / regen / refresh amount
+export const MOD_LINGERING_TURNS = 1;  // +1 turn of duration (Regen / Refresh)
+
+const cardHasStrength = (id: CardId): boolean => {
+  const c = CARDS[id];
+  return c.heal != null || c.regen != null || c.refresh != null;
+};
+const cardHasDuration = (id: CardId): boolean => {
+  const c = CARDS[id];
+  return c.regen != null || c.refresh != null;
+};
+
+export interface ModifierDef {
+  id: ModifierId;
+  name: string;
+  rarity: Rarity;
+  desc: string;
+  eligible: (cardId: CardId) => boolean; // which cards this modifier may be applied to
+}
+
+export const MODIFIERS: Record<ModifierId, ModifierDef> = {
+  lingering: {
+    id: 'lingering', name: 'Lingering', rarity: 'common',
+    desc: '+1 turn of duration.', eligible: cardHasDuration,
+  },
+  efficient: {
+    id: 'efficient', name: 'Efficient', rarity: 'uncommon',
+    desc: '-1 mana cost.', eligible: () => true,
+  },
+  potent: {
+    id: 'potent', name: 'Potent', rarity: 'uncommon',
+    desc: '+1 to its healing / restore amount.', eligible: cardHasStrength,
+  },
+  retain: {
+    id: 'retain', name: 'Retain', rarity: 'rare',
+    desc: 'Not discarded at end of turn.', eligible: () => true,
+  },
+};
+
+export const MODIFIER_IDS: ModifierId[] = ['lingering', 'efficient', 'potent', 'retain'];
+
+// Whether `mod` can be applied to `card` right now: an open slot and eligibility.
+export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
+  return card.upgrades.length < MAX_UPGRADE_SLOTS && MODIFIERS[mod].eligible(card.id);
+}
+
 export function resolveCard(card: DeckCard): ResolvedCard {
   const base = CARDS[card.id];
-  const r: ResolvedCard = {
+  let efficient = 0, potent = 0, lingering = 0, retain = false;
+  for (const u of card.upgrades) {
+    if (u === 'efficient') efficient++;
+    else if (u === 'potent') potent++;
+    else if (u === 'lingering') lingering++;
+    else if (u === 'retain') retain = true;
+  }
+  const bump = (v: number | undefined): number | undefined =>
+    v == null ? undefined : v + potent * MOD_POTENT_STRENGTH;
+  return {
     id: base.id,
     name: base.name,
-    cost: base.cost,
+    cost: Math.max(0, base.cost - efficient * MOD_EFFICIENT_COST),
     target: base.target,
     desc: base.desc,
-    heal: base.heal,
-    regen: base.regen,
-    refresh: base.refresh,
-    regenTurns: REGEN_TURNS,
-    refreshTurns: REFRESH_TURNS,
-    retain: false,
+    heal: bump(base.heal),
+    regen: bump(base.regen),
+    refresh: bump(base.refresh),
+    regenTurns: REGEN_TURNS + lingering * MOD_LINGERING_TURNS,
+    refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
+    retain,
     upgrades: card.upgrades,
   };
-  // Modifier effects are applied in a later commit; for now cards resolve to
-  // their base stats.
-  return r;
 }
