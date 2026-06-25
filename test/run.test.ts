@@ -1,0 +1,233 @@
+// Run-layer test harness. Run with: tsx test/run.test.ts
+import { Run } from '../src/run';
+import {
+  FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
+  GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
+  defaultDeck, MAX_UPGRADE_SLOTS,
+} from '../src/constants';
+import type { CardId, ModifierId, Slot } from '../src/constants';
+
+let passed = 0;
+let failed = 0;
+function check(name: string, cond: boolean, extra: string = ''): void {
+  if (cond) { passed++; }
+  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
+}
+function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
+
+const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id)!.uid;
+
+// --- map shape & determinism ------------------------------------------------
+{
+  const run = new Run(1);
+  eq('map has FORK_COUNT forks', run.map.length, FORK_COUNT);
+  let okShape = true, okTypes = true, okDiffer = true;
+  for (const fork of run.map) {
+    if (fork.branches.length !== BRANCHES_PER_FORK) okShape = false;
+    for (const branch of fork.branches) {
+      if (branch.nodes.length !== NODES_PER_BRANCH) okShape = false;
+      for (const node of branch.nodes) if (!NON_FIGHT_NODES.includes(node.type)) okTypes = false;
+      if (branch.nodes[0].type === branch.nodes[1].type) okDiffer = false;
+    }
+  }
+  check('every fork has BRANCHES_PER_FORK branches of NODES_PER_BRANCH nodes', okShape);
+  check('all map nodes are non-fight types', okTypes);
+  check("a branch's two nodes differ", okDiffer);
+}
+{
+  // Same seed -> identical map; different seed -> (very likely) different map.
+  eq('map deterministic by seed', JSON.stringify(new Run(42).map), JSON.stringify(new Run(42).map));
+  check('different seeds differ', JSON.stringify(new Run(1).map) !== JSON.stringify(new Run(2).map));
+}
+
+// --- initial state ----------------------------------------------------------
+{
+  const run = new Run(1);
+  eq('starts at fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
+  eq('starts with 0 gold', run.gold, 0);
+  eq('starts with default deck size', run.deck.length, defaultDeck().length);
+  eq('not boss at fight 0', run.isBossFight, false);
+  eq('default healer maxMana', run.healer.maxMana, DEFAULT_HEALER.maxMana);
+}
+
+// --- progression through the run --------------------------------------------
+{
+  const run = new Run(3);
+  // Win fight 0 -> fork 0, gold awarded.
+  run.winFight();
+  eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
+  eq('gold awarded for fight', run.gold, GOLD_PER_FIGHT);
+
+  // Choose a branch -> first node; complete twice -> next fight.
+  run.chooseBranch(0);
+  check('branch choice -> node', run.location.kind === 'node' && run.location.index === 0);
+  run.completeNode();
+  check('node -> second node', run.location.kind === 'node' && run.location.index === 1);
+  run.completeNode();
+  check('branch end -> fight 1', run.location.kind === 'fight' && run.location.fightIndex === 1);
+}
+{
+  // Drive all the way to the boss and win the run.
+  const run = new Run(4);
+  for (let f = 0; f < FIGHT_COUNT - 1; f++) {
+    check(`fight ${f} is not boss`, !run.isBossFight);
+    run.winFight();
+    run.chooseBranch(run.rng() < 0.5 ? 0 : 1);
+    run.completeNode();
+    run.completeNode();
+  }
+  check('reached boss fight', run.location.kind === 'fight' && run.location.fightIndex === FIGHT_COUNT - 1);
+  check('boss flagged', run.isBossFight);
+  eq('boss battle config has two actions', run.toBattleConfig().enemy.actionsPerTurn, 2);
+  run.winFight();
+  eq('beating boss wins the run', run.status, 'won');
+}
+{
+  // Losing any fight loses the run.
+  const run = new Run(5);
+  run.loseFight();
+  eq('loseFight -> lost', run.status, 'lost');
+}
+
+// --- toBattleConfig reflects progression ------------------------------------
+{
+  const run = new Run(6);
+  const cfg = run.toBattleConfig();
+  eq('config deck length tracks run deck', cfg.deck.length, run.deck.length);
+  eq('normal fight one action', cfg.enemy.actionsPerTurn, 1);
+  // Config deep-copies the deck (mutating config must not touch the run deck).
+  cfg.deck[0].upgrades.push('retain');
+  eq('config deck is a copy', run.deck[0].upgrades.length, 0);
+}
+
+// --- card shop --------------------------------------------------------------
+{
+  const run = new Run(7);
+  const offers = run.rollCardShop();
+  eq('card shop offers SHOP_SIZE.cardShop cards', offers.length, SHOP_SIZE.cardShop);
+  const ids = new Set(offers.map((o) => o.cardId));
+  eq('card offers are distinct', ids.size, offers.length);
+  check('card offer prices match rarity', offers.every((o) => o.price === RARITY_PRICE[CARD_RARITY[o.cardId]]));
+}
+{
+  const run = new Run(7);
+  run.gold = 1000;
+  run.nodeContent = { type: 'cardShop', offers: run.rollCardShop() };
+  const before = run.deck.length;
+  const price = (run.nodeContent as { offers: { price: number }[] }).offers[0].price;
+  check('buy card offer succeeds', run.buyCardOffer(0));
+  eq('deck grew by one', run.deck.length, before + 1);
+  eq('gold deducted', run.gold, 1000 - price);
+  // Out of gold -> rejected.
+  run.gold = 0;
+  check('buy with no gold fails', !run.buyCardOffer(0));
+}
+
+// --- card upgrade shop ------------------------------------------------------
+{
+  const run = new Run(8);
+  run.gold = 1000;
+  run.nodeContent = { type: 'cardUpgrade', offers: [{ modifier: 'lingering', rarity: 'common', price: RARITY_PRICE.common }] };
+  const regenUid = uidOf(run, 'regen');
+  check('apply lingering to regen succeeds', run.buyModifierOffer(0, regenUid));
+  eq('gold deducted for upgrade', run.gold, 1000 - RARITY_PRICE.common);
+  check('regen card carries lingering', run.deck.find((c) => c.uid === regenUid)!.upgrades.includes('lingering'));
+  check('offer consumed', (run.nodeContent as { offers: unknown[] }).offers.length === 0);
+}
+{
+  // Ineligible target is rejected and costs nothing.
+  const run = new Run(8);
+  run.gold = 1000;
+  run.nodeContent = { type: 'cardUpgrade', offers: [{ modifier: 'lingering', rarity: 'common', price: RARITY_PRICE.common }] };
+  check('lingering on highHeal rejected', !run.buyModifierOffer(0, uidOf(run, 'highHeal')));
+  eq('rejected upgrade keeps gold', run.gold, 1000);
+}
+
+// --- party upgrade shop -----------------------------------------------------
+{
+  const run = new Run(9);
+  run.gold = 1000;
+  const def = { id: 'hp3', stat: 'maxHP' as const, amount: 3, rarity: 'common' as const, name: '+3 Max HP', desc: '' };
+  run.nodeContent = { type: 'partyUpgrade', offers: [{ def, price: RARITY_PRICE.common }] };
+  const before = run.party[0 as Slot].maxHP;
+  check('buy party offer succeeds', run.buyPartyOffer(0, 0 as Slot));
+  eq('member maxHP raised', run.party[0 as Slot].maxHP, before + 3);
+  eq('party gold deducted', run.gold, 1000 - RARITY_PRICE.common);
+}
+
+// --- healer upgrade shop ----------------------------------------------------
+{
+  const run = new Run(10);
+  run.gold = 1000;
+  const def = { id: 'mana', stat: 'maxMana' as const, amount: 1, rarity: 'common' as const, name: '+1 Max Mana', desc: '' };
+  run.nodeContent = { type: 'healerUpgrade', offers: [{ def, price: RARITY_PRICE.common }] };
+  const before = run.healer.maxMana;
+  check('buy healer offer succeeds', run.buyHealerOffer(0));
+  eq('maxMana raised', run.healer.maxMana, before + 1);
+}
+
+// --- events -----------------------------------------------------------------
+{
+  // Casino: invariants over many seeds.
+  for (let seed = 0; seed < 30; seed++) {
+    const run = new Run(seed);
+    run.gold = 100;
+    const { delta, gold } = run.gambleGold();
+    check(`casino delta in set (seed ${seed})`, [75, 25, -25].includes(delta), `got ${delta}`);
+    eq(`casino gold floors at 0 (seed ${seed})`, gold, Math.max(0, 100 + delta));
+  }
+  // Floor actually clamps when poor.
+  let sawLoss = false;
+  for (let seed = 0; seed < 60 && !sawLoss; seed++) {
+    const run = new Run(seed);
+    run.gold = 10;
+    const { delta, gold } = run.gambleGold();
+    if (delta === -25) { sawLoss = true; eq('poor loss floors to 0', gold, 0); }
+  }
+  check('exercised a losing flip', sawLoss);
+}
+{
+  // Apothecary add-card offer.
+  const run = new Run(11);
+  const offer = run.eventCardOffer();
+  eq('event card offer size', offer.length, 3);
+  check('event card offer distinct', new Set(offer).size === offer.length);
+  const before = run.deck.length;
+  run.addCard(offer[0]);
+  eq('event add card grows deck', run.deck.length, before + 1);
+}
+{
+  // Apothecary remove-card.
+  const run = new Run(11);
+  const uid = uidOf(run, 'lowHeal');
+  const before = run.deck.length;
+  check('remove card succeeds', run.removeCard(uid));
+  eq('deck shrank', run.deck.length, before - 1);
+  check('remove missing uid fails', !run.removeCard(99999));
+}
+{
+  // Shrine: bless a card -> a random *eligible* modifier lands in a free slot.
+  const run = new Run(12);
+  const eligible = run.shrineEligibleCards();
+  check('shrine has eligible cards', eligible.length > 0);
+  const target = eligible[0];
+  const slotsBefore = target.upgrades.length;
+  const mod = run.shrineBlessCard(target.uid);
+  check('shrine applied a modifier', mod !== null);
+  eq('shrine filled a slot', target.upgrades.length, slotsBefore + 1);
+  check('applied modifier is eligible for the card', mod != null && MODIFIERS[mod].eligible(target.id));
+  check('within slot cap', target.upgrades.length <= MAX_UPGRADE_SLOTS);
+}
+{
+  // Shrine: bless a member -> a random stat boost applies.
+  const run = new Run(13);
+  const slot = 2 as Slot;
+  const snapshot = { ...run.party[slot] };
+  const def = run.shrineBlessMember(slot);
+  const after = run.party[slot];
+  const changed = after.maxHP !== snapshot.maxHP || after.damage !== snapshot.damage || after.abilityPower !== snapshot.abilityPower;
+  check('shrine member boost changed a stat', changed, `def ${def.id}`);
+}
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed === 0 ? 0 : 1);

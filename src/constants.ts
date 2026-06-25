@@ -262,6 +262,145 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
   return card.upgrades.length < MAX_UPGRADE_SLOTS && MODIFIERS[mod].eligible(card.id);
 }
 
+// ---------------------------------------------------------------------------
+// Run structure: node types, map shape, economy, and shop/event offer pools.
+// ---------------------------------------------------------------------------
+
+export type NodeType =
+  | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade';
+
+// The non-fight node types that fill the branches between fights.
+export const NON_FIGHT_NODES: NodeType[] = [
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade',
+];
+
+// Weights for placing non-fight node types on the map.
+export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
+  ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
+];
+
+export const FIGHT_COUNT = 5;        // fights 0..4; fight 4 (the last) is the boss
+export const FORK_COUNT = 4;         // forks sit between consecutive fights
+export const BRANCHES_PER_FORK = 2;
+export const NODES_PER_BRANCH = 2;
+
+export const GOLD_PER_FIGHT = 50;    // awarded for winning a (non-final) fight
+
+// Storefront sizes per shop type.
+export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerUpgrade: 3 } as const;
+
+// Rarity of each existing card (new cards are a separate design task).
+export const CARD_RARITY: Record<CardId, Rarity> = {
+  lowHeal: 'common',
+  regen: 'common',
+  highHeal: 'uncommon',
+  aoeHeal: 'uncommon',
+  shield: 'uncommon',
+  refresh: 'uncommon',
+  ability: 'uncommon',
+  resurrect: 'rare',
+};
+
+// The cards a shop can sell (every defined card).
+export const CARD_POOL: CardId[] = Object.keys(CARDS) as CardId[];
+
+// Party member stat upgrades.
+export type PartyStat = 'maxHP' | 'damage' | 'ability';
+export interface PartyUpgradeDef {
+  id: string;
+  stat: PartyStat;
+  amount: number;
+  rarity: Rarity;
+  name: string;
+  desc: string;
+}
+export const PARTY_UPGRADES: PartyUpgradeDef[] = [
+  { id: 'hp3', stat: 'maxHP', amount: 3, rarity: 'common', name: '+3 Max HP', desc: 'Raise a member’s max HP by 3.' },
+  { id: 'hp6', stat: 'maxHP', amount: 6, rarity: 'uncommon', name: '+6 Max HP', desc: 'Raise a member’s max HP by 6.' },
+  { id: 'dmg1', stat: 'damage', amount: 1, rarity: 'uncommon', name: '+1 Damage', desc: 'Raise a member’s attack damage by 1.' },
+  { id: 'dmg2', stat: 'damage', amount: 2, rarity: 'rare', name: '+2 Damage', desc: 'Raise a member’s attack damage by 2.' },
+  { id: 'abil1', stat: 'ability', amount: 1, rarity: 'uncommon', name: '+1 Ability', desc: 'Raise a member’s ability strength by 1.' },
+];
+
+// Healer (player) stat upgrades — each a +1 increment to a player resource.
+export type HealerStat = 'maxMana' | 'handSize' | 'restRegen' | 'passiveMp';
+export interface HealerUpgradeDef {
+  id: string;
+  stat: HealerStat;
+  amount: number;
+  rarity: Rarity;
+  name: string;
+  desc: string;
+}
+export const HEALER_UPGRADES: HealerUpgradeDef[] = [
+  { id: 'mana', stat: 'maxMana', amount: 1, rarity: 'common', name: '+1 Max Mana', desc: 'Raise max mana (and starting mana) by 1.' },
+  { id: 'rest', stat: 'restRegen', amount: 1, rarity: 'common', name: '+1 Rest Regen', desc: 'Rest restores 1 more MP.' },
+  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', name: '+1 Passive MP', desc: 'Gain 1 MP at the start of each of your turns.' },
+  { id: 'hand', stat: 'handSize', amount: 1, rarity: 'rare', name: '+1 Hand Size', desc: 'Draw 1 more card each turn.' },
+];
+
+// Events: a scenario, plus choices the UI dispatches on by `kind`. The actual
+// random rolls / run mutations live in run.ts so they stay testable.
+export type EventChoiceKind =
+  | 'addCardOffer'  // show a few card offers; player picks one to add (free)
+  | 'removeCard'    // deck picker; remove the chosen card (free)
+  | 'gambleGold'    // resolve a random gold outcome
+  | 'shrineCard'    // pick an eligible card; apply a random eligible modifier (free)
+  | 'shrineParty'   // pick a member; apply a random stat boost (free)
+  | 'leave';        // decline / move on
+
+export interface EventChoiceDef {
+  label: string;
+  kind: EventChoiceKind;
+  detail?: string; // outcome hint shown under the label
+}
+export interface EventDef {
+  id: string;
+  title: string;
+  text: string;
+  choices: EventChoiceDef[];
+}
+
+export const EVENT_CARD_OFFER_SIZE = 3;
+
+export const EVENTS: EventDef[] = [
+  {
+    id: 'apothecary',
+    title: 'Traveling Apothecary',
+    text: 'A cart of curios blocks the path. "Add to your repertoire, or shed what burdens you — no charge today."',
+    choices: [
+      { label: 'Buy a remedy', kind: 'addCardOffer', detail: 'Choose 1 of 3 cards to add (free).' },
+      { label: 'Shed a burden', kind: 'removeCard', detail: 'Remove a card from your deck (free).' },
+      { label: 'Move on', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'casino',
+    title: 'Casino Cart',
+    text: 'A gambler flips a golden coin. "Care to test your luck, healer? No ante — but the coin bites."',
+    choices: [
+      { label: 'Flip the coin', kind: 'gambleGold', detail: '50% +75g · 25% +25g · 25% −25g.' },
+      { label: 'Walk away', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'shrine',
+    title: 'Forgotten Shrine',
+    text: 'An old shrine to a forgotten god of mending hums with latent power. It will grant one boon — but chooses its own gift.',
+    choices: [
+      { label: 'Bless a card', kind: 'shrineCard', detail: 'Pick a card; it gains a random upgrade.' },
+      { label: 'Bless a hero', kind: 'shrineParty', detail: 'Pick a member; they gain a random boost.' },
+      { label: 'Leave', kind: 'leave' },
+    ],
+  },
+];
+
+// Shop offer shapes (a rolled storefront entry plus its gold price).
+export interface CardOffer { cardId: CardId; rarity: Rarity; price: number; }
+export interface ModifierOffer { modifier: ModifierId; rarity: Rarity; price: number; }
+export interface PartyUpgradeOffer { def: PartyUpgradeDef; price: number; }
+export interface HealerUpgradeOffer { def: HealerUpgradeDef; price: number; }
+
 export function resolveCard(card: DeckCard): ResolvedCard {
   const base = CARDS[card.id];
   let efficient = 0, potent = 0, lingering = 0, retain = false;
