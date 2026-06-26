@@ -734,5 +734,72 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('boss resolves two actions mid-fight', attacks >= 2, `got ${attacks}`);
 }
 
+// --- dev / cheat methods ----------------------------------------------------
+{
+  const g = new Game(1); g.start();
+  const before = g.enemy.hp;
+  g.devDamageEnemy(10);
+  eq('devDamageEnemy lowers enemy HP by 10', g.enemy.hp, before - 10);
+  check('devDamageEnemy keeps fight going', g.status === 'playing');
+}
+{
+  const g = new Game(1); g.start();
+  g.devDamageEnemy(99999);
+  eq('devDamageEnemy clamps HP at 0', g.enemy.hp, 0);
+  eq('lethal devDamageEnemy wins the fight', g.status, 'win');
+  check('lethal devDamageEnemy emits defeatEnemy', g.events.some((e) => e.kind === 'defeatEnemy'));
+}
+{
+  const g = new Game(1); g.start();
+  g.devKillEnemy();
+  eq('devKillEnemy zeroes enemy HP', g.enemy.hp, 0);
+  eq('devKillEnemy wins the fight', g.status, 'win');
+}
+{
+  const g = new Game(1); g.start();
+  const m = g.members[1];
+  m.hp = 1;
+  g.devHealMemberToFull(1);
+  eq('devHealMemberToFull restores to max', m.hp, m.maxHP);
+}
+{
+  const g = new Game(1); g.start();
+  const m = g.members[2];
+  g._killMember(m);
+  g.devHealMemberToFull(2);
+  check('devHealMemberToFull leaves a dead member dead', !m.alive && m.hp === 0);
+}
+{
+  const g = new Game(1); g.start();
+  g.mp = 0;
+  g.devFillMana();
+  eq('devFillMana fills MP to the cap', g.mp, g.maxMana);
+}
+{
+  // Plays a card without spending MP or having it in hand.
+  const g = new Game(1); g.start();
+  const m = g.members[1];
+  m.hp = 1;
+  const mpBefore = g.mp;
+  const handBefore = g.hand.length;
+  g.devPlayCard('highHeal'); // auto-targets the first living member (slot 0)
+  g.devPlayCard('highHeal', 1); // explicit target: the hurt tank
+  check('devPlayCard heals the targeted member', m.hp > 1);
+  eq('devPlayCard spends no MP', g.mp, mpBefore);
+  eq('devPlayCard does not consume the hand', g.hand.length, handBefore);
+}
+{
+  const g = new Game(1); g.start();
+  const m = g.members[2];
+  g._killMember(m);
+  g.devPlayCard('resurrect'); // auto-targets the first dead member
+  check('devPlayCard resurrect revives a dead member', m.alive && m.hp > 0);
+}
+{
+  const g = new Game(1); g.start();
+  g.devPlayCard('refresh');
+  check('devPlayCard refresh primes MP regen', g.refreshTurns > 0 && g.refresh > 0);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

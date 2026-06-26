@@ -14,10 +14,10 @@ import {
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SLOT,
-  defaultBattleConfig, resolveCard,
+  defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
-  Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard,
+  Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard, CardId,
 } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -689,5 +689,53 @@ export class Game {
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
+  }
+
+  // ---- dev / cheats --------------------------------------------------------
+  // Used only by the dev panel. Each clears `events` and emits existing FX events
+  // where a natural one exists, so the hook's animator and view-sync stay unchanged.
+  // These bypass the normal rules (MP cost, hand, targeting) on purpose.
+
+  devDamageEnemy(amount: number): void {
+    this.events = [];
+    if (this.status !== 'playing') return;
+    const killed = this._damageEnemy(Math.max(0, amount), 'Dev');
+    if (killed) this._emit({ kind: 'defeatEnemy' });
+  }
+
+  devKillEnemy(): void {
+    this.devDamageEnemy(this.enemy.hp);
+  }
+
+  devHealMemberToFull(slot: number): void {
+    this.events = [];
+    const m = this.members[slot];
+    if (!m || !m.alive) return; // dead members stay dead — use Resurrect from the library
+    const healed = this._healMember(m, m.maxHP - m.hp);
+    this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+  }
+
+  devFillMana(): void {
+    this.events = [];
+    this.mp = this.maxMana;
+  }
+
+  // Play any card in the game immediately, free of MP cost and without it being in
+  // hand. Auto-resolves a sensible target when none is given.
+  devPlayCard(cardId: CardId, target: number | null = null): void {
+    this.events = [];
+    if (this.status !== 'playing' || this.phase !== 'player') return;
+    const card = resolveCard(makeDeckCard(cardId, 0));
+    // single/ability cover the heal/regen/shield/ability cards (all targeted 'single'
+    // or 'ability'); 'dead' is resurrect; 'all'/'none' need no target.
+    const needsLiving = card.target === 'single' || card.target === 'ability';
+    let t = target;
+    if (t == null) {
+      if (needsLiving) t = this.members.find((m) => m.alive)?.slot ?? null;
+      else if (card.target === 'dead') t = this.members.find((m) => !m.alive)?.slot ?? null;
+    }
+    // Bail if a slot-targeted card has no valid target available.
+    if ((needsLiving || card.target === 'dead') && t == null) return;
+    this._applyCard(card, t);
   }
 }
