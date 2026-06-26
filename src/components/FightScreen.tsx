@@ -1,5 +1,6 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useGame } from '../useGame';
+import type { GameController } from '../useGame';
 import type { Run } from '../run';
 import { BattleScreen } from './BattleScreen';
 
@@ -7,6 +8,9 @@ interface FightScreenProps {
   run: Run;
   onWin: () => void;
   onLose: () => void;
+  // Publishes this fight's controller up to App so the dev panel can reach the
+  // live engine; receives null when the fight unmounts.
+  onController?: (ctrl: GameController | null) => void;
 }
 
 // Derive a stable, per-fight seed from the run seed so each fight is reproducible
@@ -19,11 +23,17 @@ function fightSeed(run: Run): number {
 // One fight within the run. Mounted fresh per fight (keyed by fight index), so its
 // useGame builds a fresh battle from this fight's config. On end, resolves the
 // fight into the run.
-export function FightScreen({ run, onWin, onLose }: FightScreenProps) {
+export function FightScreen({ run, onWin, onLose, onController }: FightScreenProps) {
   // Capture config and seed once on mount (this component is remounted per fight).
   const config = useRef(run.toBattleConfig()).current;
   const seed = useRef(fightSeed(run)).current;
   const ctrl = useGame(seed, config);
+
+  // Hand the controller to App for the duration of this fight; clear it on unmount.
+  useEffect(() => {
+    onController?.(ctrl);
+    return () => onController?.(null);
+  }, [ctrl, onController]);
 
   const onBattleEnd = () => {
     if (ctrl.game.status === 'win') onWin();

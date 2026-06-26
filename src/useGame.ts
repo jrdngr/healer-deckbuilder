@@ -36,6 +36,9 @@ export interface GameController {
   playCard: (handIndex: number, target: number | null) => void;
   skipTurn: () => void;
   endTurn: () => void;
+  /** Dev-panel cheat hook: run an arbitrary engine mutation through the normal
+   *  dispatch path so its events animate and the view/re-render stay in sync. */
+  devAction: (mutate: (g: Game) => void) => void;
 }
 
 function randomSeed(): number {
@@ -254,5 +257,9 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     dispatch(() => g.endTurn(), true); // staged enemy/party phase
   }, [dispatch]);
 
-  return { game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn };
+  const devAction = useCallback((mutate: (g: Game) => void) => {
+    dispatch(() => mutate(ref.current!), false);
+  }, [dispatch]);
+
+  return { game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn, devAction };
 }

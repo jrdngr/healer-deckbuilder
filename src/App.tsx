@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRun } from './useRun';
 import type { Run } from './run';
+import type { GameController } from './useGame';
 import { FIGHT_COUNT, NODES_PER_BRANCH } from './constants';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
@@ -8,6 +9,7 @@ import { FightScreen } from './components/FightScreen';
 import { MapScreen } from './components/MapScreen';
 import { NodeScreen } from './components/NodeScreen';
 import { RunOverScreen } from './components/RunOverScreen';
+import { DevPanel } from './components/DevPanel';
 
 // A short label for where the player is in the run, shown in the topbar.
 function progressLabel(run: Run): string {
@@ -25,6 +27,8 @@ function progressLabel(run: Run): string {
 export function App() {
   const { run, act, newRun } = useRun();
   const [seedField, setSeedField] = useState<string>(String(run.seed));
+  // The active fight's controller, published by FightScreen; null outside of a fight.
+  const [gameCtrl, setGameCtrl] = useState<GameController | null>(null);
 
   const startNewRun = (seed?: number) => setSeedField(String(newRun(seed)));
   const onNewRun = () => {
@@ -45,6 +49,7 @@ export function App() {
         run={run}
         onWin={() => act((r) => r.winFight())}
         onLose={() => act((r) => r.loseFight())}
+        onController={setGameCtrl}
       />
     );
   } else if (run.location.kind === 'forkChoice') {
@@ -63,6 +68,7 @@ export function App() {
         progress={progressLabel(run)}
       />
       {screen}
+      <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />
     </>
   );
 }
