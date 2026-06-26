@@ -23,7 +23,15 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: To
             onChange={(e) => onSeedChange(e.target.value)}
           />
         </label>
-        <button onClick={onNewRun}>New Run</button>
+        <button
+          onClick={() => {
+            if (window.confirm('Start a new run? Your current run will be lost.')) {
+              onNewRun();
+            }
+          }}
+        >
+          New Run
+        </button>
       </div>
     </header>
   );
