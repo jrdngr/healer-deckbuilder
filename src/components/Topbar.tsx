@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 interface TopbarProps {
   seedField: string;
   onSeedChange: (value: string) => void;
@@ -7,6 +9,8 @@ interface TopbarProps {
 }
 
 export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: TopbarProps) {
+  const [confirming, setConfirming] = useState(false);
+
   return (
     <header className="topbar">
       <h1>Healer Deckbuilder <span className="tag">prototype</span></h1>
@@ -23,16 +27,29 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: To
             onChange={(e) => onSeedChange(e.target.value)}
           />
         </label>
-        <button
-          onClick={() => {
-            if (window.confirm('Start a new run? Your current run will be lost.')) {
-              onNewRun();
-            }
-          }}
-        >
-          New Run
-        </button>
+        <button onClick={() => setConfirming(true)}>New Run</button>
       </div>
+
+      {confirming && (
+        <div className="overlay" onClick={() => setConfirming(false)}>
+          <div className="overlay-card" onClick={(e) => e.stopPropagation()}>
+            <h2>Start a new run?</h2>
+            <p>Your current run will be lost.</p>
+            <div className="overlay-actions">
+              <button onClick={() => setConfirming(false)}>Cancel</button>
+              <button
+                className="primary"
+                onClick={() => {
+                  setConfirming(false);
+                  onNewRun();
+                }}
+              >
+                New Run
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

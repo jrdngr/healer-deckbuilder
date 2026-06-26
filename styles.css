@@ -203,6 +203,7 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .overlay-card.win h2 { color: var(--hp); }
 .overlay-card.loss h2 { color: var(--danger); }
 .overlay-card p { color: var(--muted); margin: 0 0 18px; }
+.overlay-actions { display: flex; gap: 10px; justify-content: center; }
 
 .hidden { display: none !important; }
 
