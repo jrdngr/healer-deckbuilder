@@ -81,21 +81,25 @@ export class Run {
 
   _generateMap(): Fork[] {
     const forks: Fork[] = [];
-    for (let f = 0; f < FORK_COUNT; f++) {
-      const branches: Branch[] = [];
-      for (let b = 0; b < BRANCHES_PER_FORK; b++) branches.push({ nodes: this._rollBranch() });
-      forks.push({ branches });
-    }
+    for (let f = 0; f < FORK_COUNT; f++) forks.push(this._rollFork());
     return forks;
   }
 
-  // A branch's two nodes; the second is rolled to differ from the first.
-  _rollBranch(): MapNode[] {
-    const first = weightedPick(NODE_TYPE_WEIGHTS, this.rng);
-    let second = weightedPick(NODE_TYPE_WEIGHTS, this.rng);
-    let guard = 0;
-    while (second === first && guard++ < 20) second = weightedPick(NODE_TYPE_WEIGHTS, this.rng);
-    return [{ type: first }, { type: second }];
+  // A fork's branches. Every node across the whole fork is rolled to be a
+  // distinct type, so the player never sees a duplicate among the choices.
+  _rollFork(): Fork {
+    const types = this._pickDistinct(
+      NODE_TYPE_WEIGHTS.map(([t, w]): [NodeType, number] => [t, w]),
+      BRANCHES_PER_FORK * NODES_PER_BRANCH,
+    );
+    const branches: Branch[] = [];
+    for (let b = 0; b < BRANCHES_PER_FORK; b++) {
+      const nodes = types
+        .slice(b * NODES_PER_BRANCH, (b + 1) * NODES_PER_BRANCH)
+        .map((type): MapNode => ({ type }));
+      branches.push({ nodes });
+    }
+    return { branches };
   }
 
   // ---- progression ---------------------------------------------------------

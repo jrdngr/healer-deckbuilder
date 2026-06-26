@@ -35,6 +35,18 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   check("a branch's two nodes differ", okDiffer);
 }
 {
+  // Every node across a whole fork is distinct — no duplicate among the two
+  // paths' four nodes. Sweep many seeds so a rare collision can't slip through.
+  let allUnique = true;
+  for (let seed = 1; seed <= 300; seed++) {
+    for (const fork of new Run(seed).map) {
+      const types = fork.branches.flatMap((b) => b.nodes.map((n) => n.type));
+      if (new Set(types).size !== types.length) allUnique = false;
+    }
+  }
+  check('all nodes within a fork are unique (no duplicates across the two paths)', allUnique);
+}
+{
   // Same seed -> identical map; different seed -> (very likely) different map.
   eq('map deterministic by seed', JSON.stringify(new Run(42).map), JSON.stringify(new Run(42).map));
   check('different seeds differ', JSON.stringify(new Run(1).map) !== JSON.stringify(new Run(2).map));
