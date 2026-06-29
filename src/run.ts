@@ -7,7 +7,7 @@
 // reproducible from its seed.
 
 import {
-  ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
+  ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT, ENEMY_ATTACK_BONUS, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
@@ -113,7 +113,8 @@ export class Run {
     return this.location.kind === 'fight' && this.location.fightIndex === FIGHT_COUNT - 1;
   }
 
-  // Enemy HP escalates each fight: ENEMY_BASE_HP on the first, +ENEMY_HP_PER_FIGHT thereafter.
+  // Enemy HP escalates each fight: ENEMY_BASE_HP on the first, +ENEMY_HP_PER_FIGHT
+  // thereafter. (Fight 0..4 -> 50/75/100/125/150, the boss last and highest.)
   enemyMaxHP(): number {
     return ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * this.fightIndex;
   }
@@ -124,7 +125,11 @@ export class Run {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
       party: this.party.map((p) => ({ ...p })),
       healer: { ...this.healer },
-      enemy: { maxHP: this.enemyMaxHP(), actionsPerTurn: this.isBossFight ? 2 : 1 },
+      enemy: {
+        maxHP: this.enemyMaxHP(),
+        boss: this.isBossFight,
+        attackBonus: ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0,
+      },
     };
   }
 

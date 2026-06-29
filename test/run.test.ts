@@ -95,7 +95,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   }
   check('reached boss fight', run.location.kind === 'fight' && run.location.fightIndex === FIGHT_COUNT - 1);
   check('boss flagged', run.isBossFight);
-  eq('boss battle config has two actions', run.toBattleConfig().enemy.actionsPerTurn, 2);
+  eq('boss battle config is flagged as the boss', run.toBattleConfig().enemy.boss, true);
   run.winFight();
   eq('beating boss wins the run', run.status, 'won');
 }
@@ -130,7 +130,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const run = new Run(6);
   const cfg = run.toBattleConfig();
   eq('config deck length tracks run deck', cfg.deck.length, run.deck.length);
-  eq('normal fight one action', cfg.enemy.actionsPerTurn, 1);
+  eq('non-boss fight is not flagged as the boss', cfg.enemy.boss, false);
   // Config deep-copies the deck (mutating config must not touch the run deck).
   cfg.deck[0].upgrades.push('retain');
   eq('config deck is a copy', run.deck[0].upgrades.length, 0);

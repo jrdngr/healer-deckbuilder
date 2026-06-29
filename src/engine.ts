@@ -209,8 +209,9 @@ export class Game {
   isEnraged(turn: number): boolean { return turn >= ENRAGE_TURN; }
 
   // Per-target damage for an attack type at a given turn (round up on enrage).
+  // The enemy's per-fight attackBonus is added before the enrage multiplier.
   attackDamage(type: AttackType, turn: number): number {
-    const base = ATTACK_BASE_DAMAGE[type];
+    const base = ATTACK_BASE_DAMAGE[type] + this.config.enemy.attackBonus;
     return this.isEnraged(turn) ? Math.ceil(base * ENRAGE_MULT) : base;
   }
 
@@ -219,7 +220,10 @@ export class Game {
   // ---- telegraph generation ------------------------------------------------
 
   _pickType(turn: number): AttackType {
-    const w = this.isEnraged(turn) ? TYPE_WEIGHTS.enraged : TYPE_WEIGHTS.normal;
+    const enraged = this.isEnraged(turn);
+    const w = this.config.enemy.boss
+      ? (enraged ? TYPE_WEIGHTS.bossEnraged : TYPE_WEIGHTS.boss)
+      : (enraged ? TYPE_WEIGHTS.enraged : TYPE_WEIGHTS.normal);
     return weightedPick(Object.entries(w) as Array<[AttackType, number]>, this.rng);
   }
 
@@ -238,8 +242,9 @@ export class Game {
 
   // Resolve the set of target slots for a type given a chosen primary slot.
   _geometry(type: AttackType, primary: Slot): Slot[] {
-    if (type === 'single' || type === 'hidden') return [primary];
-    if (type === 'aoe') return [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT];
+    // 'heavy' is single-target like 'single'; 'sweep' hits the whole party like 'aoe'.
+    if (type === 'single' || type === 'hidden' || type === 'heavy') return [primary];
+    if (type === 'aoe' || type === 'sweep') return [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT];
     // two-target: primary + one adjacent. center -> random edge; edge -> center.
     let second: Slot;
     if (primary === SLOT.CENTER) second = this.rng() < 0.5 ? SLOT.LEFT : SLOT.RIGHT;
@@ -386,18 +391,11 @@ export class Game {
       if (this.refreshTurns === 0) this.refresh = 0;
     }
 
-    // 2) the attack itself (executes the standing telegraph).
+    // 2) the attack itself (executes the standing telegraph). The boss is more
+    // dangerous via its stronger telegraphed attack pool (heavy/sweep), not via a
+    // hidden extra strike — everything it does is shown ahead of time.
     this._resolveAttack();
     if (this._checkWipe()) return;
-
-    // 2b) boss second action: an extra strike this same enemy phase that was
-    // never telegraphed (generated fresh, not shown as the standing telegraph),
-    // so the player can't see it coming. Resolves while this turn's taunt /
-    // defense still hold.
-    if (this.config.enemy.actionsPerTurn >= 2) {
-      this._resolveAttack(this._generateTelegraph(this.turn));
-      if (this._checkWipe()) return;
-    }
 
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
     if (this.tank.alive && this.tank.taunt > 0) {
@@ -420,7 +418,8 @@ export class Game {
   _resolveAttack(t: Telegraph | null = this.telegraph): void {
     if (!t) return;
     const label = t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
-      : t.type === 'aoe' ? 'AoE attack' : 'Attack';
+      : t.type === 'aoe' ? 'AoE attack' : t.type === 'heavy' ? 'Heavy attack'
+      : t.type === 'sweep' ? 'Sweeping attack' : 'Attack';
     for (const slot of t.targets) {
       const m = this.members[slot];
       if (!m || !m.alive) {

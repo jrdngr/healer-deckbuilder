@@ -2,7 +2,9 @@
 // Slots are 0,1,2 == spec slots 1,2,3 == Ranger (left), Tank (center), Mage (right).
 
 export type Slot = 0 | 1 | 2;
-export type AttackType = 'single' | 'two' | 'aoe' | 'hidden';
+// 'heavy' (big single-target hit) and 'sweep' (strong hit on the whole party) are
+// the boss's signature attacks — stronger than the basic ones, but fully telegraphed.
+export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep';
 export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
 export type MemberId = 'ranger' | 'tank' | 'mage';
 export type AbilityId = 'poison' | 'taunt' | 'bolt';
@@ -42,12 +44,17 @@ export const MEMBER_DEFS: MemberDef[] = [
 export const ENEMY_MAX_HP = 100;
 
 // Base (pre-enrage) per-target damage by attack type.
-export const ATTACK_BASE_DAMAGE: Record<AttackType, number> = { single: 4, two: 3, aoe: 2, hidden: 4 };
+export const ATTACK_BASE_DAMAGE: Record<AttackType, number> = {
+  single: 4, two: 3, aoe: 2, hidden: 4, heavy: 7, sweep: 4,
+};
 
-// Attack-type selection weights.
-export const TYPE_WEIGHTS: Record<'normal' | 'enraged', Record<AttackType, number>> = {
-  normal: { single: 60, two: 20, aoe: 10, hidden: 10 },
-  enraged: { single: 30, two: 35, aoe: 25, hidden: 10 },
+// Attack-type selection weights. Regular enemies never use the boss-only types
+// (heavy/sweep weight 0); the boss never uses the untelegraphed 'hidden' type.
+export const TYPE_WEIGHTS: Record<'normal' | 'enraged' | 'boss' | 'bossEnraged', Record<AttackType, number>> = {
+  normal:      { single: 60, two: 20, aoe: 10, hidden: 10, heavy: 0,  sweep: 0 },
+  enraged:     { single: 30, two: 35, aoe: 25, hidden: 10, heavy: 0,  sweep: 0 },
+  boss:        { single: 20, two: 20, aoe: 10, hidden: 0,  heavy: 30, sweep: 20 },
+  bossEnraged: { single: 10, two: 20, aoe: 15, hidden: 0,  heavy: 35, sweep: 20 },
 };
 
 // Primary-slot weights, indexed by slot. Hidden attack uses its own profile.
@@ -72,7 +79,7 @@ export const POISON_TURNS = 5;  // enemy turns Poison lasts
 export const REGEN_TURNS = 3;   // player phases Regen lasts
 export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
 export const TAUNT_TURNS = 4;
-export const DEFENSE_AMOUNT = 2; // incoming damage reduced by this while Defense is active
+export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 
 export const HAND_SIZE = 3;
@@ -147,7 +154,8 @@ export interface HealerConfig {
 
 export interface EnemyConfig {
   maxHP: number;
-  actionsPerTurn: number; // 1 for normal fights; 2 for the boss (2nd untelegraphed)
+  boss: boolean;       // true -> uses the stronger, fully-telegraphed boss attack pool
+  attackBonus: number; // flat bonus added to each attack's per-target damage (difficulty ramp)
 }
 
 export interface BattleConfig {
@@ -158,10 +166,10 @@ export interface BattleConfig {
 }
 
 export const DEFAULT_HEALER: HealerConfig = {
-  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 2,
+  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 0,
 };
 
-export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, actionsPerTurn: 1 };
+export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, boss: false, attackBonus: 0 };
 
 export const MAX_UPGRADE_SLOTS = 2;
 
@@ -290,6 +298,11 @@ export const GOLD_PER_FIGHT = 50;    // awarded for winning a (non-final) fight
 // adds ENEMY_HP_PER_FIGHT. (Fight 0..4 -> 50/75/100/125/150, the boss last.)
 export const ENEMY_BASE_HP = 50;
 export const ENEMY_HP_PER_FIGHT = 25;
+
+// Flat bonus added to every enemy attack's per-target damage, indexed by fight.
+// This drives the difficulty curve: fight 0 is gentle, fights 1-3 ramp up. The
+// boss (last) gets its own stronger, fully-telegraphed attack pool (see TYPE_WEIGHTS).
+export const ENEMY_ATTACK_BONUS: number[] = [0, 1, 2, 2, 0];
 
 // Storefront sizes per shop type.
 export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerUpgrade: 3 } as const;

@@ -187,11 +187,11 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
   g.events = [];
   g._resolveAttack();
-  eq('defense reduces the hit by 2', tank.hp, tank.maxHP - 2);
+  eq('defense reduces the hit by 1', tank.hp, tank.maxHP - 3);
   const atk = g.events.find((e) => e.kind === 'enemyAttack') as any;
-  eq('enemyAttack amount reflects reduced damage', atk.amount, 2);
+  eq('enemyAttack amount reflects reduced damage', atk.amount, 3);
   const spec = g.attackTargets().find((s) => s.slot === SLOT.CENTER) as any;
-  eq('telegraph preview shows reduced damage on the tank', spec.damage, 2);
+  eq('telegraph preview shows reduced damage on the tank', spec.damage, 3);
 }
 
 // --- Defense lasts 4 enemy turns, then fades --------------------------------
@@ -651,7 +651,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // Custom party stats and enemy HP feed straight through.
   const cfg = defaultBattleConfig();
   cfg.party[SLOT.LEFT] = { maxHP: 20, damage: 7, abilityPower: 0 };
-  cfg.enemy = { maxHP: 50, actionsPerTurn: 1 };
+  cfg.enemy = { maxHP: 50, boss: false, attackBonus: 0 };
   const g = new Game(6, cfg);
   eq('custom member maxHP', g.members[SLOT.LEFT].maxHP, 20);
   eq('custom member starts at full', g.members[SLOT.LEFT].hp, 20);
@@ -708,32 +708,60 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('plain card left hand', !g.hand.some((c) => c.uid === -101));
 }
 
-// --- boss two-action enemy phase --------------------------------------------
+// --- boss attack pool: stronger, but fully telegraphed (no hidden 2nd strike) ---
 {
-  // Same seed, normal vs. boss: the boss strikes twice per phase, so the party
-  // takes strictly more damage in the opening enemy phase.
-  const seed = 12345;
-  const normalCfg = defaultBattleConfig();
-  const bossCfg = defaultBattleConfig();
-  bossCfg.enemy = { maxHP: 100, actionsPerTurn: 2 };
-  const gn = new Game(seed, normalCfg); gn.start();
-  const gb = new Game(seed, bossCfg); gb.start();
-  const lost = (g: Game) => g.members.reduce((s, m) => s + (m.maxHP - m.hp), 0);
-  check('boss deals more total damage in one phase', lost(gb) > lost(gn),
-    `normal=${lost(gn)} boss=${lost(gb)}`);
-  const attacks = gb.events.filter((e) => e.kind === 'enemyAttack').length;
-  check('boss emits >= 2 enemy attacks in opening phase', attacks >= 2, `got ${attacks}`);
+  // The boss draws from its own attack pool, which includes the heavy/sweep types
+  // that regular enemies never use. Sweep over many seeds to observe them.
+  const cfg = defaultBattleConfig();
+  cfg.enemy = { maxHP: 150, boss: true, attackBonus: 0 };
+  const types = new Set<string>();
+  for (let seed = 0; seed < 400; seed++) {
+    const g = new Game(seed, cfg);
+    types.add(g._generateTelegraph(1).type);   // pre-enrage boss pool
+    types.add(g._generateTelegraph(11).type);  // enraged boss pool
+  }
+  check('boss uses the heavy attack', types.has('heavy'));
+  check('boss uses the sweep attack', types.has('sweep'));
+  check('boss never uses the hidden (untelegraphed) attack', !types.has('hidden'));
 }
 {
-  // The boss resolves two separate attacks during a mid-fight enemy phase too,
-  // not only on the opening phase.
+  // Regular enemies never roll the boss-only types.
+  const cfg = defaultBattleConfig(); // boss: false
+  const types = new Set<string>();
+  for (let seed = 0; seed < 400; seed++) {
+    const g = new Game(seed, cfg);
+    types.add(g._generateTelegraph(1).type);
+    types.add(g._generateTelegraph(11).type);
+  }
+  check('regular enemy never uses heavy', !types.has('heavy'));
+  check('regular enemy never uses sweep', !types.has('sweep'));
+}
+{
+  // The boss resolves exactly one (telegraphed) attack per enemy phase — its
+  // standing telegraph — never a hidden extra strike. Every blow that lands is
+  // one the player could see coming.
   const cfg = defaultBattleConfig();
-  cfg.enemy = { maxHP: 100, actionsPerTurn: 2 };
-  const g = new Game(999, cfg);
-  g.start();
-  g.endTurn(); // party phase, then a full boss enemy phase
-  const attacks = g.events.filter((e) => e.kind === 'enemyAttack').length;
-  check('boss resolves two actions mid-fight', attacks >= 2, `got ${attacks}`);
+  cfg.enemy = { maxHP: 150, boss: true, attackBonus: 0 };
+  for (let seed = 0; seed < 50; seed++) {
+    const g = new Game(seed, cfg);
+    g.telegraph = g._generateTelegraph(1);
+    const telegraphed = g.telegraph.targets.filter((s) => g.members[s].alive).length;
+    g.events = [];
+    g._runEnemyPhase(); // resolves the standing telegraph, then telegraphs the next turn
+    const hits = g.events.filter((e) => e.kind === 'enemyAttack').length;
+    check(`boss enemy phase resolves only the telegraph (seed ${seed})`,
+      hits === telegraphed, `hits=${hits} telegraphed=${telegraphed}`);
+  }
+}
+{
+  // attackBonus raises every attack's per-target damage (the per-fight difficulty ramp).
+  const base = defaultBattleConfig();
+  const buffed = defaultBattleConfig();
+  buffed.enemy = { maxHP: 100, boss: false, attackBonus: 2 };
+  const gb = new Game(1, base);
+  const gp = new Game(1, buffed);
+  eq('attackBonus adds to single damage', gp.attackDamage('single', 1), gb.attackDamage('single', 1) + 2);
+  eq('attackBonus adds before enrage', gp.attackDamage('single', 11), Math.ceil((4 + 2) * 1.25));
 }
 
 // --- dev / cheat methods ----------------------------------------------------
