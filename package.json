@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsx test/engine.test.ts && tsx test/animations.test.ts && tsx test/run.test.ts",
+    "test": "tsx test/engine.test.ts && tsx test/animations.test.ts && tsx test/run.test.ts && tsx test/useGame.test.tsx",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,10 +16,12 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^29.1.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vite": "^6.0.0"
