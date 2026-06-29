@@ -261,5 +261,14 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     dispatch(() => mutate(ref.current!), false);
   }, [dispatch]);
 
-  return { game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn, devAction };
+  // Return a STABLE controller reference. The fields are refreshed every render,
+  // but the object identity is held constant (via a ref + Object.assign) so the
+  // controller can be used safely in dependency arrays. FightScreen publishes this
+  // object up to App in an effect keyed on the controller; a fresh object literal
+  // each render would re-fire that effect -> setState -> re-render, looping until
+  // React throws "Maximum update depth exceeded".
+  const controllerRef = useRef<GameController>({} as GameController);
+  return Object.assign(controllerRef.current, {
+    game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn, devAction,
+  });
 }
