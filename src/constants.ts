@@ -34,9 +34,9 @@ export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 } as const;
 
 // Fixed party layout. `ability` names which ability the Ability card fires for this member.
 export const MEMBER_DEFS: MemberDef[] = [
-  { slot: 0, id: 'ranger', name: 'Ranger', maxHP: 8, damage: 3, ability: 'poison' },
-  { slot: 1, id: 'tank', name: 'Tank', maxHP: 12, damage: 1, ability: 'taunt' },
-  { slot: 2, id: 'mage', name: 'Mage', maxHP: 6, damage: 5, ability: 'bolt' },
+  { slot: 0, id: 'ranger', name: 'Ranger', maxHP: 11, damage: 4, ability: 'poison' },
+  { slot: 1, id: 'tank', name: 'Tank', maxHP: 18, damage: 2, ability: 'taunt' },
+  { slot: 2, id: 'mage', name: 'Mage', maxHP: 9, damage: 5, ability: 'bolt' },
 ];
 
 export const ENEMY_MAX_HP = 100;
@@ -65,15 +65,15 @@ export const SKIP_REGEN = 5;
 
 // Ability values.
 export const BOLT_BASE = 5;
-export const BOLT_CHARGE_MULT = 2; // Lightning Bolt adds this much damage per Charge
+export const BOLT_CHARGE_MULT = 3; // Lightning Bolt adds this much damage per Charge
 export const CHARGE_MAX = 5;
-export const POISON_BASE = 3;   // Poison strength: damage dealt per enemy turn.
+export const POISON_BASE = 5;   // Poison strength: damage dealt per enemy turn.
 export const POISON_TURNS = 5;  // enemy turns Poison lasts
 export const REGEN_TURNS = 3;   // player phases Regen lasts
 export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
-export const TAUNT_TURNS = 3;
-export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
-export const DEFENSE_TURNS = 3;  // enemy turns Defense lasts (granted alongside Taunt)
+export const TAUNT_TURNS = 4;
+export const DEFENSE_AMOUNT = 2; // incoming damage reduced by this while Defense is active
+export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 
 export const HAND_SIZE = 3;
 
@@ -99,14 +99,14 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
 };
 
-// The fixed 15-card starting deck.
+// The fixed 16-card starting deck.
 export const DECK_LIST: CardId[] = [
   'lowHeal', 'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
   'aoeHeal', 'aoeHeal',
   'regen', 'regen',
   'refresh', 'refresh',
-  'ability', 'ability',
+  'ability', 'ability', 'ability',
   'shield',
   'resurrect',
 ];
@@ -158,7 +158,7 @@ export interface BattleConfig {
 }
 
 export const DEFAULT_HEALER: HealerConfig = {
-  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 0,
+  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 2,
 };
 
 export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, actionsPerTurn: 1 };

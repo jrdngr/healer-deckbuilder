@@ -21,7 +21,7 @@ function giveCard(game: Game, cardId: CardId, upgrades: ModifierId[] = []): numb
 }
 
 // --- deck composition -------------------------------------------------------
-eq('deck has 15 cards', DECK_LIST.length, 15);
+eq('deck has 16 cards', DECK_LIST.length, 16);
 {
   const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
@@ -30,7 +30,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   eq('2 Group Heal', counts.aoeHeal, 2);
   eq('2 Regen', counts.regen, 2);
   eq('2 Refresh', counts.refresh, 2);
-  eq('2 Ability', counts.ability, 2);
+  eq('3 Ability', counts.ability, 3);
   eq('1 Shield', counts.shield, 1);
   eq('1 Resurrect', counts.resurrect, 1);
 }
@@ -69,7 +69,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('single hits 1', g._geometry('single', SLOT.LEFT).length, 1);
 }
 
-// --- poison: flat 3/turn for 5 turns = 15, then stops ----------------------
+// --- poison: flat 5/turn for 5 turns = 25, then stops ----------------------
 {
   const g = new Game(2);
   g.start();
@@ -86,8 +86,8 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     }
     seq.push(before - g.enemy.hp);
   }
-  eq('poison schedule sum', seq.reduce((a, b) => a + b, 0), 15);
-  check('poison is flat 3,3,3,3,3 then 0', JSON.stringify(seq) === JSON.stringify([3, 3, 3, 3, 3, 0]),
+  eq('poison schedule sum', seq.reduce((a, b) => a + b, 0), POISON_BASE * POISON_TURNS);
+  check('poison is flat 5,5,5,5,5 then 0', JSON.stringify(seq) === JSON.stringify([5, 5, 5, 5, 5, 0]),
     JSON.stringify(seq));
 }
 
@@ -95,7 +95,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
 {
   const g = new Game(3);
   const ranger = g.members[SLOT.LEFT];
-  ranger.hp = 6; ranger.regen = 1; ranger.regenTurns = REGEN_TURNS; // maxHP 8
+  ranger.hp = ranger.maxHP - 2; ranger.regen = 1; ranger.regenTurns = REGEN_TURNS;
   const healed: number[] = [];
   for (let i = 0; i < REGEN_TURNS; i++) {
     const before = ranger.hp;
@@ -106,8 +106,8 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     }
     healed.push(ranger.hp - before);
   }
-  // ranger starts 6: +1 ->7, +1 ->8 (cap), +1 ->8 (no room)
-  eq('regen capped total', ranger.hp, 8);
+  // ranger starts maxHP-2: +1, +1 (cap), +1 (no room)
+  eq('regen capped total', ranger.hp, ranger.maxHP);
   check('regen ticks respect cap', JSON.stringify(healed) === JSON.stringify([1, 1, 0]),
     JSON.stringify(healed));
 }
@@ -182,32 +182,34 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const tank = g.members[SLOT.CENTER];
   g.mp = 10;
   g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
-  eq('defense set on cast', tank.defense, 3);
+  eq('defense set on cast', tank.defense, 4);
   tank.hp = tank.maxHP;
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
   g.events = [];
   g._resolveAttack();
-  eq('defense reduces the hit by 1', tank.hp, tank.maxHP - 3);
+  eq('defense reduces the hit by 2', tank.hp, tank.maxHP - 2);
   const atk = g.events.find((e) => e.kind === 'enemyAttack') as any;
-  eq('enemyAttack amount reflects reduced damage', atk.amount, 3);
+  eq('enemyAttack amount reflects reduced damage', atk.amount, 2);
   const spec = g.attackTargets().find((s) => s.slot === SLOT.CENTER) as any;
-  eq('telegraph preview shows reduced damage on the tank', spec.damage, 3);
+  eq('telegraph preview shows reduced damage on the tank', spec.damage, 2);
 }
 
-// --- Defense lasts 3 enemy turns, then fades --------------------------------
+// --- Defense lasts 4 enemy turns, then fades --------------------------------
 {
   const g = new Game(41);
   g.start();
   const tank = g.members[SLOT.CENTER];
   g.mp = 10;
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt -> defense 3
-  eq('defense starts at 3', tank.defense, 3);
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt -> defense 4
+  eq('defense starts at 4', tank.defense, 4);
   tank.hp = tank.maxHP; g.endTurn();
-  eq('defense after 1 enemy turn', tank.defense, 2);
+  eq('defense after 1 enemy turn', tank.defense, 3);
   tank.hp = tank.maxHP; g.endTurn();
-  eq('defense after 2 enemy turns', tank.defense, 1);
+  eq('defense after 2 enemy turns', tank.defense, 2);
   tank.hp = tank.maxHP; g.endTurn();
-  eq('defense after 3 enemy turns', tank.defense, 0);
+  eq('defense after 3 enemy turns', tank.defense, 1);
+  tank.hp = tank.maxHP; g.endTurn();
+  eq('defense after 4 enemy turns', tank.defense, 0);
 }
 
 // --- refresh: flat 2 MP/turn for 3 turns = 6, then stops -------------------
@@ -271,7 +273,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // Standing telegraph might target anyone; fire taunt and verify retarget.
   const idx = giveCard(g, 'ability');
   g.playCard(idx, SLOT.CENTER); // tank
-  eq('taunt set to 3', g.members[SLOT.CENTER].taunt, 3);
+  eq('taunt set to 4', g.members[SLOT.CENTER].taunt, 4);
   const tel = g.telegraph!;
   check('telegraph retargeted to include tank', tel.targets.includes(SLOT.CENTER));
   if (tel.type === 'single' || tel.type === 'hidden') {
@@ -293,7 +295,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const idx = giveCard(g, 'resurrect');
   const res = g.playCard(idx, SLOT.RIGHT);
   check('resurrect played', res.ok, res.reason);
-  eq('mage revived to 50% (ceil 6/2=3)', mage.hp, 3);
+  eq('mage revived to 50% (ceil 9/2=5)', mage.hp, Math.ceil(mage.maxHP / 2));
   check('mage alive again', mage.alive);
   eq('charge cleared on res', g.mageCharge, 0);
 }
@@ -433,9 +435,9 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('party emits one event per living member', party.length, 3);
   check('party events ordered left-to-right',
     JSON.stringify(party.map((e: any) => e.slot)) === JSON.stringify([0, 1, 2]));
-  // ranger 3, tank 1, mage 5 -> running enemy HP 97, 96, 91
+  // ranger 4, tank 2, mage 5 -> running enemy HP 96, 94, 89
   check('party enemyHp steps down per strike',
-    JSON.stringify(party.map((e: any) => e.enemyHp)) === JSON.stringify([97, 96, 91]),
+    JSON.stringify(party.map((e: any) => e.enemyHp)) === JSON.stringify([96, 94, 89]),
     JSON.stringify(party.map((e: any) => e.enemyHp)));
 }
 
