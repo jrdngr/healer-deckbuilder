@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -258,12 +258,63 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const idxB = giveCard(g, 'shield');
   g.playCard(idxB, SLOT.RIGHT); // does not stack -> still one shield
   check('shield set', mage.shield === true);
+  eq('shield fuse set', mage.shieldTurns, SHIELD_TURNS);
   // force an attack on mage
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.RIGHT], enraged: false, forTurn: 2 };
   const before = mage.hp;
   g._resolveAttack();
   eq('shield absorbs (no dmg)', mage.hp, before);
   check('shield consumed', mage.shield === false);
+  eq('shield fuse cleared on consume', mage.shieldTurns, 0);
+}
+
+// --- shield survives a fully-mitigated (0-damage) hit (flaw #20) ------------
+{
+  const g = new Game(7);
+  g.start();
+  const tank = g.members[SLOT.CENTER];
+  const idx = giveCard(g, 'shield');
+  g.playCard(idx, SLOT.CENTER);
+  // Give the tank Defense so a 1-damage attack is fully mitigated to 0.
+  tank.defense = DEFENSE_TURNS;
+  const raw = DEFENSE_AMOUNT + tank.abilityPower; // reduced exactly to 0
+  g.telegraph = { type: 'single', hidden: false, damage: raw, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  const before = tank.hp;
+  g._resolveAttack();
+  eq('0-damage hit deals nothing', tank.hp, before);
+  check('shield NOT consumed by a 0-damage hit', tank.shield === true);
+}
+
+// --- shield fades after SHIELD_TURNS enemy turns unused (flaw #4) -----------
+{
+  const g = new Game(7);
+  g.start();
+  const ranger = g.members[SLOT.LEFT];
+  const idx = giveCard(g, 'shield');
+  g.playCard(idx, SLOT.LEFT);
+  // Run enemy phases where nothing hits the ranger; the fuse counts down.
+  for (let i = 0; i < SHIELD_TURNS; i++) {
+    // aim the telegraph away from the ranger so the shield stays unused
+    g.telegraph = { type: 'single', hidden: false, damage: 3, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+    check(`shield alive before turn ${i + 1}`, ranger.shield === true);
+    g._runEnemyPhase();
+  }
+  check('shield fades after SHIELD_TURNS unused', ranger.shield === false);
+  eq('shield fuse at 0 after fade', ranger.shieldTurns, 0);
+}
+
+// --- telegraph preview reflects Shield (telegraph == applied invariant) -----
+{
+  const g = new Game(7);
+  g.start();
+  const mage = g.members[SLOT.RIGHT];
+  mage.shield = true; mage.shieldTurns = SHIELD_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.RIGHT], enraged: false, forTurn: g.turn };
+  const spec = g.attackTargets().find((s) => s.slot === SLOT.RIGHT);
+  eq('shielded member previews 0 damage', spec?.damage, 0);
+  const before = mage.hp;
+  g._resolveAttack();
+  eq('applied damage matches preview (0)', mage.hp, before);
 }
 
 // --- taunt forces primary to tank and retargets telegraph ------------------
@@ -661,10 +712,23 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
 
 // --- card upgrade modifiers -------------------------------------------------
 {
-  // Efficient: -1 cost per stack, floored at 0.
+  // Efficient: -1 cost per stack, floored at 1 (never free).
   eq('efficient -1 cost', resolveCard(makeDeckCard('highHeal', 1, ['efficient'])).cost, CARDS.highHeal.cost - 1);
   eq('efficient stacks', resolveCard(makeDeckCard('highHeal', 1, ['efficient', 'efficient'])).cost, CARDS.highHeal.cost - 2);
-  eq('efficient floors at 0', resolveCard(makeDeckCard('lowHeal', 1, ['efficient', 'efficient'])).cost, 0);
+  eq('efficient floors at 1', resolveCard(makeDeckCard('lowHeal', 1, ['efficient', 'efficient'])).cost, 1);
+  eq('efficient floors highHeal at 1', resolveCard(makeDeckCard('highHeal', 1, ['efficient', 'efficient', 'efficient'])).cost, 1);
+}
+{
+  // Efficient can't create a 0-cost card, so playing one still counts as a card
+  // played (Rest is blocked afterward).
+  const g = new Game(31);
+  g.start();
+  const idx = giveCard(g, 'lowHeal', ['efficient', 'efficient']);
+  eq('efficient lowHeal still costs 1', resolveCard(g.hand[idx]).cost, 1);
+  const mpBefore = g.mp;
+  g.playCard(idx, SLOT.CENTER);
+  eq('playing the card spent 1 MP', g.mp, mpBefore - 1);
+  check('cannot Rest after playing a card', g.canSkip() === false);
 }
 {
   // Potent: +1 to the present strength stat; stacks.

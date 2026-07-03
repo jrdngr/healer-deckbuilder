@@ -13,7 +13,7 @@ import {
   MEMBER_DEFS, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
-  TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SLOT,
+  TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
@@ -35,7 +35,8 @@ export interface Member {
   abilityPower: number; // run bonus added to the member's base ability strength
   hp: number;
   alive: boolean;
-  shield: boolean; // pending shield (blocks next instance)
+  shield: boolean;      // pending shield (blocks the next damaging instance)
+  shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
   regen: number;      // Regen strength: HP healed per turn while active
   regenTurns: number; // player phases of Regen remaining
   taunt: number;   // taunt turns remaining (tank only)
@@ -145,7 +146,8 @@ export class Game {
         slot: d.slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
         ability: d.ability, abilityPower: p.abilityPower,
         hp: p.maxHP, alive: true,
-        shield: false, // pending shield (blocks next instance)
+        shield: false, // pending shield (blocks the next damaging instance)
+        shieldTurns: 0,
         regen: 0,      // Regen strength
         regenTurns: 0, // Regen turns remaining
         taunt: 0,      // taunt turns remaining (tank only)
@@ -277,7 +279,13 @@ export class Game {
     }
     return t.targets
       .filter((slot) => this.members[slot]?.alive)
-      .map((slot): AttackSpec => ({ slot, damage: this._effectiveDamage(this.members[slot], t.damage), hidden: false }));
+      .map((slot): AttackSpec => {
+        const m = this.members[slot];
+        const eff = this._effectiveDamage(m, t.damage);
+        // A Shield blocks a damaging instance entirely, so the applied damage is
+        // 0 — preview must match (telegraph == applied invariant).
+        return { slot, damage: m.shield && eff > 0 ? 0 : eff, hidden: false };
+      });
   }
 
   // Recompute the standing telegraph's targets with the Tank forced as primary.
@@ -320,6 +328,7 @@ export class Game {
     m.alive = false;
     m.hp = 0;
     m.shield = false;
+    m.shieldTurns = 0;
     m.regen = 0;
     m.regenTurns = 0;
     m.taunt = 0;
@@ -407,6 +416,15 @@ export class Game {
         m.defense -= 1;
         if (m.defense === 0) this._log(`Defense fades from ${m.name}.`, 'status');
       }
+      // An unused Shield fades after SHIELD_TURNS enemy turns (it is consumed —
+      // not decayed — the moment it blocks a damaging hit).
+      if (m.alive && m.shield && m.shieldTurns > 0) {
+        m.shieldTurns -= 1;
+        if (m.shieldTurns === 0) {
+          m.shield = false;
+          this._log(`Shield fades from ${m.name}.`, 'status');
+        }
+      }
     }
 
     // 4) telegraph the next turn's attack (with correct enrage state baked in).
@@ -427,13 +445,16 @@ export class Game {
         this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden });
         continue;
       }
-      if (m.shield) {
+      const dmg = this._effectiveDamage(m, t.damage);
+      // A Shield only spends on a *damaging* instance — a fully-mitigated (0-damage)
+      // hit passes through harmlessly and leaves the Shield up.
+      if (m.shield && dmg > 0) {
         m.shield = false;
+        m.shieldTurns = 0;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
         this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
         continue;
       }
-      const dmg = this._effectiveDamage(m, t.damage);
       m.hp = Math.max(0, m.hp - dmg);
       this._log(`${label} hits ${m.name} for ${dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       const killed = m.hp <= 0;
@@ -564,7 +585,8 @@ export class Game {
       case 'shield': {
         const m = this.members[target as number];
         m.shield = true; // does not stack
-        this._log(`Shield raised on ${m.name}.`, 'status');
+        m.shieldTurns = SHIELD_TURNS; // re-raising refreshes the fuse
+        this._log(`Shield raised on ${m.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
       }
@@ -572,7 +594,7 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.regen = 0; m.regenTurns = 0; m.taunt = 0; m.defense = 0;
+        m.shield = false; m.shieldTurns = 0; m.regen = 0; m.regenTurns = 0; m.taunt = 0; m.defense = 0;
         if (m.id === 'mage') this.mageCharge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });

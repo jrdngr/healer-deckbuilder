@@ -81,6 +81,7 @@ export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
 export const TAUNT_TURNS = 4;
 export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
+export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
 
 export const HAND_SIZE = 3;
 
@@ -433,7 +434,9 @@ export function resolveCard(card: DeckCard): ResolvedCard {
   return {
     id: base.id,
     name: base.name,
-    cost: Math.max(0, base.cost - efficient * MOD_EFFICIENT_COST),
+    // Efficient never drives a card below cost 1: a free card opens degenerate
+    // edge cases (e.g. it would not count as "played" against Rest).
+    cost: Math.max(1, base.cost - efficient * MOD_EFFICIENT_COST),
     target: base.target,
     desc: base.desc,
     heal: bump(base.heal),
