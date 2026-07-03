@@ -26,7 +26,7 @@ DOM-free TypeScript module that the UI and the tests both consume.
 ## Visual verification — do not use the Chrome DevTools plugin
 
 - Do **not** use the Chrome DevTools MCP plugin (or other browser-automation tooling) to
-  verify UI changes. The maintainer verifies visual/UI changes manually.
+  verify UI changes unless you are told to do so. The maintainer verifies visual/UI changes manually.
 - For UI work, make the change, ensure tests still pass, and leave visual confirmation to
   the maintainer rather than driving a browser yourself.
 
