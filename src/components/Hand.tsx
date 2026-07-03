@@ -33,7 +33,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
         <div className="hand">
           {game.hand.map((dc, i) => {
             const card = resolveCard(dc);
-            const affordable = game.mp >= card.cost && !over && !disabled;
+            const affordable = game.mp >= game.effectiveCost(card) && !over && !disabled;
             return (
               <Card
                 key={dc.uid}

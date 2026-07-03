@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -1522,6 +1522,194 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.playCard(idx, null);
   eq('Inspiration with empty piles redraws only itself', g.hand.length, handBefore);
   check('Inspiration comes back to hand off the reshuffle', g.hand.some((c) => c.id === 'inspiration'));
+}
+
+// --- card set phase B: Lifebloom / Surge / Battle Hymn / Barrier / Blood (issue 16) ---
+{
+  // Definitions: costs, blood costs, rarities (shop prices follow rarity 25/50/75).
+  eq('Lifebloom costs 3', CARDS.lifebloom.cost, 3);
+  eq('Lifebloom regen strength 2', CARDS.lifebloom.regen, 2);
+  eq('Lifebloom is uncommon', CARD_RARITY.lifebloom, 'uncommon');
+  eq('Surge costs 2', CARDS.surge.cost, 2);
+  eq('Surge is uncommon', CARD_RARITY.surge, 'uncommon');
+  eq('Battle Hymn costs 1', CARDS.battleHymn.cost, 1);
+  eq('Battle Hymn is common', CARD_RARITY.battleHymn, 'common');
+  eq('Barrier costs 4', CARDS.barrier.cost, 4);
+  eq('Barrier is rare', CARD_RARITY.barrier, 'rare');
+  eq('Blood Tithe costs 0 MP', CARDS.bloodTithe.cost, 0);
+  eq('Blood Tithe blood cost 4', CARDS.bloodTithe.selfDamage, 4);
+  eq('Blood Tithe is uncommon', CARD_RARITY.bloodTithe, 'uncommon');
+  eq('Martyr\'s Gift costs 2', CARDS.martyrsGift.cost, 2);
+  eq('Martyr\'s Gift blood cost 3', CARDS.martyrsGift.selfDamage, 3);
+  eq('Martyr\'s Gift heals others 4', CARDS.martyrsGift.heal, 4);
+  eq('Grim Harvest costs 2', CARDS.grimHarvest.cost, 2);
+  eq('Grim Harvest blood cost 4', CARDS.grimHarvest.selfDamage, 4);
+  eq('Grim Harvest is rare', CARD_RARITY.grimHarvest, 'rare');
+  check('all seven phase-B cards joined the shop pool',
+    (['lifebloom', 'surge', 'battleHymn', 'barrier', 'bloodTithe', 'martyrsGift', 'grimHarvest'] as CardId[])
+      .every((id) => CARD_POOL.includes(id)));
+}
+{
+  // Lifebloom end condition 1 — natural expiry: ticks 2/turn, then bursts 3.
+  const g = new Game(70); g.start();
+  const tank = g.tank;
+  tank.hp = 5;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
+  eq('Lifebloom applies Regen 2', tank.regen, 2);
+  eq('Lifebloom runs for REGEN_TURNS', tank.regenTurns, REGEN_TURNS);
+  eq('Lifebloom arms its burst', tank.bloomBurst, LIFEBLOOM_BURST);
+  for (let i = 0; i < REGEN_TURNS; i++) g._startPlayerPhase(); // each ticks Regen once
+  eq('Lifebloom ticks then bursts on expiry', tank.hp, 5 + 2 * REGEN_TURNS + LIFEBLOOM_BURST);
+  eq('the paid burst is cleared', tank.bloomBurst, 0);
+}
+{
+  // End condition 2 — overwrite by a new Regen-slot cast pays the burst out.
+  const g = new Game(71); g.start();
+  const tank = g.tank;
+  tank.hp = 5;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
+  const hpBefore = tank.hp;
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
+  eq('overwrite pays the burst immediately', tank.hp, hpBefore + LIFEBLOOM_BURST);
+  eq('keep-stronger keeps Lifebloom strength', tank.regen, 2);
+  eq('no burst left pending', tank.bloomBurst, 0);
+}
+{
+  // End condition 3 — Bloom's consume: consume heal + burst together.
+  const g = new Game(72); g.start();
+  const tank = g.tank;
+  tank.hp = 3;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
+  const hpBefore = tank.hp;
+  g.playCard(giveCard(g, 'bloom'), SLOT.CENTER);
+  eq('Bloom on Lifebloom heals consume + burst', tank.hp, hpBefore + BLOOM_HEAL_PER_TURN * REGEN_TURNS + LIFEBLOOM_BURST);
+  eq('the Regen is consumed', tank.regenTurns, 0);
+  eq('the burst is spent', tank.bloomBurst, 0);
+}
+{
+  // Death forfeits; Cultivate keeps the burst pending (in-place, no overwrite).
+  const g = new Game(73); g.start();
+  const tank = g.tank;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
+  g.playCard(giveCard(g, 'cultivate'), SLOT.CENTER);
+  eq('Cultivate keeps the burst pending', tank.bloomBurst, LIFEBLOOM_BURST);
+  eq('Cultivate still modifies in place', tank.regen, 2 + CULTIVATE_STRENGTH);
+  g._killMember(tank);
+  eq('death forfeits the burst', tank.bloomBurst, 0);
+  eq('no posthumous heal', tank.hp, 0);
+}
+{
+  // Surge: the next card this turn costs 0; consumed by exactly one play.
+  const g = new Game(74); g.start();
+  g.mp = 5;
+  g.playCard(giveCard(g, 'surge'), null);
+  eq('Surge costs its own 2 MP', g.mp, 3);
+  check('Surge is pending', g.surgePending);
+  const idx = giveCard(g, 'highHeal');
+  eq('effectiveCost is 0 under Surge', g.effectiveCost(resolveCard(g.hand[idx])), 0);
+  g.members[SLOT.LEFT].hp = 1;
+  g.playCard(idx, SLOT.LEFT);
+  eq('the surged card spent no MP', g.mp, 3);
+  check('Surge is consumed by one play', !g.surgePending);
+}
+{
+  // Surge makes an otherwise-unaffordable card playable; Surge->Surge is legal.
+  const g = new Game(75); g.start();
+  g.mp = 2;
+  g.playCard(giveCard(g, 'surge'), null); // -> 0 MP, surge pending
+  const heal = giveCard(g, 'highHeal');
+  eq('canPlay allows a 3-cost card at 0 MP under Surge', g.canPlay(heal, SLOT.CENTER), null);
+  const surge2 = giveCard(g, 'surge');
+  g.playCard(surge2, null); // consumes the pending surge, re-arms it: a strict loss
+  eq('Surge->Surge spends no MP', g.mp, 0);
+  check('Surge->Surge leaves a surge pending', g.surgePending);
+  g.endTurn();
+  check('an unspent Surge fizzles at end of turn', !g.surgePending);
+}
+{
+  // Battle Hymn: +2 on every living auto THIS party phase; resets after.
+  const g = new Game(76); g.start();
+  g.playCard(giveCard(g, 'battleHymn'), null);
+  const expected = g.livingMembers().reduce((s, m) => s + m.damage + HYMN_BONUS, 0);
+  const ehp = g.enemy.hp;
+  g.endTurn(); // party phase swings with the hymn, then the enemy phase runs
+  eq('Hymn adds +2 to each living auto', ehp - g.enemy.hp, expected);
+  eq('Hymn resets after the party phase', g.hymnBonus, 0);
+}
+{
+  // Battle Hymn degrades as members die (per-member bonus, no corpse credit).
+  const g = new Game(77); g.start();
+  g._killMember(g.mage);
+  g.playCard(giveCard(g, 'battleHymn'), null);
+  const expected = g.livingMembers().reduce((s, m) => s + m.damage + HYMN_BONUS, 0);
+  const ehp = g.enemy.hp;
+  g.endTurn();
+  eq('Hymn only buffs the living', ehp - g.enemy.hp, expected);
+}
+{
+  // Barrier: every living member gains a 1-enemy-phase Shield; a longer-lived
+  // Shield already standing is not downgraded; unused Barrier Shields fade
+  // after exactly one enemy phase.
+  const g = new Game(78); g.start();
+  g.playCard(giveCard(g, 'shield'), SLOT.CENTER); // tank: full 3-turn Shield
+  g.playCard(giveCard(g, 'barrier'), null);
+  check('Barrier shields every living member', g.livingMembers().every((m) => m.shield));
+  eq('Barrier fuse is 1 enemy phase', g.members[SLOT.LEFT].shieldTurns, BARRIER_TURNS);
+  eq('Barrier never downgrades a longer Shield', g.members[SLOT.CENTER].shieldTurns, SHIELD_TURNS);
+  g._runEnemyPhase(); // targets consume their Shield; unused Barrier ones fade
+  check('no Barrier shield survives the enemy phase',
+    [g.members[SLOT.LEFT], g.members[SLOT.RIGHT]].every((m) => !m.alive || !m.shield));
+}
+{
+  // Blood Tithe: pay 4 HP for 2 MP (capped); gated on >4 HP; engine-tagged.
+  const g = new Game(79); g.start();
+  const tank = g.tank;
+  tank.hp = 12;
+  g.mp = 5;
+  const idx = giveCard(g, 'bloodTithe');
+  eq('Tithe playable above the gate', g.canPlay(idx, SLOT.CENTER), null);
+  g.playCard(idx, SLOT.CENTER);
+  eq('Tithe pays 4 HP', tank.hp, 8);
+  eq('Tithe restores 2 MP', g.mp, 5 + BLOOD_TITHE_MP);
+  const idx2 = giveCard(g, 'bloodTithe');
+  tank.hp = 4;
+  eq('Tithe is blocked at exactly 4 HP', g.canPlay(idx2, SLOT.CENTER), 'target must have more than 4 HP');
+  tank.hp = 18; g.mp = g.maxMana;
+  g.playCard(idx2, SLOT.CENTER);
+  eq('Tithe MP gain respects the cap', g.mp, g.maxMana);
+  check('Blood Tithe is engine-tagged', isEngineCard('bloodTithe'));
+  check('Retain cannot lock in Blood Tithe', !MODIFIERS.retain.eligible('bloodTithe'));
+  check('Efficient cannot touch a 0-cost card', !MODIFIERS.efficient.eligible('bloodTithe'));
+}
+{
+  // Martyr's Gift: the target pays 3; every OTHER living member heals 4.
+  const g = new Game(80); g.start();
+  const [ranger, tank, mage] = g.members;
+  ranger.hp = 5; tank.hp = 10; mage.hp = 3;
+  g.playCard(giveCard(g, 'martyrsGift'), SLOT.CENTER);
+  eq('Gift: the target pays 3', tank.hp, 7);
+  eq('Gift: ranger heals 4', ranger.hp, 9);
+  eq('Gift: mage heals 4', mage.hp, 7);
+}
+{
+  // Grim Harvest: the target pays 4; the enemy takes 10 (can trigger phase/kill).
+  const g = new Game(81); g.start();
+  const tank = g.tank;
+  const hpBefore = tank.hp;
+  const ehp = g.enemy.hp;
+  g.playCard(giveCard(g, 'grimHarvest'), SLOT.CENTER);
+  eq('Harvest deals 10 to the enemy', ehp - g.enemy.hp, GRIM_HARVEST_DMG);
+  eq('Harvest: the target pays 4', tank.hp, hpBefore - 4);
+}
+{
+  // Blood is never lethal: even bypassing canPlay (dev path), the payment
+  // clamps to leave 1 HP.
+  const g = new Game(82); g.start();
+  const tank = g.tank;
+  tank.hp = 2;
+  g.devPlayCard('grimHarvest', SLOT.CENTER);
+  eq('Blood pay clamps to leave 1 HP', tank.hp, 1);
+  check('the member survives the payment', tank.alive);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

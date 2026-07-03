@@ -29,7 +29,7 @@ function handIndexOf(game: Game, id: CardId): number {
   return game.hand.findIndex((c) => c.id === id);
 }
 function cardCost(game: Game, idx: number): number {
-  return resolveCard(game.hand[idx]).cost;
+  return game.effectiveCost(resolveCard(game.hand[idx])); // 0 while a Surge is pending
 }
 function affordable(game: Game, idx: number): boolean {
   return idx >= 0 && game.mp >= cardCost(game, idx);
@@ -279,9 +279,10 @@ export function playFight(game: Game, turnCap = 40): void {
 // feed the Taunt/Bolt/Poison line; Refresh feeds the MP economy.
 const CARD_BUY_VALUE: Record<CardId, number> = {
   ability: 9, fontOfMana: 8, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2,
-  // Phase-A cards (#15) the fight policy has no tactic for yet stay below the
-  // buy threshold — a card the policy never plays is dead deck weight.
+  // Phase-A/B cards (#15/#16) the fight policy has no tactic for yet stay below
+  // the buy threshold — a card the policy never plays is dead deck weight.
   overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
+  lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

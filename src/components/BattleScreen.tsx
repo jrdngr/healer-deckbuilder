@@ -69,7 +69,7 @@ export function BattleScreen({
   const onCardClick = (handIndex: number) => {
     if (animating || game.status !== 'playing' || game.phase !== 'player') return;
     const card = resolveCard(game.hand[handIndex]);
-    if (game.mp < card.cost) return; // unaffordable
+    if (game.mp < game.effectiveCost(card)) return; // unaffordable
     // No-target cards play immediately.
     if (card.target === 'all' || card.target === 'none') {
       setSelected(null);

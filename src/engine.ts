@@ -17,6 +17,7 @@ import {
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN,
+  LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
@@ -45,6 +46,7 @@ export interface Member {
   shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
   regen: number;      // Regen strength: HP healed per turn while active
   regenTurns: number; // player phases of Regen remaining
+  bloomBurst: number; // pending Lifebloom burst: heals this much when the Regen ends alive (#16)
   taunt: number;   // taunt turns remaining (attributed to whoever cast Taunt)
   defense: number; // Defense turns remaining: incoming hits reduced by DEFENSE_AMOUNT
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
@@ -120,6 +122,9 @@ export type GameEvent =
   | { kind: 'resurrect'; slot: Slot; hp: number }
   | { kind: 'refreshPrimed'; stack: number }
   | { kind: 'draw'; count: number }
+  | { kind: 'surge' }                                      // next card this turn costs 0 (#16)
+  | { kind: 'hymn'; bonus: number }                        // party autos buffed this phase (#16)
+  | { kind: 'bloodPay'; slot: Slot; amount: number; hp: number } // Blood card HP cost paid (#16)
   | { kind: 'cleanse'; slot: Slot }
   | { kind: 'rest'; amount: number; mp: number }
   // --- abilities ---
@@ -153,6 +158,8 @@ export class Game {
   refreshRestored: number; // MP the current Refresh cast has restored so far (capped at refreshCap)
   refreshCap: number;     // per-cast lifetime MP cap of the active cast (Refresh 6 / Font of Mana 9)
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
+  surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
+  hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
   drawPile: DeckCard[];
   discardPile: DeckCard[];
   hand: DeckCard[];
@@ -189,6 +196,7 @@ export class Game {
         shieldTurns: 0,
         regen: 0,      // Regen strength
         regenTurns: 0, // Regen turns remaining
+        bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
         defense: 0,    // Defense turns remaining
         charge: 0,     // per-member Charge
@@ -211,6 +219,8 @@ export class Game {
     this.refreshRestored = 0;
     this.refreshCap = REFRESH_MP_CAP;
     this.woundTurns = 0;    // no Hex active at fight start
+    this.surgePending = false;
+    this.hymnBonus = 0;
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
     // own array — so reshuffles here don't disturb the persistent deck.
@@ -249,9 +259,9 @@ export class Game {
   // trio this is always the tank, but the engine no longer assumes that.
   tauntingMember(): Member | null { return this.members.find((m) => m.alive && m.taunt > 0) ?? null; }
 
-  // Per-member attack damage — an accessor so future per-member damage modifiers
-  // have a single seam.
-  memberDamage(m: Member): number { return m.damage; }
+  // Per-member attack damage — the single seam for party-phase damage modifiers.
+  // Battle Hymn (#16) adds its bonus here for the phase it was sung in.
+  memberDamage(m: Member): number { return m.damage + this.hymnBonus; }
 
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
   allDead(): boolean { return this.members.every((m) => !m.alive); }
@@ -528,6 +538,7 @@ export class Game {
     m.shieldTurns = 0;
     m.regen = 0;
     m.regenTurns = 0;
+    m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
     m.taunt = 0;
     m.defense = 0;
     m.charge = 0;
@@ -582,6 +593,30 @@ export class Game {
     const before = m.hp;
     m.hp = Math.min(m.maxHP, m.hp + effective);
     return m.hp - before;
+  }
+
+  // Pay out a pending Lifebloom burst (#16). A Lifebloom Regen that ENDS while
+  // its target lives — natural expiry, overwrite by a new Regen-slot cast, or
+  // Bloom's consume — burst-heals; death forfeits it (_killMember clears the
+  // field without paying). Cultivate modifies the stack in place and never
+  // routes through here, so it keeps the burst pending.
+  _endRegenBurst(m: Member): void {
+    if (m.bloomBurst <= 0 || !m.alive) return;
+    const burst = m.bloomBurst;
+    m.bloomBurst = 0;
+    const healed = this._healMember(m, burst);
+    this._log(`Lifebloom bursts on ${m.name}: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
+    this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+  }
+
+  // A Blood card's HP cost (#16). canPlay gates on hp > cost, and the payment
+  // itself clamps to leave 1 HP (the dev panel bypasses canPlay) — Blood
+  // self-damage is never lethal, so playCard opens no new death path.
+  _bloodPay(m: Member, amount: number): number {
+    const paid = Math.min(amount, Math.max(0, m.hp - 1));
+    m.hp -= paid;
+    this._emit({ kind: 'bloodPay', slot: m.slot, amount: paid, hp: m.hp });
+    return paid;
   }
 
   // Damage a member actually takes from a raw attack value, after their Defense
@@ -789,7 +824,10 @@ export class Game {
         this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
         this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
         m.regenTurns -= 1;
-        if (m.regenTurns === 0) m.regen = 0;
+        if (m.regenTurns === 0) {
+          m.regen = 0;
+          this._endRegenBurst(m); // natural expiry pays a pending Lifebloom burst
+        }
       }
     }
     // Passive MP income (healer upgrade) lands at the start of the player phase.
@@ -827,6 +865,12 @@ export class Game {
     }
   }
 
+  // What a card costs to play right now: 0 while a Surge (#16) is pending,
+  // otherwise its resolved cost. The UI's affordability check reads this too.
+  effectiveCost(card: ResolvedCard): number {
+    return this.surgePending ? 0 : card.cost;
+  }
+
   // Validate whether a hand card can currently be played. Returns null if ok,
   // otherwise a short reason string.
   canPlay(handIndex: number, target: number | null): string | null {
@@ -834,7 +878,7 @@ export class Game {
     const dc = this.hand[handIndex];
     if (dc == null) return 'no such card';
     const card = resolveCard(dc);
-    if (this.mp < card.cost) return 'not enough MP';
+    if (this.mp < this.effectiveCost(card)) return 'not enough MP';
     switch (card.target) {
       case 'single':
       case 'ability': {
@@ -842,6 +886,8 @@ export class Game {
         if (!m || !m.alive) return 'target must be a living member';
         // Cultivate / Bloom (#15) operate on an existing Regen — dead without one.
         if (card.needsRegen && m.regenTurns <= 0) return 'target must have an active Regen';
+        // Blood cards (#16) demand the target survive the payment outright.
+        if (card.selfDamage != null && m.hp <= card.selfDamage) return `target must have more than ${card.selfDamage} HP`;
         break;
       }
       case 'dead': {
@@ -864,7 +910,11 @@ export class Game {
     this.events = [];
     const dc = this.hand[handIndex];
     const card = resolveCard(dc);
-    this.mp -= card.cost;
+    this.mp -= this.effectiveCost(card);
+    // A pending Surge is spent by the next card played, whatever it is — even a
+    // card that was already free (strict "next card" rule; Surge->Surge is a
+    // legal strict loss, since the case below re-arms it after this consume).
+    this.surgePending = false;
     this.hand.splice(handIndex, 1);
     this.discardPile.push(dc);
     this.cardsPlayedThisPhase += 1;
@@ -893,6 +943,8 @@ export class Game {
       }
       case 'regen': {
         const m = this.members[target as number];
+        // Overwriting a Lifebloom Regen ends it — its pending burst pays out first.
+        this._endRegenBurst(m);
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
         m.regen = Math.max(m.regen, card.regen ?? 0);
         m.regenTurns = card.regenTurns;
@@ -912,7 +964,7 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.shieldTurns = 0; m.regen = 0; m.regenTurns = 0; m.taunt = 0; m.defense = 0; m.charge = 0;
+        m.shield = false; m.shieldTurns = 0; m.regen = 0; m.regenTurns = 0; m.bloomBurst = 0; m.taunt = 0; m.defense = 0; m.charge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
@@ -935,6 +987,7 @@ export class Game {
         // Party-wide Regen with the single-target card's no-stack semantics per
         // member: refresh the duration, keep the stronger strength.
         for (const m of this.livingMembers()) {
+          this._endRegenBurst(m); // overwrite pays out a pending Lifebloom burst
           m.regen = Math.max(m.regen, card.regen ?? 0);
           m.regenTurns = card.regenTurns;
           this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
@@ -961,6 +1014,8 @@ export class Game {
         m.regenTurns = 0;
         this._log(`Bloom consumes ${m.name}'s Regen: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        // Consuming a Lifebloom Regen is one of its end conditions: burst too.
+        this._endRegenBurst(m);
         break;
       }
       case 'inspiration': {
@@ -973,6 +1028,71 @@ export class Game {
         const drawn = this.hand.length - before;
         this._log(`Inspiration: drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
         this._emit({ kind: 'draw', count: drawn });
+        break;
+      }
+      case 'lifebloom': {
+        const m = this.members[target as number];
+        // Overwriting an older Lifebloom ends it — pay its burst before arming
+        // the new one (a member never holds two pending bursts).
+        this._endRegenBurst(m);
+        m.regen = Math.max(m.regen, card.regen ?? 0);
+        m.regenTurns = card.regenTurns;
+        m.bloomBurst = LIFEBLOOM_BURST;
+        this._log(`Lifebloom on ${m.name} (${m.regen}/turn for ${m.regenTurns}; bursts ${LIFEBLOOM_BURST} when it ends).`, 'status');
+        this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
+        break;
+      }
+      case 'surge': {
+        this.surgePending = true; // consumed by the next play; cleared at end of turn
+        this._log('Surge: the next card this turn costs 0 MP.', 'status');
+        this._emit({ kind: 'surge' });
+        break;
+      }
+      case 'battleHymn': {
+        // No stacking — re-singing it in the same phase keeps the stronger bonus.
+        this.hymnBonus = Math.max(this.hymnBonus, HYMN_BONUS);
+        this._log(`Battle Hymn: every living member's attack deals +${this.hymnBonus} this turn.`, 'status');
+        this._emit({ kind: 'hymn', bonus: this.hymnBonus });
+        break;
+      }
+      case 'barrier': {
+        // A mass Shield with a 1-enemy-phase fuse (the strict case of the #02
+        // expiry rule). Never downgrades a longer-lived Shield already standing.
+        for (const m of this.livingMembers()) {
+          m.shield = true;
+          m.shieldTurns = Math.max(m.shieldTurns, BARRIER_TURNS);
+          this._emit({ kind: 'shieldApplied', slot: m.slot });
+        }
+        this._log('Barrier: every living member gains a Shield (fades after the next enemy phase).', 'status');
+        break;
+      }
+      case 'bloodTithe': {
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, card.selfDamage ?? 0);
+        const before = this.mp;
+        this.mp = Math.min(this.maxMana, this.mp + BLOOD_TITHE_MP);
+        this._log(`Blood Tithe: ${m.name} pays ${paid} HP; ${this.mp - before} MP restored. (MP ${this.mp})`, 'mp');
+        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
+        break;
+      }
+      case 'martyrsGift': {
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, card.selfDamage ?? 0);
+        for (const other of this.livingMembers()) {
+          if (other.slot === m.slot) continue;
+          const healed = this._healMember(other, card.heal ?? 0);
+          this._emit({ kind: 'heal', slot: other.slot, amount: healed, hp: other.hp });
+        }
+        this._log(`Martyr's Gift: ${m.name} pays ${paid} HP; the others heal up to ${card.heal}.`, 'heal');
+        break;
+      }
+      case 'grimHarvest': {
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, card.selfDamage ?? 0);
+        this._log(`Grim Harvest: ${m.name} pays ${paid} HP.`, 'status');
+        const killed = this._damageEnemy(GRIM_HARVEST_DMG, 'Grim Harvest');
+        this._emit({ kind: 'partyAttack', slot: m.slot, amount: GRIM_HARVEST_DMG, enemyHp: this.enemy.hp });
+        if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
       case 'cleanse': {
@@ -1073,6 +1193,8 @@ export class Game {
   }
 
   _endTurnInternal(): void {
+    this.surgePending = false; // Surge is "this turn" only — an unspent one fizzles
+
     // Discard the hand from the end (same ordering the prototype used, so existing
     // seeds reshuffle identically), keeping any Retain cards in hand for next phase.
     const kept: DeckCard[] = [];
@@ -1105,6 +1227,7 @@ export class Game {
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
+    this.hymnBonus = 0; // Battle Hymn only buffs the phase it was sung in
   }
 
   // ---- dev / cheats --------------------------------------------------------

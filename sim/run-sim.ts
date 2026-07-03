@@ -62,6 +62,12 @@
 //     Every offer roll shifts (pool 8 -> 13 ids) but the bands hold. The policy
 //     buys/plays Font of Mana via tryRefresh; the other four sit below its buy
 //     threshold until a tactic exists for them (Regen-line play is #16's problem).
+//   after #16 (card set phase B: Lifebloom / Surge / Battle Hymn / Barrier /
+//     Blood Tithe / Martyr's Gift / Grim Harvest):  full-run 34.1 % ±2.9 at N=1000.
+//     F0 100 | F1 100 | F2 A1boss 89.0 | F3 99.2 | F4 98.0 | F5 A2boss 73.9 | F6 95.3 | F7 96.7 | F8 A3boss 57.9
+//     Pool 13 -> 20 ids; bands hold (top edge of 25-35%). None of the seven has a
+//     fight tactic yet, so all sit below the policy's buy threshold — a
+//     Regen/Blood-aware policy line is future work if their winrates matter later.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

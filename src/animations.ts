@@ -251,6 +251,39 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'surge': {
+        // Surge (#16): the next card is free — flare the mana bar.
+        push({ at: t, fx: [
+          { type: 'glow', at: 'mp', color: C.mp },
+          { type: 'ring', at: 'mp', color: C.mp },
+          { type: 'float', at: 'mp', text: 'NEXT CARD FREE', color: C.mp },
+        ] });
+        t += 380;
+        break;
+      }
+
+      case 'hymn': {
+        // Battle Hymn (#16): the whole party rallies for this phase's autos.
+        push({ at: t, fx: [
+          { type: 'glow', at: 0, color: C.taunt },
+          { type: 'glow', at: 1, color: C.taunt },
+          { type: 'glow', at: 2, color: C.taunt },
+          { type: 'float', at: 1, text: `+${ev.bonus} ATK`, color: C.taunt, big: true },
+        ] });
+        t += 460;
+        break;
+      }
+
+      case 'bloodPay': {
+        // A Blood card's HP cost (#16): a self-inflicted, never-lethal hit.
+        push({ at: t, shake: 4, patch: { memberHp: { slot: ev.slot, hp: ev.hp } }, fx: [
+          { type: 'burst', at: ev.slot, color: C.danger, count: 12, spread: 55 },
+          { type: 'float', at: ev.slot, text: `-${ev.amount}`, color: C.danger },
+        ] });
+        t += 360;
+        break;
+      }
+
       case 'draw': {
         // Inspiration (#15): the cards appear in the hand instantly (it renders
         // live), so a light pulse near the hand acknowledges the play.

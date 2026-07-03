@@ -13,7 +13,9 @@ export type AbilityId = 'poison' | 'taunt' | 'bolt';
 export type CardId =
   | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
-  | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration';
+  | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration'
+  | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
+  | 'bloodTithe' | 'martyrsGift' | 'grimHarvest';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -48,6 +50,10 @@ export interface CardDef {
   // Per-cast lifetime MP cap override for Refresh-slot cards; defaults to
   // REFRESH_MP_CAP (Font of Mana carries its own larger designed lifetime).
   refreshCap?: number;
+  // Blood cards (#16): HP the TARGET pays as a cost. canPlay requires the target
+  // to have strictly more HP than this, and the payment clamps to leave 1 HP —
+  // Blood self-damage is never lethal (no new death path in playCard).
+  selfDamage?: number;
   // "Engine" cards generate MP or draw cards (they fuel the economy). Retain is
   // ineligible for them, and later economy modifiers (Taper, #22) gate on the
   // same tag. Keep this the single source of the tag.
@@ -334,6 +340,13 @@ export const CULTIVATE_STRENGTH = 1;  // Regen strength Cultivate adds in place
 export const CULTIVATE_TURNS = 1;     // Regen turns Cultivate adds in place
 export const BLOOM_HEAL_PER_TURN = 2; // healing per remaining Regen turn Bloom consumes
 
+// Card set phase B (#16) magnitudes.
+export const LIFEBLOOM_BURST = 3;     // burst heal when a Lifebloom Regen ends on a living target
+export const HYMN_BONUS = 2;          // damage added to each living member's auto this party phase
+export const BARRIER_TURNS = 1;       // enemy phases an unused Barrier Shield lasts (vs SHIELD_TURNS)
+export const BLOOD_TITHE_MP = 2;      // MP gained by Blood Tithe (capped at max mana)
+export const GRIM_HARVEST_DMG = 10;   // enemy damage dealt by Grim Harvest
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -386,6 +399,21 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Refresh 3: restore 3 MP per turn for 3 enemy turns.' },
   inspiration: { id: 'inspiration', name: 'Inspiration', cost: 2, target: 'none', draw: 2, engine: true,
     desc: 'Draw 2 cards.' },
+  // --- card set phase B (#16): cards with small new engine state -------------
+  lifebloom: { id: 'lifebloom', name: 'Lifebloom', cost: 3, target: 'single', regen: 2,
+    desc: 'Regen 2 for 3 turns; when it ends while the target lives, burst-heal 3.' },
+  surge: { id: 'surge', name: 'Surge', cost: 2, target: 'none',
+    desc: 'The next card you play this turn costs 0 MP.' },
+  battleHymn: { id: 'battleHymn', name: 'Battle Hymn', cost: 1, target: 'none',
+    desc: 'Every living member\'s attack this turn deals +2.' },
+  barrier: { id: 'barrier', name: 'Barrier', cost: 4, target: 'all',
+    desc: 'Every living member gains a Shield; unused ones fade after the next enemy phase.' },
+  bloodTithe: { id: 'bloodTithe', name: 'Blood Tithe', cost: 0, target: 'single', selfDamage: 4, engine: true,
+    desc: 'A member with more than 4 HP pays 4 HP; restore 2 MP.' },
+  martyrsGift: { id: 'martyrsGift', name: 'Martyr\'s Gift', cost: 2, target: 'single', selfDamage: 3, heal: 4,
+    desc: 'A member with more than 3 HP pays 3 HP; every other living member heals 4.' },
+  grimHarvest: { id: 'grimHarvest', name: 'Grim Harvest', cost: 2, target: 'single', selfDamage: 4,
+    desc: 'A member with more than 4 HP pays 4 HP; deal 10 damage to the enemy.' },
 };
 
 // The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
@@ -494,6 +522,7 @@ export interface ResolvedCard {
   draw?: number;
   needsRegen: boolean;
   refreshCap: number; // per-cast lifetime MP cap for Refresh-slot cards
+  selfDamage?: number; // Blood cost the target pays (never bumped by modifiers)
   regenTurns: number;
   refreshTurns: number;
   retain: boolean;
@@ -643,6 +672,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   lowHeal: 'common',
   regen: 'common',
   cultivate: 'common',
+  battleHymn: 'common',
   cleanse: 'uncommon',
   highHeal: 'uncommon',
   aoeHeal: 'uncommon',
@@ -652,8 +682,14 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   overgrowth: 'uncommon',
   bloom: 'uncommon',
   inspiration: 'uncommon',
+  lifebloom: 'uncommon',
+  surge: 'uncommon',
+  bloodTithe: 'uncommon',
+  martyrsGift: 'uncommon',
   resurrect: 'rare',
   fontOfMana: 'rare',
+  barrier: 'rare',
+  grimHarvest: 'rare',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
@@ -778,8 +814,11 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     id: base.id,
     name: base.name,
     // Efficient never drives a card below cost 1: a free card opens degenerate
-    // edge cases (e.g. it would not count as "played" against Rest).
-    cost: Math.max(1, base.cost - efficient * MOD_EFFICIENT_COST),
+    // edge cases (e.g. it would not count as "played" against Rest). Cards whose
+    // BASE cost is 0 (Blood Tithe pays in HP) keep it — the floor only guards
+    // against Efficient discounting a card to free, and Efficient is ineligible
+    // on 0-cost cards anyway.
+    cost: Math.max(Math.min(1, base.cost), base.cost - efficient * MOD_EFFICIENT_COST),
     target: base.target,
     desc: base.desc,
     heal: bump(base.heal),
@@ -790,6 +829,7 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     // The cap is the BASE card's designed lifetime — Potent/Lingering change the
     // tempo of a Refresh-slot cast, never its total (flaw #7).
     refreshCap: base.refreshCap ?? REFRESH_MP_CAP,
+    selfDamage: base.selfDamage,
     regenTurns: REGEN_TURNS + lingering * MOD_LINGERING_TURNS,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
     retain,
