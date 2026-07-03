@@ -3,9 +3,9 @@ import { Run } from '../src/run';
 import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
-  defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT,
+  defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_HP_BY_FIGHT, ENEMY_ENRAGE_TURN_BY_FIGHT,
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
-  NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID,
+  NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, FIGHTS_PER_ACT, ACT_COUNT,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
@@ -85,29 +85,42 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   check('branch end -> fight 1', run.location.kind === 'fight' && run.location.fightIndex === 1);
 }
 {
-  // Drive all the way to the boss and win the run.
+  // Drive through all 9 fights: three acts, an act boss at the end of each
+  // (fights 2, 5, 8), only the final fight wins the run.
   const run = new Run(4);
   run.beginRun();
-  for (let f = 0; f < FIGHT_COUNT - 1; f++) {
-    check(`fight ${f} is not boss`, !run.isBossFight);
-    run.winFight();
-    run.chooseBranch(run.rng() < 0.5 ? 0 : 1);
-    run.completeNode();
-    run.completeNode();
+  const bossFights: number[] = [];
+  let gold = 0;
+  for (let f = 0; f < FIGHT_COUNT; f++) {
+    check(`fight ${f} boss flag matches isActBoss`, run.isBossFight === isActBoss(f));
+    if (run.isBossFight) {
+      bossFights.push(f);
+      eq(`fight ${f} config flagged boss`, run.toBattleConfig().enemy.boss, true);
+    }
+    if (f < FIGHT_COUNT - 1) {
+      run.winFight();
+      gold = run.gold;
+      check(`win of fight ${f} -> forkChoice`, run.location.kind === 'forkChoice');
+      run.chooseBranch(run.rng() < 0.5 ? 0 : 1);
+      run.completeNode();
+      run.completeNode();
+    }
   }
-  check('reached boss fight', run.location.kind === 'fight' && run.location.fightIndex === FIGHT_COUNT - 1);
-  check('boss flagged', run.isBossFight);
-  eq('boss battle config is flagged as the boss', run.toBattleConfig().enemy.boss, true);
+  eq('act bosses sit at fights 2/5/8', JSON.stringify(bossFights), JSON.stringify([2, 5, 8]));
+  eq('reached the final boss fight', run.fightIndex, FIGHT_COUNT - 1);
+  eq('gold accrued over 8 non-final fights', gold, GOLD_PER_FIGHT * (FIGHT_COUNT - 1));
   run.winFight();
-  eq('beating boss wins the run', run.status, 'won');
+  eq('beating the final boss wins the run', run.status, 'won');
 }
 {
-  // Enemy HP escalates each fight: 50 + 25 * fightIndex.
+  // Enemy HP / enrage turn follow the per-act curve.
   const run = new Run(77);
   run.beginRun();
   const seen: number[] = [];
+  const enrage: number[] = [];
   for (let f = 0; f < FIGHT_COUNT; f++) {
     seen.push(run.toBattleConfig().enemy.maxHP);
+    enrage.push(run.toBattleConfig().enemy.enrageTurn ?? -1);
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       run.chooseBranch(0);
@@ -115,10 +128,9 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
       run.completeNode();
     }
   }
-  eq('fight 1 enemy HP is 50', seen[0], ENEMY_BASE_HP);
-  check('HP rises by 25 each fight',
-    seen.every((hp, i) => hp === ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * i), seen.join(','));
-  eq('boss HP is 150', seen[FIGHT_COUNT - 1], ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * (FIGHT_COUNT - 1));
+  eq('HP curve matches ENEMY_HP_BY_FIGHT', JSON.stringify(seen), JSON.stringify(ENEMY_HP_BY_FIGHT));
+  eq('enrage curve matches ENEMY_ENRAGE_TURN_BY_FIGHT', JSON.stringify(enrage), JSON.stringify(ENEMY_ENRAGE_TURN_BY_FIGHT));
+  eq('act-2 boss enrages a turn sooner', enrage[5], 10);
 }
 {
   // Losing any fight loses the run.
@@ -345,11 +357,20 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 {
   // Encounter selection is deterministic by seed, and the boss slot is always the boss.
   const idsFor = (seed: number): string[] =>
-    [0, 1, 2, 3, 4].map((fi) => new Run(seed).rollEncounter(fi).id);
+    Array.from({ length: FIGHT_COUNT }, (_, fi) => new Run(seed).rollEncounter(fi).id);
   eq('encounter roll deterministic by seed', JSON.stringify(idsFor(7)), JSON.stringify(idsFor(7)));
   const ids = idsFor(7);
-  eq('boss slot is always the boss', ids[FIGHT_COUNT - 1], 'boss');
-  check('normal slots are named normals', ids.slice(0, FIGHT_COUNT - 1).every((id) => ENEMY_DEF_BY_ID[id] !== undefined));
+  for (let fi = 0; fi < FIGHT_COUNT; fi++) {
+    if (isActBoss(fi)) eq(`fight ${fi} (act boss) is the boss`, ids[fi], 'boss');
+    else check(`fight ${fi} is a named normal`, ENEMY_DEF_BY_ID[ids[fi]] !== undefined);
+  }
+}
+{
+  // 3-act shape: 9 fights, an act boss at each act end, 8 forks in the map.
+  eq('nine fights', FIGHT_COUNT, 9);
+  eq('three acts of three', FIGHTS_PER_ACT * ACT_COUNT, FIGHT_COUNT);
+  eq('eight forks between fights', FORK_COUNT, FIGHT_COUNT - 1);
+  eq('map has one fork per gap', new Run(1).map.length, FORK_COUNT);
 }
 {
   // Entering a fight rolls and caches the enemy def (stable across toBattleConfig).

@@ -142,14 +142,19 @@ export const NORMAL_ENEMY_DEFS: EnemyDef[] = [ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_
 export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
   Object.fromEntries(NORMAL_ENEMY_DEFS.map((d) => [d.id, d]));
 
-// Encounter table: weighted normal picks per fight index (the boss slot, the last
-// fight, is excluded — it always uses BOSS_ENEMY_DEF). Gentler shapes early, the
-// full roster (diluted) later — texture, not a difficulty spike.
+// Encounter table: weighted normal picks per fight index. Act-boss slots (2, 5,
+// 8) are empty — those fights always use BOSS_ENEMY_DEF. Gentler shapes early,
+// the full roster (Cleaver-weighted) later across acts — texture, not a spike.
 export const ENCOUNTER_TABLE: Array<Array<[string, number]>> = [
-  [['spammer', 70], ['swarm', 30]],                                   // fight 0
-  [['spammer', 45], ['swarm', 30], ['stalker', 25]],                  // fight 1
-  [['spammer', 30], ['swarm', 30], ['stalker', 25], ['cleaver', 15]], // fight 2
-  [['spammer', 25], ['swarm', 25], ['stalker', 25], ['cleaver', 25]], // fight 3
+  [['spammer', 70], ['swarm', 30]],                                   // fight 0 (A1)
+  [['spammer', 45], ['swarm', 30], ['stalker', 25]],                  // fight 1 (A1)
+  [],                                                                  // fight 2 (A1 boss)
+  [['spammer', 35], ['swarm', 30], ['stalker', 25], ['cleaver', 10]], // fight 3 (A2)
+  [['spammer', 25], ['swarm', 30], ['stalker', 25], ['cleaver', 20]], // fight 4 (A2)
+  [],                                                                  // fight 5 (A2 boss)
+  [['spammer', 25], ['swarm', 25], ['stalker', 25], ['cleaver', 25]], // fight 6 (A3)
+  [['spammer', 20], ['swarm', 25], ['stalker', 25], ['cleaver', 30]], // fight 7 (A3)
+  [],                                                                  // fight 8 (A3 boss)
 ];
 
 export const ENRAGE_TURN = 11; // first enraged enemy turn (turn 11 onward)
@@ -263,6 +268,7 @@ export interface EnemyConfig {
   boss: boolean;       // true -> uses the stronger, fully-telegraphed boss attack pool
   attackBonus: number; // flat bonus added to each attack's per-target damage (difficulty ramp)
   def?: EnemyDef;      // enemy behavior (attack weights, name); synthesized from `boss` if omitted
+  enrageTurn?: number; // turn this enemy enrages (defaults to the global ENRAGE_TURN)
 }
 
 export interface BattleConfig {
@@ -407,22 +413,47 @@ export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
 ];
 
-export const FIGHT_COUNT = 5;        // fights 0..4; fight 4 (the last) is the boss
-export const FORK_COUNT = 4;         // forks sit between consecutive fights
+// A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks
+// between them. Act bosses sit at fights 2, 5, 8 (the last fight of each act); the
+// final fight (8) ends the run.
+export const FIGHTS_PER_ACT = 3;
+export const ACT_COUNT = 3;
+export const FIGHT_COUNT = FIGHTS_PER_ACT * ACT_COUNT; // 9
+export const FORK_COUNT = FIGHT_COUNT - 1;             // 8 forks between fights
 export const BRANCHES_PER_FORK = 2;
 export const NODES_PER_BRANCH = 2;
 
-export const GOLD_PER_FIGHT = 50;    // awarded for winning a (non-final) fight
+export const GOLD_PER_FIGHT = 40;    // awarded for winning a (non-final) fight (~40 x 8 = 320/run)
 
-// Enemy HP scales up each fight: the first fight is easiest, every later fight
-// adds ENEMY_HP_PER_FIGHT. (Fight 0..4 -> 50/75/100/125/150, the boss last.)
-export const ENEMY_BASE_HP = 50;
-export const ENEMY_HP_PER_FIGHT = 25;
+// Which act a fight belongs to, and whether it is that act's boss (its last fight).
+export const actOfFight = (fightIndex: number): number => Math.floor(fightIndex / FIGHTS_PER_ACT);
+export const isActBoss = (fightIndex: number): boolean =>
+  (fightIndex % FIGHTS_PER_ACT) === FIGHTS_PER_ACT - 1;
 
-// Flat bonus added to every enemy attack's per-target damage, indexed by fight.
-// This drives the difficulty curve: fight 0 is gentle, fights 1-3 ramp up. The
-// boss (last) gets its own stronger, fully-telegraphed attack pool (see TYPE_WEIGHTS).
-export const ENEMY_ATTACK_BONUS: number[] = [0, 1, 2, 2, 0];
+// Per-act difficulty curve, indexed by fight. HP and attackBonus climb per act;
+// the enrage column lets act bosses enrage sooner. Act bosses (2,5,8) use the
+// boss attack pool, so their flat attackBonus is 0. A2/A3 bosses are placeholders
+// (scaled BOSS_ENEMY_DEF) until the Gatewarden/Hexweaver/Devourer land (#12-14).
+export const ENEMY_HP_BY_FIGHT: number[] = [
+  50, 75, 130,    // Act 1: two normals + boss (e11)
+  105, 130, 200,  // Act 2: boss e10
+  160, 190, 280,  // Act 3: boss per-def (placeholder)
+];
+// Normals stay gentle on per-hit damage (their difficulty is the rising HP =
+// longer fights), so a good player clears them reliably; the bosses are the walls.
+export const ENEMY_ATTACK_BONUS: number[] = [
+  0, 0, 0,
+  1, 1, 0,
+  1, 2, 0,
+];
+// Enrage is a boss anti-stall mechanic. Normals get a high enrage turn (14) so
+// long high-HP normals stay a clean DPS race and don't hit an enrage cliff; the
+// act bosses keep their tuned enrage turns (A1 11, A2 10, A3 per-def placeholder 11).
+export const ENEMY_ENRAGE_TURN_BY_FIGHT: number[] = [
+  14, 14, 11,
+  14, 14, 10,
+  14, 14, 11,
+];
 
 // Storefront sizes per shop type.
 export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerUpgrade: 3 } as const;

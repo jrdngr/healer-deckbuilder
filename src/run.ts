@@ -7,7 +7,8 @@
 // reproducible from its seed.
 
 import {
-  ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT, ENEMY_ATTACK_BONUS, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
+  ENEMY_HP_BY_FIGHT, ENEMY_ATTACK_BONUS, ENEMY_ENRAGE_TURN_BY_FIGHT, isActBoss, actOfFight,
+  ENEMY_MAX_HP, ENRAGE_TURN, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
@@ -90,8 +91,9 @@ export class Run {
   // Roll the enemy for a fight slot from the encounter table (the boss slot always
   // uses BOSS_ENEMY_DEF). Deterministic in the run seed.
   rollEncounter(fightIndex: number): EnemyDef {
-    if (fightIndex >= FIGHT_COUNT - 1) return BOSS_ENEMY_DEF;
-    const row = ENCOUNTER_TABLE[fightIndex] ?? ENCOUNTER_TABLE[ENCOUNTER_TABLE.length - 1];
+    if (isActBoss(fightIndex)) return BOSS_ENEMY_DEF;
+    const row = ENCOUNTER_TABLE[fightIndex];
+    if (!row || row.length === 0) return DEFAULT_ENEMY_DEF;
     const id = weightedPick(row, this.rng);
     return ENEMY_DEF_BY_ID[id] ?? DEFAULT_ENEMY_DEF;
   }
@@ -128,14 +130,17 @@ export class Run {
     return this.location.kind === 'fight' ? this.location.fightIndex : 0;
   }
 
+  // The act (0-based) the current fight belongs to.
+  get act(): number { return actOfFight(this.fightIndex); }
+
+  // A fight is a boss fight when it is the last fight of its act (fights 2, 5, 8).
   get isBossFight(): boolean {
-    return this.location.kind === 'fight' && this.location.fightIndex === FIGHT_COUNT - 1;
+    return this.location.kind === 'fight' && isActBoss(this.location.fightIndex);
   }
 
-  // Enemy HP escalates each fight: ENEMY_BASE_HP on the first, +ENEMY_HP_PER_FIGHT
-  // thereafter. (Fight 0..4 -> 50/75/100/125/150, the boss last and highest.)
+  // Enemy HP follows the per-act curve (ENEMY_HP_BY_FIGHT).
   enemyMaxHP(): number {
-    return ENEMY_BASE_HP + ENEMY_HP_PER_FIGHT * this.fightIndex;
+    return ENEMY_HP_BY_FIGHT[this.fightIndex] ?? ENEMY_MAX_HP;
   }
 
   // Build the config for the fight at the current location.
@@ -149,6 +154,7 @@ export class Run {
         boss: this.isBossFight,
         attackBonus: ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0,
         def: this.currentEnemyDef ?? (this.isBossFight ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF),
+        enrageTurn: ENEMY_ENRAGE_TURN_BY_FIGHT[this.fightIndex] ?? ENRAGE_TURN,
       },
     };
   }

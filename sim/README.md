@@ -17,7 +17,14 @@ npm run sim -- 2000 1  # N=2000 from seed 1
 
 Determinism and a locked aggregate are guarded by `test/sim.test.ts`.
 
-## Canonical baseline (issue 06 — post-P1 re-anchor)
+> **Superseded by the 3-act / 9-fight structure (#10).** The table below is the
+> post-P1 baseline for the old flat 5-fight run. Since #10 the run is 9 fights in
+> 3 acts with placeholder Act 2/3 bosses (scaled BOSS_ENEMY_DEF, 200/280 HP) that
+> the current policy can't beat, so full-run is 0% by design — the full-run band is
+> tuned once the real bosses land (#12–#14). Clean-sample normals (F0/F1/F3/F4)
+> clear ≥95%. See the progression table in `run-sim.ts` for the current numbers.
+
+## Canonical baseline (issue 06 — post-P1 re-anchor, pre-#10)
 
 Measured at **N = 1000** seeds (from seed 1) with the P1 balance repair (#02–#05)
 merged. This supersedes the pre-repair historical reference (~100/100/83/67/60 /

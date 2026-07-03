@@ -25,6 +25,13 @@
 //   after #09 (four named normals + encounter tables):
 //                          per-fight ~100 / 100 / 90.1 / 71.5 / 72.0 %   full-run ~46.4 %
 //                          (variety, not a spike — every fight within +-5pp of #06)
+//   after #10 (3-act / 9-fight structure):  full-run ~0 %  (per-fight below)
+//     F0 100 | F1 100 | F2 A1boss 78 | F3 99 | F4 99 | F5 A2boss 17 | F6 91 | F7 21 | F8 A3boss 0
+//     The Act 2/3 bosses are placeholders (scaled BOSS_ENEMY_DEF, 200/280 HP) with no
+//     boss-specific counterplay yet, so they wall the sim and full-run is 0% — this is
+//     expected and the full-run band is deferred to #14. Clean-sample normals (F0/F1/
+//     F3/F4) clear >= 95%; late-normal (F6/F7) samples are tiny and biased by the
+//     placeholder bosses.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now
@@ -41,7 +48,7 @@
 import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
-import { FIGHT_COUNT } from '../src/constants';
+import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
 import { playFight, resolveNode, chooseBranch } from './policy';
 
 export interface FightOutcome {
@@ -143,7 +150,7 @@ export function formatReport(r: SimReport): string {
   lines.push('');
   lines.push('Per-fight winrate (conditional on reaching the fight):');
   r.perFight.forEach((p, i) => {
-    const label = i === FIGHT_COUNT - 1 ? `F${i} (boss)` : `F${i}`;
+    const label = isActBoss(i) ? `F${i} A${actOfFight(i) + 1}boss` : `F${i}`;
     lines.push(
       `  ${label.padEnd(9)} ${pct(p.rate).padStart(5)}% ±${pct(p.ci95)}  ` +
       `(${p.wins}/${p.n}, mean ${r.meanTurns[i].toFixed(1)} turns)`,

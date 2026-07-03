@@ -120,6 +120,7 @@ export class Game {
   rng: Rng;
   config: BattleConfig;
   enemyDef: EnemyDef; // data-driven enemy behavior (attack weights, name)
+  enrageTurn: number; // the turn this enemy enrages (per-fight; default ENRAGE_TURN)
   members: Member[];
   enemy: Enemy;
   mp: number;
@@ -150,6 +151,7 @@ export class Game {
     // fixtures) synthesizes the stock def from its boss flag, so the engine always
     // has a single source for attack weights and never forks on the boss flag.
     this.enemyDef = config.enemy.def ?? (config.enemy.boss ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF);
+    this.enrageTurn = config.enemy.enrageTurn ?? ENRAGE_TURN;
 
     this.members = config.party.map((p, slot): Member => {
       const d = MEMBER_DEFS[slot];
@@ -238,13 +240,13 @@ export class Game {
 
   _emit(e: GameEvent): void { this.events.push(e); }
 
-  isEnraged(turn: number): boolean { return turn >= ENRAGE_TURN; }
+  isEnraged(turn: number): boolean { return turn >= this.enrageTurn; }
 
   // Player-turns remaining before the enemy enrages (0 once it has). Drives the
   // enrage-countdown pip so the otherwise-invisible race is legible (flaw #2).
   turnsUntilEnrage(): number {
     if (this.enemy.enraged) return 0;
-    return Math.max(0, ENRAGE_TURN - this.turn);
+    return Math.max(0, this.enrageTurn - this.turn);
   }
 
   // Per-target damage for an attack type at a given turn (round up on enrage).
@@ -433,7 +435,7 @@ export class Game {
   // ---- enemy phase ---------------------------------------------------------
 
   _runEnemyPhase(): void {
-    if (this.turn === ENRAGE_TURN && !this.enemy.enraged) {
+    if (this.turn === this.enrageTurn && !this.enemy.enraged) {
       this.enemy.enraged = true;
       this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');
       this._emit({ kind: 'enrage' });
