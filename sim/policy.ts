@@ -283,6 +283,7 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // the buy threshold — a card the policy never plays is dead deck weight.
   overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
   lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
+  phalanx: 2, brace: 2,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

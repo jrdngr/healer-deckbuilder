@@ -18,6 +18,7 @@ import {
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN,
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
+  PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
@@ -44,11 +45,14 @@ export interface Member {
   alive: boolean;
   shield: boolean;      // pending shield (blocks the next damaging instance)
   shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
+  brace: boolean;       // pending Brace: next damaging instance reduced by BRACE_AMOUNT (#17)
+  braceTurns: number;   // enemy turns the pending Brace lasts before fading unused
   regen: number;      // Regen strength: HP healed per turn while active
   regenTurns: number; // player phases of Regen remaining
   bloomBurst: number; // pending Lifebloom burst: heals this much when the Regen ends alive (#16)
   taunt: number;   // taunt turns remaining (attributed to whoever cast Taunt)
-  defense: number; // Defense turns remaining: incoming hits reduced by DEFENSE_AMOUNT
+  defense: number; // Defense turns remaining: incoming hits reduced by defenseAmount
+  defenseAmount: number; // per-member Defense strength while defense > 0 (#17)
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
 }
 
@@ -119,6 +123,8 @@ export type GameEvent =
   | { kind: 'heal'; slot: Slot; amount: number; hp: number }
   | { kind: 'regenApplied'; slot: Slot; stack: number }
   | { kind: 'shieldApplied'; slot: Slot }
+  | { kind: 'defenseApplied'; slot: Slot; amount: number } // Phalanx (#17)
+  | { kind: 'braceApplied'; slot: Slot }                   // Brace (#17)
   | { kind: 'resurrect'; slot: Slot; hp: number }
   | { kind: 'refreshPrimed'; stack: number }
   | { kind: 'draw'; count: number }
@@ -194,11 +200,14 @@ export class Game {
         hp: p.maxHP, alive: true,
         shield: false, // pending shield (blocks the next damaging instance)
         shieldTurns: 0,
+        brace: false,  // pending Brace (one-shot damage reduction)
+        braceTurns: 0,
         regen: 0,      // Regen strength
         regenTurns: 0, // Regen turns remaining
         bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
         defense: 0,    // Defense turns remaining
+        defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
       };
     });
@@ -450,22 +459,20 @@ export class Game {
     if (this.status !== 'playing' || !t) return [];
     if (t.hidden) {
       // Reveal the magnitude, hide the target (flaw #11) — per member: each line
-      // shows what THAT member would take if the blow lands on them (Defense
-      // folded in, a Shield blocking to 0), keeping preview == applied for
-      // whichever target the attack turns out to have.
-      return this.livingMembers().map((m): AttackSpec => {
-        const eff = this._effectiveDamage(m, t.damage, t.ignoreDefense);
-        return { slot: m.slot, damage: m.shield && eff > 0 ? 0 : eff, hidden: true };
-      });
+      // shows what THAT member would take if the blow lands on them (the full
+      // Defense -> Brace -> Shield pipeline folded in), keeping preview ==
+      // applied for whichever target the attack turns out to have.
+      return this.livingMembers().map((m): AttackSpec => (
+        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense).dmg, hidden: true }
+      ));
     }
     return t.targets
       .filter((slot) => this.members[slot]?.alive)
       .map((slot): AttackSpec => {
         const m = this.members[slot];
-        const eff = this._effectiveDamage(m, t.damage, t.ignoreDefense);
-        // A Shield blocks a damaging instance entirely, so the applied damage is
-        // 0 — preview must match (telegraph == applied invariant).
-        return { slot, damage: m.shield && eff > 0 ? 0 : eff, hidden: false };
+        // The preview runs the same Defense -> Brace -> Shield pipeline the
+        // resolver applies (telegraph == applied invariant).
+        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense).dmg, hidden: false };
       });
   }
 
@@ -536,11 +543,14 @@ export class Game {
     m.hp = 0;
     m.shield = false;
     m.shieldTurns = 0;
+    m.brace = false;
+    m.braceTurns = 0;
     m.regen = 0;
     m.regenTurns = 0;
     m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
     m.taunt = 0;
     m.defense = 0;
+    m.defenseAmount = 0;
     m.charge = 0;
     this._log(`${m.name} has fallen!`, 'death');
   }
@@ -620,11 +630,33 @@ export class Game {
   }
 
   // Damage a member actually takes from a raw attack value, after their Defense
-  // (if any). Floored at 0 so a fully-absorbed hit can't heal. Defense is granted
-  // by the Taunt ability to whoever cast it, and that caster's abilityPower scales
-  // the reduction (for the fixed trio this is always the tank).
+  // (if any). Floored at 0 so a fully-absorbed hit can't heal. Defense strength
+  // is per-member (#17): Taunt grants DEFENSE_AMOUNT + the caster's abilityPower,
+  // Phalanx grants PHALANX_DEFENSE — whatever was set is what reduces here.
   _effectiveDamage(m: Member, raw: number, ignoreDefense = false): number {
-    return m.defense > 0 && !ignoreDefense ? Math.max(0, raw - (DEFENSE_AMOUNT + m.abilityPower)) : raw;
+    return m.defense > 0 && !ignoreDefense ? Math.max(0, raw - m.defenseAmount) : raw;
+  }
+
+  // The full defensive pipeline for one attack instance on one member (#17):
+  //   Defense (flat reduction while active) -> Brace (one-shot -BRACE_AMOUNT,
+  //   consumed) -> Shield (full block, consumed).
+  // Brace and Shield are exclusive holds, and each only spends on a hit that
+  // still deals damage after the stages before it. Pure read — attackTargets()
+  // and _resolveAttack() both compute damage through here, which is what keeps
+  // the telegraph preview equal to the applied damage across the whole pipeline.
+  _wardedDamage(m: Member, raw: number, ignoreDefense = false): { dmg: number; spendsBrace: boolean; spendsShield: boolean } {
+    let dmg = this._effectiveDamage(m, raw, ignoreDefense);
+    let spendsBrace = false;
+    let spendsShield = false;
+    if (m.brace && dmg > 0) {
+      dmg = Math.max(0, dmg - BRACE_AMOUNT);
+      spendsBrace = true;
+    }
+    if (m.shield && dmg > 0) {
+      dmg = 0;
+      spendsShield = true;
+    }
+    return { dmg, spendsBrace, spendsShield };
   }
 
   // ---- enemy phase ---------------------------------------------------------
@@ -718,7 +750,10 @@ export class Game {
       }
       if (m.alive && m.defense > 0) {
         m.defense -= 1;
-        if (m.defense === 0) this._log(`Defense fades from ${m.name}.`, 'status');
+        if (m.defense === 0) {
+          m.defenseAmount = 0;
+          this._log(`Defense fades from ${m.name}.`, 'status');
+        }
       }
       // An unused Shield fades after SHIELD_TURNS enemy turns (it is consumed —
       // not decayed — the moment it blocks a damaging hit).
@@ -727,6 +762,14 @@ export class Game {
         if (m.shieldTurns === 0) {
           m.shield = false;
           this._log(`Shield fades from ${m.name}.`, 'status');
+        }
+      }
+      // An unused Brace fades the same way (#17).
+      if (m.alive && m.brace && m.braceTurns > 0) {
+        m.braceTurns -= 1;
+        if (m.braceTurns === 0) {
+          m.brace = false;
+          this._log(`Brace fades from ${m.name}.`, 'status');
         }
       }
     }
@@ -795,20 +838,25 @@ export class Game {
         this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden });
         continue;
       }
-      const dmg = this._effectiveDamage(m, t.damage, t.ignoreDefense);
-      // A Shield only spends on a *damaging* instance — a fully-mitigated (0-damage)
-      // hit passes through harmlessly and leaves the Shield up.
-      if (m.shield && dmg > 0) {
+      // Defense -> Brace -> Shield (#17); the same pipeline attackTargets()
+      // previews. Brace and Shield only spend on a still-damaging instance.
+      const w = this._wardedDamage(m, t.damage, t.ignoreDefense);
+      if (w.spendsShield) {
         m.shield = false;
         m.shieldTurns = 0;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
         this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
         continue;
       }
-      m.hp = Math.max(0, m.hp - dmg);
-      this._log(`${label} hits ${m.name} for ${dmg}. (${m.hp}/${m.maxHP})`, 'hit');
+      if (w.spendsBrace) {
+        m.brace = false;
+        m.braceTurns = 0;
+        this._log(`${m.name} braces — the hit is blunted by ${BRACE_AMOUNT}.`, 'shield');
+      }
+      m.hp = Math.max(0, m.hp - w.dmg);
+      this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       const killed = m.hp <= 0;
-      this._emit({ kind: 'enemyAttack', slot, amount: dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
+      this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
       if (killed) this._killMember(m);
     }
   }
@@ -888,6 +936,10 @@ export class Game {
         if (card.needsRegen && m.regenTurns <= 0) return 'target must have an active Regen';
         // Blood cards (#16) demand the target survive the payment outright.
         if (card.selfDamage != null && m.hp <= card.selfDamage) return `target must have more than ${card.selfDamage} HP`;
+        // Bulwark cards (#17) are Defense-exclusive; Phalanx also refuses the
+        // taunting member (Taunt's bundled Defense is the tank's lane).
+        if (card.noDefense && m.defense > 0) return 'target already has Defense';
+        if (card.noTaunt && m.taunt > 0) return 'cannot target the taunting member';
         break;
       }
       case 'dead': {
@@ -956,6 +1008,8 @@ export class Game {
         const m = this.members[target as number];
         m.shield = true; // does not stack
         m.shieldTurns = SHIELD_TURNS; // re-raising refreshes the fuse
+        m.brace = false; // a member holds Shield OR Brace — newest replaces (#17)
+        m.braceTurns = 0;
         this._log(`Shield raised on ${m.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
@@ -964,7 +1018,9 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.shieldTurns = 0; m.regen = 0; m.regenTurns = 0; m.bloomBurst = 0; m.taunt = 0; m.defense = 0; m.charge = 0;
+        m.shield = false; m.shieldTurns = 0; m.brace = false; m.braceTurns = 0;
+        m.regen = 0; m.regenTurns = 0; m.bloomBurst = 0;
+        m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
@@ -1061,6 +1117,8 @@ export class Game {
         for (const m of this.livingMembers()) {
           m.shield = true;
           m.shieldTurns = Math.max(m.shieldTurns, BARRIER_TURNS);
+          m.brace = false; // newest ward replaces (#17)
+          m.braceTurns = 0;
           this._emit({ kind: 'shieldApplied', slot: m.slot });
         }
         this._log('Barrier: every living member gains a Shield (fades after the next enemy phase).', 'status');
@@ -1095,6 +1153,25 @@ export class Game {
         if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
+      case 'phalanx': {
+        const m = this.members[target as number];
+        // canPlay guarantees no active Defense (that is also the no-stack rule).
+        m.defense = PHALANX_TURNS;
+        m.defenseAmount = PHALANX_DEFENSE;
+        this._log(`Phalanx: ${m.name} gains Defense ${PHALANX_DEFENSE} for ${PHALANX_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'defenseApplied', slot: m.slot, amount: PHALANX_DEFENSE });
+        break;
+      }
+      case 'brace': {
+        const m = this.members[target as number];
+        m.brace = true;
+        m.braceTurns = BRACE_TURNS;
+        m.shield = false; // a member holds Shield OR Brace — newest replaces
+        m.shieldTurns = 0;
+        this._log(`${m.name} Braces: the next hit deals ${BRACE_AMOUNT} less (fades in ${BRACE_TURNS} enemy turns).`, 'status');
+        this._emit({ kind: 'braceApplied', slot: m.slot });
+        break;
+      }
       case 'cleanse': {
         // Removes the Hexweaver's party-wide Hex (#13). Always playable; a no-op if
         // nothing is Wounded (the animator still gets an event to acknowledge it).
@@ -1126,6 +1203,10 @@ export class Game {
       }
       case 'taunt': {
         // Taunt and its bundled Defense are attributed to the caster, not a slot.
+        // Defense strength is per-member (#17): the caster's abilityPower scales
+        // it, and a stronger Defense already standing (Phalanx) is kept.
+        const strength = DEFENSE_AMOUNT + m.abilityPower;
+        m.defenseAmount = m.defense > 0 ? Math.max(m.defenseAmount, strength) : strength;
         m.taunt = TAUNT_TURNS;
         m.defense = DEFENSE_TURNS;
         // Future telegraphs auto-aim at the taunting member (via _pickPrimary). The

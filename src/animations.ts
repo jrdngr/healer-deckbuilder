@@ -228,6 +228,27 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'defenseApplied': {
+        // Phalanx (#17): a standing damage reduction settles on the member.
+        push({ at: t, fx: [
+          { type: 'glow', at: ev.slot, color: C.taunt },
+          { type: 'ring', at: ev.slot, color: C.taunt },
+          { type: 'float', at: ev.slot, text: `DEF ${ev.amount}`, color: C.taunt },
+        ] });
+        t += 400;
+        break;
+      }
+
+      case 'braceApplied': {
+        // Brace (#17): a one-shot blunting ward, visually a lighter Shield.
+        push({ at: t, fx: [
+          { type: 'shield', at: ev.slot, color: C.smoke },
+          { type: 'float', at: ev.slot, text: 'BRACE', color: C.white },
+        ] });
+        t += 380;
+        break;
+      }
+
       case 'resurrect': {
         push({ at: t, shake: 4, fx: [
           { type: 'pillar', at: ev.slot, color: C.taunt },

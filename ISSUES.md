@@ -27,11 +27,11 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–16** (P0–P6 plus card set phases A and B — 12 new shop cards total). Each landed as
-its own commit with tests and a sim gate. The three bosses hit their gates (Gatewarden ~89% /
-Hexweaver ~74% / Devourer ~58%) and the **full run is winnable end to end at ~34%** (the
-designed 25–35% band — re-checked at N=1000 after each pool change). **Next up: #17 (card set
-phase C: Bulwark / Defense pipeline).** **➤ Human playtest #2** is ready now (the Devourer /
+**Done: 01–17** (P0–P7 card work: 14 new shop cards + the Defense→Brace→Shield pipeline). Each
+landed as its own commit with tests and a sim gate. The three bosses hit their gates (Gatewarden
+~89% / Hexweaver ~74% / Devourer ~57%) and the **full run is winnable end to end at ~34%** (the
+designed 25–35% band — re-checked at N=1000 after each pool change). **Next up: #18 (Resurrect
+rework + poison decision + Second Wind).** **➤ Human playtest #2** is ready now (the Devourer /
 full-run band landed).
 
 ## Issues (implementation order)
@@ -54,7 +54,7 @@ full-run band landed).
 | 14 | ✅ Done | [Boss 3 — Devourer ("race or die") + phase system](./issues/14-boss-devourer.md) | P6 | 13 | §4 P6 |
 | 15 | ✅ Done | [Card set phase A: existing-field cards](./issues/15-cards-phase-a.md) | P7a | 14 | §3.2 |
 | 16 | ✅ Done | [Card set phase B: small-new-state cards](./issues/16-cards-phase-b.md) | P7b | 15 | §3.2 |
-| 17 | ⬜ Todo | [Card set phase C: Bulwark / Defense pipeline](./issues/17-cards-phase-c-bulwark.md) | P7c | 16 | §3.2; Q10 |
+| 17 | ✅ Done | [Card set phase C: Bulwark / Defense pipeline](./issues/17-cards-phase-c-bulwark.md) | P7c | 16 | §3.2; Q10 |
 | 18 | ⬜ Todo | [Resurrect rework + poison decision + Second Wind](./issues/18-resurrect-poison-secondwind.md) | P7d | 14, 16 | flaws #13, #14; Q5 |
 | 19 | ⬜ Todo | [Events expansion 3 → ~8](./issues/19-events-expansion.md) | P7e | 10 | §4 P7 |
 | 20 | ⬜ Todo | [Act 2/3 named rosters](./issues/20-act23-rosters.md) | P8 | 14, 09 | §4 P8 |

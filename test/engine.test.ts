@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -277,6 +277,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.playCard(idx, SLOT.CENTER);
   // Give the tank Defense so a 1-damage attack is fully mitigated to 0.
   tank.defense = DEFENSE_TURNS;
+  tank.defenseAmount = DEFENSE_AMOUNT + tank.abilityPower; // what Taunt would set (#17)
   const raw = DEFENSE_AMOUNT + tank.abilityPower; // reduced exactly to 0
   g.telegraph = { type: 'single', hidden: false, damage: raw, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
   const before = tank.hp;
@@ -490,6 +491,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // Per-member fold (playtest finding): a defended member's line shows what THEY
   // would take, and a Shield previews as 0 — preview == applied for any target.
   g2.tank.defense = DEFENSE_TURNS;
+  g2.tank.defenseAmount = DEFENSE_AMOUNT + g2.tank.abilityPower; // what Taunt would set (#17)
   g2.mage.shield = true; g2.mage.shieldTurns = SHIELD_TURNS;
   const hl2 = g2.attackTargets();
   const bySlot = new Map(hl2.map((s) => [s.slot, s.damage]));
@@ -1001,6 +1003,7 @@ function gatewardenGame(seed: number, enrageTurn = 99): Game {
   g.turn = 2; g._runEnemyPhase();      // wind-up (channel now resolves next turn)
   // Late taunt: the tank taunts during the wind-up.
   g.tank.taunt = TAUNT_TURNS; g.tank.defense = DEFENSE_TURNS;
+  g.tank.defenseAmount = DEFENSE_AMOUNT + g.tank.abilityPower; // what Taunt would set (#17)
   g.ranger.hp = 50; g.tank.hp = 50;
   g.turn = 3; g._runEnemyPhase();      // resolve: should hit the taunting tank
   eq('channel redirected onto the taunting tank',
@@ -1710,6 +1713,142 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.devPlayCard('grimHarvest', SLOT.CENTER);
   eq('Blood pay clamps to leave 1 HP', tank.hp, 1);
   check('the member survives the payment', tank.alive);
+}
+
+// --- card set phase C: Phalanx / Brace + the Defense pipeline (issue 17) ----
+{
+  eq('Phalanx costs 2', CARDS.phalanx.cost, 2);
+  eq('Phalanx is uncommon', CARD_RARITY.phalanx, 'uncommon');
+  eq('Brace costs 1', CARDS.brace.cost, 1);
+  eq('Brace is common', CARD_RARITY.brace, 'common');
+  check('both phase-C cards joined the shop pool',
+    (['phalanx', 'brace'] as CardId[]).every((id) => CARD_POOL.includes(id)));
+}
+{
+  // Phalanx: Defense 2 for 2 enemy turns; Defense-exclusive (its no-stack rule)
+  // and never on the taunting member.
+  const g = new Game(92); g.start();
+  const ranger = g.ranger;
+  const idx = giveCard(g, 'phalanx');
+  eq('Phalanx playable on an undefended member', g.canPlay(idx, SLOT.LEFT), null);
+  g.playCard(idx, SLOT.LEFT);
+  eq('Phalanx grants Defense strength 2', ranger.defenseAmount, PHALANX_DEFENSE);
+  eq('Phalanx lasts 2 enemy turns', ranger.defense, PHALANX_TURNS);
+  const idx2 = giveCard(g, 'phalanx');
+  eq('Phalanx refuses a defended member (no stack)', g.canPlay(idx2, SLOT.LEFT), 'target already has Defense');
+  g.tank.taunt = 2; g.tank.defense = 0; g.tank.defenseAmount = 0; // taunt outliving Defense (edge)
+  eq('Phalanx refuses the taunting member', g.canPlay(idx2, SLOT.CENTER), 'cannot target the taunting member');
+  // Expiry clears the per-member strength too.
+  for (let i = 0; i < PHALANX_TURNS; i++) {
+    g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.RIGHT], enraged: false, forTurn: g.turn + 1 };
+    g._runEnemyPhase();
+  }
+  eq('expired Defense clears its strength', ranger.defenseAmount, 0);
+}
+{
+  // Taunt keeps a stronger Defense already standing (Phalanx then Taunt).
+  const g = new Game(93); g.start();
+  const tank = g.tank;
+  g.playCard(giveCard(g, 'phalanx'), SLOT.CENTER); // Defense 2 on the (untaunting) tank
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // Taunt would grant only 1
+  eq('Taunt keeps the stronger standing Defense', tank.defenseAmount, PHALANX_DEFENSE);
+  eq('Taunt still refreshes the Defense duration', tank.defense, DEFENSE_TURNS);
+}
+{
+  // Shield / Brace exclusivity: a member holds one; the newest replaces.
+  const g = new Game(94); g.start();
+  const mage = g.mage;
+  g.playCard(giveCard(g, 'shield'), SLOT.RIGHT);
+  g.playCard(giveCard(g, 'brace'), SLOT.RIGHT);
+  check('Brace replaces a standing Shield', mage.brace && !mage.shield);
+  eq('Brace carries its fade fuse', mage.braceTurns, BRACE_TURNS);
+  g.playCard(giveCard(g, 'shield'), SLOT.RIGHT);
+  check('Shield replaces a standing Brace', mage.shield && !mage.brace);
+}
+{
+  // Pipeline order Defense -> Brace: preview and applied agree; Brace only
+  // spends on a hit that still damages after Defense.
+  const g = new Game(95); g.start();
+  const tank = g.tank;
+  tank.hp = tank.maxHP;
+  tank.defense = 2; tank.defenseAmount = 2;
+  tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  eq('preview folds Defense then Brace', g.attackTargets()[0]?.damage, 5 - 2 - BRACE_AMOUNT);
+  const before = tank.hp;
+  g._resolveAttack();
+  eq('applied equals the preview', before - tank.hp, 5 - 2 - BRACE_AMOUNT);
+  check('Brace is consumed by the damaging hit', !tank.brace);
+}
+{
+  // A hit Defense already absorbs to 0 leaves the Brace standing.
+  const g = new Game(96); g.start();
+  const tank = g.tank;
+  tank.defense = 2; tank.defenseAmount = 4;
+  tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  eq('Defense alone absorbs the hit', g.attackTargets()[0]?.damage, 0);
+  g._resolveAttack();
+  check('Brace not spent on a 0-damage hit', tank.brace);
+}
+{
+  // Pipeline order Defense -> Shield: a partially-reduced hit still blocks (and
+  // spends) the Shield; preview shows 0.
+  const g = new Game(97); g.start();
+  const tank = g.tank;
+  tank.hp = tank.maxHP;
+  tank.defense = 2; tank.defenseAmount = 2;
+  tank.shield = true; tank.shieldTurns = SHIELD_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+  eq('Shield previews the pipeline to 0', g.attackTargets()[0]?.damage, 0);
+  const before = tank.hp;
+  g._resolveAttack();
+  eq('the blocked hit deals nothing', tank.hp, before);
+  check('Shield is spent by the still-damaging hit', !tank.shield);
+}
+{
+  // Unused Brace fades after BRACE_TURNS enemy turns.
+  const g = new Game(98); g.start();
+  const tank = g.tank;
+  g.playCard(giveCard(g, 'brace'), SLOT.CENTER);
+  for (let i = 0; i < BRACE_TURNS; i++) {
+    g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
+    g._runEnemyPhase();
+  }
+  check('unused Brace fades after its fuse', !tank.brace);
+  eq('faded Brace clears its fuse', tank.braceTurns, 0);
+}
+{
+  // PROPERTY: previewed per-target damage == applied damage through the full
+  // Defense -> Brace -> Shield pipeline, across seeds and randomized ward
+  // states (the #15/#17 telegraph invariant).
+  let checked = 0;
+  let mismatches = 0;
+  for (let seed = 200; seed < 260; seed++) {
+    const g = new Game(seed);
+    g.start();
+    // Randomize ward states deterministically off the game's own rng, and top
+    // everyone up so a kill's HP floor can't mask the comparison.
+    for (const m of g.members) {
+      m.hp = m.maxHP;
+      if (g.rng() < 0.5) { m.defense = 1 + Math.floor(g.rng() * 3); m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
+      const r = g.rng();
+      if (r < 0.3) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
+      else if (r < 0.6) { m.brace = true; m.braceTurns = BRACE_TURNS; }
+    }
+    const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
+    const hpBefore = g.members.map((m) => m.hp);
+    g._runEnemyPhase();
+    for (const m of g.members) {
+      const taken = hpBefore[m.slot] - m.hp;
+      if (taken === 0) continue; // not targeted (or fully mitigated) — nothing to compare
+      checked++;
+      if (taken !== preview.get(m.slot)) mismatches++;
+    }
+  }
+  check('property: preview == applied across the ward pipeline (no mismatches)', mismatches === 0,
+    `${mismatches} mismatches`);
+  check('property test exercised real hits', checked > 20, `${checked} hits checked`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

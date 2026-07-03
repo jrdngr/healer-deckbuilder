@@ -51,8 +51,9 @@ export function MemberCard({
       </div>
       <div className="badges">
         {m.shield && <span className="badge shield">🛡 Shield</span>}
+        {m.brace && <span className="badge shield">🧱 Brace</span>}
         {m.regen > 0 && <span className="badge regen">♻ Regen {m.regen}</span>}
-        {m.defense > 0 && <span className="badge defense">🪖 Def {m.defense}</span>}
+        {m.defense > 0 && <span className="badge defense">🪖 Def {m.defenseAmount}·{m.defense}t</span>}
         {m.id === 'tank' && m.taunt > 0 && <span className="badge taunt">⚔ Taunt {m.taunt}</span>}
       </div>
       {m.id === 'mage' && <div className="charge">⚡ Charge {mageCharge}/{CHARGE_MAX}</div>}

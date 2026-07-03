@@ -68,6 +68,11 @@
 //     Pool 13 -> 20 ids; bands hold (top edge of 25-35%). None of the seven has a
 //     fight tactic yet, so all sit below the policy's buy threshold — a
 //     Regen/Blood-aware policy line is future work if their winrates matter later.
+//   after #17 (card set phase C: Phalanx / Brace + the Defense->Brace->Shield
+//     pipeline, per-member Defense strength):  full-run 33.8 % ±2.9 at N=1000.
+//     F0 100 | F1 100 | F2 A1boss 88.8 | F3 99.4 | F4 98.5 | F5 A2boss 74.3 | F6 95.0 | F7 97.1 | F8 A3boss 56.7
+//     Pool 20 -> 22 ids; bands hold. The preview==applied invariant now runs the
+//     whole ward pipeline (property-tested in engine.test.ts).
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

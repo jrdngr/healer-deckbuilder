@@ -15,7 +15,8 @@ export type CardId =
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
   | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration'
   | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
-  | 'bloodTithe' | 'martyrsGift' | 'grimHarvest';
+  | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
+  | 'phalanx' | 'brace';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -54,6 +55,12 @@ export interface CardDef {
   // to have strictly more HP than this, and the payment clamps to leave 1 HP —
   // Blood self-damage is never lethal (no new death path in playCard).
   selfDamage?: number;
+  // Bulwark cards (#17) are Defense-exclusive: the target must not already have
+  // an active Defense (this is also how "no stack" is enforced for Phalanx).
+  noDefense?: boolean;
+  // Phalanx (#17) may not target the taunting member — Taunt's bundled Defense
+  // is the tank's lane; Bulwark protects the members Taunt can't.
+  noTaunt?: boolean;
   // "Engine" cards generate MP or draw cards (they fuel the economy). Retain is
   // ineligible for them, and later economy modifiers (Taper, #22) gate on the
   // same tag. Keep this the single source of the tag.
@@ -347,6 +354,12 @@ export const BARRIER_TURNS = 1;       // enemy phases an unused Barrier Shield l
 export const BLOOD_TITHE_MP = 2;      // MP gained by Blood Tithe (capped at max mana)
 export const GRIM_HARVEST_DMG = 10;   // enemy damage dealt by Grim Harvest
 
+// Card set phase C (#17) — the Bulwark / Defense pipeline.
+export const PHALANX_DEFENSE = 2;     // Defense strength Phalanx grants
+export const PHALANX_TURNS = 2;       // enemy turns Phalanx's Defense lasts
+export const BRACE_AMOUNT = 2;        // one-shot reduction Brace applies to the next damaging hit
+export const BRACE_TURNS = 3;         // enemy turns an unused Brace lasts before fading (mirrors Shield)
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -414,6 +427,12 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'A member with more than 3 HP pays 3 HP; every other living member heals 4.' },
   grimHarvest: { id: 'grimHarvest', name: 'Grim Harvest', cost: 2, target: 'single', selfDamage: 4,
     desc: 'A member with more than 4 HP pays 4 HP; deal 10 damage to the enemy.' },
+  // --- card set phase C (#17): the Bulwark / Defense pipeline ----------------
+  // ("Phalanx" per Q10 — the old "Aegis" name collides with a relic.)
+  phalanx: { id: 'phalanx', name: 'Phalanx', cost: 2, target: 'single', noDefense: true, noTaunt: true,
+    desc: 'Defense 2 for 2 enemy turns. Cannot target a defended or taunting member.' },
+  brace: { id: 'brace', name: 'Brace', cost: 1, target: 'single', noDefense: true,
+    desc: 'The next attack on the target deals 2 less. Replaces a Shield (and vice versa).' },
 };
 
 // The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
@@ -523,6 +542,8 @@ export interface ResolvedCard {
   needsRegen: boolean;
   refreshCap: number; // per-cast lifetime MP cap for Refresh-slot cards
   selfDamage?: number; // Blood cost the target pays (never bumped by modifiers)
+  noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
+  noTaunt: boolean;   // Phalanx targeting gate: not the taunting member
   regenTurns: number;
   refreshTurns: number;
   retain: boolean;
@@ -673,6 +694,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   regen: 'common',
   cultivate: 'common',
   battleHymn: 'common',
+  brace: 'common',
   cleanse: 'uncommon',
   highHeal: 'uncommon',
   aoeHeal: 'uncommon',
@@ -686,6 +708,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   surge: 'uncommon',
   bloodTithe: 'uncommon',
   martyrsGift: 'uncommon',
+  phalanx: 'uncommon',
   resurrect: 'rare',
   fontOfMana: 'rare',
   barrier: 'rare',
@@ -830,6 +853,8 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     // tempo of a Refresh-slot cast, never its total (flaw #7).
     refreshCap: base.refreshCap ?? REFRESH_MP_CAP,
     selfDamage: base.selfDamage,
+    noDefense: base.noDefense === true,
+    noTaunt: base.noTaunt === true,
     regenTurns: REGEN_TURNS + lingering * MOD_LINGERING_TURNS,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
     retain,

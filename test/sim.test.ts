@@ -52,12 +52,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for issue 16 (card set phase B): seven more cards join CARD_POOL
-  // (20 ids total), so every shop/event offer roll draws differently. Balance
-  // holds — N=1000 reads full-run 34.1%, bosses 89.0 / 73.9 / 57.9% (vs 32.3%
-  // and 89.3 / 71.2 / 57.2 after #15). This N=200 sample: full run 66/200 = 33%;
-  // F2 179 (~90%), F5 125/175 (~71%), F8 66/118 (~56%).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 179, 178, 175, 125, 122, 118, 66]));
+  // Re-pinned for issue 17 (card set phase C): Phalanx/Brace join CARD_POOL (22
+  // ids), so every shop/event offer roll draws differently. Balance holds —
+  // N=1000 reads full-run 33.8%, bosses 88.8 / 74.3 / 56.7% (vs 34.1% and
+  // 89.0 / 73.9 / 57.9 after #16). This N=200 sample: full run 66/200 = 33%;
+  // F2 180 (~90%), F5 130/176 (~74%), F8 66/119 (~55%).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 180, 179, 176, 130, 124, 119, 66]));
   // Full-run lands in the 25-35% band (issue 14 gate).
   check('full-run in the 25-35% band', r.fullRun.rate >= 0.25 && r.fullRun.rate <= 0.35, `${(r.fullRun.rate * 100).toFixed(1)}%`);
   // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).
