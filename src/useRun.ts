@@ -4,6 +4,8 @@
 import { useCallback, useReducer, useRef } from 'react';
 import { Run, RUN_SAVE_VERSION } from './run';
 import type { RunSnapshot } from './run';
+import type { Difficulty } from './constants';
+import { loadStats, saveStats, recordRunEnd } from './stats';
 
 function randomSeed(): number {
   return (Math.random() * 1e9) | 0;
@@ -40,7 +42,7 @@ export interface RunController {
   run: Run;
   act: RunAct;
   /** Start a fresh run. Returns the seed actually used (random when omitted). */
-  newRun: (seed?: number) => number;
+  newRun: (seed?: number, difficulty?: Difficulty) => number;
   /** Whether a resumable save exists (checked once at mount). */
   hasSave: boolean;
   /** Fight index the save is at or headed toward (null when no save). */
@@ -65,15 +67,22 @@ export function useRun(initialSeed?: number): RunController {
   const [, force] = useReducer((x: number) => x + 1, 0);
 
   const act = useCallback(<T,>(fn: (run: Run) => T): T => {
+    const wasPlaying = ref.current!.status === 'playing';
     const out = fn(ref.current!);
-    saveRun(ref.current!); // persist the new boundary state
+    const run = ref.current!;
+    // Fold a just-finished run into the local stats (#23) — once, at the
+    // playing -> won/lost transition.
+    if (wasPlaying && run.status !== 'playing') {
+      saveStats(recordRunEnd(loadStats(), run.difficulty, run.status === 'won', run.act + 1));
+    }
+    saveRun(run); // persist the new boundary state
     force();
     return out;
   }, []);
 
-  const newRun = useCallback((seed?: number): number => {
+  const newRun = useCallback((seed?: number, difficulty: Difficulty = 'standard'): number => {
     const s = Number.isFinite(seed) ? (seed as number) : randomSeed();
-    ref.current = new Run(s);
+    ref.current = new Run(s, difficulty);
     saveRun(ref.current);
     force();
     return s;

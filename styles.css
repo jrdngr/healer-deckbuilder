@@ -526,3 +526,12 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .relic-icon { font-size: 28px; }
 .relic-name { font-weight: 700; }
 .relic-desc { font-size: 12px; opacity: .85; }
+
+/* --- difficulty presets (#23) ----------------------------------------------- */
+.difficulty-row { display: flex; gap: 8px; justify-content: center; margin: 8px 0 2px; }
+.difficulty-pick {
+  padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  background: var(--panel, #1c2230); border: 1px solid var(--line, #333a4d); color: inherit;
+}
+.difficulty-pick.selected { border-color: var(--accent, #6ea8fe); font-weight: 700; }
+.stats-line { opacity: .8; font-size: 13px; }

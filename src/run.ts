@@ -17,13 +17,13 @@ import {
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
-  RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
+  RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS, DIFFICULTIES,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
-  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId,
+  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId, Difficulty,
   CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer, RelicOffer,
 } from './constants';
 import { makeRng, weightedPick } from './rng';
@@ -55,12 +55,14 @@ export type NodeContent =
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number };// relic shop (#21)
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
-// discarded rather than misread. (v2: relics + spoils/reliquary content, #21.)
-export const RUN_SAVE_VERSION = 2;
+// discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
+// v3: difficulty, #23.)
+export const RUN_SAVE_VERSION = 3;
 
 export interface RunSnapshot {
   version: number;
   seed: number;
+  difficulty: Difficulty;
   rngState: number;
   nextUid: number;
   gold: number;
@@ -78,6 +80,7 @@ export interface RunSnapshot {
 
 export class Run {
   seed: number;
+  difficulty: Difficulty;
   rng: Rng;
   gold: number;
   deck: DeckCard[];
@@ -92,8 +95,9 @@ export class Run {
   currentEnemyDef: EnemyDef | null; // enemy rolled for the current fight (stable for the visit)
   private nextUid: number;
 
-  constructor(seed: number = Date.now()) {
+  constructor(seed: number = Date.now(), difficulty: Difficulty = 'standard') {
     this.seed = seed >>> 0;
+    this.difficulty = difficulty;
     this.rng = makeRng(this.seed);
     this.gold = 0;
     this.deck = defaultDeck();
@@ -119,6 +123,7 @@ export class Run {
     return {
       version: RUN_SAVE_VERSION,
       seed: this.seed,
+      difficulty: this.difficulty,
       rngState: this.rng.getState(),
       nextUid: this.nextUid,
       gold: this.gold,
@@ -138,7 +143,7 @@ export class Run {
   // Rebuild a Run from a snapshot, restoring the exact RNG position so the resumed
   // run continues the identical deterministic stream.
   static fromJSON(snap: RunSnapshot): Run {
-    const run = new Run(snap.seed);
+    const run = new Run(snap.seed, snap.difficulty ?? 'standard');
     run.rng.setState(snap.rngState); // continue the saved stream, not a fresh one
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
@@ -245,8 +250,10 @@ export class Run {
     return ENEMY_HP_BY_FIGHT[this.fightIndex] ?? ENEMY_MAX_HP;
   }
 
-  // Build the config for the fight at the current location.
+  // Build the config for the fight at the current location. The difficulty
+  // preset (#23) applies as modifiers over the tuned per-act curve.
   toBattleConfig(): BattleConfig {
+    const d = DIFFICULTIES[this.difficulty];
     return {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
       party: this.party.map((p) => ({ ...p })),
@@ -254,11 +261,11 @@ export class Run {
       relics: [...this.relics],
       spentRelics: [...this.spentRelics],
       enemy: {
-        maxHP: this.enemyMaxHP(),
+        maxHP: Math.round(this.enemyMaxHP() * d.hpMult),
         boss: this.isBossFight,
-        attackBonus: ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0,
+        attackBonus: Math.max(0, (ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0) + d.attackDelta),
         def: this.currentEnemyDef ?? (this.isBossFight ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF),
-        enrageTurn: ENEMY_ENRAGE_TURN_BY_FIGHT[this.fightIndex] ?? ENRAGE_TURN,
+        enrageTurn: (ENEMY_ENRAGE_TURN_BY_FIGHT[this.fightIndex] ?? ENRAGE_TURN) + d.enrageDelta,
       },
     };
   }
@@ -269,8 +276,11 @@ export class Run {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
-    // The Rusty Crown (#22) pays its bonus on every win it made harder.
-    this.gold += GOLD_PER_FIGHT + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
+    // The Rusty Crown (#22) pays its bonus on every win it made harder; Story
+    // (#23) pads the purse so newer players can actually buy their way forward.
+    this.gold += GOLD_PER_FIGHT
+      + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
+      + DIFFICULTIES[this.difficulty].goldBonus;
     // Spoils (#21, Q9): the act-1 and act-2 bosses drop a free relic pick.
     // (The final boss ends the run above, so this is exactly fights 3 and 6.)
     if (isActBoss(fi)) {

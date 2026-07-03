@@ -11,7 +11,9 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
+  DIFFICULTIES,
 } from '../src/constants';
+import { emptyStats, recordRunEnd } from '../src/stats';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
 let passed = 0;
@@ -645,6 +647,45 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   run.beginRun();
   run.winFight();
   eq('the Crown pays extra gold per win', run.gold, GOLD_PER_FIGHT + RUSTY_CROWN_GOLD);
+}
+
+// --- difficulty presets + local stats (issue 23) ------------------------------
+{
+  // Story softens the tuned curve: HP x0.8, attack -1 (floor 0), enrage +2,
+  // gold +25/fight. Standard IS the curve. Brutal is dev-only and untuned.
+  const std = new Run(95);
+  const story = new Run(95, 'story');
+  std.beginRun(); story.beginRun();
+  const stdCfg = std.toBattleConfig();
+  const storyCfg = story.toBattleConfig();
+  eq('Story scales enemy HP by 0.8', storyCfg.enemy.maxHP, Math.round(stdCfg.enemy.maxHP * 0.8));
+  eq('Story floors the attack bonus at 0', storyCfg.enemy.attackBonus, 0);
+  eq('Story delays enrage by 2', storyCfg.enemy.enrageTurn, (stdCfg.enemy.enrageTurn ?? 0) + 2);
+  story.winFight();
+  eq('Story pads the purse', story.gold, GOLD_PER_FIGHT + DIFFICULTIES.story.goldBonus);
+  std.winFight();
+  eq('Standard gold is unchanged', std.gold, GOLD_PER_FIGHT);
+  check('Standard is the identity preset',
+    DIFFICULTIES.standard.hpMult === 1 && DIFFICULTIES.standard.attackDelta === 0
+    && DIFFICULTIES.standard.enrageDelta === 0 && DIFFICULTIES.standard.goldBonus === 0);
+  check('Brutal hides behind the dev flag', DIFFICULTIES.brutal.devOnly === true);
+  eq('a run defaults to Standard', new Run(1).difficulty, 'standard');
+  // Difficulty survives the snapshot roundtrip.
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(story.toJSON())));
+  eq('difficulty round-trips through a save', restored.difficulty, 'story');
+}
+{
+  // Local stats fold runs per difficulty and track the best act (pure logic).
+  let s = emptyStats();
+  s = recordRunEnd(s, 'standard', false, 1);
+  s = recordRunEnd(s, 'standard', true, 3);
+  s = recordRunEnd(s, 'story', true, 3);
+  eq('runs counted per difficulty', s.runs.standard, 2);
+  eq('wins counted per difficulty', s.wins.standard, 1);
+  eq('story wins counted', s.wins.story, 1);
+  eq('best act sticks at the maximum', s.bestAct, 3);
+  const s2 = recordRunEnd(s, 'standard', false, 2);
+  eq('a worse run never lowers the best act', s2.bestAct, 3);
 }
 
 // --- issue 11: save / resume -----------------------------------------------

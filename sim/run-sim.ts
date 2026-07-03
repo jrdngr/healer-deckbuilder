@@ -118,6 +118,12 @@
 //     absorbed by Hexweaver 142->146 and Devourer 190->198. The N=200 pinned
 //     sample reads 35.5% (seeds 1-200 run hot); the in-test band check now
 //     carries the sample CI, with N=1000 as the authoritative gate.
+//   after #23 (difficulty presets + local stats):  Standard unchanged (it IS
+//     the tuned curve — the preset is the identity, and the N=200 pins pass
+//     bit-identical). Story (HP x0.8, attack -1 floor 0, enrage +2, +25g/win)
+//     reads full-run 96.1% ±1.2 at N=1000 (gate: >=60%) — a cruise for the
+//     reference policy, which is the point. Brutal is untuned, dev-flag-only
+//     (?dev), and carries no gate by design.
 //     The Q5 poison measurement (all N=1000, on the #17 baseline):
 //       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
 //       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%

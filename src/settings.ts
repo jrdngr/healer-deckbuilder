@@ -14,3 +14,8 @@ export const toggleAnimSpeed = (): number => {
 };
 // Human label for the current speed ("1x" / "2x").
 export const animSpeedLabel = (): string => (animSpeed === 1 ? '1x' : '2x');
+
+// Whether dev-only surfaces (the Brutal preset) are unlocked: add ?dev to the
+// URL. Read once at load; not a gameplay setting.
+export const devUnlocked: boolean =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).has('dev');
