@@ -1,5 +1,6 @@
 // Run-layer test harness. Run with: tsx test/run.test.ts
 import { Run } from '../src/run';
+import { makeRng } from '../src/rng';
 import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
@@ -379,6 +380,46 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const def = run.currentEnemyDef;
   check('fight 0 has a rolled enemy def', def !== null && def!.boss === false);
   eq('battle config carries the same def', run.toBattleConfig().enemy.def, def);
+}
+
+// --- issue 11: save / resume -----------------------------------------------
+{
+  // makeRng exposes get/set state and resumes the identical stream.
+  const a = makeRng(123);
+  for (let i = 0; i < 5; i++) a();      // advance the stream
+  const state = a.getState();
+  const seq = [a(), a(), a()];
+  const b = makeRng(999);               // a different seed...
+  b.setState(state);                    // ...restored to a's position
+  eq('rng resumes the stream from saved state', JSON.stringify([b(), b(), b()]), JSON.stringify(seq));
+}
+{
+  // Snapshot round-trips through JSON and the resumed run continues the stream.
+  const run = new Run(5);
+  run.beginRun();
+  run.winFight();
+  run.chooseBranch(0);
+  const snap = JSON.parse(JSON.stringify(run.toJSON())); // survive real serialization
+  const restored = Run.fromJSON(snap);
+  eq('snapshot round-trips', JSON.stringify(restored.toJSON()), JSON.stringify(snap));
+  eq('restored rng continues from the saved position', run.rng(), restored.rng());
+}
+{
+  // A save+resume at a boundary produces the same run as never interrupting.
+  const finish = (r: Run): void => { r.chooseBranch(0); r.completeNode(); r.completeNode(); };
+  const uninterrupted = new Run(9);
+  uninterrupted.beginRun();
+  uninterrupted.winFight();
+  finish(uninterrupted);
+
+  const resumed = new Run(9);
+  resumed.beginRun();
+  resumed.winFight();
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(resumed.toJSON())));
+  finish(restored);
+
+  eq('resumed run matches an uninterrupted run of the same seed',
+    JSON.stringify(uninterrupted.toJSON()), JSON.stringify(restored.toJSON()));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

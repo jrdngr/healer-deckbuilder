@@ -46,6 +46,26 @@ export type NodeContent =
   | { type: 'healerUpgrade'; offers: HealerUpgradeOffer[] }
   | { type: 'event'; event: EventDef };
 
+// Boundary-only save format. Bumped if the shape changes so stale saves are
+// discarded rather than misread.
+export const RUN_SAVE_VERSION = 1;
+
+export interface RunSnapshot {
+  version: number;
+  seed: number;
+  rngState: number;
+  nextUid: number;
+  gold: number;
+  deck: DeckCard[];
+  party: PartyMemberConfig[];
+  healer: HealerConfig;
+  map: Fork[];
+  status: RunStatus;
+  location: RunLocation;
+  nodeContent: NodeContent | null;
+  currentEnemyDef: EnemyDef | null;
+}
+
 export class Run {
   seed: number;
   rng: Rng;
@@ -73,6 +93,48 @@ export class Run {
     this.location = { kind: 'start' };
     this.nodeContent = null;
     this.currentEnemyDef = null;
+  }
+
+  // ---- save / resume (boundary-only, issue 11) -----------------------------
+  // The run layer is pure and seed-deterministic, so a snapshot is just its
+  // fields plus the RNG position. Serialize only between fights/nodes (never
+  // mid-fight — that is a standing cut). All fields are plain data (EnemyDef,
+  // offers, map) so the snapshot round-trips through JSON.
+
+  toJSON(): RunSnapshot {
+    return {
+      version: RUN_SAVE_VERSION,
+      seed: this.seed,
+      rngState: this.rng.getState(),
+      nextUid: this.nextUid,
+      gold: this.gold,
+      deck: this.deck,
+      party: this.party,
+      healer: this.healer,
+      map: this.map,
+      status: this.status,
+      location: this.location,
+      nodeContent: this.nodeContent,
+      currentEnemyDef: this.currentEnemyDef,
+    };
+  }
+
+  // Rebuild a Run from a snapshot, restoring the exact RNG position so the resumed
+  // run continues the identical deterministic stream.
+  static fromJSON(snap: RunSnapshot): Run {
+    const run = new Run(snap.seed);
+    run.rng.setState(snap.rngState); // continue the saved stream, not a fresh one
+    run.nextUid = snap.nextUid;
+    run.gold = snap.gold;
+    run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
+    run.party = snap.party.map((p) => ({ ...p }));
+    run.healer = { ...snap.healer };
+    run.map = snap.map;
+    run.status = snap.status;
+    run.location = snap.location;
+    run.nodeContent = snap.nodeContent;
+    run.currentEnemyDef = snap.currentEnemyDef;
+    return run;
   }
 
   // Leave the opening map and enter the first fight.

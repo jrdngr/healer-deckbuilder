@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useRun } from './useRun';
 import type { Run } from './run';
 import type { GameController } from './useGame';
-import { FIGHT_COUNT, NODES_PER_BRANCH } from './constants';
+import { FIGHTS_PER_ACT, ACT_COUNT, NODES_PER_BRANCH, isActBoss, actOfFight } from './constants';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
 import { FightScreen } from './components/FightScreen';
@@ -18,19 +18,23 @@ function progressLabel(run: Run): string {
   const loc = run.location;
   if (loc.kind === 'start') return 'The journey begins';
   if (loc.kind === 'fight') {
-    return loc.fightIndex === FIGHT_COUNT - 1 ? 'Boss fight' : `Fight ${loc.fightIndex + 1} / ${FIGHT_COUNT}`;
+    const act = actOfFight(loc.fightIndex) + 1;
+    const inAct = (loc.fightIndex % FIGHTS_PER_ACT) + 1;
+    const where = `Act ${act} / ${ACT_COUNT} · Fight ${inAct} / ${FIGHTS_PER_ACT}`;
+    return isActBoss(loc.fightIndex) ? `${where} — Boss` : where;
   }
   if (loc.kind === 'forkChoice') return 'Choose a path';
   return `Node ${loc.index + 1} / ${NODES_PER_BRANCH}`;
 }
 
 export function App() {
-  const { run, act, newRun } = useRun();
+  const { run, act, newRun, hasSave, continueRun } = useRun();
   const [seedField, setSeedField] = useState<string>(String(run.seed));
   // The active fight's controller, published by FightScreen; null outside of a fight.
   const [gameCtrl, setGameCtrl] = useState<GameController | null>(null);
 
   const startNewRun = (seed?: number) => setSeedField(String(newRun(seed)));
+  const onContinue = () => { const s = continueRun(); if (s != null) setSeedField(String(s)); };
   const onNewRun = () => {
     const v = parseInt(seedField, 10);
     startNewRun(Number.isFinite(v) ? v : undefined);
@@ -40,7 +44,7 @@ export function App() {
   if (run.status !== 'playing') {
     screen = <RunOverScreen run={run} onNewRun={() => startNewRun()} />;
   } else if (run.location.kind === 'start') {
-    screen = <StartScreen onBegin={() => act((r) => r.beginRun())} />;
+    screen = <StartScreen onBegin={() => act((r) => r.beginRun())} hasSave={hasSave} onContinue={onContinue} />;
   } else if (run.location.kind === 'fight') {
     // Keyed so each fight remounts with a fresh battle from its own config.
     screen = (

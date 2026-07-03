@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toggleAnimSpeed, animSpeedLabel } from '../settings';
 
 interface TopbarProps {
   seedField: string;
@@ -10,6 +11,7 @@ interface TopbarProps {
 
 export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: TopbarProps) {
   const [confirming, setConfirming] = useState(false);
+  const [, forceSpeed] = useState(0);
 
   return (
     <header className="topbar">
@@ -19,6 +21,13 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: To
         <span className="run-gold" title="Gold">⦿ {gold}</span>
       </div>
       <div className="newgame">
+        <button
+          className="speed-toggle"
+          title="Animation speed"
+          onClick={() => { toggleAnimSpeed(); forceSpeed((x) => x + 1); }}
+        >
+          Speed {animSpeedLabel()}
+        </button>
         <label>
           Seed{' '}
           <input

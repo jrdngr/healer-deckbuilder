@@ -39,6 +39,7 @@ body {
 }
 .newgame { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
 .newgame input { width: 110px; background: var(--panel-2); border: 1px solid #333; color: var(--ink); padding: 4px 6px; border-radius: 5px; }
+.speed-toggle { font-variant-numeric: tabular-nums; }
 
 main {
   max-width: 980px; margin: 0 auto; padding: 16px;

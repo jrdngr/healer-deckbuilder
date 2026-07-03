@@ -14,6 +14,7 @@ import { Game } from './engine';
 import type { GameEvent } from './engine';
 import type { BattleConfig } from './constants';
 import { buildTimeline, FX_DURATION } from './animations';
+import { getAnimSpeed } from './settings';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec } from './animations';
 
 // Staged display values overlaid on the engine while an animation plays. Only the
@@ -112,7 +113,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     const id = setTimeout(() => {
       timers.current = timers.current.filter((t) => t !== id);
       fn();
-    }, ms);
+    }, ms * getAnimSpeed()); // scale by the global animation-speed setting (issue 11)
     timers.current.push(id);
   }, []);
 
