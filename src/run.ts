@@ -12,6 +12,7 @@ import {
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
   GOLD_PER_FIGHT, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
+  PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
@@ -223,7 +224,7 @@ export class Run {
       PARTY_UPGRADES.map((d): [PartyUpgradeDef, number] => [d, RARITY_WEIGHT[d.rarity]]),
       SHOP_SIZE.partyUpgrade,
     );
-    return defs.map((def): PartyUpgradeOffer => ({ def, price: RARITY_PRICE[def.rarity] }));
+    return defs.map((def): PartyUpgradeOffer => ({ def, price: def.price ?? RARITY_PRICE[def.rarity] }));
   }
 
   rollHealerShop(): HealerUpgradeOffer[] {
@@ -231,7 +232,7 @@ export class Run {
       HEALER_UPGRADES.map((d): [HealerUpgradeDef, number] => [d, RARITY_WEIGHT[d.rarity]]),
       SHOP_SIZE.healerUpgrade,
     );
-    return defs.map((def): HealerUpgradeOffer => ({ def, price: RARITY_PRICE[def.rarity] }));
+    return defs.map((def): HealerUpgradeOffer => ({ def, price: def.price ?? RARITY_PRICE[def.rarity] }));
   }
 
   rollEvent(): EventDef {
@@ -250,6 +251,15 @@ export class Run {
     const i = this.deck.findIndex((c) => c.uid === uid);
     if (i < 0) return false;
     this.deck.splice(i, 1);
+    return true;
+  }
+
+  // Paid card removal (Apothecary and anywhere else it's offered): unified at
+  // CARD_REMOVAL_PRICE gold (flaw #17). Fails without charging if unaffordable.
+  removeCardForGold(uid: number): boolean {
+    if (this.gold < CARD_REMOVAL_PRICE) return false;
+    if (!this.removeCard(uid)) return false;
+    this.gold -= CARD_REMOVAL_PRICE;
     return true;
   }
 
@@ -272,7 +282,7 @@ export class Run {
     if (def.stat === 'maxMana') h.maxMana += def.amount;
     else if (def.stat === 'handSize') h.handSize += def.amount;
     else if (def.stat === 'restRegen') h.restRegen += def.amount;
-    else h.passiveMp += def.amount;
+    else h.passiveMp = Math.min(PASSIVE_MP_CAP, h.passiveMp + def.amount); // capped per run (flaw #10)
   }
 
   // ---- shop purchases (operate on the current node's storefront) ------------
@@ -319,6 +329,8 @@ export class Run {
     if (this.nodeContent?.type !== 'healerUpgrade') return false;
     const offer = this.nodeContent.offers[index];
     if (!offer || this.gold < offer.price) return false;
+    // passiveMp is capped per run; a maxed-out offer is unbuyable (no wasted gold).
+    if (offer.def.stat === 'passiveMp' && this.healer.passiveMp >= PASSIVE_MP_CAP) return false;
     this.gold -= offer.price;
     this.applyHealerUpgrade(offer.def);
     this.nodeContent.offers.splice(index, 1);
@@ -333,6 +345,12 @@ export class Run {
       CARD_POOL.map((id): [CardId, number] => [id, RARITY_WEIGHT[CARD_RARITY[id]]]),
       n,
     );
+  }
+
+  // Casino Cart: decline the flip for a guaranteed payout (flaw #18).
+  safeGold(): { delta: number; gold: number } {
+    this.gold += CASINO_SAFE_GOLD;
+    return { delta: CASINO_SAFE_GOLD, gold: this.gold };
   }
 
   // Casino Cart: free flip — 50% +75g, 25% +25g, 25% −25g (gold floored at 0).

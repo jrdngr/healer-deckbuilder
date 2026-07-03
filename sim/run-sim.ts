@@ -20,9 +20,13 @@
 //   after #03 (surcharge): per-fight ~100 / 99.8 / 67.1 / 37.0 / 37.1 %  full-run ~9.2 %
 //   after #04 (turn-1 single + softer enraged sweep):
 //                          per-fight ~100 / 99.8 / 70.7 / 38.4 / 45.0 %  full-run ~12.2 %
-// (#03 priced the Taunt retarget, so the permanent-taunt line is no longer a free
-//  dominant solve. #04 forced the turn-1 blow to single — no more unavoidable
-//  turn-1 heavy/sweep — lifting the boss winrate back to a hard-but-winnable band.)
+//   after #05 (decaying Rest + economy repricing):
+//                          per-fight ~100 / 100 / 90.7 / 69.9 / 75.6 %   full-run ~47.9 %
+// (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
+//  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
+//  the hidden-magnitude reveal lets good play react precisely — the run is now
+//  winnable with good play. Later content (harder bosses #12-14, the 3-act
+//  structure #10, difficulty presets #23) re-hardens toward the 25-35% target.)
 // The reconstructed policy is a heuristic "good player", intentionally a *living*
 // stick: it reads below the old hand-tuned line but is deterministic and is the
 // fixed measuring stick every downstream gate compares against. Later issues

@@ -4,6 +4,7 @@ import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
   defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT,
+  CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
@@ -276,6 +277,55 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   }
   check('rollEvent always returns a defined event', inSet);
   check('every event has 2-3 choices', EVENTS.every((e) => e.choices.length >= 2 && e.choices.length <= 3));
+}
+
+// --- issue 05: economy repricing -------------------------------------------
+{
+  // Quick Heal is out of the shop pool (starter-only) but still a real card.
+  check('shop pool excludes Quick Heal', !CARD_POOL.includes('lowHeal'));
+  check('starter deck still has Quick Heal', defaultDeck().some((c) => c.id === 'lowHeal'));
+}
+{
+  // passiveMp is capped per run: buying it repeatedly stops at the cap and never
+  // wastes gold on a maxed-out offer.
+  const run = new Run(1);
+  run.gold = 1000;
+  const passive = HEALER_UPGRADES.find((d) => d.stat === 'passiveMp')!;
+  run.applyHealerUpgrade(passive);
+  run.applyHealerUpgrade(passive);
+  run.applyHealerUpgrade(passive); // third apply is clamped
+  eq('passiveMp clamps at the cap', run.healer.passiveMp, PASSIVE_MP_CAP);
+}
+{
+  // +2 Damage carries a bespoke price above its rarity; +1 Rest Regen is 50g.
+  const dmg2 = PARTY_UPGRADES.find((d) => d.id === 'dmg2')!;
+  eq('+2 Damage priced at 85g', dmg2.price, 85);
+  const rest = HEALER_UPGRADES.find((d) => d.id === 'rest')!;
+  eq('+1 Rest Regen is uncommon (50g)', RARITY_PRICE[rest.rarity], 50);
+  const hp6 = PARTY_UPGRADES.find((d) => d.id === 'hp6')!;
+  eq('+HP upgrade bumped to +7', hp6.amount, 7);
+}
+{
+  // Paid removal charges the unified fee and refuses when unaffordable.
+  const run = new Run(2);
+  run.gold = CARD_REMOVAL_PRICE - 1;
+  const uid = run.deck[0].uid;
+  check('removal refused when broke', run.removeCardForGold(uid) === false);
+  eq('deck unchanged when refused', run.deck.length, defaultDeck().length);
+  run.gold = CARD_REMOVAL_PRICE + 5;
+  check('removal succeeds when affordable', run.removeCardForGold(uid) === true);
+  eq('removal charged the fee', run.gold, 5);
+  eq('deck shrank by one', run.deck.length, defaultDeck().length - 1);
+}
+{
+  // Casino now offers a guaranteed cut alongside the flip.
+  const casino = EVENTS.find((e) => e.id === 'casino')!;
+  check('casino has a safe-gold branch', casino.choices.some((c) => c.kind === 'safeGold'));
+  const run = new Run(3);
+  const g0 = run.gold;
+  const { delta, gold } = run.safeGold();
+  eq('safe cut pays the fixed amount', delta, CASINO_SAFE_GOLD);
+  eq('safe cut adds to gold', gold, g0 + CASINO_SAFE_GOLD);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -21,11 +21,11 @@ function giveCard(game: Game, cardId: CardId, upgrades: ModifierId[] = []): numb
 }
 
 // --- deck composition -------------------------------------------------------
-eq('deck has 16 cards', DECK_LIST.length, 16);
+eq('deck has 15 cards', DECK_LIST.length, 15);
 {
   const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
-  eq('3 Quick Heal', counts.lowHeal, 3);
+  eq('2 Quick Heal', counts.lowHeal, 2);
   eq('2 Heal', counts.highHeal, 2);
   eq('2 Group Heal', counts.aoeHeal, 2);
   eq('2 Regen', counts.regen, 2);
@@ -36,7 +36,7 @@ eq('deck has 16 cards', DECK_LIST.length, 16);
 }
 
 // --- card heal values -------------------------------------------------------
-eq('Quick Heal heals 1', CARDS.lowHeal.heal, 1);
+eq('Quick Heal heals 2', CARDS.lowHeal.heal, 2);
 eq('Heal heals 4', CARDS.highHeal.heal, 4);
 eq('Group Heal heals 2', CARDS.aoeHeal.heal, 2);
 eq('Regen strength 1', CARDS.regen.regen, 1);
@@ -383,18 +383,19 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
   const mpBefore = g.mp;
   check('can skip initially', g.canSkip());
-  // play a card then verify skip blocked (use a fresh game to avoid ending turn)
+  // Decaying Rest (issue 05): still allowed after ONE card, blocked after two.
   const g2 = new Game(10);
   g2.start();
-  const idx = giveCard(g2, 'lowHeal');
   g2.members[SLOT.LEFT].hp = 1;
-  g2.playCard(idx, SLOT.LEFT);
-  check('cannot skip after playing a card', !g2.canSkip());
+  g2.playCard(giveCard(g2, 'lowHeal'), SLOT.LEFT);
+  check('can still skip after one card', g2.canSkip());
+  g2.playCard(giveCard(g2, 'lowHeal'), SLOT.LEFT);
+  check('cannot skip after two cards', !g2.canSkip());
   // restAmount reflects what a rest would actually recover, clamped to MP_MAX
   const g3 = new Game(10);
   g3.start();
   g3.mp = 0;
-  eq('restAmount is full SKIP_REGEN when far from cap', g3.restAmount(), 5);
+  eq('restAmount is full SKIP_REGEN with 0 cards played', g3.restAmount(), 5);
   g3.mp = MP_MAX - 2; // 8; +5 would overshoot, so only 2 is recoverable
   eq('restAmount clamps to MP_MAX', g3.restAmount(), 2);
   g3.mp = MP_MAX;
@@ -402,6 +403,45 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // skip on first game
   g.skipTurn();
   check('skip added at least +5 MP (minus any refresh noise)', g.mp >= mpBefore); // sanity
+}
+
+// --- decaying Rest: +5 at 0 cards, +2 at 1 card (issue 05) ------------------
+{
+  const g = new Game(21);
+  g.start();
+  g.mp = 0;
+  eq('rest gives full SKIP_REGEN at 0 cards', g.restRegenNow(), SKIP_REGEN);
+  g.skipTurn();
+  eq('rested +5 MP with 0 cards played', g.mp, SKIP_REGEN);
+}
+{
+  const g = new Game(22);
+  g.start();
+  g.mp = 5;
+  g.members[SLOT.LEFT].hp = 1;
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.LEFT); // 1 card, costs 1 -> mp 4
+  eq('rest decays to SKIP_REGEN_DECAYED after one card', g.restRegenNow(), SKIP_REGEN_DECAYED);
+  const before = g.mp;
+  g.skipTurn();
+  eq('rested +2 MP after one card', g.mp, before + SKIP_REGEN_DECAYED);
+}
+
+// --- Refresh cannot exceed its per-cast MP cap (flaw #7) --------------------
+{
+  const g = new Game(23);
+  g.start();
+  // A heavily-upgraded Refresh (Potent + Lingering) would be 3 MP/turn for 4 turns
+  // = 12, but the per-cast cap holds total restored to REFRESH_MP_CAP.
+  g.playCard(giveCard(g, 'refresh', ['potent', 'lingering']), null);
+  let restored = 0;
+  for (let i = 0; i < 6 && g.status === 'playing'; i++) {
+    g.mp = 0;            // drain each turn so the cap, not MP_MAX, is what binds
+    g._runEnemyPhase();  // applies one refresh tick (among other things)
+    restored += g.mp;    // all MP present now came from this phase's refresh tick
+  }
+  check('Refresh never restores more than its per-cast cap', restored <= REFRESH_MP_CAP,
+    `restored=${restored} cap=${REFRESH_MP_CAP}`);
+  eq('Refresh ends once the cap is spent', g.refreshTurns, 0);
 }
 
 // --- MP is capped at MP_MAX ------------------------------------------------
@@ -445,7 +485,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g2.telegraph = { type: 'hidden', hidden: true, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
   const hl = g2.attackTargets();
   eq('hidden -> all living lines', hl.length, 3);
-  check('hidden line damage is null', hl[0].damage === null);
+  eq('hidden line reveals the magnitude (not the target)', hl[0].damage, 4);
   check('hidden line flagged hidden', hl[0].hidden === true);
 }
 
@@ -754,7 +794,12 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const mpBefore = g.mp;
   g.playCard(idx, SLOT.CENTER);
   eq('playing the card spent 1 MP', g.mp, mpBefore - 1);
-  check('cannot Rest after playing a card', g.canSkip() === false);
+  // The card counts as played: Rest still allowed but decayed, and a second card
+  // blocks Rest entirely.
+  eq('one card counted', g.cardsPlayedThisPhase, 1);
+  eq('rest decays after that card', g.restRegenNow(), SKIP_REGEN_DECAYED);
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+  check('cannot Rest after two cards', g.canSkip() === false);
 }
 {
   // Potent: +1 to the present strength stat; stacks.

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CARDS, MEMBER_DEFS, MODIFIERS, resolveCard, makeDeckCard } from '../constants';
+import { CARDS, MEMBER_DEFS, MODIFIERS, CARD_REMOVAL_PRICE, resolveCard, makeDeckCard } from '../constants';
 import type { CardId, Slot, EventChoiceKind } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
@@ -42,6 +42,11 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
           : `The coin bites — you lose ${-delta} gold.`);
         break;
       }
+      case 'safeGold': {
+        const { delta } = act((r) => r.safeGold());
+        finish(`You pocket the safe cut — ${delta} gold.`);
+        break;
+      }
       case 'addCardOffer':
         setStage({ kind: 'addCard', offers: run.eventCardOffer() });
         break;
@@ -64,8 +69,9 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
 
   const removeCard = (uid: number) => {
     const name = CARDS[run.deck.find((c) => c.uid === uid)!.id].name;
-    act((r) => r.removeCard(uid));
-    finish(`You let go of ${name}.`);
+    const ok = act((r) => r.removeCardForGold(uid));
+    finish(ok ? `You let go of ${name} (−${CARD_REMOVAL_PRICE}g).`
+      : `You can't afford the ${CARD_REMOVAL_PRICE}g fee.`);
   };
 
   const blessCard = (uid: number) => {
@@ -116,8 +122,13 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
 
         {stage.kind === 'removeCard' && (
           <div className="event-pick">
-            <h3>Choose a card to remove</h3>
-            <DeckPicker deck={run.deck} canPick={() => true} onPick={removeCard} />
+            <h3>Choose a card to remove ({CARD_REMOVAL_PRICE}g)</h3>
+            <DeckPicker
+              deck={run.deck}
+              canPick={() => run.gold >= CARD_REMOVAL_PRICE}
+              onPick={removeCard}
+              emptyText={run.gold >= CARD_REMOVAL_PRICE ? undefined : `You need ${CARD_REMOVAL_PRICE}g to remove a card.`}
+            />
             <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
           </div>
         )}

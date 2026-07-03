@@ -15,6 +15,7 @@ import {
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
+  SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
@@ -124,15 +125,16 @@ export class Game {
   restRegen: number; // MP regained on rest (healer stat)
   passiveMp: number; // MP gained at the start of each player phase (healer stat)
   mageCharge: number;
-  refresh: number;      // Refresh strength: MP restored per turn while active
-  refreshTurns: number; // enemy turns of Refresh remaining
+  refresh: number;        // Refresh strength: MP restored per turn while active
+  refreshTurns: number;   // enemy turns of Refresh remaining
+  refreshRestored: number; // MP the current Refresh cast has restored so far (capped at REFRESH_MP_CAP)
   drawPile: DeckCard[];
   discardPile: DeckCard[];
   hand: DeckCard[];
   turn: number;
   phase: Phase;
   status: Status;
-  cardPlayedThisPhase: boolean;
+  cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +2 at 1)
   telegraph: Telegraph | null;
   tauntRetargetMode: TauntRetargetMode; // how Taunt treats the standing telegraph (see constants)
   log: LogEntry[];
@@ -170,8 +172,9 @@ export class Game {
 
     this.mp = this.maxMana; // starting MP each fight equals the cap
     this.mageCharge = 0;
-    this.refresh = 0;      // Refresh strength
-    this.refreshTurns = 0; // Refresh turns remaining
+    this.refresh = 0;       // Refresh strength
+    this.refreshTurns = 0;  // Refresh turns remaining
+    this.refreshRestored = 0;
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
     // own array — so reshuffles here don't disturb the persistent deck.
@@ -182,7 +185,7 @@ export class Game {
     this.turn = 1;           // turn whose enemy phase is current/next to run
     this.phase = 'idle';     // 'idle' | 'player' | 'over'
     this.status = 'playing'; // 'playing' | 'win' | 'loss'
-    this.cardPlayedThisPhase = false;
+    this.cardsPlayedThisPhase = 0;
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
     this.tauntRetargetMode = DEFAULT_TAUNT_RETARGET_MODE;
     this.log = [];
@@ -288,7 +291,9 @@ export class Game {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
     if (t.hidden) {
-      return this.livingMembers().map((m): AttackSpec => ({ slot: m.slot, damage: null, hidden: true }));
+      // Reveal the magnitude, hide the target: every living member shows the same
+      // number as a "someone takes N" threat (flaw #11).
+      return this.livingMembers().map((m): AttackSpec => ({ slot: m.slot, damage: t.damage, hidden: true }));
     }
     return t.targets
       .filter((slot) => this.members[slot]?.alive)
@@ -326,7 +331,8 @@ export class Game {
   // active), capped by the room left under MP_MAX.
   predictedRefresh(): number {
     if (this.refreshTurns <= 0) return 0;
-    return Math.min(this.refresh, this.maxMana - this.mp);
+    const capRoom = Math.max(0, REFRESH_MP_CAP - this.refreshRestored);
+    return Math.min(this.refresh, this.maxMana - this.mp, capRoom);
   }
 
   // Enemy HP the next Poison tick will remove (its strength while active), capped by its HP.
@@ -415,12 +421,21 @@ export class Game {
       if (this.status === 'win') return; // poison can finish the enemy
     }
     if (this.refreshTurns > 0) {
+      // A single Refresh cast restores at most REFRESH_MP_CAP MP over its lifetime,
+      // so Potent/Lingering can't turn it into an unbounded MP engine (flaw #7).
+      const capRoom = Math.max(0, REFRESH_MP_CAP - this.refreshRestored);
       const before = this.mp;
-      this.mp = Math.min(this.maxMana, this.mp + this.refresh);
-      this._log(`Refresh restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
-      this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
+      this.mp = Math.min(this.maxMana, this.mp + Math.min(this.refresh, capRoom));
+      const gained = this.mp - before;
+      this.refreshRestored += gained;
+      this._log(`Refresh restores ${gained} MP. (MP ${this.mp})`, 'mp');
+      this._emit({ kind: 'refreshTick', amount: gained, mp: this.mp });
       this.refreshTurns -= 1;
-      if (this.refreshTurns === 0) this.refresh = 0;
+      // End the cast once spent or its cap is exhausted.
+      if (this.refreshTurns === 0 || this.refreshRestored >= REFRESH_MP_CAP) {
+        this.refreshTurns = 0;
+        this.refresh = 0;
+      }
     }
 
     // 2) the attack itself (executes the standing telegraph). The boss is more
@@ -512,7 +527,7 @@ export class Game {
       this.mageCharge = Math.min(CHARGE_MAX, this.mageCharge + 1);
     }
     this._drawTo(this.handSize);
-    this.cardPlayedThisPhase = false;
+    this.cardsPlayedThisPhase = 0;
     this.phase = 'player';
   }
 
@@ -572,7 +587,7 @@ export class Game {
     this.mp -= card.cost;
     this.hand.splice(handIndex, 1);
     this.discardPile.push(dc);
-    this.cardPlayedThisPhase = true;
+    this.cardsPlayedThisPhase += 1;
 
     this._applyCard(card, target);
     return { ok: true };
@@ -624,9 +639,11 @@ export class Game {
         break;
       }
       case 'refresh': {
-        // Re-applying refreshes the duration and keeps the stronger value (no stacking).
+        // Re-applying refreshes the duration and keeps the stronger value (no stacking),
+        // and resets the per-cast MP cap so a fresh cast gets its full REFRESH_MP_CAP.
         this.refresh = Math.max(this.refresh, card.refresh ?? 0);
         this.refreshTurns = card.refreshTurns;
+        this.refreshRestored = 0;
         this._log(`Refresh primed (${this.refresh} MP/turn for ${this.refreshTurns}).`, 'status');
         this._emit({ kind: 'refreshPrimed', stack: this.refresh });
         break;
@@ -682,20 +699,28 @@ export class Game {
     }
   }
 
+  // Decaying Rest (flaw #5): you may still Rest after playing a single card, but
+  // it yields less. Resting is off the table once two or more cards are played.
   canSkip(): boolean {
-    return this.phase === 'player' && !this.cardPlayedThisPhase;
+    return this.phase === 'player' && this.cardsPlayedThisPhase <= 1;
+  }
+
+  // Raw MP a Rest would grant right now before the cap: full restRegen if no card
+  // was played, the decayed amount if exactly one was.
+  restRegenNow(): number {
+    return this.cardsPlayedThisPhase === 0 ? this.restRegen : SKIP_REGEN_DECAYED;
   }
 
   // MP a rest would actually recover right now, accounting for the MP cap.
   restAmount(): number {
-    return Math.min(this.maxMana, this.mp + this.restRegen) - this.mp;
+    return Math.min(this.maxMana, this.mp + this.restRegenNow()) - this.mp;
   }
 
   skipTurn(): PlayResult {
     if (!this.canSkip()) return { ok: false, reason: 'cannot skip now' };
     this.events = [];
     const before = this.mp;
-    this.mp = Math.min(this.maxMana, this.mp + this.restRegen);
+    this.mp = Math.min(this.maxMana, this.mp + this.restRegenNow());
     this._log(`Rested to regen +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
     this._emit({ kind: 'rest', amount: this.mp - before, mp: this.mp });
     this._endTurnInternal();

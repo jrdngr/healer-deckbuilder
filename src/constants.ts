@@ -75,7 +75,12 @@ export const ENRAGE_MULT = 1.25;
 
 export const MP_START = 10;
 export const MP_MAX = 10; // hard cap; MP never exceeds this
-export const SKIP_REGEN = 5;
+export const SKIP_REGEN = 5;          // Rest MP when no card was played this phase
+export const SKIP_REGEN_DECAYED = 2;  // Rest MP when exactly one card was played (decaying Rest, flaw #5)
+export const REFRESH_MP_CAP = 6;      // max MP a single Refresh cast may restore over its lifetime (flaw #7)
+export const PASSIVE_MP_CAP = 2;      // max total passiveMp a run may buy (flaw #10)
+export const CARD_REMOVAL_PRICE = 20; // unified card-removal price (flaw #17)
+export const CASINO_SAFE_GOLD = 25;   // guaranteed payout if you skip the flip (flaw #18)
 
 // Ability values.
 export const BOLT_BASE = 5;
@@ -109,8 +114,8 @@ export const HAND_SIZE = 3;
 export const CARDS: Record<CardId, CardDef> = {
   ability: { id: 'ability', name: 'Ability', cost: 2, target: 'ability',
     desc: 'Fire a chosen living member\'s ability.' },
-  lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 1,
-    desc: 'Heal a member for 1.' },
+  lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
+    desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
     desc: 'Heal a member for 4.' },
   aoeHeal: { id: 'aoeHeal', name: 'Group Heal', cost: 3, target: 'all', heal: 2,
@@ -125,9 +130,9 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
 };
 
-// The fixed 16-card starting deck.
+// The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
 export const DECK_LIST: CardId[] = [
-  'lowHeal', 'lowHeal', 'lowHeal',
+  'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
   'aoeHeal', 'aoeHeal',
   'regen', 'regen',
@@ -351,8 +356,9 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   resurrect: 'rare',
 };
 
-// The cards a shop can sell (every defined card).
-export const CARD_POOL: CardId[] = Object.keys(CARDS) as CardId[];
+// The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
+// buffed 1-MP heal-2 it is a starter card, not a shop purchase.
+export const CARD_POOL: CardId[] = (Object.keys(CARDS) as CardId[]).filter((id) => id !== 'lowHeal');
 
 // Party member stat upgrades.
 export type PartyStat = 'maxHP' | 'damage' | 'ability';
@@ -363,12 +369,14 @@ export interface PartyUpgradeDef {
   rarity: Rarity;
   name: string;
   desc: string;
+  price?: number; // overrides the rarity price when an offer needs a bespoke cost
 }
 export const PARTY_UPGRADES: PartyUpgradeDef[] = [
   { id: 'hp3', stat: 'maxHP', amount: 3, rarity: 'common', name: '+3 Max HP', desc: 'Raise a member’s max HP by 3.' },
-  { id: 'hp6', stat: 'maxHP', amount: 6, rarity: 'uncommon', name: '+6 Max HP', desc: 'Raise a member’s max HP by 6.' },
+  { id: 'hp6', stat: 'maxHP', amount: 7, rarity: 'uncommon', name: '+7 Max HP', desc: 'Raise a member’s max HP by 7.' },
   { id: 'dmg1', stat: 'damage', amount: 1, rarity: 'uncommon', name: '+1 Damage', desc: 'Raise a member’s attack damage by 1.' },
-  { id: 'dmg2', stat: 'damage', amount: 2, rarity: 'rare', name: '+2 Damage', desc: 'Raise a member’s attack damage by 2.' },
+  // +2 Damage is the strongest single lever; priced above its rarity (flaw #10).
+  { id: 'dmg2', stat: 'damage', amount: 2, rarity: 'rare', price: 85, name: '+2 Damage', desc: 'Raise a member’s attack damage by 2.' },
   { id: 'abil1', stat: 'ability', amount: 1, rarity: 'uncommon', name: '+1 Ability', desc: 'Raise a member’s ability strength by 1.' },
 ];
 
@@ -381,11 +389,13 @@ export interface HealerUpgradeDef {
   rarity: Rarity;
   name: string;
   desc: string;
+  price?: number; // overrides the rarity price when an offer needs a bespoke cost
 }
 export const HEALER_UPGRADES: HealerUpgradeDef[] = [
   { id: 'mana', stat: 'maxMana', amount: 1, rarity: 'common', name: '+1 Max Mana', desc: 'Raise max mana (and starting mana) by 1.' },
-  { id: 'rest', stat: 'restRegen', amount: 1, rarity: 'common', name: '+1 Rest Regen', desc: 'Rest restores 1 more MP.' },
-  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', name: '+1 Passive MP', desc: 'Gain 1 MP at the start of each of your turns.' },
+  // +1 Rest Regen repriced to 50g (flaw #9): it was too cheap for the sustain it buys.
+  { id: 'rest', stat: 'restRegen', amount: 1, rarity: 'uncommon', name: '+1 Rest Regen', desc: 'Rest restores 1 more MP.' },
+  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', name: '+1 Passive MP', desc: `Gain 1 MP at the start of each of your turns (max +${PASSIVE_MP_CAP} per run).` },
   { id: 'hand', stat: 'handSize', amount: 1, rarity: 'rare', name: '+1 Hand Size', desc: 'Draw 1 more card each turn.' },
 ];
 
@@ -393,8 +403,9 @@ export const HEALER_UPGRADES: HealerUpgradeDef[] = [
 // random rolls / run mutations live in run.ts so they stay testable.
 export type EventChoiceKind =
   | 'addCardOffer'  // show a few card offers; player picks one to add (free)
-  | 'removeCard'    // deck picker; remove the chosen card (free)
+  | 'removeCard'    // deck picker; remove the chosen card (costs CARD_REMOVAL_PRICE gold)
   | 'gambleGold'    // resolve a random gold outcome
+  | 'safeGold'      // take the guaranteed payout instead of the flip
   | 'shrineCard'    // pick an eligible card; apply a random eligible modifier (free)
   | 'shrineParty'   // pick a member; apply a random stat boost (free)
   | 'leave';        // decline / move on
@@ -420,7 +431,7 @@ export const EVENTS: EventDef[] = [
     text: 'A cart of curios blocks the path. "Add to your repertoire, or shed what burdens you — no charge today."',
     choices: [
       { label: 'Buy a remedy', kind: 'addCardOffer', detail: 'Choose 1 of 3 cards to add (free).' },
-      { label: 'Shed a burden', kind: 'removeCard', detail: 'Remove a card from your deck (free).' },
+      { label: 'Shed a burden', kind: 'removeCard', detail: `Remove a card from your deck (${CARD_REMOVAL_PRICE}g).` },
       { label: 'Move on', kind: 'leave' },
     ],
   },
@@ -430,6 +441,7 @@ export const EVENTS: EventDef[] = [
     text: 'A gambler flips a golden coin. "Care to test your luck, healer? No ante — but the coin bites."',
     choices: [
       { label: 'Flip the coin', kind: 'gambleGold', detail: '50% +75g · 25% +25g · 25% −25g.' },
+      { label: 'Take the safe cut', kind: 'safeGold', detail: `Decline the flip for a guaranteed +${CASINO_SAFE_GOLD}g.` },
       { label: 'Walk away', kind: 'leave' },
     ],
   },

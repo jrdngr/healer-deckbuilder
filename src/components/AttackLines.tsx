@@ -17,7 +17,8 @@ interface AttackLinesProps {
 
 // Draws the standing telegraph as SVG line(s) from the enemy to each target it
 // will hit, with the damage at each line's center. Concealed attacks draw dotted
-// purple lines to every living member with "???" for the damage.
+// purple lines to every living member; the magnitude is shown ("N?") but the true
+// target is hidden — "someone takes N".
 //
 // Geometry is measured from the live DOM (getBoundingClientRect) in a layout
 // effect after each render, and on window resize. A signature guard means we
@@ -51,12 +52,14 @@ export function AttackLines({ game, containerRef }: AttackLinesProps) {
           const mr = memberEl.getBoundingClientRect();
           const tx = mr.left + mr.width / 2 - mainRect.left;
           const ty = mr.top - mainRect.top; // top-center of the member card
+          // Hidden attacks now reveal their magnitude but not their target: show
+          // the number under a "?" so it reads as "someone takes N" (flaw #11).
           out.push({
             x1: ex, y1: ey, x2: tx, y2: ty,
             mx: (ex + tx) / 2, my: (ey + ty) / 2,
-            label: spec.hidden ? '???' : String(spec.damage),
+            label: spec.hidden ? `${spec.damage ?? '?'}?` : String(spec.damage),
             hidden: spec.hidden,
-            badgeW: spec.hidden ? 36 : 26,
+            badgeW: spec.hidden ? 32 : 26,
           });
         }
       }
