@@ -14,6 +14,7 @@ import {
   DIFFICULTIES,
 } from '../src/constants';
 import { emptyStats, recordRunEnd } from '../src/stats';
+import { groupPile } from '../src/deckView';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
 let passed = 0;
@@ -451,7 +452,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 {
   // Encounter selection is deterministic by seed, and the boss slot is always the boss.
   const idsFor = (seed: number): string[] =>
-    Array.from({ length: FIGHT_COUNT }, (_, fi) => new Run(seed).rollEncounter(fi).id);
+    Array.from({ length: FIGHT_COUNT }, (_, fi) => new Run(seed).peekEncounter(fi).id);
   eq('encounter roll deterministic by seed', JSON.stringify(idsFor(7)), JSON.stringify(idsFor(7)));
   const ids = idsFor(7);
   for (let fi = 0; fi < FIGHT_COUNT; fi++) {
@@ -468,8 +469,8 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   let a2ok = true, a3ok = true;
   const seen = new Set<string>();
   for (let seed = 0; seed < 40; seed++) {
-    for (const fi of [3, 4]) { const id = new Run(seed).rollEncounter(fi).id; seen.add(id); if (!A2.has(id)) a2ok = false; }
-    for (const fi of [6, 7]) { const id = new Run(seed).rollEncounter(fi).id; seen.add(id); if (!A3.has(id)) a3ok = false; }
+    for (const fi of [3, 4]) { const id = new Run(seed).peekEncounter(fi).id; seen.add(id); if (!A2.has(id)) a2ok = false; }
+    for (const fi of [6, 7]) { const id = new Run(seed).peekEncounter(fi).id; seen.add(id); if (!A3.has(id)) a3ok = false; }
   }
   check('act-2 fights draw only from the act-2 roster', a2ok);
   check('act-3 fights draw only from the act-3 roster', a3ok);
@@ -686,6 +687,48 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('best act sticks at the maximum', s.bestAct, 3);
   const s2 = recordRunEnd(s, 'standard', false, 2);
   eq('a worse run never lowers the best act', s2.bestAct, 3);
+}
+
+// --- hardening batch (issue 24) -----------------------------------------------
+{
+  // The deck viewer's grouping matches engine-state counts and hides pile order.
+  const mk = (id: CardId, uid: number, up: ModifierId[] = []) => ({ uid, id, upgrades: up });
+  const pile = [mk('highHeal', 1), mk('ability', 2), mk('highHeal', 3), mk('ability', 4, ['efficient']), mk('regen', 5)];
+  const groups = groupPile(pile);
+  eq('viewer total matches the pile', groups.reduce((s, g) => s + g.count, 0), pile.length);
+  check('same-name cards group', groups.some((g) => g.label === 'Heal' && g.count === 2));
+  check('upgraded copies group separately', groups.some((g) => g.label.includes('Efficient') && g.count === 1));
+  const sorted = [...groups].sort((a, b) => a.label.localeCompare(b.label));
+  eq('viewer output is name-sorted (order never leaks)', JSON.stringify(groups), JSON.stringify(sorted));
+}
+{
+  // The end-of-run score rewards progress and penalizes hoarded gold (flaw #21).
+  const run = new Run(96);
+  run.beginRun();
+  run.winFight(); // 1 fight, +40g
+  run.addRelic('lantern');
+  const s = run.runScore();
+  eq('fights score 100 each', s.fights, 100);
+  eq('relics score 40 each', s.relics, 40);
+  eq('no victory bonus while playing', s.victory, 0);
+  eq('hoarded gold costs half a point each', s.goldPenalty, -Math.floor(run.gold / 2));
+  eq('the total adds up', s.total, Math.max(0, 100 + 40 + s.goldPenalty));
+  run.gold = 100000;
+  check('the score floors at zero', run.runScore().total === 0);
+}
+{
+  // Fork previews (flaw #15): the next fight's foe is peekable, deterministic,
+  // stream-independent — peeking never disturbs the run's rng position.
+  const run = new Run(97);
+  const before = run.rng.getState();
+  const a = run.peekEncounter(3).id;
+  const b = run.peekEncounter(3).id;
+  eq('peeking twice gives the same foe', a, b);
+  eq('peeking never consumes the rng stream', run.rng.getState(), before);
+  check('the preview names a real enemy', ENEMY_DEF_BY_ID[a] !== undefined);
+  // Entering the fight later meets exactly the previewed foe.
+  run.beginRun();
+  eq('fight 0 matches its preview', run.currentEnemyDef!.id, new Run(97).peekEncounter(0).id);
 }
 
 // --- issue 11: save / resume -----------------------------------------------

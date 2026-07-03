@@ -89,7 +89,7 @@ export function App() {
         relics={run.relics}
       />
       {screen}
-      <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />
+      {import.meta.env.DEV && <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />}
     </>
   );
 }

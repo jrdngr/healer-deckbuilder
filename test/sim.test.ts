@@ -52,13 +52,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for issue 22 (relics phase B): four rule-changers + three curses
-  // join the pool, Dusk Chime / Martyr's Icon are once-per-RUN (spent-relic
-  // plumbing), and the Devourer absorbed the new power (190 -> 198; Hexweaver
-  // 142 -> 146). N=1000 reads full-run 30.9%, bosses 88.8 / 70.4 / 53.0%.
-  // This N=200 sample: full run 71/200 = 35.5% — seeds 1-200 run a few pp hot;
-  // the band check below carries the sample's CI for exactly that reason.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 184, 184, 182, 129, 127, 122, 71]));
+  // Re-pinned for issue 24: encounters are now derived from a per-fight
+  // SUB-seed (peekable fork previews, flaw #15), so every fight's foe and all
+  // downstream stream positions shift. N=1000 reads full-run 32.7%, bosses
+  // 89.5 / 70.4 / 55.8% — all in-band; Story reads 96.4%. This N=200 sample:
+  // full run 70/200 = 35.0% (seeds 1-200 run a few pp hot; the band check
+  // below carries the sample's CI for exactly that reason).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 184, 184, 181, 125, 120, 119, 70]));
   // Full-run lands in the 25-35% band. The authoritative gate runs at N=1000
   // (ISSUES.md ground rules; see the run-sim baseline note) — this N=200 sample
   // asserts statistical consistency with the band, not the band itself, so

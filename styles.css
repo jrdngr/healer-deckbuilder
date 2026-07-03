@@ -535,3 +535,16 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 }
 .difficulty-pick.selected { border-color: var(--accent, #6ea8fe); font-weight: 700; }
 .stats-line { opacity: .8; font-size: 13px; }
+
+/* --- hardening batch (#24) --------------------------------------------------- */
+button.pile { font: inherit; color: inherit; cursor: pointer; }
+.pile-viewer {
+  margin: 8px auto 0; max-width: 420px; padding: 10px 14px;
+  background: var(--panel, #1c2230); border: 1px solid var(--line, #333a4d); border-radius: 10px;
+}
+.pile-viewer h4 { margin: 0 0 6px; }
+.pile-viewer ul { margin: 0 0 8px; padding-left: 18px; text-align: left; columns: 2; }
+.pile-viewer li { font-size: 13px; }
+.upgrade-names { font-size: 11px; opacity: .85; margin-left: 4px; }
+.next-fight { font-size: 15px; }
+.runover-score { font-size: 14px; opacity: .95; }

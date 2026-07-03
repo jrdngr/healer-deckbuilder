@@ -56,8 +56,8 @@ export type NodeContent =
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
-// v3: difficulty, #23.)
-export const RUN_SAVE_VERSION = 3;
+// v3: difficulty, #23; v4: fightsWon, #24.)
+export const RUN_SAVE_VERSION = 4;
 
 export interface RunSnapshot {
   version: number;
@@ -71,6 +71,7 @@ export interface RunSnapshot {
   healer: HealerConfig;
   relics: RelicId[];
   spentRelics: RelicId[];
+  fightsWon: number;
   map: Fork[];
   status: RunStatus;
   location: RunLocation;
@@ -88,6 +89,7 @@ export class Run {
   healer: HealerConfig;
   relics: RelicId[];      // run-long passives (#21), in acquisition order
   spentRelics: RelicId[]; // once-per-RUN relics already consumed (#22)
+  fightsWon: number;      // fights won this run (drives the end-of-run score, #24)
   map: Fork[];
   status: RunStatus;
   location: RunLocation;
@@ -105,6 +107,7 @@ export class Run {
     this.healer = { ...DEFAULT_HEALER };
     this.relics = [];
     this.spentRelics = [];
+    this.fightsWon = 0;
     this.nextUid = this.deck.length; // new cards continue the uid sequence
     this.map = this._generateMap();
     this.status = 'playing';
@@ -132,6 +135,7 @@ export class Run {
       healer: this.healer,
       relics: this.relics,
       spentRelics: this.spentRelics,
+      fightsWon: this.fightsWon,
       map: this.map,
       status: this.status,
       location: this.location,
@@ -152,6 +156,7 @@ export class Run {
     run.healer = { ...snap.healer };
     run.relics = [...snap.relics];
     run.spentRelics = [...(snap.spentRelics ?? [])];
+    run.fightsWon = snap.fightsWon ?? 0;
     run.map = snap.map;
     run.status = snap.status;
     run.location = snap.location;
@@ -166,20 +171,23 @@ export class Run {
     this._enterFight(0);
   }
 
-  // Enter a fight: set the location and roll (once) the enemy that occupies it.
+  // Enter a fight: set the location and the enemy that occupies it.
   _enterFight(fightIndex: number): void {
     this.location = { kind: 'fight', fightIndex };
     this.nodeContent = null;
-    this.currentEnemyDef = this.rollEncounter(fightIndex);
+    this.currentEnemyDef = this.peekEncounter(fightIndex);
   }
 
-  // Roll the enemy for a fight slot from the encounter table (the boss slot always
-  // uses BOSS_ENEMY_DEF). Deterministic in the run seed.
-  rollEncounter(fightIndex: number): EnemyDef {
+  // The enemy occupying a fight slot. Derived from a per-fight SUB-seed rather
+  // than the run's rng stream (#24), so the map fork can preview the next
+  // fight's foe (flaw #15) without consuming — or depending on — stream position.
+  // Still fully deterministic in the run seed.
+  peekEncounter(fightIndex: number): EnemyDef {
     if (isActBoss(fightIndex)) return ACT_BOSS_DEFS[actOfFight(fightIndex)] ?? BOSS_ENEMY_DEF;
     const row = ENCOUNTER_TABLE[fightIndex];
     if (!row || row.length === 0) return DEFAULT_ENEMY_DEF;
-    const id = weightedPick(row, this.rng);
+    const sub = makeRng((this.seed ^ Math.imul(fightIndex + 1, 0x9e3779b9)) >>> 0);
+    const id = weightedPick(row, sub);
     return ENEMY_DEF_BY_ID[id] ?? DEFAULT_ENEMY_DEF;
   }
 
@@ -275,6 +283,7 @@ export class Run {
   winFight(): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
+    this.fightsWon += 1;
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
     // The Rusty Crown (#22) pays its bonus on every win it made harder; Story
     // (#23) pads the purse so newer players can actually buy their way forward.
@@ -313,6 +322,16 @@ export class Run {
 
   loseFight(): void {
     this.status = 'lost';
+  }
+
+  // End-of-run score (#24, flaw #21): progress is worth the most, relics a
+  // little — and HOARDED gold is penalized, so spending it is always right.
+  runScore(): { fights: number; relics: number; victory: number; goldPenalty: number; total: number } {
+    const fights = this.fightsWon * 100;
+    const relics = this.relics.length * 40;
+    const victory = this.status === 'won' ? 500 : 0;
+    const goldPenalty = -Math.floor(this.gold / 2);
+    return { fights, relics, victory, goldPenalty, total: Math.max(0, fights + relics + victory + goldPenalty) };
   }
 
   // Commit to a branch at the current fork and enter its first node.

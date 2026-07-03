@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { resolveCard } from '../constants';
 import type { ResolvedCard } from '../constants';
 import type { Game } from '../engine';
 import { Card } from './Card';
+import { groupPile } from '../deckView';
 
 interface HandProps {
   game: Game;
@@ -20,16 +22,21 @@ function promptFor(card: ResolvedCard): string {
 
 export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick }: HandProps) {
   const over = game.status !== 'playing';
+  // In-fight deck viewer (#24): click a pile to see its contents (grouped and
+  // name-sorted — the draw pile's order is never leaked).
+  const [viewing, setViewing] = useState<'draw' | 'discard' | null>(null);
+  const viewed = viewing === 'draw' ? game.drawPile : viewing === 'discard' ? game.discardPile : null;
   return (
     <section className="hand-wrap">
       <h3 id="hand-prompt" className={selectedCard ? 'targeting' : undefined}>
         {selectedCard ? promptFor(selectedCard) : 'Your hand'}
       </h3>
       <div className={`hand-area${disabled ? ' busy' : ''}`}>
-        <div className="pile draw-pile" title="Draw pile">
+        <button className="pile draw-pile" title="Draw pile — click to view (contents shown unordered)"
+          onClick={() => setViewing(viewing === 'draw' ? null : 'draw')}>
           <span className="pile-count">{game.drawPile.length}</span>
           <span className="pile-label">Draw</span>
-        </div>
+        </button>
         <div className="hand">
           {game.hand.map((dc, i) => {
             const card = resolveCard(dc);
@@ -45,11 +52,24 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
             );
           })}
         </div>
-        <div className="pile discard-pile" title="Discard pile">
+        <button className="pile discard-pile" title="Discard pile — click to view"
+          onClick={() => setViewing(viewing === 'discard' ? null : 'discard')}>
           <span className="pile-count">{game.discardPile.length}</span>
           <span className="pile-label">Discard</span>
-        </div>
+        </button>
       </div>
+      {viewed && (
+        <div className="pile-viewer" role="dialog" aria-label={`${viewing} pile contents`}>
+          <h4>{viewing === 'draw' ? `Draw pile (${viewed.length}, unordered)` : `Discard (${viewed.length})`}</h4>
+          {viewed.length === 0 && <p className="pile-empty">Empty.</p>}
+          <ul>
+            {groupPile(viewed).map((g) => (
+              <li key={g.label}>{g.count}× {g.label}</li>
+            ))}
+          </ul>
+          <button className="leave-btn" onClick={() => setViewing(null)}>Close</button>
+        </div>
+      )}
     </section>
   );
 }

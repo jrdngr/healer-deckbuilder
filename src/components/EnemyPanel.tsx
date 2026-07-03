@@ -41,7 +41,7 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
         </div>
         <div className="enemy-status">
           {intent && <span className="enemy-intent">Intends: {intent}</span>}
-          {e.poison > 0 ? ` ☠ Poison ${e.poison}` : ''}
+          {e.poison > 0 ? <span title={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}> ☠ Poison {e.poison}</span> : ''}
         </div>
         {channel && (
           <div className="cast-bar" title={`${channel.channelName}: ${channel.damage} damage on resolve`}>

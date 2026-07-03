@@ -1,3 +1,4 @@
+import { MODIFIERS } from '../constants';
 import type { ResolvedCard } from '../constants';
 
 interface CardProps {
@@ -32,8 +33,12 @@ export function Card({ card, affordable, ineligible = false, selected, onClick }
       <div className="cname">{card.name}</div>
       <div className="cdesc">{card.desc}</div>
       {card.upgrades.length > 0 && (
-        <div className="card-upgrades" title={card.upgrades.join(', ')}>
+        <div
+          className="card-upgrades"
+          title={card.upgrades.map((u) => `${MODIFIERS[u].name} — ${MODIFIERS[u].desc}`).join('\n')}
+        >
           {card.upgrades.map((u, i) => <span key={i} className={`upgrade-pip ${u}`} />)}
+          <span className="upgrade-names">{card.upgrades.map((u) => MODIFIERS[u].name).join(' · ')}</span>
         </div>
       )}
     </div>

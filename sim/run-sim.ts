@@ -124,6 +124,13 @@
 //     reads full-run 96.1% ±1.2 at N=1000 (gate: >=60%) — a cruise for the
 //     reference policy, which is the point. Brutal is untuned, dev-flag-only
 //     (?dev), and carries no gate by design.
+//   after #24 (hardening & UX; encounters derived from per-fight sub-seeds for
+//     peekable fork previews):  full-run 32.7 % ±2.9 at N=1000; Story 96.4%.
+//     F0 100 | F1 100 | F2 A1boss 89.5 | F3 99.8 | F4 98.3 | F5 A2boss 70.4 | F6 97.1 | F7 97.7 | F8 A3boss 55.8
+//     The sub-seed change re-rolled every fight's foe (hence the re-pin); the
+//     bands hold. SHIP GATE: full suite green, Standard+Story sweeps in-band,
+//     clean npm run build. Human playtest #3 (maintainer, manual) is the final
+//     call — it cannot be automated from here.
 //     The Q5 poison measurement (all N=1000, on the #17 baseline):
 //       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
 //       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%

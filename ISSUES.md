@@ -27,7 +27,8 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–23** (P0–P10 complete — nothing was cut at the Q1 cut line). Highlights: all card
+**Done: 01–24 — every committed demo issue has landed** (P0–P11; nothing was cut at the Q1 cut
+line). Remaining rows are the #25 experiment and post-demo work (#26–#32). Highlights: all card
 work + the ward pipeline; the Q5 poison decision (**measured and left at 5×5**); events 3 → 8;
 act-2/3 named rosters; **relics phase A** (10 relics, spoils after fights 3 & 6, Reliquary twice
 per run) and **phase B** (Aegis Font / First-Light Taper / Dusk Chime / Martyr's Icon + the
@@ -37,8 +38,12 @@ Devourer 165→198 — per-relic gate numbers and the tuning history live in `si
 bosses hit their gates (Gatewarden ~89% / Hexweaver ~70% / Devourer ~53%) and the **full run is
 winnable end to end at ~31%** (N=1000, the designed 25–35% band); **Story reads 96% at N=1000** (Q8 gate ≥60%), Brutal is dev-only
 (`?dev`) and ungated; local stats (wins per difficulty, best act) persist beside the save — no
-meta-progression. **Next up: #24 (hardening & UX batch — the final ship gate / playtest #3).**
-**➤ Human playtest #2 is overdue** — a lot of unplaytested content now sits on top of #14.
+meta-progression. #24's hardening batch: status tooltips, modifier text on cards, the in-fight
+deck viewer (order-hiding), fork previews (encounters now derive from per-fight sub-seeds —
+peekable and stream-independent), the end-of-run score with a hoarded-gold penalty, and DevPanel
+gated to dev builds. **The automated ship gate is green** (suite + Standard 32.7% / Story 96.4%
+at N=1000 + clean build). **➤ What remains is human: playtests #2 and #3 (maintainer, manual) —
+the final ship call.**
 
 ## Issues (implementation order)
 
@@ -67,7 +72,7 @@ meta-progression. **Next up: #24 (hardening & UX batch — the final ship gate /
 | 21 | ✅ Done | [Relics phase A: infra + 10 legible relics](./issues/21-relics-phase-a.md) | P9a | 14, 17 | §3.3; Q9 |
 | 22 | ✅ Done | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |
 | 23 | ✅ Done | [Difficulty presets + local stats](./issues/23-difficulty-presets.md) | P10 | 14 | §4 P10; Q8 |
-| 24 | ⬜ Todo | [Hardening & UX batch](./issues/24-hardening-ux.md) | P11 | 23 | flaws #15, #16, #20, #21 |
+| 24 | ✅ Done | [Hardening & UX batch](./issues/24-hardening-ux.md) | P11 | 23 | flaws #15, #16, #20, #21 |
 | 25 | ⬜ Todo | [Hand-size experiment (hand 4 + carryover)](./issues/25-hand-size-experiment.md) | exp. | 06 | flaw #16; Q6 |
 | 26 | ⬜ Todo | [Full turn-1 phase reorder](./issues/26-turn1-phase-reorder.md) | post-demo | 04 | flaw #12; Q7-full |
 | 27 | ⬜ Todo | [Party W1 — Warlock + Skald + draft skeleton](./issues/27-party-w1-warlock-skald.md) | post-demo | 08 | §3.4 |
