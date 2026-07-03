@@ -71,6 +71,34 @@ function tryRetaunt(game: Game): boolean {
   return true;
 }
 
+// Boss channels (the Gatewarden's Crushing Blow, #12) are the one telegraph the
+// player gets two full phases to answer, and the answer is real: keep the tank's
+// Taunt (and its bundled Defense) alive through the resolve, then top the
+// threatened member up ABOVE the incoming hit. The re-taunt matters doubly —
+// the preview folds Defense in, so letting it lapse mid-wind-up both raises the
+// applied damage and invalidates the number that was healed against.
+function tryBraceChannel(game: Game): boolean {
+  const t = game.telegraph;
+  if (!t || !t.channel) return false;
+  const tank = game.tank;
+  if (tank.alive && tank.taunt <= (t.turnsUntilResolve ?? 1)) {
+    const idx = handIndexOf(game, 'ability');
+    if (affordable(game, idx)) { game.playCard(idx, SLOT.CENTER); return true; }
+  }
+  const incoming = incomingDamage(game);
+  for (const m of saveOrder(game)) {
+    const dmg = incoming.get(m.slot) ?? 0;
+    if (dmg === 0 || m.shield || m.hp > dmg) continue;
+    const shieldIdx = handIndexOf(game, 'shield');
+    if (affordable(game, shieldIdx)) { game.playCard(shieldIdx, m.slot); return true; }
+    for (const id of ['highHeal', 'aoeHeal', 'lowHeal', 'regen'] as CardId[]) {
+      const idx = handIndexOf(game, id);
+      if (affordable(game, idx)) { game.playCard(idx, m.slot); return true; }
+    }
+  }
+  return false;
+}
+
 // Stop an otherwise-lethal blow: Shield fully blocks it; failing that, top the
 // member up above the incoming damage.
 function tryPreventLethal(game: Game): boolean {
@@ -89,6 +117,19 @@ function tryPreventLethal(game: Game): boolean {
   return false;
 }
 
+// While a channel threatens someone we haven't made safe yet, every point of MP
+// belongs to the save — offense during the wind-up is what turns an answerable
+// hit into a death (rest banks +2/+5 toward next phase's heals instead).
+function channelThreatUnanswered(game: Game): boolean {
+  const t = game.telegraph;
+  if (!t || !t.channel) return false;
+  const incoming = incomingDamage(game);
+  return game.livingMembers().some((m) => {
+    const dmg = incoming.get(m.slot) ?? 0;
+    return dmg > 0 && !m.shield && m.hp <= dmg;
+  });
+}
+
 // Race the enemy down with the mage's Bolt when Charge is worth spending (or
 // when it lands the kill).
 function tryBolt(game: Game): boolean {
@@ -97,7 +138,9 @@ function tryBolt(game: Game): boolean {
   const idx = handIndexOf(game, 'ability');
   if (!affordable(game, idx)) return false;
   const dmg = BOLT_BASE + mage.abilityPower + BOLT_CHARGE_MULT * game.mageCharge;
-  if (dmg >= game.enemy.hp || game.mageCharge >= Math.min(BOLT_CHARGE_GATE, CHARGE_MAX)) {
+  if (dmg >= game.enemy.hp) { game.playCard(idx, SLOT.RIGHT); return true; } // the kill ends it now
+  if (channelThreatUnanswered(game)) return false;
+  if (game.mageCharge >= Math.min(BOLT_CHARGE_GATE, CHARGE_MAX)) {
     game.playCard(idx, SLOT.RIGHT);
     return true;
   }
@@ -108,6 +151,7 @@ function tryBolt(game: Game): boolean {
 function tryPoison(game: Game): boolean {
   if (game.enemy.poisonTurns > 0) return false;
   if (!game.ranger.alive) return false;
+  if (channelThreatUnanswered(game)) return false;
   const idx = handIndexOf(game, 'ability');
   if (!affordable(game, idx)) return false;
   game.playCard(idx, SLOT.LEFT);
@@ -177,7 +221,7 @@ function tryRefresh(game: Game): boolean {
 // snowballs; banking MP instead only drags fights past the turn-11 enrage and
 // loses. Proactive single-target healing and MP economy fill the leftovers.
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryRetaunt, tryPreventLethal, tryGroupHeal, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
+  tryBraceChannel, tryRetaunt, tryPreventLethal, tryGroupHeal, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).

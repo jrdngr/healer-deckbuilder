@@ -27,6 +27,13 @@
 //                          (variety, not a spike — every fight within +-5pp of #06)
 //   after #12 (Gatewarden as the Act-1 boss): Act-1 boss (F2) ~90% (>= 85% gate).
 //     The Act 2/3 bosses are still placeholders, so full-run stays ~0% (deferred to #14).
+//   after the issues-01-12 playtest fixes (Crushing Blow 20->12 + channel-aware
+//     policy: tryBraceChannel and wind-up MP banking):
+//                          per-fight ~100 / 100 / 88.9 / 99.4 / 98.3 / 16.7 / 89.7 / 21.5 / 0 %
+//     F2 stays in the ~90% band, but the channel is now *answered* (tank survives
+//     or Shield blocks) in ~53% of boss fights instead of killing a member in 82%
+//     — the boss teaches reading, not sacrifice. Winrate parity hides that shift;
+//     judge channel changes by the death/answered split, not F2 alone.
 //
 //   after #10 (3-act / 9-fight structure):  full-run ~0 %  (per-fight below)
 //     F0 100 | F1 100 | F2 A1boss 78 | F3 99 | F4 99 | F5 A2boss 17 | F6 91 | F7 21 | F8 A3boss 0

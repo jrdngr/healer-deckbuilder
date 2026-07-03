@@ -157,12 +157,16 @@ export const ENEMY_CLEAVER: EnemyDef = { // cleaver: occasional heavy single hit
 
 // Boss 1 — Gatewarden (issue 12): a fixed, learnable rotation that teaches
 // telegraph-reading. Every 2nd cycle its heavy becomes Crushing Blow — a 2-turn
-// channel at ~20 (≈3× heavy). Opens on single, complementing the turn-1 rule.
+// channel at 12 (~1.7× heavy). Opens on single, complementing the turn-1 rule.
+// 14 keeps the read answerable (playtest finding): a defended tank takes 13, so
+// Taunt upkeep + topping the tank up survives it, while the ranger (11) and
+// mage (9) still die to it — at the original 20 it exceeded every max HP and
+// killed a member in 82% of good-play sims, teaching sacrifice instead.
 export const GATEWARDEN_DEF: EnemyDef = {
   id: 'gatewarden', name: 'Gatewarden', boss: true,
   baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
   rotation: ['single', 'two', 'heavy', 'sweep'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 20, type: 'heavy', name: 'Crushing Blow' },
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Crushing Blow' },
 };
 
 // Act boss per act (0-based). Acts 2/3 are placeholders (scaled BOSS_ENEMY_DEF)

@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -961,13 +961,15 @@ function gatewardenGame(seed: number, enrageTurn = 99): Game {
     JSON.stringify(['single', 'two', 'heavy', 'sweep', 'single', 'two', 'channel:Crushing Blow', 'sweep']));
 }
 {
-  // Crushing Blow: a 2-turn channel that deals ~20 on resolve; no damage during
-  // the wind-up (the enemy takes no other action while channelling).
+  // Crushing Blow: a 2-turn channel that deals 12 on resolve; no damage during
+  // the wind-up (the enemy takes no other action while channelling). 12 keeps
+  // the read answerable — a defended tank survives it when topped up, while the
+  // ranger/mage still die to it (see the GATEWARDEN_DEF note).
   const g = gatewardenGame(2);
   g.rotationIndex = 6;               // the channel slot
   g.telegraph = g._generateTelegraph(3);
   check('channel is telegraphed', g.telegraph.channel === true);
-  eq('channel damage is ~20', g.telegraph.damage, 20);
+  eq('channel damage is 12', g.telegraph.damage, 12);
   eq('channel takes 2 turns to resolve', g.telegraph.turnsUntilResolve, 2);
   const target = g.telegraph.targets[0];
   g.members[target].hp = 50;         // survive to measure the exact hit
@@ -978,7 +980,17 @@ function gatewardenGame(seed: number, enrageTurn = 99): Game {
   check('still channelling after wind-up', g.telegraph.channel === true);
   g.members[target].hp = 50;
   g.turn = 3; g._runEnemyPhase();     // resolve turn
-  eq('Crushing Blow lands for 20', g.members[target].hp, 30);
+  eq('Crushing Blow lands for 12', g.members[target].hp, 38);
+}
+{
+  // The channel is answerable by the tank and only the tank (the teaching): a
+  // defended, topped-up tank survives the resolve; the squishies never do.
+  const dmg = GATEWARDEN_DEF.channel!.damage;
+  const [ranger, tank, mage] = MEMBER_DEFS;
+  check('a defended full tank survives Crushing Blow',
+    tank.maxHP - (dmg - DEFENSE_AMOUNT) > 0);
+  check('Crushing Blow still one-shots a full ranger', ranger.maxHP - dmg <= 0);
+  check('Crushing Blow still one-shots a full mage', mage.maxHP - dmg <= 0);
 }
 {
   // A Taunt cast DURING the wind-up still redirects the channel at resolve.
@@ -991,7 +1003,8 @@ function gatewardenGame(seed: number, enrageTurn = 99): Game {
   g.tank.taunt = TAUNT_TURNS; g.tank.defense = DEFENSE_TURNS;
   g.ranger.hp = 50; g.tank.hp = 50;
   g.turn = 3; g._runEnemyPhase();      // resolve: should hit the taunting tank
-  eq('channel redirected onto the taunting tank', g.tank.hp, 50 - (20 - (DEFENSE_AMOUNT + g.tank.abilityPower)));
+  eq('channel redirected onto the taunting tank',
+    g.tank.hp, 50 - (GATEWARDEN_DEF.channel!.damage - (DEFENSE_AMOUNT + g.tank.abilityPower)));
   eq('the original target (ranger) is untouched', g.ranger.hp, 50);
 }
 {
