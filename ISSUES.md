@@ -14,6 +14,11 @@ every damage-modifying card/relic/boss mechanic must keep the telegraph preview 
 equal to applied damage (a property test); the engine stays pure/DOM-free; each issue ends in a
 `jj` commit with its own tests per `CLAUDE.md`.
 
+**Keep this file current:** when an issue lands, flip its row to ✅ Done and update the
+[Progress](#progress) line (and the playtest-gate notes, if one just unlocked) **in the same
+commit** — or, at latest, a docs commit immediately after. This table is the single source of
+truth for where the project stands; a stale Status column costs the next session real time.
+
 ## Legend
 
 - **Phase** — the roadmap milestone the issue belongs to (P0–P11, or post-demo).
