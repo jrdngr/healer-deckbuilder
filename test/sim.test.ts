@@ -43,36 +43,31 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
 // Locked from the current engine + policy over seeds 1..200. If a change here is
 // intentional, update these numbers together with a note on what moved.
 //
-// NOTE (issue 10): with the 3-act / 9-fight structure, full-run is 0% because the
-// Act 2/3 bosses are placeholders (scaled BOSS_ENEMY_DEF at 200/280 HP) that the
-// current policy can't beat — the real bosses and their policy reactions land with
-// #12-#14, which is when the full-run band is tuned. The early normals (F0/F1/F3/F4)
-// are the demonstrable "normals >= 95%" gate.
+// NOTE (issue 14): with all three real bosses in place (Gatewarden / Hexweaver /
+// Devourer) and the Act-3 normals brought under the enrage cliff, the full run is
+// beatable end to end — full-run lands in the designed 25-35% band. Boss winrates
+// sit near ~85 / ~70 / ~55%.
 {
   const r = runSim(200, 1);
-  eq('N=200 full-run wins', r.fullRun.wins, 0);
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned twice after the issues-01-12 playtest fixes:
-  // - canApplyModifier refuses no-op purchases (Efficient at the 1-MP floor),
-  //   so the shopper keeps gold it used to waste: F5 34->35, F6 29->30.
-  // - Crushing Blow retuned 20->12 with channel-aware policy reactions
-  //   (tryBraceChannel + wind-up MP banking): the channel is now answered in
-  //   ~53% of boss fights instead of killing a member in 82%; F2 185->181
-  //   (still >= 85% gate) with knock-on F3/F4 sample shifts.
-  // Re-pinned for issue 13: the Hexweaver replaces the Act-2 placeholder boss at
-  // 135 HP, and Cleanse joins the shop pool (shifting shop RNG). F5 jumps from the
-  // ~35 placeholder wins to ~121 (68% of the F5 sample) and the knock-on F6/F7
-  // samples grow. Full-run stays 0 (the Act-3 boss is still a placeholder, tuned
-  // with the Devourer in #14).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 181, 180, 177, 121, 110, 28, 0]));
+  // Re-pinned for issue 14: the Devourer replaces the Act-3 placeholder boss (165
+  // HP, phase system + Maw + Consume) and the Act-3 normals drop to 150 HP with
+  // attackBonus 1 (F7 was a 190-HP / +2-bonus enrage cliff at ~25%; now ~95%). The
+  // full run is winnable: 60/200 = 30% (25-35% band). Boss samples: F2 181 (~90%),
+  // F5 121 (~68%), F8 108-of-sample (~56%).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 181, 180, 177, 121, 115, 108, 60]));
+  // Full-run lands in the 25-35% band (issue 14 gate).
+  check('full-run in the 25-35% band', r.fullRun.rate >= 0.25 && r.fullRun.rate <= 0.35, `${(r.fullRun.rate * 100).toFixed(1)}%`);
   // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).
   for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 95%`, r.perFight[fi].rate >= 0.95);
-  // Issue 12 gate: the Act-1 boss (Gatewarden, F2) clears >= 85%.
+  // Act-3 normals (F6, F7) also clear >= 90% now that they're under the enrage cliff.
+  for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
+  // Boss gates: Gatewarden >= 85%, Hexweaver 65-75%, Devourer ~55% (50-62% band).
   check('Act-1 boss (Gatewarden) clears >= 85%', r.perFight[2].rate >= 0.85);
-  // Issue 13 gate: the Act-2 boss (Hexweaver, F5) lands in the 65-75% band.
   check('Act-2 boss (Hexweaver) in 65-75%', r.perFight[5].rate >= 0.65 && r.perFight[5].rate <= 0.75);
+  check('Act-3 boss (Devourer) in 50-62%', r.perFight[8].rate >= 0.50 && r.perFight[8].rate <= 0.62);
 }
 
 // --- issue 13: turtling loses to adapting against the Hexweaver --------------

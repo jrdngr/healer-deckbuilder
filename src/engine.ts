@@ -546,7 +546,25 @@ export class Game {
       this._log('The enemy is defeated. Victory!', 'win');
       return true;
     }
+    // A killing blow doesn't transform; any other HP drop through the threshold does.
+    this._maybeTriggerPhase();
     return false;
+  }
+
+  // Edge-detected HP-threshold phase transition (the Devourer, #14). Fires at most
+  // once, the first time the enemy's HP falls to/through its phase fraction — even
+  // if a Poison tick is what crosses it — then swaps in the phase-2 rotation/channel
+  // (Maw), tightens enrage, and announces the transformation beat.
+  _maybeTriggerPhase(): void {
+    const phase = this.enemyDef.phase;
+    if (!phase || this.phaseTriggered) return;
+    if (this.enemy.hp <= 0 || this.enemy.hp > this.enemy.maxHP * phase.hpFraction) return;
+    this.phaseTriggered = true;
+    this.activeRotationOverride = phase.rotation;
+    this.activeChannelOverride = phase.channel;
+    if (phase.enrageTurn != null) this.enrageTurn = Math.min(this.enrageTurn, phase.enrageTurn);
+    this._log(`${this.enemyDef.name}: ${phase.beat}`, 'system');
+    this._emit({ kind: 'phaseChange', beat: phase.beat });
   }
 
   // Central heal path for every healing source (direct heal cards AND the Regen

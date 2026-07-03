@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -1154,6 +1154,88 @@ function hexweaverGame(seed: number, enrageTurn = 99): Game {
 {
   // Cleanse is a pool card (uncommon) and is in the shop pool.
   check('Cleanse exists as an uncommon', CARDS.cleanse != null);
+}
+
+// --- Devourer: phase system + Consume + Maw (issue 14) ----------------------
+function devourerGame(seed: number, maxHP = 200, enrageTurn = 99): Game {
+  const cfg = defaultBattleConfig();
+  cfg.enemy = { maxHP, boss: true, attackBonus: 0, def: DEVOURER_DEF, enrageTurn };
+  return new Game(seed, cfg);
+}
+{
+  // Consume: cleanses the enemy's OWN poison and self-heals for every remaining
+  // tick (poison stops being free value against the Devourer).
+  const g = devourerGame(1);
+  g.enemy.hp = 100;                       // room to heal (below max 200)
+  g.enemy.poison = 5; g.enemy.poisonTurns = 4; // 20 damage of poison still owed
+  g.rotationIndex = 3; g.telegraph = g._generateTelegraph(2); // Consume slot
+  check('Consume is a cast telegraph', g.telegraph.cast === 'consume');
+  eq('Consume announces by name', g.telegraphIntent(), 'Consume');
+  // Resolve the cast in isolation (a full enemy phase would first land one poison
+  // tick, which is correct in play but muddies the pure heal-for-remaining check).
+  g._resolveCast(g.telegraph);
+  eq('Consume cleansed the enemy poison', g.enemy.poisonTurns, 0);
+  eq('Consume also zeroed the poison strength', g.enemy.poison, 0);
+  eq('Consume self-healed for the remaining ticks (5x4)', g.enemy.hp, 100 + 20);
+}
+{
+  // Consume heal is capped at max HP and is a no-op with no poison up.
+  const g = devourerGame(2);
+  g.enemy.hp = 100;
+  g.rotationIndex = 3; g.telegraph = g._generateTelegraph(2);
+  g.turn = 2; g._runEnemyPhase();
+  eq('Consume with no poison leaves HP unchanged', g.enemy.hp, 100);
+}
+{
+  // Phase transition fires exactly once at <=50% HP, swaps in the phase-2 rotation
+  // (Maw channel) and tightens enrage — and does NOT re-fire on further damage.
+  const g = devourerGame(3, 200);
+  check('starts un-transformed', g.phaseTriggered === false);
+  check('phase-1 rotation is active', g.activeChannel() === undefined);
+  g._damageEnemy(101, 'test');            // 200 -> 99 (<=50%)
+  check('transformed at the threshold', g.phaseTriggered === true);
+  check('phase-2 Maw channel is now active', g.activeChannel()?.name === 'Maw');
+  eq('enrage tightened to the phase-2 turn', g.enrageTurn, 11);
+  const beats = g.events.filter((e) => e.kind === 'phaseChange').length;
+  eq('the transformation beat fired once', beats, 1);
+  g.events = [];
+  g._damageEnemy(20, 'test');             // further damage in phase 2
+  eq('no second transformation beat', g.events.filter((e) => e.kind === 'phaseChange').length, 0);
+}
+{
+  // The threshold is edge-detected even when a Poison tick is what crosses it.
+  const g = devourerGame(4, 200);
+  g.enemy.hp = 55;                        // just above 50% (100)
+  g.enemy.poison = 10; g.enemy.poisonTurns = 2; // a 10-tick will cross 50%
+  g.telegraph = g._generateTelegraph(2); // some phase-1 attack (not consume)
+  g.turn = 2; g._runEnemyPhase();        // poison ticks 55 -> 45, crossing 50%
+  check('a Poison tick triggers the phase once', g.phaseTriggered === true);
+  check('Maw is active after the DoT-triggered transition', g.activeChannel()?.name === 'Maw');
+}
+{
+  // Maw: a 2-turn channelled sweep that resolves for DEVOURER_MAW_DMG on every
+  // living member. Drive to phase 2, then find and resolve a Maw.
+  const g = devourerGame(5, 200);
+  g._damageEnemy(150, 'test');           // -> 50, phase 2
+  // Find the next Maw telegraph.
+  let guard = 0;
+  while (guard++ < 12) {
+    g.rotationIndex += 1;
+    const t = g._generateTelegraph(2);   // turn 2 (pre-enrage) so damage is base
+    if (t.channel && t.channelName === 'Maw') { g.telegraph = t; break; }
+  }
+  check('a Maw telegraph was found in phase 2', g.telegraph?.channelName === 'Maw');
+  eq('Maw is a 2-turn channel', g.telegraph!.turnsUntilResolve, 2);
+  eq('Maw hits the whole party (sweep geometry)', g.telegraph!.targets.length, 3);
+  eq('Maw base damage is DEVOURER_MAW_DMG', g.telegraph!.damage, DEVOURER_MAW_DMG);
+  // Wind-up then resolve; every living member takes DEVOURER_MAW_DMG.
+  for (const m of g.members) m.hp = m.maxHP;
+  g.turn = 2; g._runEnemyPhase();        // wind-up (no damage)
+  const preResolve = g.members.map((m) => m.hp);
+  g.turn = 3; g._runEnemyPhase();        // resolve
+  let allTookMaw = true;
+  g.members.forEach((m, i) => { if (m.alive && preResolve[i] - m.hp !== DEVOURER_MAW_DMG) allTookMaw = false; });
+  check('Maw resolved for DEVOURER_MAW_DMG on each member', allTookMaw);
 }
 
 // --- turn-1 attack is always a plain single (flaw #12) ----------------------

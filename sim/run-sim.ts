@@ -49,8 +49,13 @@
 //     Cleanse joined the pool; the policy buys/plays it (tryCleanse). A turtle policy
 //     (funnel + heal-tank only, never Cleanse) wins 0% where the adaptive policy wins
 //     ~69% — the Piercing Bolt bypasses the taunt funnel by design (see sim.test.ts).
-//     F7 (Act-3 normal, 190 HP) reads low at ~25% but its sample is gated by the A3
-//     placeholder ahead; the late-normal HP curve is revisited in #14's full-run pass.
+//   after #14 (Devourer as the Act-3 boss, 165 HP; full-run tuned):  full-run ~32 %
+//     F0 100 | F1 100 | F2 A1boss 88.9 | F3 99.6 | F4 98.1 | F5 A2boss 70.7 | F6 95.3 | F7 95.9 | F8 A3boss 57.4
+//     All three bosses hit their gates: ~85 / ~70 / ~55%. Two levers landed the
+//     25-35% full-run band: (a) the Act-3 normals dropped to 150 HP / attackBonus 1
+//     — F7 was a 190-HP/+2 enrage cliff (~25%), now ~96%; (b) the Devourer at 165 HP
+//     (phase-2 Maw + Consume) reads ~57%. Devourer HP is a steep lever: 160->60%,
+//     170->49%. Full-run 32.2% ±2.9 at N=1000.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

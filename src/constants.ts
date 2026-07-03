@@ -237,9 +237,41 @@ export const HEXWEAVER_DEF: EnemyDef = {
   ],
 };
 
-// Act boss per act (0-based). Act 3 is a placeholder (scaled BOSS_ENEMY_DEF) until
-// the Devourer (#14) lands.
-export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, BOSS_ENEMY_DEF];
+// Boss 3 — Devourer (issue 14): "race or die". Turns the invisible enrage race
+// into an explicit, fair one via a phase system:
+//   • Phase 1 (>50% HP): a heavy/sweep pool plus Consume — a 'cast' that cleanses
+//     its OWN Poison and self-heals for every remaining tick, so poison stops being
+//     free value (it becomes a decision — the deferred call in #18).
+//   • Phase 2 (<=50% HP): an announced transformation beat, then Maw — a 2-turn
+//     channelled sweep at DEVOURER_MAW_DMG x3, recurring every ~4 turns — plus a
+//     tighter enrage. Enraged Maw one-shots an unshielded squishy: race it down.
+// The phase threshold is edge-detected (fires once, even mid-Poison-tick).
+export const DEVOURER_MAW_DMG = 7; // Maw per-target sweep damage (before enrage/attackBonus)
+export const DEVOURER_DEF: EnemyDef = {
+  id: 'devourer', name: 'Devourer', boss: true,
+  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
+  rotation: [
+    'single',
+    'heavy',
+    'sweep',
+    { type: 'cast', name: 'Consume', cast: 'consume' },
+    'two',
+    'heavy',
+  ],
+  phase: {
+    hpFraction: 0.5,
+    beat: 'The Devourer splits its maw and TRANSFORMS!',
+    // Slot 0 is always Maw (the channel fires every cycle at slot 0); the 'sweep'
+    // literal there is a placeholder the channel overrides. Maw resolves every 4
+    // enemy turns (2-turn wind-up + heavy + two).
+    rotation: ['sweep', 'heavy', 'two'],
+    channel: { slot: 0, everyCycles: 1, turns: 2, damage: DEVOURER_MAW_DMG, type: 'sweep', name: 'Maw' },
+    enrageTurn: 11,
+  },
+};
+
+// Act boss per act (0-based): Gatewarden (#12), Hexweaver (#13), Devourer (#14).
+export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF];
 
 export const NORMAL_ENEMY_DEFS: EnemyDef[] = [ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER];
 export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
@@ -553,14 +585,14 @@ export const isActBoss = (fightIndex: number): boolean =>
 export const ENEMY_HP_BY_FIGHT: number[] = [
   50, 75, 130,    // Act 1: two normals + boss (Gatewarden)
   105, 130, 135,  // Act 2: boss (Hexweaver — heal-denial makes it a wall below its HP)
-  160, 190, 280,  // Act 3: boss per-def (placeholder)
+  150, 150, 165,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
 export const ENEMY_ATTACK_BONUS: number[] = [
   0, 0, 0,
   1, 1, 0,
-  1, 2, 0,
+  1, 1, 0,
 ];
 // Enrage is a boss anti-stall mechanic. Normals get a high enrage turn (14) so
 // long high-HP normals stay a clean DPS race and don't hit an enrage cliff; the

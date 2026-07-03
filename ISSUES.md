@@ -22,10 +22,11 @@ equal to applied damage (a property test); the engine stays pure/DOM-free; each 
 
 ## Progress
 
-**Done: 01–13** (all of P0–P5, through the Hexweaver). Each landed as its own commit with tests
-and a sim gate. **Next up: #14 (Devourer).** The Hexweaver (#13) added the `'cast'` telegraph
-kind and its counter (Cleanse), and lands at 70.7% (65–75% gate). Full-run winrate is still 0%
-by design while the **Act 3** boss is a placeholder — full-run tuning is deferred to #14.
+**Done: 01–14** (all of P0–P6 — the full demo boss trilogy). Each landed as its own commit with
+tests and a sim gate. The three bosses hit their gates (Gatewarden ~89% / Hexweaver ~71% /
+Devourer ~57%) and the **full run is winnable end to end at ~32%** (the designed 25–35% band,
+tuned once against real content in #14). **Next up: #15 (card set phase A).** **➤ Human playtest
+#2** is ready now (the Devourer / full-run band landed).
 
 ## Issues (implementation order)
 
@@ -44,7 +45,7 @@ by design while the **Act 3** boss is a placeholder — full-run tuning is defer
 | 11 | ✅ Done | [Save/resume + long-run ergonomics](./issues/11-save-resume-ergonomics.md) | P3b | 10 | §4 P3 |
 | 12 | ✅ Done | [Boss 1 — Gatewarden ("learn to read")](./issues/12-boss-gatewarden.md) | P4 | 10 | §4 P4 |
 | 13 | ✅ Done | [Boss 2 — Hexweaver ("you can't turtle") + Cleanse](./issues/13-boss-hexweaver.md) | P5 | 12 | §4 P5; flaw #1 |
-| 14 | ⬜ Todo | [Boss 3 — Devourer ("race or die") + phase system](./issues/14-boss-devourer.md) | P6 | 13 | §4 P6 |
+| 14 | ✅ Done | [Boss 3 — Devourer ("race or die") + phase system](./issues/14-boss-devourer.md) | P6 | 13 | §4 P6 |
 | 15 | ⬜ Todo | [Card set phase A: existing-field cards](./issues/15-cards-phase-a.md) | P7a | 14 | §3.2 |
 | 16 | ⬜ Todo | [Card set phase B: small-new-state cards](./issues/16-cards-phase-b.md) | P7b | 15 | §3.2 |
 | 17 | ⬜ Todo | [Card set phase C: Bulwark / Defense pipeline](./issues/17-cards-phase-c-bulwark.md) | P7c | 16 | §3.2; Q10 |
@@ -87,5 +88,6 @@ size, which Taper's draw penalty depends on). #26–#32 are post-demo.
 
 ## Human playtest gates
 
-Three maintainer playtests are called out in the roadmap: **#1** after the Gatewarden ([12](./issues/12-boss-gatewarden.md)) — **➤ ready now** (issue 12 landed),
-**#2** after the Devourer / full-run band ([14](./issues/14-boss-devourer.md)), **#3** the final ship gate ([24](./issues/24-hardening-ux.md)).
+Three maintainer playtests are called out in the roadmap: **#1** after the Gatewarden ([12](./issues/12-boss-gatewarden.md)) — landed,
+**#2** after the Devourer / full-run band ([14](./issues/14-boss-devourer.md)) — **➤ ready now** (issue 14 landed; full-run ~32%),
+**#3** the final ship gate ([24](./issues/24-hardening-ux.md)).
