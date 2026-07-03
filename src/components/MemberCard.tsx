@@ -29,7 +29,18 @@ export function MemberCard({
     .filter(Boolean).join(' ');
 
   return (
-    <div className={cls} onClick={onClick}>
+    <div
+      className={cls}
+      // A member card is only a control while the player is picking a target;
+      // the rest of the time it is a status panel and stays out of the tab order.
+      role={validTarget ? 'button' : undefined}
+      tabIndex={validTarget ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (!validTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+      }}
+    >
       <div className="atk" title="Attack"><span>{m.damage}</span></div>
       <h3>{m.name}</h3>
       <div className="bar">

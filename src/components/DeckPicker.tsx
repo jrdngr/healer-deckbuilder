@@ -22,7 +22,8 @@ export function DeckPicker({ deck, canPick, onPick, emptyText }: DeckPickerProps
           <Card
             key={dc.uid}
             card={resolveCard(dc)}
-            affordable={pickable}
+            affordable={true}
+            ineligible={!pickable}
             selected={false}
             onClick={() => { if (pickable) onPick(dc.uid); }}
           />

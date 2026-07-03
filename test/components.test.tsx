@@ -14,6 +14,8 @@ import { Game } from '../src/engine';
 import { defaultBattleConfig } from '../src/constants';
 import { ManaBar } from '../src/components/ManaBar';
 import { StartScreen } from '../src/components/StartScreen';
+import { Card } from '../src/components/Card';
+import { makeDeckCard, resolveCard } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -54,6 +56,32 @@ async function render(el: React.ReactElement): Promise<string> {
   );
   check('fresh run still describes the first fight', text.includes('Fight 1 / 9'), text);
   check('no continue button without a save', !text.includes('Continue your saved run'));
+}
+
+// --- Card: button semantics + the ineligible state -----------------------------
+{
+  const resolved = resolveCard(makeDeckCard('highHeal', 1, []));
+  let clicks = 0;
+  await render(
+    <Card card={resolved} affordable={true} ineligible={false} selected={false} onClick={() => { clicks++; }} />,
+  );
+  const el = rootEl.querySelector('.card') as HTMLElement;
+  check('card exposes a button role', el.getAttribute('role') === 'button');
+  check('enabled card is focusable', el.tabIndex === 0);
+  el.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  check('Enter activates an enabled card', clicks === 1, `clicks=${clicks}`);
+
+  clicks = 0;
+  await render(
+    <Card card={resolved} affordable={true} ineligible={true} selected={false} onClick={() => { clicks++; }} />,
+  );
+  const inel = rootEl.querySelector('.card') as HTMLElement;
+  check('ineligible card gets its own class (not unaffordable)',
+    inel.className.includes('ineligible') && !inel.className.includes('unaffordable'));
+  check('ineligible card reads disabled', inel.getAttribute('aria-disabled') === 'true');
+  check('ineligible card leaves the tab order', inel.tabIndex === -1);
+  inel.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  check('Enter does nothing on an ineligible card', clicks === 0, `clicks=${clicks}`);
 }
 
 await act(async () => { root.unmount(); });
