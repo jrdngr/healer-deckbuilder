@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { CARDS, MEMBER_DEFS, MODIFIERS, CARD_REMOVAL_PRICE, resolveCard, makeDeckCard } from '../constants';
+import {
+  CARDS, MEMBER_DEFS, MODIFIERS, CARD_REMOVAL_PRICE, DUPLICATE_PRICE,
+  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, resolveCard, makeDeckCard,
+} from '../constants';
 import type { CardId, Slot, EventChoiceKind } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
@@ -18,6 +21,8 @@ type Stage =
   | { kind: 'removeCard' }
   | { kind: 'shrineCard' }
   | { kind: 'shrineParty' }
+  | { kind: 'duplicateCard' }
+  | { kind: 'bloodAltar' }
   | { kind: 'result'; text: string };
 
 // A single-step event: a scenario with a few choices. Some choices need a follow-up
@@ -59,6 +64,33 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
       case 'shrineParty':
         setStage({ kind: 'shrineParty' });
         break;
+      case 'cursedChest': {
+        const { gold, removed } = act((r) => r.cursedChest());
+        finish(removed
+          ? `You pocket ${gold} gold — and the chest swallows your ${CARDS[removed.id].name}.`
+          : `You pocket ${gold} gold. The chest finds nothing else to take.`);
+        break;
+      }
+      case 'mercenary': {
+        const hired = act((r) => r.hireMercenary());
+        finish(hired
+          ? `The mercenary drills ${MEMBER_DEFS[hired.slot].name} — +${hired.amount} damage.`
+          : 'You can\'t afford the fee.');
+        break;
+      }
+      case 'duplicateCard':
+        setStage({ kind: 'duplicateCard' });
+        break;
+      case 'purgeRandom': {
+        const purged = act((r) => r.purgeRandomCard());
+        finish(purged
+          ? `The well swallows your ${CARDS[purged.id].name}.`
+          : 'The well finds nothing to take.');
+        break;
+      }
+      case 'bloodAltar':
+        setStage({ kind: 'bloodAltar' });
+        break;
     }
   };
 
@@ -83,6 +115,20 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
   const blessMember = (slot: Slot) => {
     const def = act((r) => r.shrineBlessMember(slot));
     finish(`The shrine grants ${MEMBER_DEFS[slot].name} ${def.name}.`);
+  };
+
+  const duplicate = (uid: number) => {
+    const name = CARDS[run.deck.find((c) => c.uid === uid)!.id].name;
+    const copy = act((r) => r.duplicateCard(uid));
+    finish(copy ? `The scribe copies your ${name} (−${DUPLICATE_PRICE}g).`
+      : `You can't afford the ${DUPLICATE_PRICE}g commission.`);
+  };
+
+  const sacrifice = (slot: Slot) => {
+    const result = act((r) => r.bloodAltarSacrifice(slot));
+    finish(result
+      ? `The altar drinks. ${MEMBER_DEFS[slot].name}: −${result.hpLoss} max HP, +${result.damageGain} damage.`
+      : `${MEMBER_DEFS[slot].name} is too frail to sacrifice.`);
   };
 
   return (
@@ -155,6 +201,43 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
                 return (
                   <button key={d.id} className="member-pick" onClick={() => blessMember(d.slot as Slot)}>
                     <span className="member-name">{d.name}</span>
+                    <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
+          </div>
+        )}
+
+        {stage.kind === 'duplicateCard' && (
+          <div className="event-pick">
+            <h3>Choose a card to copy ({DUPLICATE_PRICE}g)</h3>
+            <DeckPicker
+              deck={run.deck}
+              canPick={() => run.gold >= DUPLICATE_PRICE}
+              onPick={duplicate}
+              emptyText={run.gold >= DUPLICATE_PRICE ? undefined : `You need ${DUPLICATE_PRICE}g to commission a copy.`}
+            />
+            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
+          </div>
+        )}
+
+        {stage.kind === 'bloodAltar' && (
+          <div className="event-pick">
+            <h3>Choose who bleeds (−{BLOOD_ALTAR_HP} max HP, +{BLOOD_ALTAR_DAMAGE} damage)</h3>
+            <div className="member-row">
+              {MEMBER_DEFS.map((d) => {
+                const p = run.party[d.slot];
+                const able = run.canSacrifice(d.slot as Slot);
+                return (
+                  <button
+                    key={d.id}
+                    className="member-pick"
+                    disabled={!able}
+                    onClick={() => able && sacrifice(d.slot as Slot)}
+                  >
+                    <span className="member-name">{d.name}{able ? '' : ' (too frail)'}</span>
                     <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
                   </button>
                 );

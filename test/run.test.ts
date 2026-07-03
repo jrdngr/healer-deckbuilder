@@ -6,6 +6,8 @@ import {
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
   defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_HP_BY_FIGHT, ENEMY_ENRAGE_TURN_BY_FIGHT,
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
+  CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
+  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
@@ -281,8 +283,8 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 }
 
 {
-  // Event catalog & rollEvent stay within the defined set.
-  eq('three sample events', EVENTS.length, 3);
+  // Event catalog & rollEvent stay within the defined set (expanded 3 -> 8, #19).
+  eq('eight events (expansion, #19)', EVENTS.length, 8);
   const ids = new Set(EVENTS.map((e) => e.id));
   let inSet = true;
   for (let seed = 0; seed < 30; seed++) {
@@ -291,6 +293,87 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   }
   check('rollEvent always returns a defined event', inSet);
   check('every event has 2-3 choices', EVENTS.every((e) => e.choices.length >= 2 && e.choices.length <= 3));
+  check('no event id repeats', ids.size === EVENTS.length);
+  // Every event keeps a walk-away branch except the shrine-style pure boons.
+  check('every new event can be declined',
+    EVENTS.filter((e) => ['cursedChest', 'mercenary', 'duplicator', 'purgeWell', 'bloodAltar'].includes(e.id))
+      .every((e) => e.choices.some((c) => c.kind === 'leave')));
+}
+
+// --- events expansion (#19) ---------------------------------------------------
+{
+  // Cursed Chest: guaranteed gold, a seeded-random card is the price.
+  const run = new Run(60);
+  const before = run.deck.length;
+  const goldBefore = run.gold;
+  const { gold, removed } = run.cursedChest();
+  eq('chest pays the flat gold', gold, CURSED_CHEST_GOLD);
+  eq('chest gold lands in the purse', run.gold, goldBefore + CURSED_CHEST_GOLD);
+  check('chest takes a card', removed !== null);
+  eq('deck shrinks by one', run.deck.length, before - 1);
+  check('the taken card is really gone', !run.deck.some((c) => c.uid === removed!.uid));
+  // Determinism: same seed, same victim.
+  const run2 = new Run(60);
+  eq('chest victim is seed-deterministic', run2.cursedChest().removed!.uid, removed!.uid);
+}
+{
+  // Wandering Mercenary: fee gated on gold; a seeded-random member gains damage.
+  const run = new Run(61);
+  eq('mercenary refuses an empty purse', run.hireMercenary(), null);
+  run.gold = MERCENARY_PRICE;
+  const before = run.party.map((p) => p.damage);
+  const hired = run.hireMercenary();
+  check('mercenary hires with enough gold', hired !== null);
+  eq('the fee is paid in full', run.gold, 0);
+  eq('the drilled member gains the damage', run.party[hired!.slot].damage, before[hired!.slot] + MERCENARY_DAMAGE);
+  const others = run.party.filter((_, s) => s !== hired!.slot);
+  check('nobody else changes', others.every((p, i) => {
+    const slots = [0, 1, 2].filter((s) => s !== hired!.slot);
+    return p.damage === before[slots[i]];
+  }));
+}
+{
+  // The Duplicator: a paid, unupgraded copy of a chosen card.
+  const run = new Run(62);
+  run.gold = DUPLICATE_PRICE;
+  const target = run.deck.find((c) => c.id === 'ability')!;
+  target.upgrades.push('efficient'); // the copy must NOT inherit this
+  const before = run.deck.length;
+  const copy = run.duplicateCard(target.uid);
+  check('duplicator returns the copy', copy !== null);
+  eq('deck grows by one', run.deck.length, before + 1);
+  eq('the copy shares the id', copy!.id, 'ability');
+  eq('the copy is unupgraded', copy!.upgrades.length, 0);
+  check('the copy has a fresh uid', copy!.uid !== target.uid);
+  eq('the commission is paid', run.gold, 0);
+  eq('a second copy is unaffordable', run.duplicateCard(target.uid), null);
+}
+{
+  // Purge Well: free removal, but the well chooses; seed-deterministic.
+  const run = new Run(63);
+  const before = run.deck.length;
+  const goldBefore = run.gold;
+  const purged = run.purgeRandomCard();
+  check('the well takes a card', purged !== null);
+  eq('free — no gold moves', run.gold, goldBefore);
+  eq('deck shrinks by one', run.deck.length, before - 1);
+  eq('well victim is seed-deterministic', new Run(63).purgeRandomCard()!.uid, purged!.uid);
+}
+{
+  // Blood Altar: permanent maxHP -> damage trade, floored so it never cripples.
+  const run = new Run(64);
+  const tank = run.party[1];
+  const hpBefore = tank.maxHP, dmgBefore = tank.damage;
+  const result = run.bloodAltarSacrifice(1 as Slot);
+  check('the altar accepts a healthy member', result !== null);
+  eq('max HP is paid', tank.maxHP, hpBefore - BLOOD_ALTAR_HP);
+  eq('damage is granted', tank.damage, dmgBefore + BLOOD_ALTAR_DAMAGE);
+  // Drain the mage down to the floor: the altar must refuse.
+  const mage = run.party[2];
+  mage.maxHP = BLOOD_ALTAR_MIN_HP;
+  check('a member at the floor may not sacrifice', !run.canSacrifice(2 as Slot));
+  eq('the altar refuses the frail', run.bloodAltarSacrifice(2 as Slot), null);
+  eq('no stats moved on refusal', mage.maxHP, BLOOD_ALTAR_MIN_HP);
 }
 
 // --- issue 05: economy repricing -------------------------------------------

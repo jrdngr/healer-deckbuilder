@@ -76,6 +76,11 @@
 //   after #18 (Resurrect 6->4 MP + revive-behind-a-Shield; poison MEASURED and
 //     left at 5x5):  sim unchanged from #17 (the policy stick has no resurrect
 //     tactic, so the N=200 pins pass bit-identical; full-run stays 33.8%).
+//   after #19 (events 3 -> 8: Cursed Chest / Mercenary / Duplicator / Purge Well /
+//     Blood Altar):  full-run 32.6 % ±2.9 at N=1000.
+//     F0 100 | F1 100 | F2 A1boss 88.9 | F3 99.3 | F4 98.2 | F5 A2boss 73.9 | F6 95.0 | F7 96.9 | F8 A3boss 55.3
+//     The policy walks away from all five new events (they are player decisions,
+//     not free value), so the shift is pure event-roll RNG; bands hold.
 //     The Q5 poison measurement (all N=1000, on the #17 baseline):
 //       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
 //       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%

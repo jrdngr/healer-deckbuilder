@@ -14,6 +14,8 @@ import {
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
   GOLD_PER_FIGHT, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
+  CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
+  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
 } from './constants';
 import type {
@@ -487,5 +489,61 @@ export class Run {
     const def = PARTY_UPGRADES[Math.floor(this.rng() * PARTY_UPGRADES.length)];
     this.applyPartyUpgrade(slot, def);
     return def;
+  }
+
+  // ---- events expansion (#19) -----------------------------------------------
+
+  // Cursed Chest: the gold is guaranteed; the price is a card of the CHEST's
+  // choosing (seeded-uniform over the deck). Returns what was taken.
+  cursedChest(): { gold: number; removed: DeckCard | null } {
+    this.gold += CURSED_CHEST_GOLD;
+    let removed: DeckCard | null = null;
+    if (this.deck.length > 0) {
+      removed = this.deck[Math.floor(this.rng() * this.deck.length)];
+      this.removeCard(removed.uid);
+    }
+    return { gold: CURSED_CHEST_GOLD, removed };
+  }
+
+  // Wandering Mercenary: pay the fee; a seeded-random member gets +1 damage.
+  // Null (nothing charged) when unaffordable.
+  hireMercenary(): { slot: Slot; amount: number } | null {
+    if (this.gold < MERCENARY_PRICE) return null;
+    this.gold -= MERCENARY_PRICE;
+    const slot = Math.floor(this.rng() * this.party.length) as Slot;
+    this.party[slot].damage += MERCENARY_DAMAGE;
+    return { slot, amount: MERCENARY_DAMAGE };
+  }
+
+  // The Duplicator: add an UNUPGRADED copy of the chosen card (the letters, not
+  // the gilding — full-upgrade copies would trivialize the modifier economy).
+  duplicateCard(uid: number): DeckCard | null {
+    if (this.gold < DUPLICATE_PRICE) return null;
+    const card = this.deck.find((c) => c.uid === uid);
+    if (!card) return null;
+    this.gold -= DUPLICATE_PRICE;
+    return this.addCard(card.id);
+  }
+
+  // Purge Well: free removal, but the WELL chooses (seeded-uniform). The 20g
+  // chosen-removal economy (flaw #17) is undercut only by giving up the choice.
+  purgeRandomCard(): DeckCard | null {
+    if (this.deck.length === 0) return null;
+    const card = this.deck[Math.floor(this.rng() * this.deck.length)];
+    this.removeCard(card.uid);
+    return card;
+  }
+
+  // Blood Altar: a permanent max-HP-for-damage trade on a chosen member. A
+  // member at/below the floor may not sacrifice (the altar takes, never kills).
+  canSacrifice(slot: Slot): boolean {
+    return this.party[slot].maxHP > BLOOD_ALTAR_MIN_HP;
+  }
+
+  bloodAltarSacrifice(slot: Slot): { hpLoss: number; damageGain: number } | null {
+    if (!this.canSacrifice(slot)) return null;
+    this.party[slot].maxHP -= BLOOD_ALTAR_HP;
+    this.party[slot].damage += BLOOD_ALTAR_DAMAGE;
+    return { hpLoss: BLOOD_ALTAR_HP, damageGain: BLOOD_ALTAR_DAMAGE };
   }
 }

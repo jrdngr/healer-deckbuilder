@@ -27,14 +27,13 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–18** (through P7d: 14 new shop cards, the Defense→Brace→Shield pipeline, the
-Resurrect rework, and the Q5 poison decision — **measured and left at 5×5**; Consume already
-makes it a real decision, and a 4×4 nerf breaks two boss gates — full numbers in
-`sim/run-sim.ts`; Second Wind skipped, the 22-card pool needs no filler body). The three bosses
-hit their gates (Gatewarden ~89% / Hexweaver ~74% / Devourer ~57%) and the **full run is
-winnable end to end at ~34%** (the designed 25–35% band — re-checked at N=1000 after each pool
-change). **Next up: #19 (events expansion).** **➤ Human playtest #2** is ready now (the Devourer
-/ full-run band landed).
+**Done: 01–19** (all of P7: 14 new shop cards, the Defense→Brace→Shield pipeline, the Resurrect
+rework, the Q5 poison decision — **measured and left at 5×5**; Consume already makes it a real
+decision, a 4×4 nerf breaks two boss gates; full numbers in `sim/run-sim.ts` — and the event
+pool grown 3 → 8). The three bosses hit their gates (Gatewarden ~89% / Hexweaver ~74% / Devourer
+~55%) and the **full run is winnable end to end at ~33%** (the designed 25–35% band — re-checked
+at N=1000 after every pool change). **Next up: #20 (Act 2/3 named rosters).** **➤ Human playtest
+#2** is ready now (the Devourer / full-run band landed).
 
 ## Issues (implementation order)
 
@@ -58,7 +57,7 @@ change). **Next up: #19 (events expansion).** **➤ Human playtest #2** is ready
 | 16 | ✅ Done | [Card set phase B: small-new-state cards](./issues/16-cards-phase-b.md) | P7b | 15 | §3.2 |
 | 17 | ✅ Done | [Card set phase C: Bulwark / Defense pipeline](./issues/17-cards-phase-c-bulwark.md) | P7c | 16 | §3.2; Q10 |
 | 18 | ✅ Done | [Resurrect rework + poison decision + Second Wind](./issues/18-resurrect-poison-secondwind.md) | P7d | 14, 16 | flaws #13, #14; Q5 |
-| 19 | ⬜ Todo | [Events expansion 3 → ~8](./issues/19-events-expansion.md) | P7e | 10 | §4 P7 |
+| 19 | ✅ Done | [Events expansion 3 → 8](./issues/19-events-expansion.md) | P7e | 10 | §4 P7 |
 | 20 | ⬜ Todo | [Act 2/3 named rosters](./issues/20-act23-rosters.md) | P8 | 14, 09 | §4 P8 |
 | 21 | ⬜ Todo | [Relics phase A: infra + 10 legible relics](./issues/21-relics-phase-a.md) | P9a | 14, 17 | §3.3; Q9 |
 | 22 | ⬜ Todo | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |

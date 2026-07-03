@@ -778,6 +778,11 @@ export type EventChoiceKind =
   | 'safeGold'      // take the guaranteed payout instead of the flip
   | 'shrineCard'    // pick an eligible card; apply a random eligible modifier (free)
   | 'shrineParty'   // pick a member; apply a random stat boost (free)
+  | 'cursedChest'   // +gold, but a RANDOM card leaves the deck (#19)
+  | 'mercenary'     // pay gold; a RANDOM member gains +1 damage (#19)
+  | 'duplicateCard' // deck picker; add an unupgraded copy of the chosen card (#19)
+  | 'purgeRandom'   // free removal, but the well chooses the card (#19)
+  | 'bloodAltar'    // pick a member: -2 max HP for +1 damage, permanent (#19)
   | 'leave';        // decline / move on
 
 export interface EventChoiceDef {
@@ -793,6 +798,17 @@ export interface EventDef {
 }
 
 export const EVENT_CARD_OFFER_SIZE = 3;
+
+// Events-expansion (#19) magnitudes. Duplication costs more than removal (20g)
+// so copy/purge stay one coherent economy; the free Purge Well removal pays its
+// discount in randomness (the well picks the card, not the player).
+export const CURSED_CHEST_GOLD = 80;  // the chest's payout; a random card is the price
+export const MERCENARY_PRICE = 45;    // hire fee for +1 damage on a random member
+export const MERCENARY_DAMAGE = 1;
+export const DUPLICATE_PRICE = 30;    // add an unupgraded copy of a chosen card
+export const BLOOD_ALTAR_HP = 2;      // permanent max-HP price a member pays
+export const BLOOD_ALTAR_DAMAGE = 1;  // permanent damage the altar grants
+export const BLOOD_ALTAR_MIN_HP = 6;  // members at/below this max HP may not sacrifice
 
 export const EVENTS: EventDef[] = [
   {
@@ -823,6 +839,53 @@ export const EVENTS: EventDef[] = [
       { label: 'Bless a card', kind: 'shrineCard', detail: 'Pick a card; it gains a random upgrade.' },
       { label: 'Bless a hero', kind: 'shrineParty', detail: 'Pick a member; they gain a random boost.' },
       { label: 'Leave', kind: 'leave' },
+    ],
+  },
+  // --- events expansion (#19): five more, each a real decision ---------------
+  {
+    id: 'cursedChest',
+    title: 'Cursed Chest',
+    text: 'A gilded chest sits in the roots of a dead tree, humming softly. Gold glints through the seam — but so does something hungrier.',
+    choices: [
+      { label: 'Pry it open', kind: 'cursedChest', detail: `+${CURSED_CHEST_GOLD}g — but a random card leaves your deck.` },
+      { label: 'Leave it buried', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'mercenary',
+    title: 'Wandering Mercenary',
+    text: '"Your lot swing like farmhands," the sellsword laughs. "For coin, I\'ll drill one of them — my pick, not yours."',
+    choices: [
+      { label: 'Pay for drills', kind: 'mercenary', detail: `${MERCENARY_PRICE}g: a random member gains +${MERCENARY_DAMAGE} damage.` },
+      { label: 'Decline', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'duplicator',
+    title: 'The Duplicator',
+    text: 'A scribe with ink-stained fingers studies your deck. "Any page can be copied — the letters, not the gilding."',
+    choices: [
+      { label: 'Commission a copy', kind: 'duplicateCard', detail: `${DUPLICATE_PRICE}g: add an unupgraded copy of a chosen card.` },
+      { label: 'Move on', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'purgeWell',
+    title: 'Purge Well',
+    text: 'Black water swallows whatever is thrown in. The well keeps what it takes — and it is not picky, unless you pay it to be.',
+    choices: [
+      { label: 'Feed it a burden', kind: 'removeCard', detail: `Choose a card to remove (${CARD_REMOVAL_PRICE}g).` },
+      { label: 'Let the well choose', kind: 'purgeRandom', detail: 'Free — a random card is removed.' },
+      { label: 'Step away', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'bloodAltar',
+    title: 'Blood Altar',
+    text: 'The stone drinks. Old carvings promise strength for vitality — a bargain struck in the flesh, and never unstruck.',
+    choices: [
+      { label: 'Offer a hero\'s blood', kind: 'bloodAltar', detail: `Chosen member: −${BLOOD_ALTAR_HP} max HP, +${BLOOD_ALTAR_DAMAGE} damage (permanent).` },
+      { label: 'Keep your blood', kind: 'leave' },
     ],
   },
 ];
