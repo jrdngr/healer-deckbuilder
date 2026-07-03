@@ -5,6 +5,7 @@ import {
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
   defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_BASE_HP, ENEMY_HP_PER_FIGHT,
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
+  NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
@@ -326,6 +327,37 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const { delta, gold } = run.safeGold();
   eq('safe cut pays the fixed amount', delta, CASINO_SAFE_GOLD);
   eq('safe cut adds to gold', gold, g0 + CASINO_SAFE_GOLD);
+}
+
+// --- issue 09: named normals + encounter tables ----------------------------
+{
+  // Each named normal has a distinct, single-plurality profile (texture, not a
+  // spike): single is the most-weighted type, and only Cleaver uses heavy.
+  for (const def of NORMAL_ENEMY_DEFS) {
+    const w = def.baseWeights;
+    const total = Object.values(w).reduce((s, x) => s + x, 0);
+    check(`${def.id} weights sum > 0`, total > 0);
+    check(`${def.id} is single-plurality`, w.single >= Math.max(w.two, w.aoe, w.hidden, w.heavy, w.sweep));
+    check(`${def.id} never sweeps (boss-only)`, w.sweep === 0);
+  }
+  check('only Cleaver uses heavy', NORMAL_ENEMY_DEFS.filter((d) => d.baseWeights.heavy > 0).map((d) => d.id).join() === 'cleaver');
+}
+{
+  // Encounter selection is deterministic by seed, and the boss slot is always the boss.
+  const idsFor = (seed: number): string[] =>
+    [0, 1, 2, 3, 4].map((fi) => new Run(seed).rollEncounter(fi).id);
+  eq('encounter roll deterministic by seed', JSON.stringify(idsFor(7)), JSON.stringify(idsFor(7)));
+  const ids = idsFor(7);
+  eq('boss slot is always the boss', ids[FIGHT_COUNT - 1], 'boss');
+  check('normal slots are named normals', ids.slice(0, FIGHT_COUNT - 1).every((id) => ENEMY_DEF_BY_ID[id] !== undefined));
+}
+{
+  // Entering a fight rolls and caches the enemy def (stable across toBattleConfig).
+  const run = new Run(3);
+  run.beginRun(); // enters fight 0
+  const def = run.currentEnemyDef;
+  check('fight 0 has a rolled enemy def', def !== null && def!.boss === false);
+  eq('battle config carries the same def', run.toBattleConfig().enemy.def, def);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

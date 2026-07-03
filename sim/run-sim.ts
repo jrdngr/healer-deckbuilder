@@ -22,6 +22,9 @@
 //                          per-fight ~100 / 99.8 / 70.7 / 38.4 / 45.0 %  full-run ~12.2 %
 //   after #05 (decaying Rest + economy repricing):
 //                          per-fight ~100 / 100 / 90.7 / 69.9 / 75.6 %   full-run ~47.9 %
+//   after #09 (four named normals + encounter tables):
+//                          per-fight ~100 / 100 / 90.1 / 71.5 / 72.0 %   full-run ~46.4 %
+//                          (variety, not a spike — every fight within +-5pp of #06)
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

@@ -114,6 +114,44 @@ export const BOSS_ENEMY_DEF: EnemyDef = {
   baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged,
 };
 
+// Attack-weight literal helper — keeps the six-key order consistent across defs.
+const aw = (single: number, two: number, aoe: number, hidden: number, heavy: number, sweep: number): AttackWeights =>
+  ({ single, two, aoe, hidden, heavy, sweep });
+
+// Four named normals (issue 09). Each is a distinct *shape* of the same total
+// threat as the old generic normal (~4.5 party-wide dmg/turn), not a difficulty
+// spike — the encounter tables keep per-fight winrates within ±5pp of baseline.
+export const ENEMY_SPAMMER: EnemyDef = { // single-spammer: relentless single hits
+  id: 'spammer', name: 'Brute', boss: false,
+  baseWeights: aw(78, 14, 4, 4, 0, 0), enragedWeights: aw(58, 24, 14, 4, 0, 0),
+};
+export const ENEMY_SWARM: EnemyDef = { // swarm: leans more on multi-target blows
+  id: 'swarm', name: 'Swarm', boss: false,
+  baseWeights: aw(52, 26, 17, 5, 0, 0), enragedWeights: aw(35, 33, 27, 5, 0, 0),
+};
+export const ENEMY_STALKER: EnemyDef = { // stalker: leans on concealed (hidden) blows
+  id: 'stalker', name: 'Stalker', boss: false,
+  baseWeights: aw(52, 10, 8, 30, 0, 0), enragedWeights: aw(35, 18, 17, 30, 0, 0),
+};
+export const ENEMY_CLEAVER: EnemyDef = { // cleaver: occasional heavy single hit
+  id: 'cleaver', name: 'Cleaver', boss: false,
+  baseWeights: aw(58, 12, 7, 5, 18, 0), enragedWeights: aw(42, 18, 12, 5, 23, 0),
+};
+
+export const NORMAL_ENEMY_DEFS: EnemyDef[] = [ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER];
+export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
+  Object.fromEntries(NORMAL_ENEMY_DEFS.map((d) => [d.id, d]));
+
+// Encounter table: weighted normal picks per fight index (the boss slot, the last
+// fight, is excluded — it always uses BOSS_ENEMY_DEF). Gentler shapes early, the
+// full roster (diluted) later — texture, not a difficulty spike.
+export const ENCOUNTER_TABLE: Array<Array<[string, number]>> = [
+  [['spammer', 70], ['swarm', 30]],                                   // fight 0
+  [['spammer', 45], ['swarm', 30], ['stalker', 25]],                  // fight 1
+  [['spammer', 30], ['swarm', 30], ['stalker', 25], ['cleaver', 15]], // fight 2
+  [['spammer', 25], ['swarm', 25], ['stalker', 25], ['cleaver', 25]], // fight 3
+];
+
 export const ENRAGE_TURN = 11; // first enraged enemy turn (turn 11 onward)
 export const ENRAGE_MULT = 1.25;
 

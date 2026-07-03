@@ -13,11 +13,11 @@ import {
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
   GOLD_PER_FIGHT, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
-  DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF,
+  DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
-  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef,
+  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef,
   CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer,
 } from './constants';
 import { makeRng, weightedPick } from './rng';
@@ -56,6 +56,7 @@ export class Run {
   status: RunStatus;
   location: RunLocation;
   nodeContent: NodeContent | null;
+  currentEnemyDef: EnemyDef | null; // enemy rolled for the current fight (stable for the visit)
   private nextUid: number;
 
   constructor(seed: number = Date.now()) {
@@ -70,13 +71,29 @@ export class Run {
     this.status = 'playing';
     this.location = { kind: 'start' };
     this.nodeContent = null;
+    this.currentEnemyDef = null;
   }
 
   // Leave the opening map and enter the first fight.
   beginRun(): void {
     if (this.location.kind !== 'start') return;
-    this.location = { kind: 'fight', fightIndex: 0 };
+    this._enterFight(0);
+  }
+
+  // Enter a fight: set the location and roll (once) the enemy that occupies it.
+  _enterFight(fightIndex: number): void {
+    this.location = { kind: 'fight', fightIndex };
     this.nodeContent = null;
+    this.currentEnemyDef = this.rollEncounter(fightIndex);
+  }
+
+  // Roll the enemy for a fight slot from the encounter table (the boss slot always
+  // uses BOSS_ENEMY_DEF). Deterministic in the run seed.
+  rollEncounter(fightIndex: number): EnemyDef {
+    if (fightIndex >= FIGHT_COUNT - 1) return BOSS_ENEMY_DEF;
+    const row = ENCOUNTER_TABLE[fightIndex] ?? ENCOUNTER_TABLE[ENCOUNTER_TABLE.length - 1];
+    const id = weightedPick(row, this.rng);
+    return ENEMY_DEF_BY_ID[id] ?? DEFAULT_ENEMY_DEF;
   }
 
   // ---- map generation ------------------------------------------------------
@@ -131,7 +148,7 @@ export class Run {
         maxHP: this.enemyMaxHP(),
         boss: this.isBossFight,
         attackBonus: ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0,
-        def: this.isBossFight ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF,
+        def: this.currentEnemyDef ?? (this.isBossFight ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF),
       },
     };
   }
@@ -163,10 +180,7 @@ export class Run {
     if (this.location.kind !== 'node') return;
     const { forkIndex, branch, index } = this.location;
     if (index < NODES_PER_BRANCH - 1) this._gotoNode(forkIndex, branch, index + 1);
-    else {
-      this.location = { kind: 'fight', fightIndex: forkIndex + 1 };
-      this.nodeContent = null;
-    }
+    else this._enterFight(forkIndex + 1);
   }
 
   _gotoNode(forkIndex: number, branch: number, index: number): void {
