@@ -25,6 +25,9 @@
 //   after #09 (four named normals + encounter tables):
 //                          per-fight ~100 / 100 / 90.1 / 71.5 / 72.0 %   full-run ~46.4 %
 //                          (variety, not a spike — every fight within +-5pp of #06)
+//   after #12 (Gatewarden as the Act-1 boss): Act-1 boss (F2) ~90% (>= 85% gate).
+//     The Act 2/3 bosses are still placeholders, so full-run stays ~0% (deferred to #14).
+//
 //   after #10 (3-act / 9-fight structure):  full-run ~0 %  (per-fight below)
 //     F0 100 | F1 100 | F2 A1boss 78 | F3 99 | F4 99 | F5 A2boss 17 | F6 91 | F7 21 | F8 A3boss 0
 //     The Act 2/3 bosses are placeholders (scaled BOSS_ENEMY_DEF, 200/280 HP) with no

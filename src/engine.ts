@@ -63,6 +63,9 @@ export interface Telegraph {
   targets: Slot[];
   enraged: boolean;
   forTurn: number;
+  channel?: boolean;          // a multi-turn channelled attack (its wind-up is the telegraph)
+  channelName?: string;       // display name for the channel (e.g. "Crushing Blow")
+  turnsUntilResolve?: number; // enemy turns until it lands (undefined/1 = lands next enemy phase)
 }
 
 export interface LogEntry {
@@ -87,6 +90,9 @@ export interface AttackSpec {
 export type GameEvent =
   // --- enemy phase ---
   | { kind: 'enrage' }
+  // --- channelled attacks (Gatewarden, #12): a wind-up the cast bar tracks ---
+  | { kind: 'channelStart'; name: string; damage: number; turnsUntilResolve: number }
+  | { kind: 'channelTick'; name: string; turnsUntilResolve: number }
   | { kind: 'poisonTick'; amount: number; enemyHp: number }
   | { kind: 'refreshTick'; amount: number; mp: number }
   | { kind: 'enemyAttack'; slot: Slot; amount: number; hp: number;
@@ -139,6 +145,7 @@ export class Game {
   status: Status;
   cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +2 at 1)
   telegraph: Telegraph | null;
+  rotationIndex: number; // index into a rotation enemy's fixed attack cycle (see EnemyDef.rotation)
   tauntRetargetMode: TauntRetargetMode; // how Taunt treats the standing telegraph (see constants)
   log: LogEntry[];
   events: GameEvent[]; // animation feed for the most recent action (see GameEvent)
@@ -195,6 +202,7 @@ export class Game {
     this.status = 'playing'; // 'playing' | 'win' | 'loss'
     this.cardsPlayedThisPhase = 0;
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
+    this.rotationIndex = 0;  // advances each time a rotation enemy issues an attack
     this.tauntRetargetMode = DEFAULT_TAUNT_RETARGET_MODE;
     this.log = [];
     this.events = [];
@@ -249,11 +257,16 @@ export class Game {
     return Math.max(0, this.enrageTurn - this.turn);
   }
 
-  // Per-target damage for an attack type at a given turn (round up on enrage).
-  // The enemy's per-fight attackBonus is added before the enrage multiplier.
+  // Per-target damage for a base value at a given turn: add the enemy's per-fight
+  // attackBonus, then round up under the enrage multiplier if enraged.
+  attackDamageOf(base: number, turn: number): number {
+    const b = base + this.config.enemy.attackBonus;
+    return this.isEnraged(turn) ? Math.ceil(b * ENRAGE_MULT) : b;
+  }
+
+  // Per-target damage for an attack type at a given turn.
   attackDamage(type: AttackType, turn: number): number {
-    const base = ATTACK_BASE_DAMAGE[type] + this.config.enemy.attackBonus;
-    return this.isEnraged(turn) ? Math.ceil(base * ENRAGE_MULT) : base;
+    return this.attackDamageOf(ATTACK_BASE_DAMAGE[type], turn);
   }
 
   tankTaunting(): boolean { return this.tauntingMember() !== null; }
@@ -300,6 +313,33 @@ export class Game {
   }
 
   _generateTelegraph(turn: number): Telegraph {
+    const def = this.enemyDef;
+    // Rotation bosses follow a fixed, learnable cycle; some slots periodically
+    // become a multi-turn channel (its wind-up is the telegraph).
+    if (def.rotation && def.rotation.length > 0) {
+      const len = def.rotation.length;
+      const idx = this.rotationIndex % len;
+      const cycle = Math.floor(this.rotationIndex / len);
+      const ch = def.channel;
+      if (ch && idx === ch.slot && (cycle % ch.everyCycles) === ch.everyCycles - 1) {
+        const primary = this._pickPrimary(ch.type);
+        return {
+          type: ch.type, hidden: false,
+          damage: this.attackDamageOf(ch.damage, turn),
+          targets: this._geometry(ch.type, primary),
+          enraged: this.isEnraged(turn), forTurn: turn,
+          channel: true, channelName: ch.name, turnsUntilResolve: ch.turns,
+        };
+      }
+      const type = def.rotation[idx];
+      const primary = this._pickPrimary(type);
+      return {
+        type, hidden: type === 'hidden',
+        damage: this.attackDamage(type, turn),
+        targets: this._geometry(type, primary),
+        enraged: this.isEnraged(turn), forTurn: turn, turnsUntilResolve: 1,
+      };
+    }
     // The turn-1 blow resolves on mount, before any player input, so it must not
     // open on a heavy or a sweep — force it to a plain single-target hit (flaw #12).
     const type = turn === 1 ? 'single' : this._pickType(turn);
@@ -312,6 +352,7 @@ export class Game {
       targets,
       enraged: this.isEnraged(turn),
       forTurn: turn,
+      turnsUntilResolve: 1,
     };
   }
 
@@ -470,13 +511,38 @@ export class Game {
       }
     }
 
-    // 2) the attack itself (executes the standing telegraph). The boss is more
-    // dangerous via its stronger telegraphed attack pool (heavy/sweep), not via a
-    // hidden extra strike — everything it does is shown ahead of time.
+    // 2) resolve the standing telegraph — unless it is a channel still winding up,
+    // in which case the enemy takes no other action this turn (its wind-up IS the
+    // telegraph) and the channel stays standing for another turn.
+    const t = this.telegraph;
+    if (t && t.channel && (t.turnsUntilResolve ?? 1) > 1) {
+      t.turnsUntilResolve = (t.turnsUntilResolve ?? 1) - 1;
+      this._log(`${this.enemyDef.name} channels ${t.channelName} — ${t.turnsUntilResolve} turn(s) to resolve.`, 'system');
+      this._emit({ kind: 'channelTick', name: t.channelName ?? 'Channel', turnsUntilResolve: t.turnsUntilResolve ?? 0 });
+      this._decayBuffs();
+      return; // channel keeps standing; do not advance the rotation or re-telegraph
+    }
+
+    // A channel re-checks Taunt at resolve (not only at cast), so a late Taunt
+    // still redirects it onto the defended member.
+    if (t && t.channel) {
+      const taunter = this.tauntingMember();
+      if (taunter && this._standingTelegraphRedirectable(taunter.slot)) this._retargetTelegraphTo(taunter.slot);
+    }
     this._resolveAttack();
     if (this._checkWipe()) return;
 
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
+    this._decayBuffs();
+
+    // 4) advance any rotation and telegraph the next attack (enrage baked in).
+    this.rotationIndex += 1;
+    this.telegraph = this._generateTelegraph(this.turn + 1);
+    this._announceChannel(this.telegraph);
+  }
+
+  // Decay the per-turn member buffs after an enemy turn's attack has resolved.
+  _decayBuffs(): void {
     for (const m of this.members) {
       if (m.alive && m.taunt > 0) {
         m.taunt -= 1;
@@ -496,9 +562,15 @@ export class Game {
         }
       }
     }
+  }
 
-    // 4) telegraph the next turn's attack (with correct enrage state baked in).
-    this.telegraph = this._generateTelegraph(this.turn + 1);
+  // Emit the channel-start event when a freshly-generated telegraph is a channel,
+  // so the UI cast bar can begin its countdown.
+  _announceChannel(t: Telegraph | null): void {
+    if (t && t.channel) {
+      this._log(`${this.enemyDef.name} begins channelling ${t.channelName}!`, 'system');
+      this._emit({ kind: 'channelStart', name: t.channelName ?? 'Channel', damage: t.damage, turnsUntilResolve: t.turnsUntilResolve ?? 1 });
+    }
   }
 
   // Resolve an enemy attack. Defaults to the standing telegraph, but the boss's

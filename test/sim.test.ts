@@ -50,9 +50,11 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 158, 157, 156, 26, 23, 6, 0]));
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 185, 184, 183, 34, 29, 6, 0]));
   // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).
   for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 95%`, r.perFight[fi].rate >= 0.95);
+  // Issue 12 gate: the Act-1 boss (Gatewarden, F2) clears >= 85%.
+  check('Act-1 boss (Gatewarden) clears >= 85%', r.perFight[2].rate >= 0.85);
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

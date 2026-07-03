@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -920,6 +920,61 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // memberDamage accessor returns the member's damage (the party-phase seam).
   const g = new Game(44);
   for (const m of g.members) eq(`memberDamage(${m.id})`, g.memberDamage(m), m.damage);
+}
+
+// --- Gatewarden: fixed rotation + Crushing Blow channel (issue 12) ----------
+function gatewardenGame(seed: number, enrageTurn = 99): Game {
+  const cfg = defaultBattleConfig();
+  cfg.enemy = { maxHP: 9999, boss: true, attackBonus: 0, def: GATEWARDEN_DEF, enrageTurn };
+  return new Game(seed, cfg);
+}
+{
+  // Rotation is exact: single -> two -> heavy -> sweep, repeating, with the heavy
+  // becoming Crushing Blow on every 2nd cycle.
+  const g = gatewardenGame(1);
+  const seq: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    g.rotationIndex = i;
+    const t = g._generateTelegraph(5);
+    seq.push(t.channel ? `channel:${t.channelName}` : t.type);
+  }
+  eq('exact rotation with channel on cycle 2',
+    JSON.stringify(seq),
+    JSON.stringify(['single', 'two', 'heavy', 'sweep', 'single', 'two', 'channel:Crushing Blow', 'sweep']));
+}
+{
+  // Crushing Blow: a 2-turn channel that deals ~20 on resolve; no damage during
+  // the wind-up (the enemy takes no other action while channelling).
+  const g = gatewardenGame(2);
+  g.rotationIndex = 6;               // the channel slot
+  g.telegraph = g._generateTelegraph(3);
+  check('channel is telegraphed', g.telegraph.channel === true);
+  eq('channel damage is ~20', g.telegraph.damage, 20);
+  eq('channel takes 2 turns to resolve', g.telegraph.turnsUntilResolve, 2);
+  const target = g.telegraph.targets[0];
+  g.members[target].hp = 50;         // survive to measure the exact hit
+  const before = g.members[target].hp;
+  g.turn = 2; g._runEnemyPhase();     // wind-up turn: no damage
+  eq('no damage during the wind-up', g.members[target].hp, before);
+  eq('wind-up decremented the timer', g.telegraph.turnsUntilResolve, 1);
+  check('still channelling after wind-up', g.telegraph.channel === true);
+  g.members[target].hp = 50;
+  g.turn = 3; g._runEnemyPhase();     // resolve turn
+  eq('Crushing Blow lands for 20', g.members[target].hp, 30);
+}
+{
+  // A Taunt cast DURING the wind-up still redirects the channel at resolve.
+  const g = gatewardenGame(3);
+  g.rotationIndex = 6;
+  g.telegraph = g._generateTelegraph(3);
+  g.telegraph.targets = [SLOT.LEFT];  // channel aimed at the ranger
+  g.turn = 2; g._runEnemyPhase();      // wind-up (channel now resolves next turn)
+  // Late taunt: the tank taunts during the wind-up.
+  g.tank.taunt = TAUNT_TURNS; g.tank.defense = DEFENSE_TURNS;
+  g.ranger.hp = 50; g.tank.hp = 50;
+  g.turn = 3; g._runEnemyPhase();      // resolve: should hit the taunting tank
+  eq('channel redirected onto the taunting tank', g.tank.hp, 50 - (20 - (DEFENSE_AMOUNT + g.tank.abilityPower)));
+  eq('the original target (ranger) is untouched', g.ranger.hp, 50);
 }
 
 // --- turn-1 attack is always a plain single (flaw #12) ----------------------

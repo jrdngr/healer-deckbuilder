@@ -17,6 +17,11 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
   const untilEnrage = game.turnsUntilEnrage();
   const showCountdown = game.status === 'playing' && !e.enraged && untilEnrage > 0 && untilEnrage <= 4;
   const intent = game.telegraphIntent();
+  // A channelled attack (Gatewarden's Crushing Blow, #12): show a cast bar that
+  // fills as its wind-up nears resolve.
+  const tel = game.telegraph;
+  const channel = game.status === 'playing' && tel?.channel ? tel : null;
+  const castTurns = channel?.turnsUntilResolve ?? 0;
   return (
     <section className="enemy">
       <div className="enemy-head">
@@ -38,6 +43,17 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
           {intent && <span className="enemy-intent">Intends: {intent}</span>}
           {e.poison > 0 ? ` ☠ Poison ${e.poison}` : ''}
         </div>
+        {channel && (
+          <div className="cast-bar" title={`${channel.channelName}: ${channel.damage} damage on resolve`}>
+            <span className="cast-label">
+              ⚡ {channel.channelName} — resolves in {castTurns} turn{castTurns === 1 ? '' : 's'} ({channel.damage})
+            </span>
+            <div className="cast-track">
+              {/* fills as the wind-up nears resolve (1 turn left ≈ full) */}
+              <div className="cast-fill" style={{ width: `${Math.max(0, 100 - castTurns * 45)}%` }} />
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

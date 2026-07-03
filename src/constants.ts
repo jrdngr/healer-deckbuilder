@@ -94,12 +94,26 @@ export const ATTACK_INTENT_NAMES: Record<AttackType, string> = {
 // ---------------------------------------------------------------------------
 export type AttackWeights = Record<AttackType, number>;
 
+// A channelled attack: a multi-turn wind-up whose telegraph IS the standing
+// telegraph (preserving the single-telegraph invariant). While it winds up the
+// enemy takes no other action; on resolve it lands `damage` with `type` geometry.
+export interface ChannelDef {
+  slot: number;        // rotation index that becomes a channel
+  everyCycles: number; // channel on cycles where (cycle % everyCycles) === everyCycles - 1
+  turns: number;       // enemy turns from telegraph to resolve (2 = one wind-up turn + resolve)
+  damage: number;      // per-target damage on resolve
+  type: AttackType;    // geometry/label the channel resolves as
+  name: string;        // display name (e.g. "Crushing Blow")
+}
+
 export interface EnemyDef {
   id: string;
   name: string;
   boss: boolean;
   baseWeights: AttackWeights;    // attack-type selection pre-enrage
   enragedWeights: AttackWeights; // attack-type selection while enraged
+  rotation?: AttackType[];       // fixed, learnable attack cycle (overrides weighted selection)
+  channel?: ChannelDef;          // a rotation slot that periodically becomes a channel
 }
 
 // The two stock behaviors that reproduce the pre-refactor enemies exactly. They
@@ -137,6 +151,20 @@ export const ENEMY_CLEAVER: EnemyDef = { // cleaver: occasional heavy single hit
   id: 'cleaver', name: 'Cleaver', boss: false,
   baseWeights: aw(58, 12, 7, 5, 18, 0), enragedWeights: aw(42, 18, 12, 5, 23, 0),
 };
+
+// Boss 1 — Gatewarden (issue 12): a fixed, learnable rotation that teaches
+// telegraph-reading. Every 2nd cycle its heavy becomes Crushing Blow — a 2-turn
+// channel at ~20 (≈3× heavy). Opens on single, complementing the turn-1 rule.
+export const GATEWARDEN_DEF: EnemyDef = {
+  id: 'gatewarden', name: 'Gatewarden', boss: true,
+  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
+  rotation: ['single', 'two', 'heavy', 'sweep'],
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 20, type: 'heavy', name: 'Crushing Blow' },
+};
+
+// Act boss per act (0-based). Acts 2/3 are placeholders (scaled BOSS_ENEMY_DEF)
+// until the Hexweaver (#13) and Devourer (#14) land.
+export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, BOSS_ENEMY_DEF, BOSS_ENEMY_DEF];
 
 export const NORMAL_ENEMY_DEFS: EnemyDef[] = [ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER];
 export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =

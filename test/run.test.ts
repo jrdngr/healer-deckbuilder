@@ -6,7 +6,7 @@ import {
   GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
   defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_HP_BY_FIGHT, ENEMY_ENRAGE_TURN_BY_FIGHT,
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
-  NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, FIGHTS_PER_ACT, ACT_COUNT,
+  NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
 
@@ -362,9 +362,10 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('encounter roll deterministic by seed', JSON.stringify(idsFor(7)), JSON.stringify(idsFor(7)));
   const ids = idsFor(7);
   for (let fi = 0; fi < FIGHT_COUNT; fi++) {
-    if (isActBoss(fi)) eq(`fight ${fi} (act boss) is the boss`, ids[fi], 'boss');
+    if (isActBoss(fi)) eq(`fight ${fi} (act boss) uses its act boss def`, ids[fi], ACT_BOSS_DEFS[actOfFight(fi)].id);
     else check(`fight ${fi} is a named normal`, ENEMY_DEF_BY_ID[ids[fi]] !== undefined);
   }
+  eq('Act-1 boss is the Gatewarden', ids[2], 'gatewarden');
 }
 {
   // 3-act shape: 9 fights, an act boss at each act end, 8 forks in the map.

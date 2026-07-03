@@ -14,7 +14,7 @@ import {
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
   GOLD_PER_FIGHT, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
-  DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
+  DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
@@ -153,7 +153,7 @@ export class Run {
   // Roll the enemy for a fight slot from the encounter table (the boss slot always
   // uses BOSS_ENEMY_DEF). Deterministic in the run seed.
   rollEncounter(fightIndex: number): EnemyDef {
-    if (isActBoss(fightIndex)) return BOSS_ENEMY_DEF;
+    if (isActBoss(fightIndex)) return ACT_BOSS_DEFS[actOfFight(fightIndex)] ?? BOSS_ENEMY_DEF;
     const row = ENCOUNTER_TABLE[fightIndex];
     if (!row || row.length === 0) return DEFAULT_ENEMY_DEF;
     const id = weightedPick(row, this.rng);
