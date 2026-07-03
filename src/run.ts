@@ -192,6 +192,18 @@ export class Run {
     return this.location.kind === 'fight' ? this.location.fightIndex : 0;
   }
 
+  // The fight a location is at or headed toward — forks and nodes sit between
+  // fight N (just won) and fight N+1. Lets the start screen describe a save
+  // ("Act 2 · Fight 5 / 9") without rehydrating the whole Run.
+  static upcomingFightIndex(location: RunLocation): number {
+    switch (location.kind) {
+      case 'fight': return location.fightIndex;
+      case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
+      case 'node': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
+      default: return 0;
+    }
+  }
+
   // The act (0-based) the current fight belongs to.
   get act(): number { return actOfFight(this.fightIndex); }
 

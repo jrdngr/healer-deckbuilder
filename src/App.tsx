@@ -28,7 +28,7 @@ function progressLabel(run: Run): string {
 }
 
 export function App() {
-  const { run, act, newRun, hasSave, continueRun } = useRun();
+  const { run, act, newRun, hasSave, savedFightIndex, continueRun } = useRun();
   const [seedField, setSeedField] = useState<string>(String(run.seed));
   // The active fight's controller, published by FightScreen; null outside of a fight.
   const [gameCtrl, setGameCtrl] = useState<GameController | null>(null);
@@ -44,7 +44,14 @@ export function App() {
   if (run.status !== 'playing') {
     screen = <RunOverScreen run={run} onNewRun={() => startNewRun()} />;
   } else if (run.location.kind === 'start') {
-    screen = <StartScreen onBegin={() => act((r) => r.beginRun())} hasSave={hasSave} onContinue={onContinue} />;
+    screen = (
+      <StartScreen
+        onBegin={() => act((r) => r.beginRun())}
+        hasSave={hasSave}
+        savedFightIndex={savedFightIndex}
+        onContinue={onContinue}
+      />
+    );
   } else if (run.location.kind === 'fight') {
     // Keyed so each fight remounts with a fresh battle from its own config.
     screen = (

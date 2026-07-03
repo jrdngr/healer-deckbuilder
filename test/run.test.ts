@@ -423,5 +423,15 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
     JSON.stringify(uninterrupted.toJSON()), JSON.stringify(restored.toJSON()));
 }
 
+// --- upcomingFightIndex: where a saved location is headed (start-screen resume card)
+{
+  eq('start heads to fight 0', Run.upcomingFightIndex({ kind: 'start' }), 0);
+  eq('a fight is its own fight', Run.upcomingFightIndex({ kind: 'fight', fightIndex: 4 }), 4);
+  eq('a fork heads to the next fight', Run.upcomingFightIndex({ kind: 'forkChoice', forkIndex: 4 }), 5);
+  eq('a node heads to the next fight',
+    Run.upcomingFightIndex({ kind: 'node', forkIndex: 2, branch: 0, index: 1, nodeType: 'event' }), 3);
+  eq('the last fork clamps to the final fight', Run.upcomingFightIndex({ kind: 'forkChoice', forkIndex: 8 }), 8);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

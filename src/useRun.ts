@@ -43,16 +43,22 @@ export interface RunController {
   newRun: (seed?: number) => number;
   /** Whether a resumable save exists (checked once at mount). */
   hasSave: boolean;
+  /** Fight index the save is at or headed toward (null when no save). */
+  savedFightIndex: number | null;
   /** Resume the saved run, if any. Returns the resumed seed, or null if no save. */
   continueRun: () => number | null;
 }
 
 export function useRun(initialSeed?: number): RunController {
   const ref = useRef<Run | null>(null);
-  // Whether a save existed when the app loaded (drives the Continue button).
+  // Whether a save existed when the app loaded (drives the Continue button),
+  // and where it stands (drives the resume card's position label).
   const hasSaveRef = useRef<boolean>(false);
+  const savedFightRef = useRef<number | null>(null);
   if (ref.current === null) {
-    hasSaveRef.current = loadSnapshot() !== null;
+    const snap = loadSnapshot();
+    hasSaveRef.current = snap !== null;
+    savedFightRef.current = snap ? Run.upcomingFightIndex(snap.location) : null;
     ref.current = new Run(Number.isFinite(initialSeed) ? (initialSeed as number) : randomSeed());
   }
 
@@ -81,5 +87,8 @@ export function useRun(initialSeed?: number): RunController {
     return ref.current.seed;
   }, []);
 
-  return { run: ref.current, act, newRun, hasSave: hasSaveRef.current, continueRun };
+  return {
+    run: ref.current, act, newRun,
+    hasSave: hasSaveRef.current, savedFightIndex: savedFightRef.current, continueRun,
+  };
 }
