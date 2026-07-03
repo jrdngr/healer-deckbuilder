@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -317,22 +317,48 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('applied damage matches preview (0)', mage.hp, before);
 }
 
-// --- taunt forces primary to tank and retargets telegraph ------------------
+// --- taunt (future mode): standing blow still lands, future ones aim at tank -
 {
   const g = new Game(8);
   g.start();
-  // Standing telegraph might target anyone; fire taunt and verify retarget.
+  g.tauntRetargetMode = 'future';
+  const before = JSON.stringify(g.telegraph!.targets);
   const idx = giveCard(g, 'ability');
-  g.playCard(idx, SLOT.CENTER); // tank
+  g.playCard(idx, SLOT.CENTER); // taunt
   eq('taunt set to 4', g.members[SLOT.CENTER].taunt, 4);
-  const tel = g.telegraph!;
-  check('telegraph retargeted to include tank', tel.targets.includes(SLOT.CENTER));
-  if (tel.type === 'single' || tel.type === 'hidden') {
-    check('single/hidden taunt -> tank only', tel.targets[0] === SLOT.CENTER);
-  }
-  // new telegraphs while taunting also target tank
+  eq('standing telegraph is NOT redirected for free (future mode)',
+    JSON.stringify(g.telegraph!.targets), before);
+  // new telegraphs generated while taunting still funnel onto the tank
   const tg = g._generateTelegraph(3);
   check('new telegraph under taunt targets tank', tg.targets.includes(SLOT.CENTER));
+}
+
+// --- taunt (surcharge mode): redirect the standing blow for +1 MP -----------
+{
+  const g = new Game(8);
+  g.start();
+  g.tauntRetargetMode = 'surcharge';
+  // A single-target blow aimed at the ranger — redirecting it matters.
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn };
+  check('standing single-target blow is redirectable', g._standingTelegraphRedirectable());
+  const mpBefore = g.mp;
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
+  eq('standing blow redirected onto the tank',
+    JSON.stringify(g.telegraph!.targets), JSON.stringify([SLOT.CENTER]));
+  eq('surcharge is +1 MP on top of the Ability cost',
+    g.mp, mpBefore - CARDS.ability.cost - TAUNT_RETARGET_SURCHARGE);
+}
+
+// --- taunt (surcharge mode): no surcharge on a blow that can't be redirected -
+{
+  const g = new Game(8);
+  g.start();
+  g.tauntRetargetMode = 'surcharge';
+  g.telegraph = { type: 'sweep', hidden: false, damage: 4, targets: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], enraged: false, forTurn: g.turn };
+  check('a sweep is not redirectable (hits everyone anyway)', g._standingTelegraphRedirectable() === false);
+  const mpBefore = g.mp;
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
+  eq('no surcharge when redirect is pointless', g.mp, mpBefore - CARDS.ability.cost);
 }
 
 // --- resurrect to 50% max hp, statuses cleared -----------------------------
@@ -748,7 +774,15 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('potent eligible on refresh', MODIFIERS.potent.eligible('refresh'));
   check('lingering ineligible on highHeal', !MODIFIERS.lingering.eligible('highHeal'));
   check('lingering eligible on regen', MODIFIERS.lingering.eligible('regen'));
-  check('retain eligible on anything', MODIFIERS.retain.eligible('shield'));
+  // Retain gating (issue 03): refuses the always-on Ability card and engine cards.
+  check('retain eligible on shield', MODIFIERS.retain.eligible('shield'));
+  check('retain eligible on lowHeal', MODIFIERS.retain.eligible('lowHeal'));
+  check('retain refuses the Ability card', !MODIFIERS.retain.eligible('ability'));
+  check('retain refuses the engine card Refresh', !MODIFIERS.retain.eligible('refresh'));
+  check('Refresh is engine-tagged', isEngineCard('refresh'));
+  check('Quick Heal is not engine-tagged', !isEngineCard('lowHeal'));
+  // Efficient refuses 0-cost cards (there are none today; all base costs are > 0).
+  check('efficient eligible on a costed card', MODIFIERS.efficient.eligible('highHeal'));
   check('two open slots applies', canApplyModifier(makeDeckCard('regen', 1, []), 'lingering'));
   check('one open slot applies', canApplyModifier(makeDeckCard('regen', 1, ['lingering']), 'lingering'));
   check('full slots reject', !canApplyModifier(makeDeckCard('regen', 1, ['lingering', 'lingering']), 'lingering'));

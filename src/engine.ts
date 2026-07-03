@@ -14,10 +14,12 @@ import {
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
+  DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
   Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard, CardId,
+  TauntRetargetMode,
 } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -132,6 +134,7 @@ export class Game {
   status: Status;
   cardPlayedThisPhase: boolean;
   telegraph: Telegraph | null;
+  tauntRetargetMode: TauntRetargetMode; // how Taunt treats the standing telegraph (see constants)
   log: LogEntry[];
   events: GameEvent[]; // animation feed for the most recent action (see GameEvent)
 
@@ -181,6 +184,7 @@ export class Game {
     this.status = 'playing'; // 'playing' | 'win' | 'loss'
     this.cardPlayedThisPhase = false;
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
+    this.tauntRetargetMode = DEFAULT_TAUNT_RETARGET_MODE;
     this.log = [];
     this.events = [];
   }
@@ -293,6 +297,16 @@ export class Game {
     if (!this.telegraph) return;
     const t = this.telegraph;
     t.targets = this._geometry(t.type, SLOT.CENTER);
+  }
+
+  // Whether redirecting the standing telegraph onto the tank would actually move
+  // damage off someone: only for aimed (non-AoE/sweep) attacks that currently
+  // threaten a living non-tank slot. AoE/sweep hit everyone regardless, and a
+  // hidden attack has no known geometry, so neither is worth a surcharge.
+  _standingTelegraphRedirectable(): boolean {
+    const t = this.telegraph;
+    if (!t || t.hidden || t.type === 'aoe' || t.type === 'sweep') return false;
+    return t.targets.some((s) => s !== SLOT.CENTER && this.members[s]?.alive);
   }
 
   // ---- next-turn predictions (for the bar telegraphs) ----------------------
@@ -631,7 +645,15 @@ export class Game {
       case 'taunt': {
         this.tank.taunt = TAUNT_TURNS;
         this.tank.defense = DEFENSE_TURNS;
-        this._retargetTelegraphToTank();
+        // Future telegraphs auto-aim at the taunting tank (via _pickPrimary). The
+        // *standing* blow is the costly part: it is not redirected for free.
+        if (this.tauntRetargetMode === 'surcharge'
+            && this._standingTelegraphRedirectable()
+            && this.mp >= TAUNT_RETARGET_SURCHARGE) {
+          this.mp -= TAUNT_RETARGET_SURCHARGE;
+          this._retargetTelegraphToTank();
+          this._log(`${m.name} wrenches the incoming attack onto itself (-${TAUNT_RETARGET_SURCHARGE} MP).`, 'status');
+        }
         this._log(`${m.name} Taunts and braces (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_TURNS });
         break;

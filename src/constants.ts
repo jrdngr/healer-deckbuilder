@@ -30,6 +30,10 @@ export interface CardDef {
   heal?: number;
   regen?: number;
   refresh?: number;
+  // "Engine" cards generate MP or draw cards (they fuel the economy). Retain is
+  // ineligible for them, and later economy modifiers (Taper, #22) gate on the
+  // same tag. Keep this the single source of the tag.
+  engine?: boolean;
 }
 
 export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 } as const;
@@ -83,6 +87,17 @@ export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defens
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
 
+// How casting Taunt interacts with the *standing* (already-telegraphed) attack.
+// The free instant-retarget made permanent Taunt a strictly-dominant solve
+// (flaw #1), so casting it now costs a real decision. Two modes ship behind this
+// flag for the P1 sim/playtest (Open Q3); one is kept afterward:
+//   'future'    — Taunt only redirects *future* telegraphs; the standing blow
+//                 still lands where it was aimed (you must taunt a turn early).
+//   'surcharge' — Taunt may redirect the standing blow now, but pays +1 MP for it.
+export type TauntRetargetMode = 'future' | 'surcharge';
+export const DEFAULT_TAUNT_RETARGET_MODE: TauntRetargetMode = 'surcharge';
+export const TAUNT_RETARGET_SURCHARGE = 1; // extra MP to redirect the standing blow (surcharge mode)
+
 export const HAND_SIZE = 3;
 
 // Card definitions. `target` drives the UI's targeting flow.
@@ -103,7 +118,7 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Fully block the next attack instance on a member.' },
   resurrect: { id: 'resurrect', name: 'Resurrect', cost: 6, target: 'dead',
     desc: 'Revive a dead member to 50% max HP.' },
-  refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 2,
+  refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 2, engine: true,
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
 };
 
@@ -237,6 +252,19 @@ const cardHasDuration = (id: CardId): boolean => {
   return c.regen != null || c.refresh != null;
 };
 
+// Shared engine tag: any card that generates MP or draws cards.
+export const isEngineCard = (id: CardId): boolean => CARDS[id].engine === true;
+
+// Retain may not lock in the always-on Ability card, any engine card (that would
+// make the MP-economy loop deterministic), or a 0-cost card (free perpetual value).
+const retainEligible = (id: CardId): boolean =>
+  id !== 'ability' && !isEngineCard(id) && CARDS[id].cost > 0;
+
+// Efficient may not touch a 0-cost card (nothing to shave; the #02 floor already
+// blocks reaching 0). Inspiration (a future engine draw card) is excluded here too
+// once it exists, via the engine tag on 0-cost cards.
+const efficientEligible = (id: CardId): boolean => CARDS[id].cost > 0;
+
 export interface ModifierDef {
   id: ModifierId;
   name: string;
@@ -252,7 +280,7 @@ export const MODIFIERS: Record<ModifierId, ModifierDef> = {
   },
   efficient: {
     id: 'efficient', name: 'Efficient', rarity: 'uncommon',
-    desc: '-1 mana cost.', eligible: () => true,
+    desc: '-1 mana cost.', eligible: efficientEligible,
   },
   potent: {
     id: 'potent', name: 'Potent', rarity: 'uncommon',
@@ -260,7 +288,7 @@ export const MODIFIERS: Record<ModifierId, ModifierDef> = {
   },
   retain: {
     id: 'retain', name: 'Retain', rarity: 'rare',
-    desc: 'Not discarded at end of turn.', eligible: () => true,
+    desc: 'Not discarded at end of turn.', eligible: retainEligible,
   },
 };
 

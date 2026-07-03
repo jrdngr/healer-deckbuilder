@@ -40,10 +40,10 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
 // intentional, update these numbers together with a note on what moved.
 {
   const r = runSim(200, 1);
-  eq('N=200 full-run wins', r.fullRun.wins, 26);
+  eq('N=200 full-run wins', r.fullRun.wins, 18);
   eq('N=200 sample size', r.fullRun.n, 200);
   const perFightWins = r.perFight.map((p) => p.wins);
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 150, 73, 26]));
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 134, 54, 18]));
   // Confidence interval is reported and shrinks with N.
   check('full-run CI is a positive half-width', r.fullRun.ci95 > 0 && r.fullRun.ci95 < 0.1);
 }
