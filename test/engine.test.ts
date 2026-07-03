@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -806,6 +806,44 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('plain card left hand', !g.hand.some((c) => c.uid === -101));
 }
 
+// --- turn-1 attack is always a plain single (flaw #12) ----------------------
+{
+  // Turn 1 resolves on mount before any input, so it must not be a heavy/sweep.
+  // Check both regular and boss configs across many seeds.
+  const boss = defaultBattleConfig(); boss.enemy = { maxHP: 150, boss: true, attackBonus: 0 };
+  let allSingle = true;
+  for (let seed = 0; seed < 400; seed++) {
+    if (new Game(seed)._generateTelegraph(1).type !== 'single') allSingle = false;
+    if (new Game(seed, boss)._generateTelegraph(1).type !== 'single') allSingle = false;
+  }
+  check('turn-1 telegraph is always single (regular + boss)', allSingle);
+  // The mounted fight opens on a single-target blow.
+  const g = new Game(3, boss);
+  g.start();
+  const opener = g.log.find((l) => l.kind === 'hit');
+  check('boss opening blow is single-target', opener !== undefined && !/Sweep|Heavy|AoE|Two/.test(opener!.text));
+}
+
+// --- enrage fires exactly on ENRAGE_TURN; countdown counts down -------------
+{
+  const g = new Game(9);
+  g.start();
+  eq('not enraged at turn 1', g.enemy.enraged, false);
+  // Countdown legibility: ENRAGE_TURN - turn until it fires.
+  eq('turnsUntilEnrage at turn 1', g.turnsUntilEnrage(), ENRAGE_TURN - 1);
+  // Fast-forward to just before enrage without ending the fight.
+  g.turn = ENRAGE_TURN - 1;
+  eq('countdown reads 1 the turn before enrage', g.turnsUntilEnrage(), 1);
+  g.enemy.hp = 999; // keep the fight alive through the enrage turn
+  g.endTurn();
+  eq('enrage fires exactly on ENRAGE_TURN', g.enemy.enraged, true);
+  eq('turnsUntilEnrage is 0 once enraged', g.turnsUntilEnrage(), 0);
+}
+
+// --- tuned enraged sweep weight matches the softened constant (issue 04) -----
+eq('enraged sweep weight softened to 10', TYPE_WEIGHTS.bossEnraged.sweep, 10);
+eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
+
 // --- boss attack pool: stronger, but fully telegraphed (no hidden 2nd strike) ---
 {
   // The boss draws from its own attack pool, which includes the heavy/sweep types
@@ -815,7 +853,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const types = new Set<string>();
   for (let seed = 0; seed < 400; seed++) {
     const g = new Game(seed, cfg);
-    types.add(g._generateTelegraph(1).type);   // pre-enrage boss pool
+    types.add(g._generateTelegraph(2).type);   // pre-enrage boss pool (turn 1 is forced single)
     types.add(g._generateTelegraph(11).type);  // enraged boss pool
   }
   check('boss uses the heavy attack', types.has('heavy'));
@@ -828,7 +866,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const types = new Set<string>();
   for (let seed = 0; seed < 400; seed++) {
     const g = new Game(seed, cfg);
-    types.add(g._generateTelegraph(1).type);
+    types.add(g._generateTelegraph(2).type);
     types.add(g._generateTelegraph(11).type);
   }
   check('regular enemy never uses heavy', !types.has('heavy'));

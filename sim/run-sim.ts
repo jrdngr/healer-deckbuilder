@@ -18,8 +18,11 @@
 // This harness's own reading with the reconstructed policy (policy.ts), N=1000:
 //   after #01:            per-fight ~100 / 99.7 / 71.6 / 42.6 / 38.2 %  full-run ~11.6 %
 //   after #03 (surcharge): per-fight ~100 / 99.8 / 67.1 / 37.0 / 37.1 %  full-run ~9.2 %
-// (#03 priced the Taunt retarget, so the permanent-taunt line is no longer a
-//  free dominant solve — the winrate drop is expected and intended.)
+//   after #04 (turn-1 single + softer enraged sweep):
+//                          per-fight ~100 / 99.8 / 70.7 / 38.4 / 45.0 %  full-run ~12.2 %
+// (#03 priced the Taunt retarget, so the permanent-taunt line is no longer a free
+//  dominant solve. #04 forced the turn-1 blow to single — no more unavoidable
+//  turn-1 heavy/sweep — lifting the boss winrate back to a hard-but-winnable band.)
 // The reconstructed policy is a heuristic "good player", intentionally a *living*
 // stick: it reads below the old hand-tuned line but is deterministic and is the
 // fixed measuring stick every downstream gate compares against. Later issues

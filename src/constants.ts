@@ -58,7 +58,10 @@ export const TYPE_WEIGHTS: Record<'normal' | 'enraged' | 'boss' | 'bossEnraged',
   normal:      { single: 60, two: 20, aoe: 10, hidden: 10, heavy: 0,  sweep: 0 },
   enraged:     { single: 30, two: 35, aoe: 25, hidden: 10, heavy: 0,  sweep: 0 },
   boss:        { single: 20, two: 20, aoe: 10, hidden: 0,  heavy: 30, sweep: 20 },
-  bossEnraged: { single: 10, two: 20, aoe: 15, hidden: 0,  heavy: 35, sweep: 20 },
+  // Enraged sweep softened 20->10 (issue 04): enraged sweep (ceil(4x1.25)x3 = 15
+  // party-wide/turn) otherwise beats the sustain ceiling and makes the post-enrage
+  // race unwinnable. Halving its weight keeps the boss hard but the race winnable.
+  bossEnraged: { single: 10, two: 20, aoe: 15, hidden: 0,  heavy: 35, sweep: 10 },
 };
 
 // Primary-slot weights, indexed by slot. Hidden attack uses its own profile.

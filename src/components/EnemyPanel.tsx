@@ -12,10 +12,21 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
   // [0, 100] so an out-of-range displayHp (overkill below 0, or a stale value
   // above max) still maps to a valid width — 0 HP renders as an empty bar.
   const pct = Math.max(0, Math.min(100, (displayHp / e.maxHP) * 100));
+  // Announce the otherwise-invisible enrage race: a pip appears once the enrage is
+  // within ~4 turns, so the player can see the clock (flaw #2).
+  const untilEnrage = game.turnsUntilEnrage();
+  const showCountdown = game.status === 'playing' && !e.enraged && untilEnrage > 0 && untilEnrage <= 4;
   return (
     <section className="enemy">
       <div className="enemy-head">
-        <h2>Enemy {e.enraged && <span className="enrage">ENRAGED</span>}</h2>
+        <h2>
+          Enemy {e.enraged && <span className="enrage">ENRAGED</span>}
+          {showCountdown && (
+            <span className="enrage-countdown" title="The enemy's attacks grow heavier when it enrages.">
+              Enrages in {untilEnrage}
+            </span>
+          )}
+        </h2>
         <div className="bar enemy-bar">
           <div className="bar-track">
             <div className="seg enemy" style={{ left: 0, width: `${pct}%` }} />

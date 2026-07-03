@@ -214,6 +214,13 @@ export class Game {
 
   isEnraged(turn: number): boolean { return turn >= ENRAGE_TURN; }
 
+  // Player-turns remaining before the enemy enrages (0 once it has). Drives the
+  // enrage-countdown pip so the otherwise-invisible race is legible (flaw #2).
+  turnsUntilEnrage(): number {
+    if (this.enemy.enraged) return 0;
+    return Math.max(0, ENRAGE_TURN - this.turn);
+  }
+
   // Per-target damage for an attack type at a given turn (round up on enrage).
   // The enemy's per-fight attackBonus is added before the enrage multiplier.
   attackDamage(type: AttackType, turn: number): number {
@@ -259,7 +266,9 @@ export class Game {
   }
 
   _generateTelegraph(turn: number): Telegraph {
-    const type = this._pickType(turn);
+    // The turn-1 blow resolves on mount, before any player input, so it must not
+    // open on a heavy or a sweep — force it to a plain single-target hit (flaw #12).
+    const type = turn === 1 ? 'single' : this._pickType(turn);
     const primary = this._pickPrimary(type);
     const targets = this._geometry(type, primary);
     return {
