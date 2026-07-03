@@ -19,13 +19,15 @@ import {
   CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN,
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
+  TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
+  GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
   Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard, CardId,
-  TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind,
+  TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind, RelicId,
 } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -54,6 +56,7 @@ export interface Member {
   defense: number; // Defense turns remaining: incoming hits reduced by defenseAmount
   defenseAmount: number; // per-member Defense strength while defense > 0 (#17)
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
+  drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
 }
 
 export interface Enemy {
@@ -166,6 +169,10 @@ export class Game {
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
   surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
+  relics: Set<RelicId>;   // run-long passives (#21); empty set = fully inert
+  echoUsed: boolean;      // Echo Locket: its once-per-fight return has fired
+  stormglassUsed: boolean;// Stormglass Mirror: its once-per-fight negate has fired
+  titheGained: number;    // Tithe Candle MP granted this fight (capped per fight)
   drawPile: DeckCard[];
   discardPile: DeckCard[];
   hand: DeckCard[];
@@ -209,6 +216,7 @@ export class Game {
         defense: 0,    // Defense turns remaining
         defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
+        drumPrimed: false, // no War Drum beat pending
       };
     });
 
@@ -230,6 +238,10 @@ export class Game {
     this.woundTurns = 0;    // no Hex active at fight start
     this.surgePending = false;
     this.hymnBonus = 0;
+    this.relics = new Set(config.relics ?? []);
+    this.echoUsed = false;
+    this.stormglassUsed = false;
+    this.titheGained = 0;
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
     // own array — so reshuffles here don't disturb the persistent deck.
@@ -268,9 +280,15 @@ export class Game {
   // trio this is always the tank, but the engine no longer assumes that.
   tauntingMember(): Member | null { return this.members.find((m) => m.alive && m.taunt > 0) ?? null; }
 
+  hasRelic(id: RelicId): boolean { return this.relics.has(id); }
+
   // Per-member attack damage — the single seam for party-phase damage modifiers.
-  // Battle Hymn (#16) adds its bonus here for the phase it was sung in.
-  memberDamage(m: Member): number { return m.damage + this.hymnBonus; }
+  // Battle Hymn (#16) adds its bonus here for the phase it was sung in;
+  // Vanguard's Banner (#21) rewards a member kept at full HP.
+  memberDamage(m: Member): number {
+    const banner = this.hasRelic('vanguardsBanner') && m.hp === m.maxHP ? VANGUARD_BONUS : 0;
+    return m.damage + this.hymnBonus + banner;
+  }
 
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
   allDead(): boolean { return this.members.every((m) => !m.alive); }
@@ -457,13 +475,17 @@ export class Game {
   attackTargets(): AttackSpec[] {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
-    if (t.hidden) {
+    // Lantern of Foresight (#21): a hidden attack's TARGET is revealed too, so
+    // its lines collapse from the every-member fan-out to the true target(s)
+    // (the magnitude was already revealed by flaw #11's fix). Still drawn in
+    // the hidden style — the enemy is concealing it; the lantern sees through.
+    if (t.hidden && !this.hasRelic('lantern')) {
       // Reveal the magnitude, hide the target (flaw #11) — per member: each line
       // shows what THAT member would take if the blow lands on them (the full
       // Defense -> Brace -> Shield pipeline folded in), keeping preview ==
       // applied for whichever target the attack turns out to have.
       return this.livingMembers().map((m): AttackSpec => (
-        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense).dmg, hidden: true }
+        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: true }
       ));
     }
     return t.targets
@@ -472,7 +494,7 @@ export class Game {
         const m = this.members[slot];
         // The preview runs the same Defense -> Brace -> Shield pipeline the
         // resolver applies (telegraph == applied invariant).
-        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense).dmg, hidden: false };
+        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: t.hidden };
       });
   }
 
@@ -552,6 +574,7 @@ export class Game {
     m.defense = 0;
     m.defenseAmount = 0;
     m.charge = 0;
+    m.drumPrimed = false;
     this._log(`${m.name} has fallen!`, 'death');
   }
 
@@ -598,6 +621,11 @@ export class Game {
   // WOUND_HEAL_FACTOR and floored.
   _healMember(m: Member, amount: number): number {
     if (!m.alive || amount <= 0) return 0;
+    // Field Triage Kit (#21): heals on a member below half max HP heal harder.
+    // The bonus lands before the Hex halving — the curse dominates everything.
+    if (this.hasRelic('fieldTriage') && m.hp < m.maxHP * FIELD_TRIAGE_THRESHOLD) {
+      amount += FIELD_TRIAGE_BONUS;
+    }
     const effective = this.woundTurns > 0 ? Math.floor(amount * WOUND_HEAL_FACTOR) : amount;
     if (effective <= 0) return 0;
     const before = m.hp;
@@ -644,10 +672,18 @@ export class Game {
   // still deals damage after the stages before it. Pure read — attackTargets()
   // and _resolveAttack() both compute damage through here, which is what keeps
   // the telegraph preview equal to the applied damage across the whole pipeline.
-  _wardedDamage(m: Member, raw: number, ignoreDefense = false): { dmg: number; spendsBrace: boolean; spendsShield: boolean } {
+  _wardedDamage(m: Member, raw: number, ignoreDefense = false, attackType?: AttackType):
+      { dmg: number; spendsBrace: boolean; spendsShield: boolean; spendsStormglass: boolean } {
     let dmg = this._effectiveDamage(m, raw, ignoreDefense);
     let spendsBrace = false;
     let spendsShield = false;
+    let spendsStormglass = false;
+    // Stormglass Mirror (#21): once per fight, the first single-target hit of
+    // 6+ (measured after Defense, before Brace/Shield) is negated outright.
+    const singleTarget = attackType === 'single' || attackType === 'hidden' || attackType === 'heavy';
+    if (!this.stormglassUsed && this.hasRelic('stormglass') && singleTarget && dmg >= STORMGLASS_MIN_HIT) {
+      return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: true };
+    }
     if (m.brace && dmg > 0) {
       dmg = Math.max(0, dmg - BRACE_AMOUNT);
       spendsBrace = true;
@@ -656,7 +692,11 @@ export class Game {
       dmg = 0;
       spendsShield = true;
     }
-    return { dmg, spendsBrace, spendsShield };
+    // Grounding Rod (#21): multi-target hits lose 1 off the FINAL number.
+    if (dmg > 0 && this.hasRelic('groundingRod') && (attackType === 'aoe' || attackType === 'sweep')) {
+      dmg = Math.max(0, dmg - GROUNDING_ROD_REDUCTION);
+    }
+    return { dmg, spendsBrace, spendsShield, spendsStormglass };
   }
 
   // ---- enemy phase ---------------------------------------------------------
@@ -840,7 +880,13 @@ export class Game {
       }
       // Defense -> Brace -> Shield (#17); the same pipeline attackTargets()
       // previews. Brace and Shield only spend on a still-damaging instance.
-      const w = this._wardedDamage(m, t.damage, t.ignoreDefense);
+      const w = this._wardedDamage(m, t.damage, t.ignoreDefense, t.type);
+      if (w.spendsStormglass) {
+        this.stormglassUsed = true;
+        this._log(`The Stormglass Mirror shatters the blow aimed at ${m.name}.`, 'shield');
+        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
+        continue;
+      }
       if (w.spendsShield) {
         m.shield = false;
         m.shieldTurns = 0;
@@ -858,6 +904,16 @@ export class Game {
       const killed = m.hp <= 0;
       this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
       if (killed) this._killMember(m);
+      // Tithe Candle (#21): post-mitigation enemy damage tithes 1 MP back
+      // (a 0-damage hit gives nothing; capped at max mana AND per fight — every
+      // MP engine in this game is bounded, the flaw-#7 law).
+      if (w.dmg > 0 && this.hasRelic('titheCandle') && this.mp < this.maxMana
+          && this.titheGained < TITHE_CANDLE_FIGHT_CAP) {
+        this.mp = Math.min(this.maxMana, this.mp + TITHE_CANDLE_MP);
+        this.titheGained += TITHE_CANDLE_MP;
+        this._log(`The Tithe Candle burns: +${TITHE_CANDLE_MP} MP. (MP ${this.mp})`, 'mp');
+        this._emit({ kind: 'refreshTick', amount: TITHE_CANDLE_MP, mp: this.mp });
+      }
     }
   }
 
@@ -901,6 +957,13 @@ export class Game {
       this.drawPile = shuffle(this.discardPile, this.rng);
       this.discardPile = [];
       this._log('Reshuffled discard into draw pile.', 'system');
+      // Prayer Beads (#21): every reshuffle restores MP.
+      if (this.hasRelic('prayerBeads') && this.mp < this.maxMana) {
+        const before = this.mp;
+        this.mp = Math.min(this.maxMana, this.mp + PRAYER_BEADS_MP);
+        this._log(`The Prayer Beads turn: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
+        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
+      }
     }
     return this.drawPile.shift() ?? null;
   }
@@ -972,6 +1035,22 @@ export class Game {
     this.cardsPlayedThisPhase += 1;
 
     this._applyCard(card, target);
+
+    // Echo Locket (#21): once per fight, the first Poison or Bolt Ability cast
+    // returns the card to hand (its MP was paid; a replay pays again).
+    if (!this.echoUsed && this.hasRelic('echoLocket') && card.id === 'ability' && target != null) {
+      const ability = this.members[target]?.ability;
+      if (ability === 'poison' || ability === 'bolt') {
+        this.echoUsed = true;
+        const i = this.discardPile.lastIndexOf(dc);
+        if (i >= 0) {
+          this.discardPile.splice(i, 1);
+          this.hand.push(dc);
+          this._log('The Echo Locket hums — the Ability card returns to your hand.', 'status');
+          this._emit({ kind: 'draw', count: 1 });
+        }
+      }
+    }
     return { ok: true };
   }
 
@@ -1020,7 +1099,7 @@ export class Game {
         m.hp = Math.ceil(m.maxHP / 2);
         m.brace = false; m.braceTurns = 0;
         m.regen = 0; m.regenTurns = 0; m.bloomBurst = 0;
-        m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0;
+        m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
         // Reworked (#18): the revive comes back behind a fresh Shield so the
         // standing telegraph can't immediately undo the 4 MP investment.
         m.shield = true; m.shieldTurns = SHIELD_TURNS;
@@ -1195,6 +1274,8 @@ export class Game {
   }
 
   _fireAbility(m: Member): void {
+    // War Drum (#21): any Ability cast primes the caster's next auto to double.
+    if (this.hasRelic('warDrum')) m.drumPrimed = true;
     switch (m.ability) {
       case 'poison': {
         const strength = POISON_BASE + m.abilityPower;
@@ -1305,8 +1386,14 @@ export class Game {
     // can play three attacks in sequence. The enemy HP steps down per hit; the
     // total is unchanged from a single combined strike.
     for (const m of this.members) {
-      const dmg = this.memberDamage(m);
+      let dmg = this.memberDamage(m);
       if (!m.alive || dmg <= 0) continue;
+      // War Drum (#21): the primed member's auto lands double, then the beat is spent.
+      if (m.drumPrimed) {
+        dmg *= 2;
+        m.drumPrimed = false;
+        this._log(`The War Drum beats — ${m.name}'s strike doubles!`, 'status');
+      }
       const killed = this._damageEnemy(dmg, `${m.name}`);
       this._emit({ kind: 'partyAttack', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });

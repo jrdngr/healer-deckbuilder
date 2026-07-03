@@ -511,3 +511,18 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
 }
 .dev-library-grid .card { width: 120px; min-height: 130px; cursor: pointer; }
+
+/* --- relics (#21): topbar row + spoils/Reliquary tiles ---------------------- */
+.relic-row { display: inline-flex; gap: 4px; margin-left: 10px; }
+.relic-badge { font-size: 16px; cursor: help; }
+.relic-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: 170px; min-height: 150px; padding: 12px 10px;
+  background: var(--panel, #1c2230); border: 1px solid var(--line, #333a4d);
+  border-radius: 10px; color: inherit; cursor: pointer; text-align: center;
+}
+.relic-tile:hover:not(:disabled) { border-color: var(--accent, #6ea8fe); }
+.relic-tile:disabled, .relic-tile.unaffordable { opacity: .5; cursor: not-allowed; }
+.relic-icon { font-size: 28px; }
+.relic-name { font-weight: 700; }
+.relic-desc { font-size: 12px; opacity: .85; }

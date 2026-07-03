@@ -90,6 +90,15 @@
 //     pierce per cycle and a light cycle around a Gorge is what fits the ~5.5-6
 //     party-wide dmg/turn envelope. First draft (2 pierces, aoe-heavy cycles)
 //     read F6 75% / F7 82% / full-run 20% — far out of the ±5pp gate.
+//   after #21 (relics phase A: 10 relics + spoils after fights 3 & 6 + the
+//     Reliquary twice per run; relic-aware policy):  full-run 33.9 % ±2.9 at N=1000.
+//     F0 100 | F1 100 | F2 A1boss 88.8 | F3 99.8 | F4 98.5 | F5 A2boss 70.6 | F6 97.2 | F7 97.5 | F8 A3boss 58.0
+//     Relics are real player power: as first specced they read full-run 65.4%
+//     (+34pp!). Landed back in band via (a) relic tuning — Tithe Candle capped
+//     at 4 MP/fight (the flaw-#7 "every MP engine is bounded" law), Vanguard's
+//     Banner +2 -> +1, Prayer Beads +3 -> +2 — and (b) the act-2/3 bosses
+//     absorbing the rest: Hexweaver 135 -> 142, Devourer 165 -> 190. The
+//     Gatewarden is untouched (spoils come after it, so F2 is relic-free).
 //     The Q5 poison measurement (all N=1000, on the #17 baseline):
 //       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
 //       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%
@@ -120,7 +129,7 @@ import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
 import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
-import { playFight, resolveNode, chooseBranch } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil } from './policy';
 
 export interface FightOutcome {
   fightIndex: number;
@@ -158,6 +167,7 @@ export function runSingleRun(seed: number): RunOutcome {
         else run.loseFight();
         break;
       }
+      case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
       case 'node': resolveNode(run); run.completeNode(); break;
       case 'start': run.beginRun(); break;

@@ -15,7 +15,7 @@ import { Run } from '../src/run';
 import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
 } from '../src/constants';
-import type { CardId, Slot } from '../src/constants';
+import type { CardId, Slot, RelicId } from '../src/constants';
 
 // ---------------------------------------------------------------------------
 // Fight policy
@@ -355,6 +355,40 @@ function shopModifierNode(run: Run): void {
   }
 }
 
+// Relic desirability (#21) for spoils picks and Reliquary buys. MP economy and
+// steady damage top the list (the levers the balance passes found mattered);
+// the Lantern trails (hidden attacks are rare and already magnitude-revealed).
+const RELIC_VALUE: Record<RelicId, number> = {
+  titheCandle: 9, vanguardsBanner: 8, prayerBeads: 7, warDrum: 7,
+  fieldTriage: 6, groundingRod: 6, stormglass: 5, echoLocket: 5,
+  hagglersCharm: 4, lantern: 2,
+};
+
+// Spoils are free: always take the best-valued offer.
+export function chooseSpoil(run: Run): number {
+  if (run.nodeContent?.type !== 'spoils') return 0;
+  let best = 0, bestVal = -1;
+  run.nodeContent.offers.forEach((o, i) => {
+    const v = RELIC_VALUE[o.relicId] ?? 0;
+    if (v > bestVal) { bestVal = v; best = i; }
+  });
+  return best;
+}
+
+// Reliquary: buy the single best-value affordable relic (run-long payoff), and
+// skip the card-removal service (the policy's deck stays lean by buying little).
+function shopReliquary(run: Run): void {
+  if (run.nodeContent?.type !== 'reliquary') return;
+  const offers = run.nodeContent.offers;
+  let best = -1, bestVal = 3; // don't burn 50g+ on bottom-value relics
+  offers.forEach((o, i) => {
+    if (o.price > run.gold) return;
+    const v = RELIC_VALUE[o.relicId] ?? 0;
+    if (v > bestVal) { bestVal = v; best = i; }
+  });
+  if (best >= 0) run.buyRelicOffer(best);
+}
+
 function resolveEvent(run: Run): void {
   if (run.nodeContent?.type !== 'event') return;
   for (const choice of run.nodeContent.event.choices) {
@@ -384,6 +418,7 @@ export function resolveNode(run: Run): void {
     case 'partyUpgrade': shopPartyNode(run); break;
     case 'cardUpgrade': shopModifierNode(run); break;
     case 'event': resolveEvent(run); break;
+    case 'reliquary': shopReliquary(run); break;
     default: break;
   }
 }
@@ -391,7 +426,7 @@ export function resolveNode(run: Run): void {
 // Score a branch by the permanent power its nodes offer, so the policy walks the
 // stronger path through each fork.
 const NODE_DESIRABILITY: Record<string, number> = {
-  partyUpgrade: 5, healerUpgrade: 5, cardUpgrade: 4, cardShop: 3, event: 2, fight: 0,
+  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, cardUpgrade: 4, cardShop: 3, event: 2, fight: 0,
 };
 
 export function chooseBranch(run: Run): number {

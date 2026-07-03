@@ -8,6 +8,7 @@ import { StartScreen } from './components/StartScreen';
 import { FightScreen } from './components/FightScreen';
 import { MapScreen } from './components/MapScreen';
 import { NodeScreen } from './components/NodeScreen';
+import { SpoilsScreen } from './components/SpoilsScreen';
 import { RunOverScreen } from './components/RunOverScreen';
 import { DevPanel } from './components/DevPanel';
 
@@ -24,6 +25,7 @@ function progressLabel(run: Run): string {
     return isActBoss(loc.fightIndex) ? `${where} — Boss` : where;
   }
   if (loc.kind === 'forkChoice') return 'Choose a path';
+  if (loc.kind === 'spoils') return 'Spoils of victory';
   return `Node ${loc.index + 1} / ${NODES_PER_BRANCH}`;
 }
 
@@ -63,6 +65,8 @@ export function App() {
         onController={setGameCtrl}
       />
     );
+  } else if (run.location.kind === 'spoils') {
+    screen = <SpoilsScreen run={run} act={act} />;
   } else if (run.location.kind === 'forkChoice') {
     screen = <MapScreen run={run} onChoose={(b) => act((r) => r.chooseBranch(b))} />;
   } else {
@@ -77,6 +81,7 @@ export function App() {
         onNewRun={onNewRun}
         gold={run.gold}
         progress={progressLabel(run)}
+        relics={run.relics}
       />
       {screen}
       <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />

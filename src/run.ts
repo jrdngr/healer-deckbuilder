@@ -17,11 +17,14 @@ import {
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
+  RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
+  SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
+  HAGGLER_DISCOUNT, HAGGLER_FLOOR,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
-  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef,
-  CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer,
+  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId,
+  CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer, RelicOffer,
 } from './constants';
 import { makeRng, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -37,6 +40,7 @@ export type RunStatus = 'playing' | 'won' | 'lost';
 export type RunLocation =
   | { kind: 'start' }
   | { kind: 'fight'; fightIndex: number }
+  | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
   | { kind: 'forkChoice'; forkIndex: number }
   | { kind: 'node'; forkIndex: number; branch: number; index: number; nodeType: NodeType };
 
@@ -46,11 +50,13 @@ export type NodeContent =
   | { type: 'cardUpgrade'; offers: ModifierOffer[] }
   | { type: 'partyUpgrade'; offers: PartyUpgradeOffer[] }
   | { type: 'healerUpgrade'; offers: HealerUpgradeOffer[] }
-  | { type: 'event'; event: EventDef };
+  | { type: 'event'; event: EventDef }
+  | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
+  | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number };// relic shop (#21)
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
-// discarded rather than misread.
-export const RUN_SAVE_VERSION = 1;
+// discarded rather than misread. (v2: relics + spoils/reliquary content, #21.)
+export const RUN_SAVE_VERSION = 2;
 
 export interface RunSnapshot {
   version: number;
@@ -61,6 +67,7 @@ export interface RunSnapshot {
   deck: DeckCard[];
   party: PartyMemberConfig[];
   healer: HealerConfig;
+  relics: RelicId[];
   map: Fork[];
   status: RunStatus;
   location: RunLocation;
@@ -75,6 +82,7 @@ export class Run {
   deck: DeckCard[];
   party: PartyMemberConfig[];
   healer: HealerConfig;
+  relics: RelicId[];
   map: Fork[];
   status: RunStatus;
   location: RunLocation;
@@ -89,6 +97,7 @@ export class Run {
     this.deck = defaultDeck();
     this.party = defaultParty();
     this.healer = { ...DEFAULT_HEALER };
+    this.relics = [];
     this.nextUid = this.deck.length; // new cards continue the uid sequence
     this.map = this._generateMap();
     this.status = 'playing';
@@ -113,6 +122,7 @@ export class Run {
       deck: this.deck,
       party: this.party,
       healer: this.healer,
+      relics: this.relics,
       map: this.map,
       status: this.status,
       location: this.location,
@@ -131,6 +141,7 @@ export class Run {
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
     run.party = snap.party.map((p) => ({ ...p }));
     run.healer = { ...snap.healer };
+    run.relics = [...snap.relics];
     run.map = snap.map;
     run.status = snap.status;
     run.location = snap.location;
@@ -167,6 +178,15 @@ export class Run {
   _generateMap(): Fork[] {
     const forks: Fork[] = [];
     for (let f = 0; f < FORK_COUNT; f++) forks.push(this._rollFork());
+    // Reliquary (#21): exactly twice per run — replace one rolled node in a
+    // mid-act fork of act 2 and of act 3. It is never part of NODE_TYPE_WEIGHTS,
+    // so these two injections are the only way it appears.
+    for (const forkChoices of [[3, 4], [6, 7]]) {
+      const fork = forks[forkChoices[Math.floor(this.rng() * forkChoices.length)]];
+      const branch = fork.branches[Math.floor(this.rng() * fork.branches.length)];
+      const idx = Math.floor(this.rng() * branch.nodes.length);
+      branch.nodes[idx] = { type: 'reliquary' };
+    }
     return forks;
   }
 
@@ -200,6 +220,7 @@ export class Run {
   static upcomingFightIndex(location: RunLocation): number {
     switch (location.kind) {
       case 'fight': return location.fightIndex;
+      case 'spoils': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'node': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       default: return 0;
@@ -225,6 +246,7 @@ export class Run {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
       party: this.party.map((p) => ({ ...p })),
       healer: { ...this.healer },
+      relics: [...this.relics],
       enemy: {
         maxHP: this.enemyMaxHP(),
         boss: this.isBossFight,
@@ -242,9 +264,35 @@ export class Run {
     const fi = this.location.fightIndex;
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
     this.gold += GOLD_PER_FIGHT;
+    // Spoils (#21, Q9): the act-1 and act-2 bosses drop a free relic pick.
+    // (The final boss ends the run above, so this is exactly fights 3 and 6.)
+    if (isActBoss(fi)) {
+      this.location = { kind: 'spoils', fightIndex: fi };
+      this.nodeContent = { type: 'spoils', offers: this.rollSpoils(fi) };
+      return;
+    }
     this.location = { kind: 'forkChoice', forkIndex: fi };
     this.nodeContent = null;
   }
+
+  // Leave the spoils screen (with or without a pick) for the next fork.
+  _leaveSpoils(): void {
+    if (this.location.kind !== 'spoils') return;
+    this.location = { kind: 'forkChoice', forkIndex: this.location.fightIndex };
+    this.nodeContent = null;
+  }
+
+  // Take the spoils offer at `index` (free), then move on.
+  pickSpoil(index: number): RelicId | null {
+    if (this.location.kind !== 'spoils' || this.nodeContent?.type !== 'spoils') return null;
+    const offer = this.nodeContent.offers[index];
+    if (!offer) return null;
+    this.addRelic(offer.relicId);
+    this._leaveSpoils();
+    return offer.relicId;
+  }
+
+  skipSpoils(): void { this._leaveSpoils(); }
 
   loseFight(): void {
     this.status = 'lost';
@@ -279,6 +327,9 @@ export class Run {
       case 'partyUpgrade': this.nodeContent = { type: 'partyUpgrade', offers: this.rollPartyShop() }; break;
       case 'healerUpgrade': this.nodeContent = { type: 'healerUpgrade', offers: this.rollHealerShop() }; break;
       case 'event': this.nodeContent = { type: 'event', event: this.rollEvent() }; break;
+      case 'reliquary':
+        this.nodeContent = { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
+        break;
       default: this.nodeContent = null; break;
     }
   }
@@ -303,7 +354,7 @@ export class Run {
       SHOP_SIZE.cardShop,
     );
     return ids.map((cardId): CardOffer => ({
-      cardId, rarity: CARD_RARITY[cardId], price: RARITY_PRICE[CARD_RARITY[cardId]],
+      cardId, rarity: CARD_RARITY[cardId], price: this.discountedPrice(RARITY_PRICE[CARD_RARITY[cardId]]),
     }));
   }
 
@@ -313,7 +364,7 @@ export class Run {
       SHOP_SIZE.cardUpgrade,
     );
     return mods.map((modifier): ModifierOffer => ({
-      modifier, rarity: MODIFIERS[modifier].rarity, price: RARITY_PRICE[MODIFIERS[modifier].rarity],
+      modifier, rarity: MODIFIERS[modifier].rarity, price: this.discountedPrice(RARITY_PRICE[MODIFIERS[modifier].rarity]),
     }));
   }
 
@@ -322,7 +373,7 @@ export class Run {
       PARTY_UPGRADES.map((d): [PartyUpgradeDef, number] => [d, RARITY_WEIGHT[d.rarity]]),
       SHOP_SIZE.partyUpgrade,
     );
-    return defs.map((def): PartyUpgradeOffer => ({ def, price: def.price ?? RARITY_PRICE[def.rarity] }));
+    return defs.map((def): PartyUpgradeOffer => ({ def, price: this.discountedPrice(def.price ?? RARITY_PRICE[def.rarity]) }));
   }
 
   rollHealerShop(): HealerUpgradeOffer[] {
@@ -330,11 +381,95 @@ export class Run {
       HEALER_UPGRADES.map((d): [HealerUpgradeDef, number] => [d, RARITY_WEIGHT[d.rarity]]),
       SHOP_SIZE.healerUpgrade,
     );
-    return defs.map((def): HealerUpgradeOffer => ({ def, price: def.price ?? RARITY_PRICE[def.rarity] }));
+    return defs.map((def): HealerUpgradeOffer => ({ def, price: this.discountedPrice(def.price ?? RARITY_PRICE[def.rarity]) }));
   }
 
   rollEvent(): EventDef {
     return EVENTS[Math.floor(this.rng() * EVENTS.length)];
+  }
+
+  // ---- relics (#21) ----------------------------------------------------------
+
+  hasRelic(id: RelicId): boolean { return this.relics.includes(id); }
+
+  addRelic(id: RelicId): void {
+    if (!this.hasRelic(id)) this.relics.push(id);
+  }
+
+  // Haggler's Charm: every storefront price drops, floored. Applied at roll
+  // time, so offers already on the table keep the price they were rolled at.
+  discountedPrice(base: number): number {
+    return this.hasRelic('hagglersCharm') ? Math.max(HAGGLER_FLOOR, base - HAGGLER_DISCOUNT) : base;
+  }
+
+  // Relics dead for the REMAINDER of the run, recomputed at each spoils roll
+  // (Q9). Data-driven: the Lantern is dead once no remaining encounter can roll
+  // a hidden attack (rotation enemies never do; weighted ones need the weight).
+  relicExclusions(fightIndex: number): Set<RelicId> {
+    const out = new Set<RelicId>();
+    let hiddenPossible = false;
+    for (let fi = fightIndex + 1; fi < FIGHT_COUNT; fi++) {
+      for (const [id] of ENCOUNTER_TABLE[fi] ?? []) {
+        const def = ENEMY_DEF_BY_ID[id];
+        if (def && !def.rotation && (def.baseWeights.hidden > 0 || def.enragedWeights.hidden > 0)) {
+          hiddenPossible = true;
+        }
+      }
+    }
+    if (!hiddenPossible) out.add('lantern');
+    return out;
+  }
+
+  // Spoils roll (#21, Q9): distinct unowned relics, rarity-weighted. The
+  // fight-3 roll guarantees at least one rare offer; the fight-6 roll weights
+  // the act-3-boss counters x2 and recomputes the exclusion list.
+  rollSpoils(fightIndex: number): RelicOffer[] {
+    const excluded = this.relicExclusions(fightIndex);
+    const pool = RELIC_IDS.filter((id) => !this.hasRelic(id) && !excluded.has(id));
+    const boost = fightIndex >= 5 ? new Set(ACT3_COUNTER_RELICS) : null;
+    const ids = this._pickDistinct(
+      pool.map((id): [RelicId, number] => [id, RARITY_WEIGHT[RELICS[id].rarity] * (boost?.has(id) ? 2 : 1)]),
+      SPOILS_OFFER_SIZE,
+    );
+    if (fightIndex === 2 && !ids.some((id) => RELICS[id].rarity === 'rare')) {
+      const rares = pool.filter((id) => RELICS[id].rarity === 'rare' && !ids.includes(id));
+      if (rares.length > 0) ids[ids.length - 1] = rares[Math.floor(this.rng() * rares.length)];
+    }
+    // Spoils are free — the boss already charged for them.
+    return ids.map((relicId): RelicOffer => ({ relicId, rarity: RELICS[relicId].rarity, price: 0 }));
+  }
+
+  // Reliquary stock: distinct unowned relics at their rarity price (60/30/10).
+  rollReliquary(): RelicOffer[] {
+    const pool = RELIC_IDS.filter((id) => !this.hasRelic(id));
+    const ids = this._pickDistinct(
+      pool.map((id): [RelicId, number] => [id, RARITY_WEIGHT[RELICS[id].rarity]]),
+      RELIQUARY_STOCK,
+    );
+    return ids.map((relicId): RelicOffer => ({
+      relicId, rarity: RELICS[relicId].rarity,
+      price: this.discountedPrice(RELIC_PRICE[RELICS[relicId].rarity]),
+    }));
+  }
+
+  // Buy the Reliquary relic offer at `index`.
+  buyRelicOffer(index: number): boolean {
+    if (this.nodeContent?.type !== 'reliquary') return false;
+    const offer = this.nodeContent.offers[index];
+    if (!offer || this.gold < offer.price) return false;
+    this.gold -= offer.price;
+    this.addRelic(offer.relicId);
+    this.nodeContent.offers.splice(index, 1);
+    return true;
+  }
+
+  // Reliquary card removal: the standard CARD_REMOVAL_PRICE (kept flat — the
+  // removal economy stays unified per flaw #17), capped per visit.
+  reliquaryRemoveCard(uid: number): boolean {
+    if (this.nodeContent?.type !== 'reliquary' || this.nodeContent.removalsLeft <= 0) return false;
+    if (!this.removeCardForGold(uid)) return false;
+    this.nodeContent.removalsLeft -= 1;
+    return true;
   }
 
   // ---- deck / progression mutators -----------------------------------------

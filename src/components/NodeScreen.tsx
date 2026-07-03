@@ -5,6 +5,7 @@ import { CardUpgradeShopScreen } from './CardUpgradeShopScreen';
 import { PartyUpgradeShopScreen } from './PartyUpgradeShopScreen';
 import { HealerUpgradeShopScreen } from './HealerUpgradeShopScreen';
 import { EventScreen } from './EventScreen';
+import { ReliquaryScreen } from './ReliquaryScreen';
 
 interface NodeScreenProps {
   run: Run;
@@ -28,6 +29,8 @@ export function NodeScreen({ run, act, onDone }: NodeScreenProps) {
       return <HealerUpgradeShopScreen run={run} act={act} onDone={onDone} />;
     case 'event':
       return <EventScreen run={run} act={act} onDone={onDone} />;
+    case 'reliquary':
+      return <ReliquaryScreen run={run} act={act} onDone={onDone} />;
     default:
       return null;
   }

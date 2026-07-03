@@ -1,7 +1,8 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
-import type { CardId, ModifierId } from '../src/constants';
+import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT } from '../src/constants';
+import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -1923,6 +1924,204 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     eq('Skewer hits for 5', t2.damage, LANCER_PIERCE_DMG);
     check('Devourling carries a Gorge step',
       DEVOURLING_DEF.rotation!.some((s) => typeof s !== 'string' && s.cast === 'consume'));
+  }
+}
+
+// --- relics phase A (issue 21) -----------------------------------------------
+{
+  const relicGame = (seed: number, relics: RelicId[]): Game => {
+    const cfg = defaultBattleConfig();
+    cfg.relics = relics;
+    return new Game(seed, cfg);
+  };
+  const singleAt = (dmg: number, slot: number, type: 'single' | 'heavy' | 'aoe' = 'single') => ({
+    type: type as 'single', hidden: false, damage: dmg,
+    targets: type === 'aoe' ? [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT] : [slot as 0],
+    enraged: false, forTurn: 2,
+  });
+
+  // Inert when empty: relic plumbing changes nothing without relics.
+  {
+    const play = (g: Game): string => {
+      g.start();
+      for (let i = 0; i < 6 && g.status === 'playing'; i++) g.endTurn();
+      return JSON.stringify(g.log) + JSON.stringify(g.members) + g.mp;
+    };
+    eq('relic plumbing is inert when empty', play(new Game(300)), play(relicGame(300, [])));
+  }
+
+  // Lantern of Foresight: a hidden telegraph reveals its true target.
+  {
+    const g = relicGame(301, ['lantern']);
+    g.start();
+    g.telegraph = { ...singleAt(4, SLOT.LEFT), type: 'hidden', hidden: true };
+    const lines = g.attackTargets();
+    eq('Lantern collapses the hidden fan-out to the true target',
+      JSON.stringify(lines.map((l) => l.slot)), JSON.stringify([SLOT.LEFT]));
+    check('the revealed line still reads as hidden', lines[0].hidden === true);
+    const g2 = relicGame(301, []);
+    g2.start();
+    g2.telegraph = { ...singleAt(4, SLOT.LEFT), type: 'hidden', hidden: true };
+    eq('without the Lantern the fan-out stays', g2.attackTargets().length, g2.livingMembers().length);
+  }
+
+  // Tithe Candle: +1 MP per damaging enemy hit; nothing on 0 damage; per-fight cap.
+  {
+    const g = relicGame(302, ['titheCandle']);
+    g.start();
+    g.mp = 0;
+    g.telegraph = singleAt(2, SLOT.CENTER);
+    g._resolveAttack();
+    eq('Tithe Candle pays on a damaging hit', g.mp, TITHE_CANDLE_MP);
+    g.tank.defense = 2; g.tank.defenseAmount = 5;
+    g.telegraph = singleAt(4, SLOT.CENTER);
+    g._resolveAttack();
+    eq('a fully-mitigated hit pays nothing', g.mp, TITHE_CANDLE_MP);
+    g.tank.defense = 0; g.tank.defenseAmount = 0;
+    for (let i = 0; i < TITHE_CANDLE_FIGHT_CAP + 3; i++) {
+      g.tank.hp = g.tank.maxHP;
+      g.telegraph = singleAt(1, SLOT.CENTER);
+      g._resolveAttack();
+    }
+    eq('the Candle stops at its per-fight cap', g.mp, TITHE_CANDLE_FIGHT_CAP);
+  }
+
+  // Field Triage Kit: heals on members below half max HP heal harder.
+  {
+    const g = relicGame(303, ['fieldTriage']);
+    g.start();
+    const tank = g.tank;
+    tank.hp = 5; // below 9 (half of 18)
+    eq('Triage boosts a heal below half', g._healMember(tank, 2), 2 + FIELD_TRIAGE_BONUS);
+    tank.hp = 15;
+    eq('Triage leaves the healthy alone', g._healMember(tank, 2), 2);
+  }
+
+  // War Drum: an Ability cast primes the caster's next auto to double (consumed).
+  {
+    const g = relicGame(304, ['warDrum']);
+    g.start();
+    g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // Taunt
+    check('the Drum primes the caster', g.tank.drumPrimed);
+    const expected = g.livingMembers().reduce((s, m) => s + g.memberDamage(m), 0) + g.memberDamage(g.tank);
+    const ehp = g.enemy.hp;
+    g.endTurn();
+    eq('the primed auto lands double', ehp - g.enemy.hp, expected);
+    check('the beat is spent', !g.tank.drumPrimed);
+  }
+
+  // Grounding Rod: aoe/sweep hits lose 1 off the final number; singles untouched;
+  // the preview shows the same reduced value (preview == applied).
+  {
+    const g = relicGame(305, ['groundingRod']);
+    g.start();
+    for (const m of g.members) m.hp = m.maxHP;
+    g.telegraph = singleAt(3, SLOT.CENTER, 'aoe');
+    const preview = g.attackTargets();
+    check('Rod-reduced preview', preview.every((l) => l.damage === 3 - GROUNDING_ROD_REDUCTION));
+    const before = g.members.map((m) => m.hp);
+    g._resolveAttack();
+    check('Rod-reduced applied matches the preview',
+      g.members.every((m, i) => before[i] - m.hp === 3 - GROUNDING_ROD_REDUCTION));
+    g.telegraph = singleAt(3, SLOT.CENTER);
+    eq('singles are untouched by the Rod', g.attackTargets()[0]?.damage, 3);
+  }
+
+  // Prayer Beads: each reshuffle restores MP.
+  {
+    const g = relicGame(306, ['prayerBeads']);
+    g.start();
+    g.mp = 0;
+    g.drawPile = [];
+    g.discardPile.push(makeDeckCard('lowHeal', -60));
+    g._drawOne(); // forces the reshuffle
+    eq('the Beads pay on a reshuffle', g.mp, PRAYER_BEADS_MP);
+  }
+
+  // Echo Locket: once per fight the first Poison/Bolt Ability returns to hand.
+  {
+    const g = relicGame(307, ['echoLocket']);
+    g.start();
+    const idx = giveCard(g, 'ability');
+    const uid = g.hand[idx].uid;
+    g.playCard(idx, SLOT.LEFT); // Poison — the Locket fires
+    check('the Ability card returns to hand', g.hand.some((c) => c.uid === uid));
+    check('the return is spent for the fight', g.echoUsed);
+    const idx2 = giveCard(g, 'ability');
+    const uid2 = g.hand[idx2].uid;
+    g.mp = 10;
+    g.playCard(idx2, SLOT.LEFT);
+    check('a second cast stays discarded', !g.hand.some((c) => c.uid === uid2));
+    // Taunt is neither Poison nor Bolt: it never triggers the Locket.
+    const g2 = relicGame(308, ['echoLocket']);
+    g2.start();
+    const i3 = giveCard(g2, 'ability');
+    const uid3 = g2.hand[i3].uid;
+    g2.playCard(i3, SLOT.CENTER);
+    check('Taunt does not trigger the Locket', !g2.echoUsed && !g2.hand.some((c) => c.uid === uid3));
+  }
+
+  // Stormglass Mirror: once per fight the first 6+ single-target hit is negated,
+  // and the preview already shows the 0 (preview == applied).
+  {
+    const g = relicGame(309, ['stormglass']);
+    g.start();
+    g.tank.hp = g.tank.maxHP;
+    g.telegraph = singleAt(7, SLOT.CENTER, 'heavy');
+    eq('the Mirror previews the negate', g.attackTargets()[0]?.damage, 0);
+    const before = g.tank.hp;
+    g._resolveAttack();
+    eq('the negated hit deals nothing', g.tank.hp, before);
+    check('the Mirror is spent', g.stormglassUsed);
+    g.telegraph = singleAt(7, SLOT.CENTER, 'heavy');
+    g._resolveAttack();
+    eq('the second big hit lands in full', g.tank.hp, before - 7);
+    // Below the threshold it never fires.
+    const g2 = relicGame(310, ['stormglass']);
+    g2.start();
+    g2.tank.hp = g2.tank.maxHP;
+    g2.telegraph = singleAt(STORMGLASS_MIN_HIT - 1, SLOT.CENTER);
+    g2._resolveAttack();
+    check('a small hit passes the Mirror', !g2.stormglassUsed);
+  }
+
+  // Vanguard's Banner: full-HP members swing harder.
+  {
+    const g = relicGame(311, ['vanguardsBanner']);
+    g.start();
+    g.tank.hp = g.tank.maxHP;
+    eq('the Banner boosts a full-HP auto', g.memberDamage(g.tank), g.tank.damage + VANGUARD_BONUS);
+    g.tank.hp -= 1;
+    eq('the Banner ignores the wounded', g.memberDamage(g.tank), g.tank.damage);
+  }
+
+  // PROPERTY: preview == applied still holds with the preview-touching relics
+  // live (Grounding Rod + Stormglass Mirror), across seeds and ward states.
+  {
+    let checked = 0;
+    let mismatches = 0;
+    for (let seed = 320; seed < 370; seed++) {
+      const g = relicGame(seed, ['groundingRod', 'stormglass']);
+      g.start();
+      for (const m of g.members) {
+        m.hp = m.maxHP;
+        if (g.rng() < 0.5) { m.defense = 1 + Math.floor(g.rng() * 3); m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
+        const r = g.rng();
+        if (r < 0.3) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
+        else if (r < 0.6) { m.brace = true; m.braceTurns = BRACE_TURNS; }
+      }
+      const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
+      const hpBefore = g.members.map((m) => m.hp);
+      g._runEnemyPhase();
+      for (const m of g.members) {
+        const taken = hpBefore[m.slot] - m.hp;
+        if (taken === 0) continue;
+        checked++;
+        if (taken !== preview.get(m.slot)) mismatches++;
+      }
+    }
+    check('property: preview == applied with Rod + Mirror live', mismatches === 0, `${mismatches} mismatches`);
+    check('relic property test exercised real hits', checked > 15, `${checked} hits checked`);
   }
 }
 

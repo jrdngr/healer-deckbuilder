@@ -8,6 +8,8 @@ import {
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
+  SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
+  HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
@@ -103,6 +105,11 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       gold = run.gold;
+      // Act-1/2 bosses drop a spoils screen first (#21); skipping it moves on.
+      if (isActBoss(f)) {
+        check(`win of boss fight ${f} -> spoils`, run.location.kind === 'spoils');
+        run.skipSpoils();
+      }
       check(`win of fight ${f} -> forkChoice`, run.location.kind === 'forkChoice');
       run.chooseBranch(run.rng() < 0.5 ? 0 : 1);
       run.completeNode();
@@ -126,6 +133,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
     enrage.push(run.toBattleConfig().enemy.enrageTurn ?? -1);
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
+      if (run.location.kind === 'spoils') run.skipSpoils();
       run.chooseBranch(0);
       run.completeNode();
       run.completeNode();
@@ -481,6 +489,109 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const def = run.currentEnemyDef;
   check('fight 0 has a rolled enemy def', def !== null && def!.boss === false);
   eq('battle config carries the same def', run.toBattleConfig().enemy.def, def);
+}
+
+// --- relics phase A: spoils / Reliquary / Haggler (issue 21) -----------------
+{
+  // Spoils fire after the act-1 boss: 3 free, distinct offers with a rare guaranteed.
+  const run = new Run(80);
+  run.beginRun();
+  for (let f = 0; f < 2; f++) {
+    run.winFight();
+    run.chooseBranch(0); run.completeNode(); run.completeNode();
+  }
+  eq('at the act-1 boss', run.fightIndex, 2);
+  run.winFight();
+  eq('boss win -> spoils', run.location.kind, 'spoils');
+  check('spoils content rolled', run.nodeContent?.type === 'spoils');
+  if (run.nodeContent?.type === 'spoils') {
+    const offers = run.nodeContent.offers;
+    eq('three spoils offers', offers.length, SPOILS_OFFER_SIZE);
+    check('spoils offers are distinct', new Set(offers.map((o) => o.relicId)).size === offers.length);
+    check('spoils are free', offers.every((o) => o.price === 0));
+    const picked = run.pickSpoil(0);
+    check('the pick lands in the relic list', picked !== null && run.hasRelic(picked));
+    eq('spoils -> forkChoice', run.location.kind, 'forkChoice');
+    check('the battle config carries the relics', run.toBattleConfig().relics!.includes(picked!));
+  }
+  // The fight-3 spoils roll guarantees >=1 rare, across seeds.
+  let rareAlways = true;
+  for (let seed = 0; seed < 25; seed++) {
+    const r = new Run(seed);
+    if (!r.rollSpoils(2).some((o) => o.rarity === 'rare')) rareAlways = false;
+  }
+  check('fight-3 spoils always include a rare', rareAlways);
+}
+{
+  // The Reliquary appears exactly twice per run: once in a mid-act-2 fork,
+  // once in a mid-act-3 fork; never anywhere else.
+  let ok = true;
+  for (let seed = 0; seed < 30; seed++) {
+    const run = new Run(seed);
+    let inA2 = 0, inA3 = 0, elsewhere = 0;
+    run.map.forEach((fork, fi) => fork.branches.forEach((b) => b.nodes.forEach((n) => {
+      if (n.type !== 'reliquary') return;
+      if (fi === 3 || fi === 4) inA2++;
+      else if (fi === 6 || fi === 7) inA3++;
+      else elsewhere++;
+    })));
+    if (inA2 !== 1 || inA3 !== 1 || elsewhere !== 0) ok = false;
+  }
+  check('the Reliquary appears exactly twice, in mid-act-2 and mid-act-3 forks', ok);
+  check('the Reliquary is never in the rolled node weights',
+    NODE_TYPE_WEIGHTS.every(([t]) => t !== 'reliquary'));
+}
+{
+  // Reliquary storefront: unowned relics at rarity prices; gold-gated buys;
+  // card removal at the standard price, capped per visit.
+  const run = new Run(81);
+  run._enterNode('reliquary');
+  check('reliquary content rolled', run.nodeContent?.type === 'reliquary');
+  if (run.nodeContent?.type === 'reliquary') {
+    const offers = run.nodeContent.offers;
+    eq('reliquary stocks 3 relics', offers.length, RELIQUARY_STOCK);
+    check('reliquary prices follow rarity', offers.every((o) => o.price === RELIC_PRICE[o.rarity]));
+    run.gold = 0;
+    check('an empty purse buys nothing', !run.buyRelicOffer(0));
+    run.gold = offers[0].price;
+    const id = offers[0].relicId;
+    check('an affordable relic sells', run.buyRelicOffer(0));
+    check('the relic is owned', run.hasRelic(id));
+    eq('the offer is consumed', run.nodeContent.offers.length, RELIQUARY_STOCK - 1);
+    // Removal: capped at RELIQUARY_REMOVALS_MAX per visit.
+    run.gold = CARD_REMOVAL_PRICE * 3;
+    const before = run.deck.length;
+    check('removal 1 works', run.reliquaryRemoveCard(run.deck[0].uid));
+    check('removal 2 works', run.reliquaryRemoveCard(run.deck[0].uid));
+    check('removal 3 is refused (per-visit cap)', !run.reliquaryRemoveCard(run.deck[0].uid));
+    eq('exactly two cards removed', run.deck.length, before - RELIQUARY_REMOVALS_MAX);
+  }
+}
+{
+  // Haggler's Charm discounts every storefront at roll time (floor 5).
+  const run = new Run(82);
+  run.addRelic('hagglersCharm');
+  check('Haggler discounts card-shop prices',
+    run.rollCardShop().every((o) => o.price === Math.max(HAGGLER_FLOOR, RARITY_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
+  check('Haggler discounts reliquary prices',
+    run.rollReliquary().every((o) => o.price === Math.max(HAGGLER_FLOOR, RELIC_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
+  const plain = new Run(82);
+  check('without the Charm prices are full',
+    plain.rollCardShop().every((o) => o.price === RARITY_PRICE[o.rarity]));
+}
+{
+  // Exclusion list (Q9): the Lantern is dead once no remaining fight can roll a
+  // hidden attack; before that it stays offered.
+  const run = new Run(83);
+  check('Lantern lives while hidden-capable normals remain', !run.relicExclusions(2).has('lantern'));
+  check('Lantern is excluded once only the boss remains', run.relicExclusions(7).has('lantern'));
+}
+{
+  // Relics survive the save/resume roundtrip.
+  const run = new Run(84);
+  run.addRelic('prayerBeads');
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  check('relics round-trip through a snapshot', restored.hasRelic('prayerBeads'));
 }
 
 // --- issue 11: save / resume -----------------------------------------------

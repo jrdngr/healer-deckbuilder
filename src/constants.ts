@@ -585,6 +585,7 @@ export interface BattleConfig {
   party: PartyMemberConfig[]; // length 3, indexed by slot
   healer: HealerConfig;
   enemy: EnemyConfig;
+  relics?: RelicId[]; // run-long passives (#21); absent/empty means fully inert
 }
 
 export const DEFAULT_HEALER: HealerConfig = {
@@ -722,11 +723,12 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
 // ---------------------------------------------------------------------------
 
 export type NodeType =
-  | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade';
+  | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade'
+  | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
 // The non-fight node types that fill the branches between fights.
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'reliquary',
 ];
 
 // Weights for placing non-fight node types on the map.
@@ -756,9 +758,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // boss attack pool, so their flat attackBonus is 0. A2/A3 bosses are placeholders
 // (scaled BOSS_ENEMY_DEF) until the Gatewarden/Hexweaver/Devourer land (#12-14).
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  50, 75, 130,    // Act 1: two normals + boss (Gatewarden)
-  105, 130, 135,  // Act 2: boss (Hexweaver — heal-denial makes it a wall below its HP)
-  150, 150, 165,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer)
+  50, 75, 130,    // Act 1: two normals + boss (Gatewarden; pre-spoils, so relic-free)
+  105, 130, 142,  // Act 2: boss (Hexweaver — raised 135->142 for #21's relic power)
+  150, 150, 190,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 165->190 for relics)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
@@ -970,8 +972,86 @@ export const EVENTS: EventDef[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Relics (issue 21, phase A): passive run-long items. Ten legible relics that
+// need no rule-changing hooks — each is a constant tweak or a single trigger in
+// the engine. All relic code is INERT when the run owns none (regression gate).
+// ---------------------------------------------------------------------------
+
+export type RelicId =
+  | 'lantern'        // hidden attacks reveal their target
+  | 'hagglersCharm'  // shop prices -15g (floor 5)
+  | 'titheCandle'    // +1 MP when a member takes enemy-attack damage
+  | 'fieldTriage'    // heals on members below 50% max HP heal +2
+  | 'warDrum'        // after an Ability cast, that member's next auto doubles
+  | 'groundingRod'   // aoe/sweep hits -1 (final number, floor 0, preview-visible)
+  | 'prayerBeads'    // +3 MP on each draw-pile reshuffle
+  | 'echoLocket'     // once/fight, the first Poison/Bolt Ability returns to hand
+  | 'stormglass'     // once/fight, the first 6+ single-target hit is negated
+  | 'vanguardsBanner';// members at full HP deal +2 on their auto
+
+export interface RelicDef {
+  id: RelicId;
+  name: string;
+  rarity: Rarity;
+  icon: string; // topbar row glyph
+  desc: string;
+}
+
+// Relic magnitudes (kept here so balance passes can reach them).
+export const HAGGLER_DISCOUNT = 15;
+export const HAGGLER_FLOOR = 5;
+export const TITHE_CANDLE_MP = 1;
+// Per-fight bound on the Candle's MP — every MP engine in this game is capped
+// (the flaw-#7 law; cf. REFRESH_MP_CAP), and an uncapped Candle reads +15-25 MP
+// over a boss fight, which alone breaks the full-run band.
+export const TITHE_CANDLE_FIGHT_CAP = 4;
+export const FIELD_TRIAGE_BONUS = 2;
+export const FIELD_TRIAGE_THRESHOLD = 0.5; // "below 50% max HP"
+export const GROUNDING_ROD_REDUCTION = 1;
+export const PRAYER_BEADS_MP = 2;
+export const STORMGLASS_MIN_HIT = 6; // post-Defense hits this big are negated
+export const VANGUARD_BONUS = 1;
+
+export const RELICS: Record<RelicId, RelicDef> = {
+  lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
+    desc: 'Hidden attacks reveal their target.' },
+  hagglersCharm: { id: 'hagglersCharm', name: 'Haggler\'s Charm', rarity: 'common', icon: '🪙',
+    desc: `All shop prices −${HAGGLER_DISCOUNT}g (never below ${HAGGLER_FLOOR}g).` },
+  titheCandle: { id: 'titheCandle', name: 'Tithe Candle', rarity: 'uncommon', icon: '🕯',
+    desc: `+${TITHE_CANDLE_MP} MP each time a member takes damage from an enemy attack.` },
+  fieldTriage: { id: 'fieldTriage', name: 'Field Triage Kit', rarity: 'uncommon', icon: '🩹',
+    desc: `Heals on a member below ${FIELD_TRIAGE_THRESHOLD * 100}% max HP heal +${FIELD_TRIAGE_BONUS}.` },
+  warDrum: { id: 'warDrum', name: 'War Drum', rarity: 'uncommon', icon: '🥁',
+    desc: 'After a member casts their Ability, their next auto-attack deals double.' },
+  groundingRod: { id: 'groundingRod', name: 'Grounding Rod', rarity: 'common', icon: '⚡',
+    desc: `Multi-target (AoE/sweep) hits deal ${GROUNDING_ROD_REDUCTION} less per hit.` },
+  prayerBeads: { id: 'prayerBeads', name: 'Prayer Beads', rarity: 'common', icon: '📿',
+    desc: `+${PRAYER_BEADS_MP} MP each time the draw pile is reshuffled.` },
+  echoLocket: { id: 'echoLocket', name: 'Echo Locket', rarity: 'uncommon', icon: '🔮',
+    desc: 'Once per fight, the first Poison or Bolt Ability returns to your hand.' },
+  stormglass: { id: 'stormglass', name: 'Stormglass Mirror', rarity: 'uncommon', icon: '🪞',
+    desc: `Once per fight, the first single-target hit of ${STORMGLASS_MIN_HIT}+ is negated.` },
+  vanguardsBanner: { id: 'vanguardsBanner', name: 'Vanguard\'s Banner', rarity: 'rare', icon: '🚩',
+    desc: `Members at full HP deal +${VANGUARD_BONUS} on their auto-attack.` },
+};
+
+export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];
+
+// Relic prices by rarity (C 50 / U 75 / R 100) — distinct from card prices.
+export const RELIC_PRICE: Record<Rarity, number> = { common: 50, uncommon: 75, rare: 100 };
+
+// Relics that counter the act-3 boss (the Devourer's Maw sweep + heavy singles
+// and the post-transform race): the fight-6 spoils roll weights these ×2.
+export const ACT3_COUNTER_RELICS: RelicId[] = ['groundingRod', 'stormglass', 'warDrum', 'vanguardsBanner'];
+
+export const SPOILS_OFFER_SIZE = 3;      // relics offered on a spoils screen (pick 1, free)
+export const RELIQUARY_STOCK = 3;        // relics stocked by a Reliquary visit
+export const RELIQUARY_REMOVALS_MAX = 2; // card removals per Reliquary visit (at CARD_REMOVAL_PRICE)
+
 // Shop offer shapes (a rolled storefront entry plus its gold price).
 export interface CardOffer { cardId: CardId; rarity: Rarity; price: number; }
+export interface RelicOffer { relicId: RelicId; rarity: Rarity; price: number; }
 export interface ModifierOffer { modifier: ModifierId; rarity: Rarity; price: number; }
 export interface PartyUpgradeOffer { def: PartyUpgradeDef; price: number; }
 export interface HealerUpgradeOffer { def: HealerUpgradeDef; price: number; }

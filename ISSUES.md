@@ -27,13 +27,15 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–20** (P0–P8: all card work, the ward pipeline, the Q5 poison decision — **measured
-and left at 5×5**, full numbers in `sim/run-sim.ts` — events 3 → 8, and the act-2/3 named
-rosters: Ironmaw/Needler/Leech and Juggernaut/Lancer/Devourling, boss tech at small scale). The
-three bosses hit their gates (Gatewarden ~89% / Hexweaver ~74% / Devourer ~55%) and the **full
-run is winnable end to end at ~31%** (the designed 25–35% band — re-checked at N=1000 after
-every content change). **Next up: #21 (relics phase A).** **➤ Human playtest #2** is ready now
-(the Devourer / full-run band landed).
+**Done: 01–21** (P0–P9a: all card work, the ward pipeline, the Q5 poison decision — **measured
+and left at 5×5**, full numbers in `sim/run-sim.ts` — events 3 → 8, the act-2/3 named rosters,
+and **relics phase A**: 10 relics, spoils after fights 3 & 6, the Reliquary twice per run.
+Relics as first specced read full-run **65%**; landed back in band via relic tuning — Tithe
+Candle capped 4 MP/fight, Banner +1, Beads +2 — plus the act-2/3 bosses absorbing the power:
+Hexweaver 135→142, Devourer 165→190). The three bosses hit their gates (Gatewarden ~89% /
+Hexweaver ~71% / Devourer ~58%) and the **full run is winnable end to end at ~34%** (the
+designed 25–35% band — re-checked at N=1000 after every content change). **Next up: #22 (relics
+phase B — the designated cut line).** **➤ Human playtest #2** is ready now.
 
 ## Issues (implementation order)
 
@@ -59,7 +61,7 @@ every content change). **Next up: #21 (relics phase A).** **➤ Human playtest #
 | 18 | ✅ Done | [Resurrect rework + poison decision + Second Wind](./issues/18-resurrect-poison-secondwind.md) | P7d | 14, 16 | flaws #13, #14; Q5 |
 | 19 | ✅ Done | [Events expansion 3 → 8](./issues/19-events-expansion.md) | P7e | 10 | §4 P7 |
 | 20 | ✅ Done | [Act 2/3 named rosters](./issues/20-act23-rosters.md) | P8 | 14, 09 | §4 P8 |
-| 21 | ⬜ Todo | [Relics phase A: infra + 10 legible relics](./issues/21-relics-phase-a.md) | P9a | 14, 17 | §3.3; Q9 |
+| 21 | ✅ Done | [Relics phase A: infra + 10 legible relics](./issues/21-relics-phase-a.md) | P9a | 14, 17 | §3.3; Q9 |
 | 22 | ⬜ Todo | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |
 | 23 | ⬜ Todo | [Difficulty presets + local stats](./issues/23-difficulty-presets.md) | P10 | 14 | §4 P10; Q8 |
 | 24 | ⬜ Todo | [Hardening & UX batch](./issues/24-hardening-ux.md) | P11 | 23 | flaws #15, #16, #20, #21 |

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { toggleAnimSpeed, animSpeedLabel } from '../settings';
+import { RELICS } from '../constants';
+import type { RelicId } from '../constants';
 
 interface TopbarProps {
   seedField: string;
@@ -7,9 +9,10 @@ interface TopbarProps {
   onNewRun: () => void;
   gold: number;
   progress: string;
+  relics: RelicId[];
 }
 
-export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: TopbarProps) {
+export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, relics }: TopbarProps) {
   const [confirming, setConfirming] = useState(false);
   const [, forceSpeed] = useState(0);
 
@@ -19,6 +22,15 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress }: To
       <div className="run-status">
         <span className="run-progress">{progress}</span>
         <span className="run-gold" title="Gold">⦿ {gold}</span>
+        {relics.length > 0 && (
+          <span className="relic-row" aria-label="Relics">
+            {relics.map((id) => (
+              <span key={id} className="relic-badge" title={`${RELICS[id].name} — ${RELICS[id].desc}`}>
+                {RELICS[id].icon}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
       <div className="newgame">
         <button
