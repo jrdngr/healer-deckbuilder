@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -881,6 +881,45 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('intent name for heavy', g.telegraphIntent(), ATTACK_INTENT_NAMES.heavy);
   g.status = 'win';
   eq('no intent once the fight is over', g.telegraphIntent(), null);
+}
+
+// --- member-identity refactor (issue 08) -----------------------------------
+{
+  // Charge is per-member and ticks for every living member each player phase.
+  const g = new Game(41);
+  g.start(); // one tick already happened at player-phase start
+  for (const m of g.members) check(`${m.id} has per-member charge`, typeof m.charge === 'number' && m.charge >= 1);
+  // mageCharge proxies the mage's charge (back-compat for UI/sim/tests).
+  eq('mageCharge proxies mage.charge', g.mageCharge, g.mage.charge);
+  g.mageCharge = 4;
+  eq('setting mageCharge writes mage.charge', g.mage.charge, 4);
+}
+{
+  // Bolt consumes only the caster's Charge, not other members'.
+  const g = new Game(42);
+  g.start();
+  g.mage.charge = 3;
+  g.ranger.charge = 2;
+  g.mp = 10;
+  g.playCard(giveCard(g, 'ability'), SLOT.RIGHT); // mage bolt
+  eq('bolt cleared the caster charge', g.mage.charge, 0);
+  eq("bolt left another member's charge alone", g.ranger.charge, 2);
+}
+{
+  // Taunt is attributed to the caster, not a fixed slot.
+  const g = new Game(43);
+  g.start();
+  g.mp = 10;
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // tank taunt
+  eq('taunt landed on the caster', g.tank.taunt, TAUNT_TURNS);
+  eq('caster also braced with Defense', g.tank.defense, DEFENSE_TURNS);
+  eq('tauntingMember() is the caster', g.tauntingMember(), g.tank);
+  check('other members are not taunting', g.mage.taunt === 0 && g.ranger.taunt === 0);
+}
+{
+  // memberDamage accessor returns the member's damage (the party-phase seam).
+  const g = new Game(44);
+  for (const m of g.members) eq(`memberDamage(${m.id})`, g.memberDamage(m), m.damage);
 }
 
 // --- turn-1 attack is always a plain single (flaw #12) ----------------------

@@ -45,6 +45,15 @@ export const MEMBER_DEFS: MemberDef[] = [
   { slot: 2, id: 'mage', name: 'Mage', maxHP: 9, damage: 5, ability: 'bolt' },
 ];
 
+// Per-member identity keyed by id. The fixed demo trio is laid out by MEMBER_DEFS
+// (slot order); MEMBER_POOL is the data-driven source the post-demo roster and
+// draft (#27-#31) extend so any member can occupy any slot and carry any ability.
+export const MEMBER_POOL: Record<MemberId, MemberDef> = {
+  ranger: MEMBER_DEFS[0],
+  tank: MEMBER_DEFS[1],
+  mage: MEMBER_DEFS[2],
+};
+
 export const ENEMY_MAX_HP = 100;
 
 // Base (pre-enrage) per-target damage by attack type.

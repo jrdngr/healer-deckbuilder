@@ -43,8 +43,9 @@ export interface Member {
   shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
   regen: number;      // Regen strength: HP healed per turn while active
   regenTurns: number; // player phases of Regen remaining
-  taunt: number;   // taunt turns remaining (tank only)
+  taunt: number;   // taunt turns remaining (attributed to whoever cast Taunt)
   defense: number; // Defense turns remaining: incoming hits reduced by DEFENSE_AMOUNT
+  charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
 }
 
 export interface Enemy {
@@ -126,7 +127,6 @@ export class Game {
   handSize: number;  // cards drawn each player phase (healer stat)
   restRegen: number; // MP regained on rest (healer stat)
   passiveMp: number; // MP gained at the start of each player phase (healer stat)
-  mageCharge: number;
   refresh: number;        // Refresh strength: MP restored per turn while active
   refreshTurns: number;   // enemy turns of Refresh remaining
   refreshRestored: number; // MP the current Refresh cast has restored so far (capped at REFRESH_MP_CAP)
@@ -161,8 +161,9 @@ export class Game {
         shieldTurns: 0,
         regen: 0,      // Regen strength
         regenTurns: 0, // Regen turns remaining
-        taunt: 0,      // taunt turns remaining (tank only)
+        taunt: 0,      // taunt turns remaining (attributed to the caster)
         defense: 0,    // Defense turns remaining
+        charge: 0,     // per-member Charge
       };
     });
 
@@ -177,7 +178,6 @@ export class Game {
     this.passiveMp = config.healer.passiveMp;
 
     this.mp = this.maxMana; // starting MP each fight equals the cap
-    this.mageCharge = 0;
     this.refresh = 0;       // Refresh strength
     this.refreshTurns = 0;  // Refresh turns remaining
     this.refreshRestored = 0;
@@ -200,9 +200,26 @@ export class Game {
 
   // ---- helpers -------------------------------------------------------------
 
-  get tank(): Member { return this.members[SLOT.CENTER]; }
-  get mage(): Member { return this.members[SLOT.RIGHT]; }
-  get ranger(): Member { return this.members[SLOT.LEFT]; }
+  // Convenience accessors for the fixed demo trio, by identity (not raw slot).
+  // Post-demo compositions read members generically; these stay for the trio.
+  get tank(): Member { return this.memberById('tank'); }
+  get mage(): Member { return this.memberById('mage'); }
+  get ranger(): Member { return this.memberById('ranger'); }
+
+  memberById(id: MemberId): Member { return this.members.find((m) => m.id === id) ?? this.members[SLOT.CENTER]; }
+
+  // Charge is per-member now (any member can carry it); mageCharge proxies the
+  // mage's charge so existing UI/sim/test call sites keep working for the trio.
+  get mageCharge(): number { return this.mage.charge; }
+  set mageCharge(v: number) { this.mage.charge = v; }
+
+  // The member currently holding Taunt (whoever cast it), or null. For the fixed
+  // trio this is always the tank, but the engine no longer assumes that.
+  tauntingMember(): Member | null { return this.members.find((m) => m.alive && m.taunt > 0) ?? null; }
+
+  // Per-member attack damage — an accessor so future per-member damage modifiers
+  // have a single seam.
+  memberDamage(m: Member): number { return m.damage; }
 
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
   allDead(): boolean { return this.members.every((m) => !m.alive); }
@@ -237,7 +254,7 @@ export class Game {
     return this.isEnraged(turn) ? Math.ceil(base * ENRAGE_MULT) : base;
   }
 
-  tankTaunting(): boolean { return this.tank.alive && this.tank.taunt > 0; }
+  tankTaunting(): boolean { return this.tauntingMember() !== null; }
 
   // ---- telegraph generation ------------------------------------------------
 
@@ -255,7 +272,8 @@ export class Game {
   }
 
   _pickPrimary(type: AttackType): Slot {
-    if (this.tankTaunting()) return SLOT.CENTER;
+    const taunter = this.tauntingMember();
+    if (taunter) return taunter.slot;
     const weights = type === 'hidden' ? SLOT_WEIGHTS.hidden : SLOT_WEIGHTS.normal;
     // Never aim the primary at a fallen member: a dead primary leaves single/hidden
     // attacks with no telegraph line to show and makes the blow whiff on a corpse.
@@ -317,21 +335,22 @@ export class Game {
       });
   }
 
-  // Recompute the standing telegraph's targets with the Tank forced as primary.
-  _retargetTelegraphToTank(): void {
+  // Recompute the standing telegraph's targets with the given slot (the taunter)
+  // forced as primary.
+  _retargetTelegraphTo(slot: Slot): void {
     if (!this.telegraph) return;
     const t = this.telegraph;
-    t.targets = this._geometry(t.type, SLOT.CENTER);
+    t.targets = this._geometry(t.type, slot);
   }
 
-  // Whether redirecting the standing telegraph onto the tank would actually move
+  // Whether redirecting the standing telegraph onto `slot` would actually move
   // damage off someone: only for aimed (non-AoE/sweep) attacks that currently
-  // threaten a living non-tank slot. AoE/sweep hit everyone regardless, and a
-  // hidden attack has no known geometry, so neither is worth a surcharge.
-  _standingTelegraphRedirectable(): boolean {
+  // threaten a living member other than `slot`. AoE/sweep hit everyone regardless,
+  // and a hidden attack has no known geometry, so neither is worth a surcharge.
+  _standingTelegraphRedirectable(slot: Slot = SLOT.CENTER): boolean {
     const t = this.telegraph;
     if (!t || t.hidden || t.type === 'aoe' || t.type === 'sweep') return false;
-    return t.targets.some((s) => s !== SLOT.CENTER && this.members[s]?.alive);
+    return t.targets.some((s) => s !== slot && this.members[s]?.alive);
   }
 
   // ---- next-turn predictions (for the bar telegraphs) ----------------------
@@ -373,7 +392,7 @@ export class Game {
     m.regenTurns = 0;
     m.taunt = 0;
     m.defense = 0;
-    if (m.id === 'mage') this.mageCharge = 0;
+    m.charge = 0;
     this._log(`${m.name} has fallen!`, 'death');
   }
 
@@ -404,9 +423,9 @@ export class Game {
   }
 
   // Damage a member actually takes from a raw attack value, after their Defense
-  // (if any). Floored at 0 so a fully-absorbed hit can't heal.
-  // Only the Tank gets Defense (via its Taunt ability), so the tank's abilityPower
-  // scales the reduction. Other members never have defense > 0 here.
+  // (if any). Floored at 0 so a fully-absorbed hit can't heal. Defense is granted
+  // by the Taunt ability to whoever cast it, and that caster's abilityPower scales
+  // the reduction (for the fixed trio this is always the tank).
   _effectiveDamage(m: Member, raw: number): number {
     return m.defense > 0 ? Math.max(0, raw - (DEFENSE_AMOUNT + m.abilityPower)) : raw;
   }
@@ -456,11 +475,11 @@ export class Game {
     if (this._checkWipe()) return;
 
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
-    if (this.tank.alive && this.tank.taunt > 0) {
-      this.tank.taunt -= 1;
-      if (this.tank.taunt === 0) this._log('Taunt fades from the Tank.', 'status');
-    }
     for (const m of this.members) {
+      if (m.alive && m.taunt > 0) {
+        m.taunt -= 1;
+        if (m.taunt === 0) this._log(`Taunt fades from ${m.name}.`, 'status');
+      }
       if (m.alive && m.defense > 0) {
         m.defense -= 1;
         if (m.defense === 0) this._log(`Defense fades from ${m.name}.`, 'status');
@@ -533,9 +552,10 @@ export class Game {
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
     }
-    // Mage charge ticks before the player can act.
-    if (this.mage.alive) {
-      this.mageCharge = Math.min(CHARGE_MAX, this.mageCharge + 1);
+    // Per-member Charge ticks before the player can act (only the Bolt ability
+    // consumes it today, so for the trio this is effectively the mage's charge).
+    for (const m of this.members) {
+      if (m.alive) m.charge = Math.min(CHARGE_MAX, m.charge + 1);
     }
     this._drawTo(this.handSize);
     this.cardsPlayedThisPhase = 0;
@@ -643,8 +663,7 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.shieldTurns = 0; m.regen = 0; m.regenTurns = 0; m.taunt = 0; m.defense = 0;
-        if (m.id === 'mage') this.mageCharge = 0;
+        m.shield = false; m.shieldTurns = 0; m.regen = 0; m.regenTurns = 0; m.taunt = 0; m.defense = 0; m.charge = 0;
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
@@ -680,15 +699,16 @@ export class Game {
         break;
       }
       case 'taunt': {
-        this.tank.taunt = TAUNT_TURNS;
-        this.tank.defense = DEFENSE_TURNS;
-        // Future telegraphs auto-aim at the taunting tank (via _pickPrimary). The
+        // Taunt and its bundled Defense are attributed to the caster, not a slot.
+        m.taunt = TAUNT_TURNS;
+        m.defense = DEFENSE_TURNS;
+        // Future telegraphs auto-aim at the taunting member (via _pickPrimary). The
         // *standing* blow is the costly part: it is not redirected for free.
         if (this.tauntRetargetMode === 'surcharge'
-            && this._standingTelegraphRedirectable()
+            && this._standingTelegraphRedirectable(m.slot)
             && this.mp >= TAUNT_RETARGET_SURCHARGE) {
           this.mp -= TAUNT_RETARGET_SURCHARGE;
-          this._retargetTelegraphToTank();
+          this._retargetTelegraphTo(m.slot);
           this._log(`${m.name} wrenches the incoming attack onto itself (-${TAUNT_RETARGET_SURCHARGE} MP).`, 'status');
         }
         this._log(`${m.name} Taunts and braces (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} enemy turns.`, 'status');
@@ -696,10 +716,11 @@ export class Game {
         break;
       }
       case 'bolt': {
+        // Bolt scales on the *caster's* Charge.
         const base = BOLT_BASE + m.abilityPower;
-        const dmg = base + BOLT_CHARGE_MULT * this.mageCharge;
-        this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${this.mageCharge}).`, 'status');
-        this.mageCharge = 0;
+        const dmg = base + BOLT_CHARGE_MULT * m.charge;
+        this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${m.charge}).`, 'status');
+        m.charge = 0;
         const killed = this._damageEnemy(dmg, 'Lightning Bolt');
         this._emit({ kind: 'bolt', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
@@ -771,9 +792,10 @@ export class Game {
     // can play three attacks in sequence. The enemy HP steps down per hit; the
     // total is unchanged from a single combined strike.
     for (const m of this.members) {
-      if (!m.alive || m.damage <= 0) continue;
-      const killed = this._damageEnemy(m.damage, `${m.name}`);
-      this._emit({ kind: 'partyAttack', slot: m.slot, amount: m.damage, enemyHp: this.enemy.hp });
+      const dmg = this.memberDamage(m);
+      if (!m.alive || dmg <= 0) continue;
+      const killed = this._damageEnemy(dmg, `${m.name}`);
+      this._emit({ kind: 'partyAttack', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
