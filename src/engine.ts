@@ -901,16 +901,19 @@ export class Game {
         break;
       }
       case 'consume': {
-        // Devourer (#14): cleanse its own Poison and heal for every remaining tick,
-        // so poison stops being free value against it.
+        // Devourer (#14) / the act-2/3 self-healers (#20): cleanse the enemy's
+        // own Poison and heal for every remaining tick, so poison stops being
+        // free value. Log with the step's own name (Consume / Gorge) so the
+        // resolution matches the telegraph the player read.
+        const name = t.name ?? 'Consume';
         const healed = this.enemy.poison * this.enemy.poisonTurns;
         this.enemy.poison = 0;
         this.enemy.poisonTurns = 0;
         if (healed > 0) {
           this.enemy.hp = Math.min(this.enemy.maxHP, this.enemy.hp + healed);
-          this._log(`${this.enemyDef.name} Consumes its wounds, healing ${healed}. (${this.enemy.hp}/${this.enemy.maxHP})`, 'system');
+          this._log(`${this.enemyDef.name} — ${name}! It feeds on its own poison, healing ${healed}. (${this.enemy.hp}/${this.enemy.maxHP})`, 'system');
         } else {
-          this._log(`${this.enemyDef.name} Consumes — but there was no poison to feed on.`, 'system');
+          this._log(`${this.enemyDef.name} — ${name}, but there is no poison to feed on.`, 'system');
         }
         this._emit({ kind: 'consume', heal: healed, enemyHp: this.enemy.hp });
         break;
