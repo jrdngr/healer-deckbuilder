@@ -73,6 +73,22 @@
 //     F0 100 | F1 100 | F2 A1boss 88.8 | F3 99.4 | F4 98.5 | F5 A2boss 74.3 | F6 95.0 | F7 97.1 | F8 A3boss 56.7
 //     Pool 20 -> 22 ids; bands hold. The preview==applied invariant now runs the
 //     whole ward pipeline (property-tested in engine.test.ts).
+//   after #18 (Resurrect 6->4 MP + revive-behind-a-Shield; poison MEASURED and
+//     left at 5x5):  sim unchanged from #17 (the policy stick has no resurrect
+//     tactic, so the N=200 pins pass bit-identical; full-run stays 33.8%).
+//     The Q5 poison measurement (all N=1000, on the #17 baseline):
+//       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
+//       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%
+//       poison 4x4:                   F2 82.9 | F5 61.3 | F8 61.6 | full-run 27.1%
+//       poison 4x4 + Bolt execute 1.5x below 25% HP:
+//                                     F2 83.0 | F5 61.2 | F8 63.2 | full-run 27.8%
+//     Verdict: the Devourer's Consume already tamed poison — it is a genuine
+//     decision now (feeding Consume costs ~15pp; a poison-skipping line wins
+//     ~71% there), while 5x5 remains load-bearing for the Gatewarden/Hexweaver
+//     tuning. A 4x4 nerf breaks the >=85% and 65-75% gates and would force a
+//     three-boss retune, which #18 does not own. Poison stays 5x5; the policy
+//     stick stays poison-blind vs the Devourer on purpose (fixed measuring
+//     stick) — a Consume-aware policy line is future work alongside any retune.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

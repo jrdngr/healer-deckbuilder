@@ -1018,11 +1018,15 @@ export class Game {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.shield = false; m.shieldTurns = 0; m.brace = false; m.braceTurns = 0;
+        m.brace = false; m.braceTurns = 0;
         m.regen = 0; m.regenTurns = 0; m.bloomBurst = 0;
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0;
-        this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
+        // Reworked (#18): the revive comes back behind a fresh Shield so the
+        // standing telegraph can't immediately undo the 4 MP investment.
+        m.shield = true; m.shieldTurns = SHIELD_TURNS;
+        this._log(`${m.name} is resurrected to ${m.hp} HP behind a Shield.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
+        this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
       }
       case 'refresh':

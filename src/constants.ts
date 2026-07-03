@@ -333,6 +333,14 @@ export const CASINO_SAFE_GOLD = 25;   // guaranteed payout if you skip the flip 
 export const BOLT_BASE = 5;
 export const BOLT_CHARGE_MULT = 3; // Lightning Bolt adds this much damage per Charge
 export const CHARGE_MAX = 5;
+// Poison stays 5x5 (#18, flaw #13 / Q5 measured 2026-07): the Devourer's
+// Consume (#14) already made it a decision — always-poison reads 56.7% there
+// while never-poison reads ~71%, so feeding the Consume is a real mistake —
+// and the 5x5 value is load-bearing against the other bosses (without it the
+// Gatewarden falls 89->70% and the Hexweaver 74->41%). A 4x4 nerf (with or
+// without a Bolt execute niche) breaks the Gatewarden >=85% and Hexweaver
+// 65-75% gates, and re-tuning three bosses is out of #18's scope. See the
+// baseline note in sim/run-sim.ts for the full numbers.
 export const POISON_BASE = 5;   // Poison strength: damage dealt per enemy turn.
 export const POISON_TURNS = 5;  // enemy turns Poison lasts
 export const REGEN_TURNS = 3;   // player phases Regen lasts
@@ -394,8 +402,11 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Regen 1: heal 1 HP per turn for 3 enemy turns.' },
   shield: { id: 'shield', name: 'Shield', cost: 3, target: 'single',
     desc: 'Fully block the next attack instance on a member.' },
-  resurrect: { id: 'resurrect', name: 'Resurrect', cost: 6, target: 'dead',
-    desc: 'Revive a dead member to 50% max HP.' },
+  // Resurrect reworked (#18, flaw #14): 6 MP -> 4 and the revived member comes
+  // back behind a Shield, so a revive isn't immediately undone by the standing
+  // telegraph — worth casting against bosses where deaths are rare but brutal.
+  resurrect: { id: 'resurrect', name: 'Resurrect', cost: 4, target: 'dead',
+    desc: 'Revive a dead member to 50% max HP behind a Shield.' },
   refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 2, engine: true,
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
   cleanse: { id: 'cleanse', name: 'Cleanse', cost: 1, target: 'none',

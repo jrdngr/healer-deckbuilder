@@ -376,6 +376,10 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('mage revived to 50% (ceil 9/2=5)', mage.hp, Math.ceil(mage.maxHP / 2));
   check('mage alive again', mage.alive);
   eq('charge cleared on res', g.mageCharge, 0);
+  // Rework (#18): 4 MP, and the revive comes back behind a fresh Shield.
+  eq('Resurrect costs 4 (rework, #18)', CARDS.resurrect.cost, 4);
+  check('revived member comes back behind a Shield', mage.shield);
+  eq('the revive Shield carries the full fuse', mage.shieldTurns, SHIELD_TURNS);
 }
 
 // --- skip regen +5, only before a card is played ---------------------------
