@@ -366,9 +366,14 @@ export class Game {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
     if (t.hidden) {
-      // Reveal the magnitude, hide the target: every living member shows the same
-      // number as a "someone takes N" threat (flaw #11).
-      return this.livingMembers().map((m): AttackSpec => ({ slot: m.slot, damage: t.damage, hidden: true }));
+      // Reveal the magnitude, hide the target (flaw #11) — per member: each line
+      // shows what THAT member would take if the blow lands on them (Defense
+      // folded in, a Shield blocking to 0), keeping preview == applied for
+      // whichever target the attack turns out to have.
+      return this.livingMembers().map((m): AttackSpec => {
+        const eff = this._effectiveDamage(m, t.damage);
+        return { slot: m.slot, damage: m.shield && eff > 0 ? 0 : eff, hidden: true };
+      });
     }
     return t.targets
       .filter((slot) => this.members[slot]?.alive)

@@ -487,6 +487,16 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('hidden -> all living lines', hl.length, 3);
   eq('hidden line reveals the magnitude (not the target)', hl[0].damage, 4);
   check('hidden line flagged hidden', hl[0].hidden === true);
+  // Per-member fold (playtest finding): a defended member's line shows what THEY
+  // would take, and a Shield previews as 0 — preview == applied for any target.
+  g2.tank.defense = DEFENSE_TURNS;
+  g2.mage.shield = true; g2.mage.shieldTurns = SHIELD_TURNS;
+  const hl2 = g2.attackTargets();
+  const bySlot = new Map(hl2.map((s) => [s.slot, s.damage]));
+  eq('hidden line folds Defense for the defended member',
+    bySlot.get(SLOT.CENTER), 4 - (DEFENSE_AMOUNT + g2.tank.abilityPower));
+  eq('hidden line previews 0 for a shielded member', bySlot.get(SLOT.RIGHT), 0);
+  eq('hidden line unchanged for an unprotected member', bySlot.get(SLOT.LEFT), 4);
 }
 
 // --- loss: party wipe ends immediately -------------------------------------
