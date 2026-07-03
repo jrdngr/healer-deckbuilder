@@ -219,13 +219,18 @@ function tryRegenTank(game: Game): boolean {
 }
 
 // Bank MP income by priming Refresh early, while it still has turns to pay off.
+// Font of Mana (#15) shares the Refresh slot and restores more per cast, so it
+// is the preferred prime when both are in hand.
 function tryRefresh(game: Game): boolean {
   if (game.refreshTurns > 0 || game.turn > REFRESH_TURN_GATE) return false;
-  const idx = handIndexOf(game, 'refresh');
-  if (!affordable(game, idx)) return false;
-  if (game.mp - cardCost(game, idx) < 1) return false; // don't strand ourselves at 0 MP
-  game.playCard(idx, null);
-  return true;
+  for (const id of ['fontOfMana', 'refresh'] as CardId[]) {
+    const idx = handIndexOf(game, id);
+    if (!affordable(game, idx)) continue;
+    if (game.mp - cardCost(game, idx) < 1) continue; // don't strand ourselves at 0 MP
+    game.playCard(idx, null);
+    return true;
+  }
+  return false;
 }
 
 // Priority order per player phase. Secure the tank's Taunt, stop lethal blows,
@@ -273,7 +278,10 @@ export function playFight(game: Game, turnCap = 40): void {
 // Buy-value of each card the shops can sell (higher = buy first). Ability cards
 // feed the Taunt/Bolt/Poison line; Refresh feeds the MP economy.
 const CARD_BUY_VALUE: Record<CardId, number> = {
-  ability: 9, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2, lowHeal: 1,
+  ability: 9, fontOfMana: 8, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2,
+  // Phase-A cards (#15) the fight policy has no tactic for yet stay below the
+  // buy threshold — a card the policy never plays is dead deck weight.
+  overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

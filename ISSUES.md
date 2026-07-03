@@ -27,11 +27,11 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–14** (all of P0–P6 — the full demo boss trilogy). Each landed as its own commit with
-tests and a sim gate. The three bosses hit their gates (Gatewarden ~89% / Hexweaver ~71% /
-Devourer ~57%) and the **full run is winnable end to end at ~32%** (the designed 25–35% band,
-tuned once against real content in #14). **Next up: #15 (card set phase A).** **➤ Human playtest
-#2** is ready now (the Devourer / full-run band landed).
+**Done: 01–15** (P0–P6 plus card set phase A). Each landed as its own commit with tests and a
+sim gate. The three bosses hit their gates (Gatewarden ~89% / Hexweaver ~71% / Devourer ~57%)
+and the **full run is winnable end to end at ~32%** (the designed 25–35% band — re-checked at
+N=1000 after #15's five shop cards joined the pool; unmoved). **Next up: #16 (card set phase
+B).** **➤ Human playtest #2** is ready now (the Devourer / full-run band landed).
 
 ## Issues (implementation order)
 
@@ -51,7 +51,7 @@ tuned once against real content in #14). **Next up: #15 (card set phase A).** **
 | 12 | ✅ Done | [Boss 1 — Gatewarden ("learn to read")](./issues/12-boss-gatewarden.md) | P4 | 10 | §4 P4 |
 | 13 | ✅ Done | [Boss 2 — Hexweaver ("you can't turtle") + Cleanse](./issues/13-boss-hexweaver.md) | P5 | 12 | §4 P5; flaw #1 |
 | 14 | ✅ Done | [Boss 3 — Devourer ("race or die") + phase system](./issues/14-boss-devourer.md) | P6 | 13 | §4 P6 |
-| 15 | ⬜ Todo | [Card set phase A: existing-field cards](./issues/15-cards-phase-a.md) | P7a | 14 | §3.2 |
+| 15 | ✅ Done | [Card set phase A: existing-field cards](./issues/15-cards-phase-a.md) | P7a | 14 | §3.2 |
 | 16 | ⬜ Todo | [Card set phase B: small-new-state cards](./issues/16-cards-phase-b.md) | P7b | 15 | §3.2 |
 | 17 | ⬜ Todo | [Card set phase C: Bulwark / Defense pipeline](./issues/17-cards-phase-c-bulwark.md) | P7c | 16 | §3.2; Q10 |
 | 18 | ⬜ Todo | [Resurrect rework + poison decision + Second Wind](./issues/18-resurrect-poison-secondwind.md) | P7d | 14, 16 | flaws #13, #14; Q5 |

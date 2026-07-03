@@ -16,6 +16,7 @@ import {
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
+  CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN,
   WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
@@ -118,6 +119,7 @@ export type GameEvent =
   | { kind: 'shieldApplied'; slot: Slot }
   | { kind: 'resurrect'; slot: Slot; hp: number }
   | { kind: 'refreshPrimed'; stack: number }
+  | { kind: 'draw'; count: number }
   | { kind: 'cleanse'; slot: Slot }
   | { kind: 'rest'; amount: number; mp: number }
   // --- abilities ---
@@ -148,7 +150,8 @@ export class Game {
   passiveMp: number; // MP gained at the start of each player phase (healer stat)
   refresh: number;        // Refresh strength: MP restored per turn while active
   refreshTurns: number;   // enemy turns of Refresh remaining
-  refreshRestored: number; // MP the current Refresh cast has restored so far (capped at REFRESH_MP_CAP)
+  refreshRestored: number; // MP the current Refresh cast has restored so far (capped at refreshCap)
+  refreshCap: number;     // per-cast lifetime MP cap of the active cast (Refresh 6 / Font of Mana 9)
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
   drawPile: DeckCard[];
   discardPile: DeckCard[];
@@ -206,6 +209,7 @@ export class Game {
     this.refresh = 0;       // Refresh strength
     this.refreshTurns = 0;  // Refresh turns remaining
     this.refreshRestored = 0;
+    this.refreshCap = REFRESH_MP_CAP;
     this.woundTurns = 0;    // no Hex active at fight start
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
@@ -483,7 +487,7 @@ export class Game {
   // active), capped by the room left under MP_MAX.
   predictedRefresh(): number {
     if (this.refreshTurns <= 0) return 0;
-    const capRoom = Math.max(0, REFRESH_MP_CAP - this.refreshRestored);
+    const capRoom = Math.max(0, this.refreshCap - this.refreshRestored);
     return Math.min(this.refresh, this.maxMana - this.mp, capRoom);
   }
 
@@ -609,9 +613,10 @@ export class Game {
       if (this.status === 'win') return; // poison can finish the enemy
     }
     if (this.refreshTurns > 0) {
-      // A single Refresh cast restores at most REFRESH_MP_CAP MP over its lifetime,
-      // so Potent/Lingering can't turn it into an unbounded MP engine (flaw #7).
-      const capRoom = Math.max(0, REFRESH_MP_CAP - this.refreshRestored);
+      // A single Refresh-slot cast restores at most its refreshCap MP over its
+      // lifetime (Refresh 6 / Font of Mana 9), so Potent/Lingering can't turn it
+      // into an unbounded MP engine (flaw #7).
+      const capRoom = Math.max(0, this.refreshCap - this.refreshRestored);
       const before = this.mp;
       this.mp = Math.min(this.maxMana, this.mp + Math.min(this.refresh, capRoom));
       const gained = this.mp - before;
@@ -620,7 +625,7 @@ export class Game {
       this._emit({ kind: 'refreshTick', amount: gained, mp: this.mp });
       this.refreshTurns -= 1;
       // End the cast once spent or its cap is exhausted.
-      if (this.refreshTurns === 0 || this.refreshRestored >= REFRESH_MP_CAP) {
+      if (this.refreshTurns === 0 || this.refreshRestored >= this.refreshCap) {
         this.refreshTurns = 0;
         this.refresh = 0;
       }
@@ -835,6 +840,8 @@ export class Game {
       case 'ability': {
         const m = target == null ? undefined : this.members[target];
         if (!m || !m.alive) return 'target must be a living member';
+        // Cultivate / Bloom (#15) operate on an existing Regen — dead without one.
+        if (card.needsRegen && m.regenTurns <= 0) return 'target must have an active Regen';
         break;
       }
       case 'dead': {
@@ -910,14 +917,62 @@ export class Game {
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
       }
-      case 'refresh': {
-        // Re-applying refreshes the duration and keeps the stronger value (no stacking),
-        // and resets the per-cast MP cap so a fresh cast gets its full REFRESH_MP_CAP.
+      case 'refresh':
+      case 'fontOfMana': {
+        // Refresh and Font of Mana (#15) share one status slot. Re-applying
+        // refreshes the duration and keeps the stronger value (no stacking), and
+        // resets the per-cast MP total; the cap is the JUST-CAST card's designed
+        // lifetime, so no cast can ever restore more than its own card allows.
         this.refresh = Math.max(this.refresh, card.refresh ?? 0);
         this.refreshTurns = card.refreshTurns;
         this.refreshRestored = 0;
-        this._log(`Refresh primed (${this.refresh} MP/turn for ${this.refreshTurns}).`, 'status');
+        this.refreshCap = card.refreshCap;
+        this._log(`${card.name} primed (${this.refresh} MP/turn for ${this.refreshTurns}).`, 'status');
         this._emit({ kind: 'refreshPrimed', stack: this.refresh });
+        break;
+      }
+      case 'overgrowth': {
+        // Party-wide Regen with the single-target card's no-stack semantics per
+        // member: refresh the duration, keep the stronger strength.
+        for (const m of this.livingMembers()) {
+          m.regen = Math.max(m.regen, card.regen ?? 0);
+          m.regenTurns = card.regenTurns;
+          this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
+        }
+        this._log(`Overgrowth: Regen ${card.regen} on all living members for ${card.regenTurns} turns.`, 'status');
+        break;
+      }
+      case 'cultivate': {
+        const m = this.members[target as number];
+        // Modify the active Regen IN PLACE (canPlay guarantees one): never
+        // overwrite the stack, so a stronger Regen — and later Lifebloom's burst
+        // (#16) — keeps everything it had.
+        m.regen += CULTIVATE_STRENGTH;
+        m.regenTurns += CULTIVATE_TURNS;
+        this._log(`Cultivate: ${m.name}'s Regen grows to ${m.regen}/turn for ${m.regenTurns}.`, 'status');
+        this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
+        break;
+      }
+      case 'bloom': {
+        const m = this.members[target as number];
+        // Consume the Regen: heal per remaining turn, then the stack is gone.
+        const healed = this._healMember(m, BLOOM_HEAL_PER_TURN * m.regenTurns);
+        m.regen = 0;
+        m.regenTurns = 0;
+        this._log(`Bloom consumes ${m.name}'s Regen: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
+        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        break;
+      }
+      case 'inspiration': {
+        const before = this.hand.length;
+        for (let i = 0; i < (card.draw ?? 0); i++) {
+          const c = this._drawOne();
+          if (c == null) break; // draw and discard both empty
+          this.hand.push(c);
+        }
+        const drawn = this.hand.length - before;
+        this._log(`Inspiration: drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
+        this._emit({ kind: 'draw', count: drawn });
         break;
       }
       case 'cleanse': {
@@ -1092,8 +1147,9 @@ export class Game {
     const needsLiving = card.target === 'single' || card.target === 'ability';
     let t = target;
     if (t == null) {
-      if (needsLiving) t = this.members.find((m) => m.alive)?.slot ?? null;
-      else if (card.target === 'dead') t = this.members.find((m) => !m.alive)?.slot ?? null;
+      if (needsLiving) {
+        t = this.members.find((m) => m.alive && (!card.needsRegen || m.regenTurns > 0))?.slot ?? null;
+      } else if (card.target === 'dead') t = this.members.find((m) => !m.alive)?.slot ?? null;
     }
     // Bail if a slot-targeted card has no valid target available.
     if ((needsLiving || card.target === 'dead') && t == null) return;

@@ -251,6 +251,17 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'draw': {
+        // Inspiration (#15): the cards appear in the hand instantly (it renders
+        // live), so a light pulse near the hand acknowledges the play.
+        push({ at: t, fx: [
+          { type: 'glow', at: 'mp', color: C.white },
+          { type: 'float', at: 'mp', text: `+${ev.count} card${ev.count === 1 ? '' : 's'}`, color: C.white },
+        ] });
+        t += 360;
+        break;
+      }
+
       case 'rest': {
         push({ at: t, patch: { mp: ev.mp }, fx: [
           { type: 'glow', at: 'mp', color: C.mp },

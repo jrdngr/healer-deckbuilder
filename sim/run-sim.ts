@@ -56,6 +56,12 @@
 //     — F7 was a 190-HP/+2 enrage cliff (~25%), now ~96%; (b) the Devourer at 165 HP
 //     (phase-2 Maw + Consume) reads ~57%. Devourer HP is a steep lever: 160->60%,
 //     170->49%. Full-run 32.2% ±2.9 at N=1000.
+//   after #15 (card set phase A: Overgrowth / Cultivate / Bloom / Font of Mana /
+//     Inspiration join CARD_POOL):  full-run 32.3 % ±2.9 at N=1000 — unmoved.
+//     F0 100 | F1 100 | F2 A1boss 89.3 | F3 99.3 | F4 98.2 | F5 A2boss 71.2 | F6 94.7 | F7 96.3 | F8 A3boss 57.2
+//     Every offer roll shifts (pool 8 -> 13 ids) but the bands hold. The policy
+//     buys/plays Font of Mana via tryRefresh; the other four sit below its buy
+//     threshold until a tactic exists for them (Regen-line play is #16's problem).
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

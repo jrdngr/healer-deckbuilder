@@ -12,7 +12,8 @@ export type MemberId = 'ranger' | 'tank' | 'mage';
 export type AbilityId = 'poison' | 'taunt' | 'bolt';
 export type CardId =
   | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
-  | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse';
+  | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
+  | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -37,6 +38,16 @@ export interface CardDef {
   heal?: number;
   regen?: number;
   refresh?: number;
+  draw?: number;        // cards drawn when played (Inspiration)
+  // Single-target eligibility gate: the target must carry an active Regen
+  // (Cultivate / Bloom are dead cards without one).
+  needsRegen?: boolean;
+  // Excluded from the Potent modifier even though it has a strength field
+  // (Overgrowth: +1 strength would be x3 members x3 turns for one upgrade).
+  noPotent?: boolean;
+  // Per-cast lifetime MP cap override for Refresh-slot cards; defaults to
+  // REFRESH_MP_CAP (Font of Mana carries its own larger designed lifetime).
+  refreshCap?: number;
   // "Engine" cards generate MP or draw cards (they fuel the economy). Retain is
   // ineligible for them, and later economy modifiers (Taper, #22) gate on the
   // same tag. Keep this the single source of the tag.
@@ -300,6 +311,7 @@ export const MP_MAX = 10; // hard cap; MP never exceeds this
 export const SKIP_REGEN = 5;          // Rest MP when no card was played this phase
 export const SKIP_REGEN_DECAYED = 2;  // Rest MP when exactly one card was played (decaying Rest, flaw #5)
 export const REFRESH_MP_CAP = 6;      // max MP a single Refresh cast may restore over its lifetime (flaw #7)
+export const FONT_MP_CAP = 9;         // Font of Mana's per-cast lifetime (3/turn x 3 turns; net +6 after its 3 MP cost)
 export const PASSIVE_MP_CAP = 2;      // max total passiveMp a run may buy (flaw #10)
 export const CARD_REMOVAL_PRICE = 20; // unified card-removal price (flaw #17)
 export const CASINO_SAFE_GOLD = 25;   // guaranteed payout if you skip the flip (flaw #18)
@@ -316,6 +328,11 @@ export const TAUNT_TURNS = 4;
 export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
+
+// Card set phase A (#15) magnitudes.
+export const CULTIVATE_STRENGTH = 1;  // Regen strength Cultivate adds in place
+export const CULTIVATE_TURNS = 1;     // Regen turns Cultivate adds in place
+export const BLOOM_HEAL_PER_TURN = 2; // healing per remaining Regen turn Bloom consumes
 
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
@@ -357,6 +374,18 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
   cleanse: { id: 'cleanse', name: 'Cleanse', cost: 1, target: 'none',
     desc: 'Remove Hex (the healing-reduction curse) from the party.' },
+  // --- card set phase A (#15): shop-only cards on existing engine state ------
+  overgrowth: { id: 'overgrowth', name: 'Overgrowth', cost: 3, target: 'all', regen: 1, noPotent: true,
+    desc: 'Regen 1 on every living member for 3 enemy turns.' },
+  cultivate: { id: 'cultivate', name: 'Cultivate', cost: 1, target: 'single', needsRegen: true,
+    desc: 'Strengthen a member\'s active Regen: +1 healing and +1 turn.' },
+  bloom: { id: 'bloom', name: 'Bloom', cost: 2, target: 'single', needsRegen: true,
+    desc: 'Consume a member\'s Regen: heal 2 per remaining turn.' },
+  fontOfMana: { id: 'fontOfMana', name: 'Font of Mana', cost: 3, target: 'none',
+    refresh: 3, refreshCap: FONT_MP_CAP, engine: true,
+    desc: 'Refresh 3: restore 3 MP per turn for 3 enemy turns.' },
+  inspiration: { id: 'inspiration', name: 'Inspiration', cost: 2, target: 'none', draw: 2, engine: true,
+    desc: 'Draw 2 cards.' },
 };
 
 // The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
@@ -462,6 +491,9 @@ export interface ResolvedCard {
   heal?: number;
   regen?: number;
   refresh?: number;
+  draw?: number;
+  needsRegen: boolean;
+  refreshCap: number; // per-cast lifetime MP cap for Refresh-slot cards
   regenTurns: number;
   refreshTurns: number;
   retain: boolean;
@@ -484,7 +516,7 @@ export const MOD_LINGERING_TURNS = 1;  // +1 turn of duration (Regen / Refresh)
 
 const cardHasStrength = (id: CardId): boolean => {
   const c = CARDS[id];
-  return c.heal != null || c.regen != null || c.refresh != null;
+  return !c.noPotent && (c.heal != null || c.regen != null || c.refresh != null);
 };
 const cardHasDuration = (id: CardId): boolean => {
   const c = CARDS[id];
@@ -500,9 +532,9 @@ const retainEligible = (id: CardId): boolean =>
   id !== 'ability' && !isEngineCard(id) && CARDS[id].cost > 0;
 
 // Efficient may not touch a 0-cost card (nothing to shave; the #02 floor already
-// blocks reaching 0). Inspiration (a future engine draw card) is excluded here too
-// once it exists, via the engine tag on 0-cost cards.
-const efficientEligible = (id: CardId): boolean => CARDS[id].cost > 0;
+// blocks reaching 0) or a draw-engine card (a discounted Inspiration compounds
+// the card economy the same way a Retained engine card would the MP economy).
+const efficientEligible = (id: CardId): boolean => CARDS[id].cost > 0 && CARDS[id].draw == null;
 
 export interface ModifierDef {
   id: ModifierId;
@@ -610,13 +642,18 @@ export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerU
 export const CARD_RARITY: Record<CardId, Rarity> = {
   lowHeal: 'common',
   regen: 'common',
+  cultivate: 'common',
   cleanse: 'uncommon',
   highHeal: 'uncommon',
   aoeHeal: 'uncommon',
   shield: 'uncommon',
   refresh: 'uncommon',
   ability: 'uncommon',
+  overgrowth: 'uncommon',
+  bloom: 'uncommon',
+  inspiration: 'uncommon',
   resurrect: 'rare',
+  fontOfMana: 'rare',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
@@ -748,6 +785,11 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     heal: bump(base.heal),
     regen: bump(base.regen),
     refresh: bump(base.refresh),
+    draw: base.draw,
+    needsRegen: base.needsRegen === true,
+    // The cap is the BASE card's designed lifetime — Potent/Lingering change the
+    // tempo of a Refresh-slot cast, never its total (flaw #7).
+    refreshCap: base.refreshCap ?? REFRESH_MP_CAP,
     regenTurns: REGEN_TURNS + lingering * MOD_LINGERING_TURNS,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
     retain,

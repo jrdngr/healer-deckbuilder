@@ -52,12 +52,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for issue 14: the Devourer replaces the Act-3 placeholder boss (165
-  // HP, phase system + Maw + Consume) and the Act-3 normals drop to 150 HP with
-  // attackBonus 1 (F7 was a 190-HP / +2-bonus enrage cliff at ~25%; now ~95%). The
-  // full run is winnable: 60/200 = 30% (25-35% band). Boss samples: F2 181 (~90%),
-  // F5 121 (~68%), F8 108-of-sample (~56%).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 181, 180, 177, 121, 115, 108, 60]));
+  // Re-pinned for issue 15 (card set phase A): five new cards join CARD_POOL, so
+  // every shop/event offer roll draws differently and the policy now buys/plays
+  // Font of Mana. Balance is unmoved — N=1000 reads full-run 32.3%, bosses
+  // 89.3 / 71.2 / 57.2% vs the #14 baseline ~32% and ~89 / ~71 / ~57. This N=200
+  // sample: full run 57/200 = 28.5%; F2 183 (~92%), F5 117/178 (~66%), F8 57/107 (~53%).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 183, 181, 178, 117, 111, 107, 57]));
   // Full-run lands in the 25-35% band (issue 14 gate).
   check('full-run in the 25-35% band', r.fullRun.rate >= 0.25 && r.fullRun.rate <= 0.35, `${(r.fullRun.rate * 100).toFixed(1)}%`);
   // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).

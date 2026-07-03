@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -1397,6 +1397,131 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const g = new Game(1); g.start();
   g.devPlayCard('refresh');
   check('devPlayCard refresh primes MP regen', g.refreshTurns > 0 && g.refresh > 0);
+}
+
+// --- card set phase A: Overgrowth / Cultivate / Bloom / Font of Mana / Inspiration (issue 15) ---
+{
+  // Definitions: costs, strengths, rarities (shop prices follow rarity 25/50/75).
+  eq('Overgrowth costs 3', CARDS.overgrowth.cost, 3);
+  eq('Overgrowth regen strength 1', CARDS.overgrowth.regen, 1);
+  eq('Overgrowth targets all', CARDS.overgrowth.target, 'all');
+  eq('Overgrowth is uncommon', CARD_RARITY.overgrowth, 'uncommon');
+  eq('Cultivate costs 1', CARDS.cultivate.cost, 1);
+  eq('Cultivate is common', CARD_RARITY.cultivate, 'common');
+  eq('Bloom costs 2', CARDS.bloom.cost, 2);
+  eq('Bloom is uncommon', CARD_RARITY.bloom, 'uncommon');
+  eq('Font of Mana costs 3', CARDS.fontOfMana.cost, 3);
+  eq('Font of Mana refresh strength 3', CARDS.fontOfMana.refresh, 3);
+  eq('Font of Mana is rare', CARD_RARITY.fontOfMana, 'rare');
+  eq('Inspiration costs 2', CARDS.inspiration.cost, 2);
+  eq('Inspiration draws 2', CARDS.inspiration.draw, 2);
+  eq('Inspiration is uncommon', CARD_RARITY.inspiration, 'uncommon');
+  check('all five phase-A cards joined the shop pool',
+    (['overgrowth', 'cultivate', 'bloom', 'fontOfMana', 'inspiration'] as CardId[])
+      .every((id) => CARD_POOL.includes(id)));
+}
+{
+  // Overgrowth: Regen 1 to every living member with the Regen card's no-stack
+  // semantics (keep the stronger strength, refresh the duration); dead skipped.
+  const g = new Game(60); g.start();
+  const [ranger, tank, mage] = g.members;
+  tank.regen = 2; tank.regenTurns = 1; // a stronger, nearly-spent stack
+  g._killMember(mage);
+  g.playCard(giveCard(g, 'overgrowth'), null);
+  eq('Overgrowth grants Regen 1', ranger.regen, 1);
+  eq('Overgrowth runs for REGEN_TURNS', ranger.regenTurns, REGEN_TURNS);
+  eq('Overgrowth keeps a stronger Regen', tank.regen, 2);
+  eq('Overgrowth refreshes the stronger stack\'s duration', tank.regenTurns, REGEN_TURNS);
+  eq('Overgrowth skips the dead', mage.regenTurns, 0);
+  // Potent-ineligible (a +1 would be x3 members x3 turns); Lingering still applies.
+  check('Overgrowth is Potent-ineligible', !MODIFIERS.potent.eligible('overgrowth'));
+  check('Overgrowth still takes Lingering', MODIFIERS.lingering.eligible('overgrowth'));
+}
+{
+  // Cultivate: dead without an active Regen; modifies the stack IN PLACE.
+  const g = new Game(61); g.start();
+  const tank = g.tank;
+  const idx = giveCard(g, 'cultivate');
+  eq('Cultivate is dead without an active Regen', g.canPlay(idx, SLOT.CENTER), 'target must have an active Regen');
+  tank.regen = 1; tank.regenTurns = 2;
+  eq('Cultivate is playable with an active Regen', g.canPlay(idx, SLOT.CENTER), null);
+  g.playCard(idx, SLOT.CENTER);
+  eq('Cultivate adds strength in place (never overwrites)', tank.regen, 1 + CULTIVATE_STRENGTH);
+  eq('Cultivate adds duration in place', tank.regenTurns, 2 + CULTIVATE_TURNS);
+}
+{
+  // Bloom: dead without an active Regen; consumes it, healing per remaining turn.
+  const g = new Game(62); g.start();
+  const tank = g.tank;
+  tank.hp = 5;
+  const idx = giveCard(g, 'bloom');
+  eq('Bloom is dead without an active Regen', g.canPlay(idx, SLOT.CENTER), 'target must have an active Regen');
+  tank.regen = 1; tank.regenTurns = 3;
+  g.playCard(idx, SLOT.CENTER);
+  eq('Bloom heals 2 per remaining turn', tank.hp, 5 + BLOOM_HEAL_PER_TURN * 3);
+  eq('Bloom consumes the Regen strength', tank.regen, 0);
+  eq('Bloom consumes the Regen turns', tank.regenTurns, 0);
+}
+{
+  // Font of Mana: Refresh 3 in the same status slot, with its own larger
+  // per-cast lifetime — 9 MP restored total (net +6 after its 3 MP cost).
+  const g = new Game(63); g.start();
+  g.playCard(giveCard(g, 'fontOfMana'), null);
+  eq('Font primes Refresh 3', g.refresh, 3);
+  eq('Font runs for REFRESH_TURNS', g.refreshTurns, REFRESH_TURNS);
+  eq('Font carries its own per-cast cap', g.refreshCap, FONT_MP_CAP);
+  let restored = 0;
+  for (let i = 0; i < 5 && g.status === 'playing'; i++) {
+    g.mp = 0;            // drain each turn so the cap, not MP_MAX, is what binds
+    g._runEnemyPhase();  // applies one refresh tick (among other things)
+    restored += g.mp;
+  }
+  eq('Font restores 9 MP over its lifetime (net +6)', restored, FONT_MP_CAP);
+  // The cap is the BASE card's designed lifetime; Potent shifts tempo, not total.
+  eq('Potent does not raise the Font cap', resolveCard(makeDeckCard('fontOfMana', -90, ['potent'])).refreshCap, FONT_MP_CAP);
+}
+{
+  // Refresh <-> Font share one status slot: keep-stronger strength, and each
+  // cast carries ITS OWN card's cap (no chaining past a cast's designed total).
+  const g = new Game(64); g.start();
+  g.playCard(giveCard(g, 'fontOfMana'), null);
+  g.mp = MP_MAX;
+  g.playCard(giveCard(g, 'refresh'), null);
+  eq('Refresh over Font keeps the stronger strength', g.refresh, 3);
+  eq('Refresh over Font uses the Refresh cap', g.refreshCap, REFRESH_MP_CAP);
+  const g2 = new Game(65); g2.start();
+  g2.playCard(giveCard(g2, 'refresh'), null);
+  g2.mp = MP_MAX;
+  g2.playCard(giveCard(g2, 'fontOfMana'), null);
+  eq('Font over Refresh keeps strength 3', g2.refresh, 3);
+  eq('Font over Refresh carries the Font cap', g2.refreshCap, FONT_MP_CAP);
+  eq('recasting resets the restored counter', g2.refreshRestored, 0);
+}
+{
+  // Inspiration: draw 2; engine-tagged, so Retain / Efficient may not touch it.
+  const g = new Game(66); g.start();
+  const handBefore = g.hand.length;
+  const idx = giveCard(g, 'inspiration');
+  g.playCard(idx, null); // -1 played, +2 drawn
+  eq('Inspiration draws 2 cards', g.hand.length, handBefore + 2);
+  check('Inspiration is engine-tagged', isEngineCard('inspiration'));
+  check('Font of Mana is engine-tagged', isEngineCard('fontOfMana'));
+  check('Retain cannot lock in Inspiration', !MODIFIERS.retain.eligible('inspiration'));
+  check('Retain cannot lock in Font of Mana', !MODIFIERS.retain.eligible('fontOfMana'));
+  check('Efficient cannot discount Inspiration', !MODIFIERS.efficient.eligible('inspiration'));
+  check('Efficient still applies to Font of Mana', MODIFIERS.efficient.eligible('fontOfMana'));
+}
+{
+  // Inspiration with both piles otherwise empty: the played card is discarded
+  // before it draws, so the reshuffle finds only Inspiration itself and draws it
+  // back — net hand unchanged, second draw finds nothing, and nothing throws.
+  const g = new Game(67); g.start();
+  g.drawPile = []; g.discardPile = [];
+  const idx = giveCard(g, 'inspiration');
+  const handBefore = g.hand.length;
+  g.playCard(idx, null);
+  eq('Inspiration with empty piles redraws only itself', g.hand.length, handBefore);
+  check('Inspiration comes back to hand off the reshuffle', g.hand.some((c) => c.id === 'inspiration'));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
