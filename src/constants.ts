@@ -4,13 +4,20 @@
 export type Slot = 0 | 1 | 2;
 // 'heavy' (big single-target hit) and 'sweep' (strong hit on the whole party) are
 // the boss's signature attacks — stronger than the basic ones, but fully telegraphed.
-export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep';
+// 'cast' is a non-geometry telegraph: a scripted, no-damage effect (the Hexweaver's
+// Hex/Siphon, the Devourer's Consume) whose resolution runs game logic, not a hit.
+export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep' | 'cast';
 export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
 export type MemberId = 'ranger' | 'tank' | 'mage';
 export type AbilityId = 'poison' | 'taunt' | 'bolt';
 export type CardId =
   | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
-  | 'regen' | 'shield' | 'resurrect' | 'refresh';
+  | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse';
+
+// The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
+// healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
+// cleanses the enemy's own poison and self-heals for the remaining ticks.
+export type CastKind = 'wound' | 'siphon' | 'consume';
 
 export interface MemberDef {
   slot: Slot;
@@ -56,21 +63,24 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
 
 export const ENEMY_MAX_HP = 100;
 
-// Base (pre-enrage) per-target damage by attack type.
+// Base (pre-enrage) per-target damage by attack type. 'cast' deals no damage —
+// its telegraph resolves into a scripted effect, so its base is 0.
 export const ATTACK_BASE_DAMAGE: Record<AttackType, number> = {
-  single: 4, two: 3, aoe: 2, hidden: 4, heavy: 7, sweep: 4,
+  single: 4, two: 3, aoe: 2, hidden: 4, heavy: 7, sweep: 4, cast: 0,
 };
 
 // Attack-type selection weights. Regular enemies never use the boss-only types
 // (heavy/sweep weight 0); the boss never uses the untelegraphed 'hidden' type.
+// 'cast' is never weighted-picked (scripted bosses place it in a rotation), so it
+// carries weight 0 everywhere — a trailing 0-weight key leaves every pick unchanged.
 export const TYPE_WEIGHTS: Record<'normal' | 'enraged' | 'boss' | 'bossEnraged', Record<AttackType, number>> = {
-  normal:      { single: 60, two: 20, aoe: 10, hidden: 10, heavy: 0,  sweep: 0 },
-  enraged:     { single: 30, two: 35, aoe: 25, hidden: 10, heavy: 0,  sweep: 0 },
-  boss:        { single: 20, two: 20, aoe: 10, hidden: 0,  heavy: 30, sweep: 20 },
+  normal:      { single: 60, two: 20, aoe: 10, hidden: 10, heavy: 0,  sweep: 0,  cast: 0 },
+  enraged:     { single: 30, two: 35, aoe: 25, hidden: 10, heavy: 0,  sweep: 0,  cast: 0 },
+  boss:        { single: 20, two: 20, aoe: 10, hidden: 0,  heavy: 30, sweep: 20, cast: 0 },
   // Enraged sweep softened 20->10 (issue 04): enraged sweep (ceil(4x1.25)x3 = 15
   // party-wide/turn) otherwise beats the sustain ceiling and makes the post-enrage
   // race unwinnable. Halving its weight keeps the boss hard but the race winnable.
-  bossEnraged: { single: 10, two: 20, aoe: 15, hidden: 0,  heavy: 35, sweep: 10 },
+  bossEnraged: { single: 10, two: 20, aoe: 15, hidden: 0,  heavy: 35, sweep: 10, cast: 0 },
 };
 
 // Primary-slot weights, indexed by slot. Hidden attack uses its own profile.
@@ -87,6 +97,9 @@ export const SLOT_WEIGHTS: Record<'normal' | 'hidden', number[]> = {
 export const ATTACK_INTENT_NAMES: Record<AttackType, string> = {
   single: 'Strike', two: 'Double Strike', aoe: 'Barrage',
   hidden: 'Veiled Strike', heavy: 'Heavy Blow', sweep: 'Sweep',
+  // 'cast' rotation steps always carry an explicit name (Hex / Siphon / Consume),
+  // so this generic label is only a fallback.
+  cast: 'Cast',
 };
 
 // ---------------------------------------------------------------------------
@@ -109,14 +122,45 @@ export interface ChannelDef {
   name: string;        // display name (e.g. "Crushing Blow")
 }
 
+// A single step in a scripted boss rotation. A bare AttackType is shorthand for a
+// plain attack of that type (the Gatewarden uses that form); a RotationStep object
+// adds the Hexweaver's tricks: an explicit intent name, a damage override, targeting
+// flags that bypass the taunt funnel, a multi-turn channel wind-up, or a scripted
+// 'cast' effect. `type: 'cast'` steps deal no damage and must set `cast`.
+export interface RotationStep {
+  type: AttackType;
+  name?: string;          // intent/display name override (e.g. 'Piercing Bolt', 'Hex')
+  damage?: number;        // per-target base damage override (defaults to ATTACK_BASE_DAMAGE[type])
+  ignoreTaunt?: boolean;  // not funnelled/redirected by Taunt (still auto-aimed by targetLowest)
+  ignoreDefense?: boolean;// Defense reduction does not apply to this hit
+  targetLowest?: boolean; // aim the (single-target) hit at the lowest-HP living member
+  channelTurns?: number;  // >1 makes this a channel with that many enemy turns to resolve
+  cast?: CastKind;        // for type 'cast': which scripted effect resolves
+}
+
+export type RotationEntry = AttackType | RotationStep;
+
 export interface EnemyDef {
   id: string;
   name: string;
   boss: boolean;
   baseWeights: AttackWeights;    // attack-type selection pre-enrage
   enragedWeights: AttackWeights; // attack-type selection while enraged
-  rotation?: AttackType[];       // fixed, learnable attack cycle (overrides weighted selection)
+  rotation?: RotationEntry[];    // fixed, learnable attack cycle (overrides weighted selection)
   channel?: ChannelDef;          // a rotation slot that periodically becomes a channel
+  phase?: PhaseDef;              // an HP-threshold phase transition (Devourer, #14)
+}
+
+// A one-shot phase transition (the Devourer, #14). When the enemy first drops to
+// or below `hpFraction` of its max HP, it announces `beat`, swaps its rotation for
+// `rotation`, and may tighten enrage to `enrageTurn`. Edge-detected: fires once,
+// even if the threshold is crossed mid-DoT-tick.
+export interface PhaseDef {
+  hpFraction: number;         // trigger when hp <= maxHP * hpFraction
+  beat: string;               // the announced transformation line
+  rotation: RotationEntry[];  // the rotation the enemy switches to in phase 2
+  channel?: ChannelDef;       // a phase-2 channel slot (Maw)
+  enrageTurn?: number;        // optional tighter enrage turn once transformed
 }
 
 // The two stock behaviors that reproduce the pre-refactor enemies exactly. They
@@ -131,9 +175,10 @@ export const BOSS_ENEMY_DEF: EnemyDef = {
   baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged,
 };
 
-// Attack-weight literal helper — keeps the six-key order consistent across defs.
+// Attack-weight literal helper — keeps the key order consistent across defs. The
+// scripted-only 'cast' type is always weight 0 (never weighted-picked).
 const aw = (single: number, two: number, aoe: number, hidden: number, heavy: number, sweep: number): AttackWeights =>
-  ({ single, two, aoe, hidden, heavy, sweep });
+  ({ single, two, aoe, hidden, heavy, sweep, cast: 0 });
 
 // Four named normals (issue 09). Each is a distinct *shape* of the same total
 // threat as the old generic normal (~4.5 party-wide dmg/turn), not a difficulty
@@ -169,9 +214,32 @@ export const GATEWARDEN_DEF: EnemyDef = {
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Crushing Blow' },
 };
 
-// Act boss per act (0-based). Acts 2/3 are placeholders (scaled BOSS_ENEMY_DEF)
-// until the Hexweaver (#13) and Devourer (#14) land.
-export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, BOSS_ENEMY_DEF, BOSS_ENEMY_DEF];
+// Boss 2 — Hexweaver (issue 13): the telegraphed taunt-punisher. It breaks the
+// permanent-taunt/turtle solve with three tools, all fully telegraphed:
+//   • Piercing Bolt — ignores Taunt AND Defense, aims at the lowest-HP member, so
+//     the tank can't soak it and the fragile DPS is the one under threat.
+//   • Hex — a 'cast' that halves ALL healing for WOUND_TURNS turns (you can't
+//     out-heal it — Cleanse removes it).
+//   • Siphon — a 'cast' that drains SIPHON_AMOUNT healer MP (you can't cast freely).
+// Opens on a plain single (a gentle turn-1 read), then cycles the three tricks
+// between whole-party pressure. Cleanse (added this issue) is its designed counter.
+export const HEXWEAVER_PIERCER_DMG = 5; // Piercing Bolt per-hit damage (before attackBonus)
+export const HEXWEAVER_DEF: EnemyDef = {
+  id: 'hexweaver', name: 'Hexweaver', boss: true,
+  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
+  rotation: [
+    'single',
+    { type: 'single', name: 'Piercing Bolt', damage: HEXWEAVER_PIERCER_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
+    { type: 'cast', name: 'Hex', cast: 'wound' },
+    'sweep',
+    { type: 'single', name: 'Piercing Bolt', damage: HEXWEAVER_PIERCER_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
+    { type: 'cast', name: 'Siphon', cast: 'siphon' },
+  ],
+};
+
+// Act boss per act (0-based). Act 3 is a placeholder (scaled BOSS_ENEMY_DEF) until
+// the Devourer (#14) lands.
+export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, BOSS_ENEMY_DEF];
 
 export const NORMAL_ENEMY_DEFS: EnemyDef[] = [ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER];
 export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
@@ -217,6 +285,11 @@ export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defens
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
 
+// Hexweaver (#13) scripted-effect magnitudes.
+export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
+export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
+export const SIPHON_AMOUNT = 3;      // healer MP drained by Siphon (floored at 0)
+
 // How casting Taunt interacts with the *standing* (already-telegraphed) attack.
 // The free instant-retarget made permanent Taunt a strictly-dominant solve
 // (flaw #1), so casting it now costs a real decision. Two modes ship behind this
@@ -250,6 +323,8 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Revive a dead member to 50% max HP.' },
   refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 2, engine: true,
     desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
+  cleanse: { id: 'cleanse', name: 'Cleanse', cost: 1, target: 'none',
+    desc: 'Remove Hex (the healing-reduction curse) from the party.' },
 };
 
 // The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
@@ -476,8 +551,8 @@ export const isActBoss = (fightIndex: number): boolean =>
 // boss attack pool, so their flat attackBonus is 0. A2/A3 bosses are placeholders
 // (scaled BOSS_ENEMY_DEF) until the Gatewarden/Hexweaver/Devourer land (#12-14).
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  50, 75, 130,    // Act 1: two normals + boss (e11)
-  105, 130, 200,  // Act 2: boss e10
+  50, 75, 130,    // Act 1: two normals + boss (Gatewarden)
+  105, 130, 135,  // Act 2: boss (Hexweaver — heal-denial makes it a wall below its HP)
   160, 190, 280,  // Act 3: boss per-def (placeholder)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
@@ -503,6 +578,7 @@ export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerU
 export const CARD_RARITY: Record<CardId, Rarity> = {
   lowHeal: 'common',
   regen: 'common',
+  cleanse: 'uncommon',
   highHeal: 'uncommon',
   aoeHeal: 'uncommon',
   shield: 'uncommon',

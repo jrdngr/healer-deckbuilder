@@ -180,6 +180,19 @@ function tryHeal(game: Game): boolean {
   return false;
 }
 
+// Cleanse the Hexweaver's Hex (#13) before healing, so the heals we spend land at
+// full value. Only worth a card + MP when there is real healing to do — a Hex with
+// nobody hurt can just be ridden out.
+function tryCleanse(game: Game): boolean {
+  if (!game.wounded) return false;
+  const idx = handIndexOf(game, 'cleanse');
+  if (!affordable(game, idx)) return false;
+  const someoneHurt = game.livingMembers().some((m) => m.hp < m.maxHP * SAFE_FRACTION);
+  if (!someoneHurt) return false;
+  game.playCard(idx, null);
+  return true;
+}
+
 // Sweeps and AoE hit the whole party regardless of Taunt — the fragile members
 // bleed out to repeated multi-target blows. Group Heal is the efficient answer:
 // when a multi-target hit is telegraphed and at least two members are hurt, heal
@@ -221,7 +234,7 @@ function tryRefresh(game: Game): boolean {
 // snowballs; banking MP instead only drags fights past the turn-11 enrage and
 // loses. Proactive single-target healing and MP economy fill the leftovers.
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryBraceChannel, tryRetaunt, tryPreventLethal, tryGroupHeal, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
+  tryBraceChannel, tryRetaunt, tryPreventLethal, tryCleanse, tryGroupHeal, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).
@@ -260,7 +273,7 @@ export function playFight(game: Game, turnCap = 40): void {
 // Buy-value of each card the shops can sell (higher = buy first). Ability cards
 // feed the Taunt/Bolt/Poison line; Refresh feeds the MP economy.
 const CARD_BUY_VALUE: Record<CardId, number> = {
-  ability: 9, refresh: 7, highHeal: 6, shield: 5, aoeHeal: 4, regen: 3, resurrect: 2, lowHeal: 1,
+  ability: 9, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2, lowHeal: 1,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

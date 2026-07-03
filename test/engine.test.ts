@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -880,7 +880,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // The engine reads attack weights from the def: a custom all-single def only
   // ever rolls single (proves _pickType is data-driven, not forked on `boss`).
   const cfg = defaultBattleConfig();
-  const onlySingle = { single: 1, two: 0, aoe: 0, hidden: 0, heavy: 0, sweep: 0 };
+  const onlySingle = { single: 1, two: 0, aoe: 0, hidden: 0, heavy: 0, sweep: 0, cast: 0 };
   cfg.enemy = {
     maxHP: 100, boss: false, attackBonus: 0,
     def: { id: 'test', name: 'Dummy', boss: false, baseWeights: onlySingle, enragedWeights: onlySingle },
@@ -1028,6 +1028,132 @@ function gatewardenGame(seed: number, enrageTurn = 99): Game {
   check('the resolve log names the channel',
     g.log.some((l) => /Crushing Blow (hits|whiffs)/.test(l.text)),
     g.log.map((l) => l.text).slice(-3).join(' | '));
+}
+
+// --- Hexweaver: Piercing Bolt / Hex / Siphon + Cleanse (issue 13) -----------
+function hexweaverGame(seed: number, enrageTurn = 99): Game {
+  const cfg = defaultBattleConfig();
+  cfg.enemy = { maxHP: 9999, boss: true, attackBonus: 0, def: HEXWEAVER_DEF, enrageTurn };
+  return new Game(seed, cfg);
+}
+{
+  // Rotation is exact and mixes the three tricks between whole-party pressure.
+  const g = hexweaverGame(1);
+  const seq: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    g.rotationIndex = i;
+    g.telegraph = g._generateTelegraph(5);
+    seq.push(g.telegraphIntent() ?? '?');
+  }
+  eq('exact Hexweaver rotation (by intent name)',
+    JSON.stringify(seq),
+    JSON.stringify(['Strike', 'Piercing Bolt', 'Hex', 'Sweep', 'Piercing Bolt', 'Siphon']));
+  // A bare-string opener still announces by its generic intent name.
+  g.rotationIndex = 0; g.telegraph = g._generateTelegraph(5);
+  eq('plain opener announces generically', g.telegraphIntent(), ATTACK_INTENT_NAMES.single);
+}
+{
+  // Piercing Bolt ignores Taunt AND Defense and aims at the lowest-HP member — the
+  // tank can't soak it and the fragile DPS is who's threatened.
+  const g = hexweaverGame(2);
+  g.tank.taunt = TAUNT_TURNS; g.tank.defense = DEFENSE_TURNS; // full taunt/defense up
+  g.ranger.hp = 3; g.mage.hp = 9; g.tank.hp = 18;            // ranger is lowest
+  g.rotationIndex = 1;                                        // Piercing Bolt slot
+  g.telegraph = g._generateTelegraph(5);
+  check('Piercing Bolt is telegraphed by name', g.telegraphIntent() === 'Piercing Bolt');
+  eq('Piercing Bolt aims at the lowest-HP member (ranger), not the taunter', JSON.stringify(g.telegraph.targets), JSON.stringify([SLOT.LEFT]));
+  // Preview must equal applied even though the tank is taunting/defending.
+  const spec = g.attackTargets().find((s) => s.slot === SLOT.LEFT);
+  eq('preview shows the full piercer damage (Defense ignored)', spec?.damage, HEXWEAVER_PIERCER_DMG);
+  g.turn = 5; g._runEnemyPhase();
+  eq('Piercing Bolt hit the ranger for full damage', g.ranger.hp, 3 - HEXWEAVER_PIERCER_DMG <= 0 ? 0 : 3 - HEXWEAVER_PIERCER_DMG);
+  eq('the taunting tank was untouched by the piercer', g.tank.hp, 18);
+}
+{
+  // Invariant: preview == applied for a Piercing Bolt aimed at a DEFENDED member —
+  // the ignoreDefense flag must fold into both the preview and the hit identically.
+  const g = hexweaverGame(20);
+  g.tank.hp = 10; g.tank.defense = DEFENSE_TURNS; // tank is strictly lowest AND defending
+  g.ranger.hp = 18; g.mage.hp = 18;
+  g.rotationIndex = 1; g.telegraph = g._generateTelegraph(5);
+  eq('piercer aims at the (defended) lowest tank', JSON.stringify(g.telegraph.targets), JSON.stringify([SLOT.CENTER]));
+  const preview = g.attackTargets().find((s) => s.slot === SLOT.CENTER)?.damage ?? -1;
+  const before = g.tank.hp;
+  g.turn = 5; g._runEnemyPhase();
+  const applied = before - g.tank.hp;
+  eq('preview equals applied through Defense (both full piercer damage)', preview, applied);
+  eq('and both equal the undefended piercer damage', applied, HEXWEAVER_PIERCER_DMG);
+}
+{
+  // A Piercing Bolt is NOT redirected onto a taunter that taunts during the wind-up
+  // (unlike Crushing Blow) — it pierces the funnel.
+  const g = hexweaverGame(3);
+  g.ranger.hp = 8; g.mage.hp = 9; g.tank.hp = 18;
+  g.rotationIndex = 1; g.telegraph = g._generateTelegraph(5); // aims at ranger (lowest)
+  check('not redirectable onto the tank', g._standingTelegraphRedirectable(SLOT.CENTER) === false);
+}
+{
+  // Hex: a 'cast' that halves ALL healing for WOUND_TURNS turns — intercepts both
+  // the direct heal path and the Regen tick (both route through _healMember).
+  const g = hexweaverGame(4);
+  g.rotationIndex = 2; g.telegraph = g._generateTelegraph(5); // Hex slot
+  check('Hex telegraph is a cast', g.telegraph.cast === 'wound');
+  check('Hex deals no damage lines', g.attackTargets().length === 0);
+  g.turn = 5; g._runEnemyPhase();                             // Hex resolves
+  check('party is Wounded after Hex', g.wounded === true);
+  eq('Wound lasts WOUND_TURNS player phases', g.woundTurns, WOUND_TURNS);
+  // Direct heal path: a Heal-4 heals only 2 while Wounded.
+  g.tank.hp = 1;
+  const healed = g._healMember(g.tank, 4);
+  eq('direct heal is halved under Hex', healed, 2);
+  // Regen tick path: strength 2 regens 1 while Wounded.
+  g.mage.hp = 1; g.mage.regen = 2; g.mage.regenTurns = 3;
+  g.phase = 'idle'; g._startPlayerPhase();
+  eq('Regen tick is halved under Hex', g.mage.hp, 1 + 1);
+}
+{
+  // Cleanse removes the Hex; healing returns to full.
+  const g = hexweaverGame(5);
+  g.woundTurns = WOUND_TURNS;
+  const idx = giveCard(g, 'cleanse');
+  g.phase = 'player';
+  g.playCard(idx, null);
+  check('Cleanse cleared the Hex', g.wounded === false);
+  g.tank.hp = 1;
+  eq('healing is full again after Cleanse', g._healMember(g.tank, 4), 4);
+}
+{
+  // Wound lasts exactly WOUND_TURNS player phases (the same-turn decay does not eat one).
+  const g = hexweaverGame(6);
+  g.rotationIndex = 2; g.telegraph = g._generateTelegraph(5);
+  g.turn = 5; g._runEnemyPhase();       // Hex resolves; woundTurns = 3
+  let woundedPhases = 0;
+  for (let k = 0; k < 5; k++) {
+    if (g.wounded) woundedPhases++;      // player phase k: is healing halved?
+    g.turn += 1; g._runEnemyPhase();     // next enemy phase decays it at the top
+  }
+  eq('Hex halves healing for exactly WOUND_TURNS player phases', woundedPhases, WOUND_TURNS);
+}
+{
+  // Siphon: a 'cast' that drains SIPHON_AMOUNT MP, floored at 0, previewed on the bar.
+  const g = hexweaverGame(7);
+  g.rotationIndex = 5; g.telegraph = g._generateTelegraph(5); // Siphon slot
+  check('Siphon telegraph is a cast', g.telegraph.cast === 'siphon');
+  g.mp = 10;
+  eq('Siphon preview matches the drain', g.predictedSiphon(), SIPHON_AMOUNT);
+  g.turn = 5; g._runEnemyPhase();
+  eq('Siphon drained the MP', g.mp, 10 - SIPHON_AMOUNT);
+  // Floors at 0: from 1 MP, a 3-drain only takes 1.
+  const g2 = hexweaverGame(8);
+  g2.rotationIndex = 5; g2.telegraph = g2._generateTelegraph(5);
+  g2.mp = 1;
+  eq('Siphon floors at 0', g2.predictedSiphon(), 1);
+  g2.turn = 5; g2._runEnemyPhase();
+  eq('Siphon left MP at 0, not negative', g2.mp, 0);
+}
+{
+  // Cleanse is a pool card (uncommon) and is in the shop pool.
+  check('Cleanse exists as an uncommon', CARDS.cleanse != null);
 }
 
 // --- turn-1 attack is always a plain single (flaw #12) ----------------------

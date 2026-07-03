@@ -16,12 +16,13 @@ import {
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
+  WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
   Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard, CardId,
-  TauntRetargetMode, EnemyDef,
+  TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind,
 } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -66,6 +67,11 @@ export interface Telegraph {
   channel?: boolean;          // a multi-turn channelled attack (its wind-up is the telegraph)
   channelName?: string;       // display name for the channel (e.g. "Crushing Blow")
   turnsUntilResolve?: number; // enemy turns until it lands (undefined/1 = lands next enemy phase)
+  name?: string;              // intent-name override (scripted rotation steps, e.g. "Piercing Bolt")
+  ignoreTaunt?: boolean;      // not funnelled/redirected by Taunt (Hexweaver's Piercing Bolt)
+  ignoreDefense?: boolean;    // Defense reduction does not apply to this hit
+  targetLowest?: boolean;     // aimed at the lowest-HP living member (locked at telegraph time)
+  cast?: CastKind;            // a scripted no-damage effect resolves instead of a hit
 }
 
 export interface LogEntry {
@@ -95,6 +101,11 @@ export type GameEvent =
   | { kind: 'channelTick'; name: string; turnsUntilResolve: number }
   | { kind: 'poisonTick'; amount: number; enemyHp: number }
   | { kind: 'refreshTick'; amount: number; mp: number }
+  // --- scripted 'cast' resolutions (Hexweaver #13, Devourer #14) ---
+  | { kind: 'wound'; turns: number }                       // Hex: healing halved for `turns`
+  | { kind: 'siphon'; amount: number; mp: number }         // Siphon: MP drained
+  | { kind: 'consume'; heal: number; enemyHp: number }     // Devourer: self-heal off its own poison
+  | { kind: 'phaseChange'; beat: string }                  // Devourer: transformation beat
   | { kind: 'enemyAttack'; slot: Slot; amount: number; hp: number;
       result: 'hit' | 'shield' | 'whiff'; killed: boolean; hidden: boolean }
   // --- player phase start (regen resolves after the enemy's blow has landed) ---
@@ -107,6 +118,7 @@ export type GameEvent =
   | { kind: 'shieldApplied'; slot: Slot }
   | { kind: 'resurrect'; slot: Slot; hp: number }
   | { kind: 'refreshPrimed'; stack: number }
+  | { kind: 'cleanse'; slot: Slot }
   | { kind: 'rest'; amount: number; mp: number }
   // --- abilities ---
   | { kind: 'poisonApplied'; slot: Slot; amount: number; poison: number }
@@ -137,6 +149,7 @@ export class Game {
   refresh: number;        // Refresh strength: MP restored per turn while active
   refreshTurns: number;   // enemy turns of Refresh remaining
   refreshRestored: number; // MP the current Refresh cast has restored so far (capped at REFRESH_MP_CAP)
+  woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
   drawPile: DeckCard[];
   discardPile: DeckCard[];
   hand: DeckCard[];
@@ -146,6 +159,9 @@ export class Game {
   cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +2 at 1)
   telegraph: Telegraph | null;
   rotationIndex: number; // index into a rotation enemy's fixed attack cycle (see EnemyDef.rotation)
+  phaseTriggered: boolean; // whether the enemy's HP-threshold phase has fired (edge-detect, #14)
+  activeRotationOverride?: RotationEntry[]; // rotation swapped in by a phase transition (#14)
+  activeChannelOverride?: EnemyDef['channel']; // channel swapped in by a phase transition (#14)
   tauntRetargetMode: TauntRetargetMode; // how Taunt treats the standing telegraph (see constants)
   log: LogEntry[];
   events: GameEvent[]; // animation feed for the most recent action (see GameEvent)
@@ -190,6 +206,7 @@ export class Game {
     this.refresh = 0;       // Refresh strength
     this.refreshTurns = 0;  // Refresh turns remaining
     this.refreshRestored = 0;
+    this.woundTurns = 0;    // no Hex active at fight start
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
     // own array — so reshuffles here don't disturb the persistent deck.
@@ -203,6 +220,7 @@ export class Game {
     this.cardsPlayedThisPhase = 0;
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
     this.rotationIndex = 0;  // advances each time a rotation enemy issues an attack
+    this.phaseTriggered = false; // no phase transition has fired yet
     this.tauntRetargetMode = DEFAULT_TAUNT_RETARGET_MODE;
     this.log = [];
     this.events = [];
@@ -286,11 +304,30 @@ export class Game {
     // A channel announces itself by its own name (e.g. 'Crushing Blow'), never
     // by the plain attack type it replaces.
     if (this.telegraph.channel && this.telegraph.channelName) return this.telegraph.channelName;
+    // Scripted rotation steps (Piercing Bolt / Hex / Siphon) carry their own name.
+    if (this.telegraph.name) return this.telegraph.name;
     return ATTACK_INTENT_NAMES[this.telegraph.type];
   }
 
-  _pickPrimary(type: AttackType): Slot {
-    const taunter = this.tauntingMember();
+  // The lowest-HP living member's slot (ties broken by slot order). Used to aim
+  // the Hexweaver's Piercing Bolt at whoever is closest to dying.
+  _lowestHpSlot(): Slot {
+    const living = this.livingMembers();
+    if (living.length === 0) return SLOT.CENTER; // unreachable: telegraphs only generate while someone lives
+    let lowest = living[0];
+    for (const m of living) if (m.hp < lowest.hp) lowest = m;
+    return lowest.slot;
+  }
+
+  // The channel config currently in force (a phase transition may swap it, #14).
+  activeChannel(): EnemyDef['channel'] {
+    return this.activeChannelOverride ?? this.enemyDef.channel;
+  }
+
+  _pickPrimary(type: AttackType, ignoreTaunt = false): Slot {
+    // A taunter funnels every attack onto itself — except a Piercing-Bolt-style
+    // hit flagged ignoreTaunt, which aims by its own rule (its caller handles that).
+    const taunter = ignoreTaunt ? null : this.tauntingMember();
     if (taunter) return taunter.slot;
     const weights = type === 'hidden' ? SLOT_WEIGHTS.hidden : SLOT_WEIGHTS.normal;
     // Never aim the primary at a fallen member: a dead primary leaves single/hidden
@@ -315,15 +352,54 @@ export class Game {
     return [primary, second];
   }
 
+  // The rotation the enemy is currently cycling. A phase transition (#14) swaps
+  // this for the phase's rotation; until then it is the def's own rotation.
+  activeRotation(): RotationEntry[] | undefined {
+    return this.activeRotationOverride ?? this.enemyDef.rotation;
+  }
+
+  // Normalize a rotation entry: a bare AttackType is shorthand for a plain attack.
+  _normalizeStep(entry: RotationEntry): RotationStep {
+    return typeof entry === 'string' ? { type: entry } : entry;
+  }
+
+  // Build a telegraph from a structured rotation step (Hexweaver / Devourer). A
+  // 'cast' step carries no damage and no targets; an attack step honors its
+  // targeting flags (ignoreTaunt / targetLowest) and an optional channel wind-up.
+  _telegraphFromStep(step: RotationStep, turn: number): Telegraph {
+    const enraged = this.isEnraged(turn);
+    if (step.type === 'cast') {
+      return {
+        type: 'cast', hidden: false, damage: 0, targets: [],
+        enraged, forTurn: turn, turnsUntilResolve: 1,
+        name: step.name, cast: step.cast,
+      };
+    }
+    const base = step.damage ?? ATTACK_BASE_DAMAGE[step.type];
+    const primary = step.targetLowest ? this._lowestHpSlot()
+      : this._pickPrimary(step.type, step.ignoreTaunt);
+    const channelling = (step.channelTurns ?? 1) > 1;
+    return {
+      type: step.type, hidden: step.type === 'hidden',
+      damage: this.attackDamageOf(base, turn),
+      targets: this._geometry(step.type, primary),
+      enraged, forTurn: turn, turnsUntilResolve: step.channelTurns ?? 1,
+      name: step.name,
+      ignoreTaunt: step.ignoreTaunt, ignoreDefense: step.ignoreDefense, targetLowest: step.targetLowest,
+      channel: channelling || undefined, channelName: channelling ? step.name : undefined,
+    };
+  }
+
   _generateTelegraph(turn: number): Telegraph {
     const def = this.enemyDef;
+    const rotation = this.activeRotation();
     // Rotation bosses follow a fixed, learnable cycle; some slots periodically
     // become a multi-turn channel (its wind-up is the telegraph).
-    if (def.rotation && def.rotation.length > 0) {
-      const len = def.rotation.length;
+    if (rotation && rotation.length > 0) {
+      const len = rotation.length;
       const idx = this.rotationIndex % len;
       const cycle = Math.floor(this.rotationIndex / len);
-      const ch = def.channel;
+      const ch = this.activeChannel();
       if (ch && idx === ch.slot && (cycle % ch.everyCycles) === ch.everyCycles - 1) {
         const primary = this._pickPrimary(ch.type);
         return {
@@ -334,14 +410,7 @@ export class Game {
           channel: true, channelName: ch.name, turnsUntilResolve: ch.turns,
         };
       }
-      const type = def.rotation[idx];
-      const primary = this._pickPrimary(type);
-      return {
-        type, hidden: type === 'hidden',
-        damage: this.attackDamage(type, turn),
-        targets: this._geometry(type, primary),
-        enraged: this.isEnraged(turn), forTurn: turn, turnsUntilResolve: 1,
-      };
+      return this._telegraphFromStep(this._normalizeStep(rotation[idx]), turn);
     }
     // The turn-1 blow resolves on mount, before any player input, so it must not
     // open on a heavy or a sweep — force it to a plain single-target hit (flaw #12).
@@ -371,7 +440,7 @@ export class Game {
       // folded in, a Shield blocking to 0), keeping preview == applied for
       // whichever target the attack turns out to have.
       return this.livingMembers().map((m): AttackSpec => {
-        const eff = this._effectiveDamage(m, t.damage);
+        const eff = this._effectiveDamage(m, t.damage, t.ignoreDefense);
         return { slot: m.slot, damage: m.shield && eff > 0 ? 0 : eff, hidden: true };
       });
     }
@@ -379,7 +448,7 @@ export class Game {
       .filter((slot) => this.members[slot]?.alive)
       .map((slot): AttackSpec => {
         const m = this.members[slot];
-        const eff = this._effectiveDamage(m, t.damage);
+        const eff = this._effectiveDamage(m, t.damage, t.ignoreDefense);
         // A Shield blocks a damaging instance entirely, so the applied damage is
         // 0 — preview must match (telegraph == applied invariant).
         return { slot, damage: m.shield && eff > 0 ? 0 : eff, hidden: false };
@@ -400,7 +469,9 @@ export class Game {
   // and a hidden attack has no known geometry, so neither is worth a surcharge.
   _standingTelegraphRedirectable(slot: Slot = SLOT.CENTER): boolean {
     const t = this.telegraph;
-    if (!t || t.hidden || t.type === 'aoe' || t.type === 'sweep') return false;
+    // A Piercing-Bolt-style ignoreTaunt hit and a no-target 'cast' are never
+    // pulled onto the taunter; neither are AoE/sweep/hidden (see above).
+    if (!t || t.hidden || t.ignoreTaunt || t.cast || t.type === 'aoe' || t.type === 'sweep') return false;
     return t.targets.some((s) => s !== slot && this.members[s]?.alive);
   }
 
@@ -421,6 +492,18 @@ export class Game {
     if (this.enemy.poisonTurns <= 0) return 0;
     return Math.min(this.enemy.poison, this.enemy.hp);
   }
+
+  // MP the standing telegraph's Siphon will drain next enemy phase (0 if the
+  // telegraphed cast isn't a Siphon), capped by current MP. Drives the ManaBar
+  // "about to be drained" segment so the threat is legible before it lands.
+  predictedSiphon(): number {
+    const t = this.telegraph;
+    if (this.status !== 'playing' || !t || t.cast !== 'siphon') return 0;
+    return Math.min(SIPHON_AMOUNT, this.mp);
+  }
+
+  // Whether a party-wide Hex (healing halved) is currently active.
+  get wounded(): boolean { return this.woundTurns > 0; }
 
   // ---- lifecycle -----------------------------------------------------------
 
@@ -466,10 +549,16 @@ export class Game {
     return false;
   }
 
+  // Central heal path for every healing source (direct heal cards AND the Regen
+  // tick, which routes through here) — so the Hexweaver's Hex (#13) only needs to
+  // reduce healing in one place to cover both. While Wounded, healing is scaled by
+  // WOUND_HEAL_FACTOR and floored.
   _healMember(m: Member, amount: number): number {
     if (!m.alive || amount <= 0) return 0;
+    const effective = this.woundTurns > 0 ? Math.floor(amount * WOUND_HEAL_FACTOR) : amount;
+    if (effective <= 0) return 0;
     const before = m.hp;
-    m.hp = Math.min(m.maxHP, m.hp + amount);
+    m.hp = Math.min(m.maxHP, m.hp + effective);
     return m.hp - before;
   }
 
@@ -477,8 +566,8 @@ export class Game {
   // (if any). Floored at 0 so a fully-absorbed hit can't heal. Defense is granted
   // by the Taunt ability to whoever cast it, and that caster's abilityPower scales
   // the reduction (for the fixed trio this is always the tank).
-  _effectiveDamage(m: Member, raw: number): number {
-    return m.defense > 0 ? Math.max(0, raw - (DEFENSE_AMOUNT + m.abilityPower)) : raw;
+  _effectiveDamage(m: Member, raw: number, ignoreDefense = false): number {
+    return m.defense > 0 && !ignoreDefense ? Math.max(0, raw - (DEFENSE_AMOUNT + m.abilityPower)) : raw;
   }
 
   // ---- enemy phase ---------------------------------------------------------
@@ -518,6 +607,13 @@ export class Game {
         this.refresh = 0;
       }
     }
+    // Hex (#13) decays at the start of the enemy phase — so a Hex applied this turn
+    // still Wounds the coming WOUND_TURNS player phases in full (decaying it in
+    // _decayBuffs after resolution would eat the turn it was cast on).
+    if (this.woundTurns > 0) {
+      this.woundTurns -= 1;
+      if (this.woundTurns === 0) this._log('The Hex fades; healing is restored.', 'status');
+    }
 
     // 2) resolve the standing telegraph — unless it is a channel still winding up,
     // in which case the enemy takes no other action this turn (its wind-up IS the
@@ -531,14 +627,20 @@ export class Game {
       return; // channel keeps standing; do not advance the rotation or re-telegraph
     }
 
-    // A channel re-checks Taunt at resolve (not only at cast), so a late Taunt
-    // still redirects it onto the defended member.
-    if (t && t.channel) {
-      const taunter = this.tauntingMember();
-      if (taunter && this._standingTelegraphRedirectable(taunter.slot)) this._retargetTelegraphTo(taunter.slot);
+    // A 'cast' telegraph runs its scripted effect (Hex / Siphon / Consume) instead
+    // of dealing damage; everything else resolves as an attack.
+    if (t && t.cast) {
+      this._resolveCast(t);
+    } else {
+      // A channel re-checks Taunt at resolve (not only at cast), so a late Taunt
+      // still redirects it onto the defended member.
+      if (t && t.channel) {
+        const taunter = this.tauntingMember();
+        if (taunter && this._standingTelegraphRedirectable(taunter.slot)) this._retargetTelegraphTo(taunter.slot);
+      }
+      this._resolveAttack();
+      if (this._checkWipe()) return;
     }
-    this._resolveAttack();
-    if (this._checkWipe()) return;
 
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
     this._decayBuffs();
@@ -572,6 +674,44 @@ export class Game {
     }
   }
 
+  // Resolve a scripted 'cast' telegraph (Hexweaver #13 / Devourer #14). These deal
+  // no damage — they run game logic: Hex halves the party's healing, Siphon drains
+  // healer MP, Consume cleanses the enemy's own poison and self-heals for it.
+  _resolveCast(t: Telegraph): void {
+    switch (t.cast) {
+      case 'wound': {
+        this.woundTurns = WOUND_TURNS;
+        this._log(`${this.enemyDef.name} weaves a Hex — healing is halved for ${WOUND_TURNS} turns.`, 'system');
+        this._emit({ kind: 'wound', turns: WOUND_TURNS });
+        break;
+      }
+      case 'siphon': {
+        const drained = Math.min(SIPHON_AMOUNT, this.mp);
+        this.mp -= drained;
+        this._log(`${this.enemyDef.name} Siphons ${drained} MP. (MP ${this.mp})`, 'mp');
+        this._emit({ kind: 'siphon', amount: drained, mp: this.mp });
+        break;
+      }
+      case 'consume': {
+        // Devourer (#14): cleanse its own Poison and heal for every remaining tick,
+        // so poison stops being free value against it.
+        const healed = this.enemy.poison * this.enemy.poisonTurns;
+        this.enemy.poison = 0;
+        this.enemy.poisonTurns = 0;
+        if (healed > 0) {
+          this.enemy.hp = Math.min(this.enemy.maxHP, this.enemy.hp + healed);
+          this._log(`${this.enemyDef.name} Consumes its wounds, healing ${healed}. (${this.enemy.hp}/${this.enemy.maxHP})`, 'system');
+        } else {
+          this._log(`${this.enemyDef.name} Consumes — but there was no poison to feed on.`, 'system');
+        }
+        this._emit({ kind: 'consume', heal: healed, enemyHp: this.enemy.hp });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
   // Emit the channel-start event when a freshly-generated telegraph is a channel,
   // so the UI cast bar can begin its countdown.
   _announceChannel(t: Telegraph | null): void {
@@ -585,7 +725,8 @@ export class Game {
   // second action passes a freshly generated (untelegraphed) one.
   _resolveAttack(t: Telegraph | null = this.telegraph): void {
     if (!t) return;
-    const label = t.channel && t.channelName ? t.channelName
+    const label = t.name ? t.name
+      : t.channel && t.channelName ? t.channelName
       : t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
       : t.type === 'aoe' ? 'AoE attack' : t.type === 'heavy' ? 'Heavy attack'
       : t.type === 'sweep' ? 'Sweeping attack' : 'Attack';
@@ -596,7 +737,7 @@ export class Game {
         this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden });
         continue;
       }
-      const dmg = this._effectiveDamage(m, t.damage);
+      const dmg = this._effectiveDamage(m, t.damage, t.ignoreDefense);
       // A Shield only spends on a *damaging* instance — a fully-mitigated (0-damage)
       // hit passes through harmlessly and leaves the Shield up.
       if (m.shield && dmg > 0) {
@@ -759,6 +900,15 @@ export class Game {
         this.refreshRestored = 0;
         this._log(`Refresh primed (${this.refresh} MP/turn for ${this.refreshTurns}).`, 'status');
         this._emit({ kind: 'refreshPrimed', stack: this.refresh });
+        break;
+      }
+      case 'cleanse': {
+        // Removes the Hexweaver's party-wide Hex (#13). Always playable; a no-op if
+        // nothing is Wounded (the animator still gets an event to acknowledge it).
+        const had = this.woundTurns > 0;
+        this.woundTurns = 0;
+        this._log(had ? 'Cleanse lifts the Hex — healing is restored.' : 'Cleanse finds no curse to lift.', 'status');
+        this._emit({ kind: 'cleanse', slot: SLOT.CENTER });
         break;
       }
       case 'ability': {

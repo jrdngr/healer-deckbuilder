@@ -83,6 +83,8 @@ const C = {
   smoke: '#6a7080',
   white: '#ffffff',
   damageText: '#ffd9d9',
+  hex: '#c46bd9',   // Hexweaver curse (healing-reduction)
+  drain: '#b06bfe', // MP siphon
 };
 
 // Per-member tint for the party auto-attack strikes (ranger / tank / mage).
@@ -289,6 +291,62 @@ export function buildTimeline(events: GameEvent[]): Timeline {
           { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: C.bolt, big: true },
         ] });
         t = impact + 460;
+        break;
+      }
+
+      case 'wound': {
+        // Hex settles over the whole party — a curse pulse on each member.
+        push({ at: t, shake: 5, fx: [
+          { type: 'float', at: 'enemy', text: 'HEX', color: C.hex, big: true },
+          { type: 'glow', at: 0, color: C.hex },
+          { type: 'glow', at: 1, color: C.hex },
+          { type: 'glow', at: 2, color: C.hex },
+          { type: 'burst', at: 1, color: C.hex, count: 16, spread: 90 },
+        ] });
+        t += 560;
+        break;
+      }
+
+      case 'siphon': {
+        push({ at: t, fx: [{ type: 'beam', from: 'mp', to: 'enemy', color: C.drain }] });
+        const impact = t + 200;
+        push({ at: impact, shake: 5, patch: { mp: ev.mp }, fx: [
+          { type: 'burst', at: 'mp', color: C.drain, count: 14, spread: 60 },
+          { type: 'float', at: 'mp', text: `-${ev.amount} MP`, color: C.drain },
+        ] });
+        t = impact + 420;
+        break;
+      }
+
+      case 'consume': {
+        // The Devourer feeds on its own poison, healing itself green.
+        push({ at: t, patch: { enemyHp: ev.enemyHp }, shake: 6, fx: [
+          { type: 'glow', at: 'enemy', color: C.hp },
+          { type: 'burst', at: 'enemy', color: C.poison, count: 18, spread: 80 },
+          { type: 'float', at: 'enemy', text: ev.heal > 0 ? `CONSUME +${ev.heal}` : 'CONSUME', color: C.hp, big: true },
+        ] });
+        t += 560;
+        break;
+      }
+
+      case 'phaseChange': {
+        push({ at: t, shake: 15, fx: [
+          { type: 'ring', at: 'enemy', color: C.danger },
+          { type: 'pillar', at: 'enemy', color: C.hex },
+          { type: 'burst', at: 'enemy', color: C.white, count: 26, spread: 120 },
+          { type: 'float', at: 'enemy', text: ev.beat, color: C.danger, big: true },
+        ] });
+        t += 820;
+        break;
+      }
+
+      case 'cleanse': {
+        push({ at: t, fx: [
+          { type: 'ring', at: 1, color: C.hp },
+          { type: 'burst', at: 1, color: C.hp, count: 14, spread: 70 },
+          { type: 'float', at: 1, text: 'CLEANSED', color: C.hp },
+        ] });
+        t += 420;
         break;
       }
 

@@ -16,6 +16,11 @@ export function Party({ game, view, animating, isValidTarget, onMemberClick }: P
   const tg = game.telegraph;
   return (
     <section className="party">
+      {game.wounded && (
+        <div className="hex-banner" title="A Hex halves all healing until it fades. Cleanse removes it.">
+          ☠ Hexed — healing halved ({game.woundTurns})
+        </div>
+      )}
       {game.members.map((m) => {
         // Hide the "targeted" outline while a sequence plays or the fight is over;
         // it reflects the next turn's telegraph, which shouldn't glow mid-attack.

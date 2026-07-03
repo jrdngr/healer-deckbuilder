@@ -73,6 +73,8 @@ section.enemy {
 .seg.hp { background: var(--hp); }
 .seg.mp { background: var(--mp); }
 .seg.refresh-pending { background: var(--mp-pending); }
+/* Siphon (#13): purple chunk carved from the right of the current MP fill. */
+.seg.siphon-pending { background: repeating-linear-gradient(45deg, #b06bfe, #b06bfe 4px, #7a3fbf 4px, #7a3fbf 8px); }
 .seg.enemy { background: var(--enemy); }
 .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px #000; }
 
@@ -130,6 +132,17 @@ section.enemy {
   position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
   font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
   background: var(--regen); color: #06351a;
+}
+.siphon-pill {
+  position: absolute; top: 50%; left: 6px; transform: translateY(-50%);
+  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
+  background: #b06bfe; color: #21063a;
+}
+/* Party-wide Hex banner (#13): sits above the party cards while healing is halved. */
+.hex-banner {
+  text-align: center; font-size: 12px; font-weight: 700; color: #f0c4ff;
+  background: #2e1440; border: 1px solid #7a3fbf; border-radius: 8px;
+  padding: 3px 10px; margin-bottom: 8px; animation: pulse 1.6s infinite;
 }
 .buttons { display: flex; gap: 8px; }
 
