@@ -8,8 +8,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsx test/engine.test.ts && tsx test/animations.test.ts && tsx test/run.test.ts && tsx test/useGame.test.tsx && tsx test/components.test.tsx && tsx test/sim.test.ts",
+    "test": "tsx test/engine.test.ts && tsx test/animations.test.ts && tsx test/run.test.ts && tsx test/useGame.test.tsx && tsx test/components.test.tsx && tsx test/sim.test.ts && tsx test/coverage.test.ts",
     "sim": "tsx sim/run-sim.ts",
+    "coverage": "tsx sim/exercise.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
