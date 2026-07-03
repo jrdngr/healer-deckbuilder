@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -849,6 +849,38 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.endTurn();
   check('retained card stays in hand', g.hand.some((c) => c.uid === -100));
   check('plain card left hand', !g.hand.some((c) => c.uid === -101));
+}
+
+// --- data-driven EnemyDef plumbing (issue 07) ------------------------------
+{
+  // A config without a def synthesizes the stock def from its boss flag.
+  eq('normal config synthesizes DEFAULT_ENEMY_DEF', new Game(1).enemyDef, DEFAULT_ENEMY_DEF);
+  const bossCfg = defaultBattleConfig(); bossCfg.enemy = { maxHP: 150, boss: true, attackBonus: 0 };
+  eq('boss config synthesizes BOSS_ENEMY_DEF', new Game(1, bossCfg).enemyDef, BOSS_ENEMY_DEF);
+}
+{
+  // The engine reads attack weights from the def: a custom all-single def only
+  // ever rolls single (proves _pickType is data-driven, not forked on `boss`).
+  const cfg = defaultBattleConfig();
+  const onlySingle = { single: 1, two: 0, aoe: 0, hidden: 0, heavy: 0, sweep: 0 };
+  cfg.enemy = {
+    maxHP: 100, boss: false, attackBonus: 0,
+    def: { id: 'test', name: 'Dummy', boss: false, baseWeights: onlySingle, enragedWeights: onlySingle },
+  };
+  const g = new Game(2, cfg);
+  let allSingle = true;
+  for (let turn = 2; turn <= 14; turn++) if (g._generateTelegraph(turn).type !== 'single') allSingle = false;
+  check('custom def weights drive attack selection', allSingle);
+  eq('enemy def name is surfaced', g.enemyDef.name, 'Dummy');
+}
+{
+  // telegraphIntent surfaces a human-readable name for the standing telegraph.
+  const g = new Game(3);
+  g.start();
+  g.telegraph = { type: 'heavy', hidden: false, damage: 7, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  eq('intent name for heavy', g.telegraphIntent(), ATTACK_INTENT_NAMES.heavy);
+  g.status = 'win';
+  eq('no intent once the fight is over', g.telegraphIntent(), null);
 }
 
 // --- turn-1 attack is always a plain single (flaw #12) ----------------------

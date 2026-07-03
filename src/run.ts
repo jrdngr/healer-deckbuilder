@@ -13,6 +13,7 @@ import {
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
   GOLD_PER_FIGHT, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
+  DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
@@ -130,6 +131,7 @@ export class Run {
         maxHP: this.enemyMaxHP(),
         boss: this.isBossFight,
         attackBonus: ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0,
+        def: this.isBossFight ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF,
       },
     };
   }

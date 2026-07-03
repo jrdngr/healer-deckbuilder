@@ -10,17 +10,18 @@
 // Read state off the public fields; read game.log for a running event feed.
 
 import {
-  MEMBER_DEFS, ATTACK_BASE_DAMAGE, TYPE_WEIGHTS, SLOT_WEIGHTS,
+  MEMBER_DEFS, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
+  DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
 } from './constants';
 import type {
   Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard, CardId,
-  TauntRetargetMode,
+  TauntRetargetMode, EnemyDef,
 } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -117,6 +118,7 @@ export class Game {
   seed: number;
   rng: Rng;
   config: BattleConfig;
+  enemyDef: EnemyDef; // data-driven enemy behavior (attack weights, name)
   members: Member[];
   enemy: Enemy;
   mp: number;
@@ -144,6 +146,10 @@ export class Game {
     this.seed = seed >>> 0;
     this.rng = makeRng(this.seed);
     this.config = config;
+    // Read enemy behavior from the def; a config without one (e.g. older test
+    // fixtures) synthesizes the stock def from its boss flag, so the engine always
+    // has a single source for attack weights and never forks on the boss flag.
+    this.enemyDef = config.enemy.def ?? (config.enemy.boss ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF);
 
     this.members = config.party.map((p, slot): Member => {
       const d = MEMBER_DEFS[slot];
@@ -237,10 +243,15 @@ export class Game {
 
   _pickType(turn: number): AttackType {
     const enraged = this.isEnraged(turn);
-    const w = this.config.enemy.boss
-      ? (enraged ? TYPE_WEIGHTS.bossEnraged : TYPE_WEIGHTS.boss)
-      : (enraged ? TYPE_WEIGHTS.enraged : TYPE_WEIGHTS.normal);
+    const w = enraged ? this.enemyDef.enragedWeights : this.enemyDef.baseWeights;
     return weightedPick(Object.entries(w) as Array<[AttackType, number]>, this.rng);
+  }
+
+  // Display name of the attack the standing telegraph will deliver (the intent),
+  // or null when there is nothing telegraphed / the fight is over.
+  telegraphIntent(): string | null {
+    if (this.status !== 'playing' || !this.telegraph) return null;
+    return ATTACK_INTENT_NAMES[this.telegraph.type];
   }
 
   _pickPrimary(type: AttackType): Slot {

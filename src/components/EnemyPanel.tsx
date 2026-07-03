@@ -16,11 +16,12 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
   // within ~4 turns, so the player can see the clock (flaw #2).
   const untilEnrage = game.turnsUntilEnrage();
   const showCountdown = game.status === 'playing' && !e.enraged && untilEnrage > 0 && untilEnrage <= 4;
+  const intent = game.telegraphIntent();
   return (
     <section className="enemy">
       <div className="enemy-head">
         <h2>
-          Enemy {e.enraged && <span className="enrage">ENRAGED</span>}
+          {game.enemyDef.name} {e.enraged && <span className="enrage">ENRAGED</span>}
           {showCountdown && (
             <span className="enrage-countdown" title="The enemy's attacks grow heavier when it enrages.">
               Enrages in {untilEnrage}
@@ -33,7 +34,10 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
           </div>
           <span className="bar-label">{displayHp} / {e.maxHP} HP</span>
         </div>
-        <div className="enemy-status">{e.poison > 0 ? `☠ Poison ${e.poison}` : ''}</div>
+        <div className="enemy-status">
+          {intent && <span className="enemy-intent">Intends: {intent}</span>}
+          {e.poison > 0 ? ` ☠ Poison ${e.poison}` : ''}
+        </div>
       </div>
     </section>
   );

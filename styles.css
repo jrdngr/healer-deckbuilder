@@ -55,6 +55,7 @@ section.enemy {
 .enemy-head h2 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
 .enrage { font-size: 11px; background: var(--danger); color: #fff; padding: 1px 8px; border-radius: 10px; animation: pulse 1.2s infinite; }
 .enrage-countdown { font-size: 11px; margin-left: 8px; background: #3a2a12; color: #f0b866; border: 1px solid #7a5a22; padding: 1px 8px; border-radius: 10px; }
+.enemy-intent { color: #d0a0e0; font-weight: 600; }
 @keyframes pulse { 50% { opacity: .55; } }
 .enemy-status { margin-top: 8px; font-size: 13px; color: var(--gold); min-height: 18px; }
 

@@ -70,6 +70,41 @@ export const SLOT_WEIGHTS: Record<'normal' | 'hidden', number[]> = {
   hidden: [40, 20, 40],
 };
 
+// Human-readable intent names for each attack type (the telegraph carries the
+// numbers; this labels what the enemy is about to do).
+export const ATTACK_INTENT_NAMES: Record<AttackType, string> = {
+  single: 'Strike', two: 'Double Strike', aoe: 'Barrage',
+  hidden: 'Veiled Strike', heavy: 'Crushing Blow', sweep: 'Sweep',
+};
+
+// ---------------------------------------------------------------------------
+// Data-driven enemy definition. An EnemyDef describes an enemy's behavior — its
+// attack-type selection weights (and, later, rotations/phases for the bosses).
+// The per-fight difficulty numbers (maxHP, attackBonus) live on EnemyConfig, so
+// the same def can be reused across the fight curve.
+// ---------------------------------------------------------------------------
+export type AttackWeights = Record<AttackType, number>;
+
+export interface EnemyDef {
+  id: string;
+  name: string;
+  boss: boolean;
+  baseWeights: AttackWeights;    // attack-type selection pre-enrage
+  enragedWeights: AttackWeights; // attack-type selection while enraged
+}
+
+// The two stock behaviors that reproduce the pre-refactor enemies exactly. They
+// reference the existing TYPE_WEIGHTS objects so Object.entries order — and thus
+// every weightedPick draw — is byte-for-byte unchanged (the #07 bit-identical gate).
+export const DEFAULT_ENEMY_DEF: EnemyDef = {
+  id: 'enemy', name: 'Enemy', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged,
+};
+export const BOSS_ENEMY_DEF: EnemyDef = {
+  id: 'boss', name: 'Boss', boss: true,
+  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged,
+};
+
 export const ENRAGE_TURN = 11; // first enraged enemy turn (turn 11 onward)
 export const ENRAGE_MULT = 1.25;
 
@@ -180,6 +215,7 @@ export interface EnemyConfig {
   maxHP: number;
   boss: boolean;       // true -> uses the stronger, fully-telegraphed boss attack pool
   attackBonus: number; // flat bonus added to each attack's per-target damage (difficulty ramp)
+  def?: EnemyDef;      // enemy behavior (attack weights, name); synthesized from `boss` if omitted
 }
 
 export interface BattleConfig {
@@ -193,7 +229,7 @@ export const DEFAULT_HEALER: HealerConfig = {
   maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 0,
 };
 
-export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, boss: false, attackBonus: 0 };
+export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, boss: false, attackBonus: 0, def: DEFAULT_ENEMY_DEF };
 
 export const MAX_UPGRADE_SLOTS = 2;
 
