@@ -283,6 +283,9 @@ export class Game {
   // or null when there is nothing telegraphed / the fight is over.
   telegraphIntent(): string | null {
     if (this.status !== 'playing' || !this.telegraph) return null;
+    // A channel announces itself by its own name (e.g. 'Crushing Blow'), never
+    // by the plain attack type it replaces.
+    if (this.telegraph.channel && this.telegraph.channelName) return this.telegraph.channelName;
     return ATTACK_INTENT_NAMES[this.telegraph.type];
   }
 
@@ -577,7 +580,8 @@ export class Game {
   // second action passes a freshly generated (untelegraphed) one.
   _resolveAttack(t: Telegraph | null = this.telegraph): void {
     if (!t) return;
-    const label = t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
+    const label = t.channel && t.channelName ? t.channelName
+      : t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
       : t.type === 'aoe' ? 'AoE attack' : t.type === 'heavy' ? 'Heavy attack'
       : t.type === 'sweep' ? 'Sweeping attack' : 'Attack';
     for (const slot of t.targets) {

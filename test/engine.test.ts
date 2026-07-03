@@ -976,6 +976,28 @@ function gatewardenGame(seed: number, enrageTurn = 99): Game {
   eq('channel redirected onto the taunting tank', g.tank.hp, 50 - (20 - (DEFENSE_AMOUNT + g.tank.abilityPower)));
   eq('the original target (ranger) is untouched', g.ranger.hp, 50);
 }
+{
+  // Naming legibility: the plain heavy must not share a name with the channel
+  // that replaces it — the whole point of the rotation is telling them apart.
+  check('generic heavy intent is not the channel name',
+    ATTACK_INTENT_NAMES.heavy !== GATEWARDEN_DEF.channel!.name);
+  const g = gatewardenGame(4);
+  g.rotationIndex = 2;                 // plain heavy slot (cycle 1)
+  g.telegraph = g._generateTelegraph(3);
+  eq('plain heavy announces by its generic name', g.telegraphIntent(), ATTACK_INTENT_NAMES.heavy);
+  g.rotationIndex = 6;                 // channel slot (cycle 2)
+  g.telegraph = g._generateTelegraph(3);
+  eq('a standing channel announces by its own name', g.telegraphIntent(), 'Crushing Blow');
+  // The resolve log also names the channel, not the underlying attack type.
+  const target = g.telegraph.targets[0];
+  g.members[target].hp = 50;
+  g.turn = 2; g._runEnemyPhase();      // wind-up
+  g.members[target].hp = 50;
+  g.turn = 3; g._runEnemyPhase();      // resolve
+  check('the resolve log names the channel',
+    g.log.some((l) => /Crushing Blow (hits|whiffs)/.test(l.text)),
+    g.log.map((l) => l.text).slice(-3).join(' | '));
+}
 
 // --- turn-1 attack is always a plain single (flaw #12) ----------------------
 {

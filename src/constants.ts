@@ -81,9 +81,12 @@ export const SLOT_WEIGHTS: Record<'normal' | 'hidden', number[]> = {
 
 // Human-readable intent names for each attack type (the telegraph carries the
 // numbers; this labels what the enemy is about to do).
+// Note: no generic name may collide with a boss channel's name (e.g. the
+// Gatewarden's 'Crushing Blow') — a channel is a bigger threat than the plain
+// attack type it replaces, and sharing a name trains the wrong read.
 export const ATTACK_INTENT_NAMES: Record<AttackType, string> = {
   single: 'Strike', two: 'Double Strike', aoe: 'Barrage',
-  hidden: 'Veiled Strike', heavy: 'Crushing Blow', sweep: 'Sweep',
+  hidden: 'Veiled Strike', heavy: 'Heavy Blow', sweep: 'Sweep',
 };
 
 // ---------------------------------------------------------------------------
