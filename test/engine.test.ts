@@ -1,7 +1,7 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
-import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT } from '../src/constants';
+import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -2122,6 +2122,168 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     }
     check('property: preview == applied with Rod + Mirror live', mismatches === 0, `${mismatches} mismatches`);
     check('relic property test exercised real hits', checked > 15, `${checked} hits checked`);
+  }
+}
+
+// --- relics phase B: rule-changers + curses (issue 22) ------------------------
+{
+  const relicGame = (seed: number, relics: RelicId[], spent: RelicId[] = []): Game => {
+    const cfg = defaultBattleConfig();
+    cfg.relics = relics;
+    cfg.spentRelics = spent;
+    return new Game(seed, cfg);
+  };
+
+  // Aegis Font: DIRECT cast-heal overheal converts to a Ward (capped, larger
+  // replaces); a Regen tick's overheal never converts (the §3.6.3 broken combo).
+  {
+    const g = relicGame(400, ['aegisFont']);
+    g.start();
+    const tank = g.tank;
+    tank.hp = tank.maxHP - 1;
+    g.playCard(giveCard(g, 'highHeal'), SLOT.CENTER); // heals 1, overheals 3
+    eq('cast overheal becomes a Ward (capped)', tank.ward, WARD_MAX);
+    tank.hp = tank.maxHP - 1;
+    tank.ward = 2;
+    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // heals 1, overheals 1 < standing 2
+    eq('a smaller overheal never shrinks the Ward', tank.ward, 2);
+    const g2 = relicGame(401, ['aegisFont']);
+    g2.start();
+    const tank2 = g2.tank;
+    tank2.hp = tank2.maxHP;
+    tank2.regen = 2; tank2.regenTurns = 1;
+    g2._startPlayerPhase(); // the whole tick overheals
+    eq('Regen-tick overheal never converts', tank2.ward, 0);
+  }
+  {
+    // The Ward absorbs at the end of the pipeline, and the preview shows it.
+    const g = relicGame(402, ['aegisFont']);
+    g.start();
+    const tank = g.tank;
+    tank.hp = tank.maxHP;
+    tank.ward = 2;
+    g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+    eq('the preview folds the Ward in', g.attackTargets()[0]?.damage, 2);
+    const before = tank.hp;
+    g._resolveAttack();
+    eq('the Ward-reduced hit matches the preview', before - tank.hp, 2);
+    eq('the Ward is consumed point for point', tank.ward, 0);
+  }
+
+  // First-Light Taper: the first cheap non-engine card each turn is free; the
+  // NEXT turn draws one fewer only when the discount actually fired.
+  {
+    const g = relicGame(403, ['firstLightTaper']);
+    g.start();
+    eq('turn 1 draws a full hand (nothing fired yet)', g.hand.length, g.handSize);
+    const idx = giveCard(g, 'regen'); // cost 2 <= TAPER_MAX_COST, non-engine
+    eq('the first cheap card is free', g.effectiveCost(resolveCard(g.hand[idx])), 0);
+    const mp = g.mp;
+    g.playCard(idx, SLOT.CENTER);
+    eq('no MP was spent', g.mp, mp);
+    const idx2 = giveCard(g, 'regen');
+    eq('the second card costs full price', g.effectiveCost(resolveCard(g.hand[idx2])), 2);
+    g.endTurn();
+    if (g.status === 'playing') {
+      eq('the turn after a fired Taper draws one fewer', g.hand.length, g.handSize - 1);
+    }
+    const g2 = relicGame(404, ['firstLightTaper']);
+    g2.start();
+    const r = giveCard(g2, 'refresh'); // engine-tagged
+    eq('engine cards never taper', g2.effectiveCost(resolveCard(g2.hand[r])), CARDS.refresh.cost);
+    const b = giveCard(g2, 'barrier'); // cost 4 > TAPER_MAX_COST
+    eq('expensive cards never taper', g2.effectiveCost(resolveCard(g2.hand[b])), CARDS.barrier.cost);
+    check('the Taper ceiling is 3', TAPER_MAX_COST === 3);
+  }
+
+  // Dusk Chime: once per RUN, a telegraph totalling DUSK_CHIME_MIN+ is delayed
+  // one turn — the enemy loses the swing this phase and it lands next phase.
+  {
+    const g = relicGame(405, ['duskChime']);
+    g.start();
+    for (const m of g.members) m.hp = m.maxHP;
+    const big = { type: 'sweep' as const, hidden: false, damage: 5, targets: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], enraged: false, forTurn: 2 };
+    g.telegraph = { ...big };
+    const hpBefore = g.members.map((m) => m.hp);
+    g._runEnemyPhase();
+    check('the Chime delays the blow (nobody is hit)', g.members.every((m, i) => m.hp === hpBefore[i]));
+    check('the Chime is spent', g.chimeUsed);
+    check('the telegraph keeps standing', g.telegraph !== null && g.telegraph.damage === 5);
+    g._runEnemyPhase();
+    check('the delayed blow lands next phase', g.members.some((m, i) => m.hp < hpBefore[i]));
+    check('the fight reports the spent Chime', g.spentRelicIds().includes('duskChime'));
+    // Once per RUN: a later fight arrives with the Chime pre-spent.
+    const g2 = relicGame(406, ['duskChime'], ['duskChime']);
+    g2.start();
+    for (const m of g2.members) m.hp = m.maxHP;
+    g2.telegraph = { ...big };
+    const hp2 = g2.members.map((m) => m.hp);
+    g2._runEnemyPhase();
+    check('a spent Chime never fires again', g2.members.some((m, i) => m.hp < hp2[i]));
+    // Small telegraphs never trigger it.
+    const g3 = relicGame(407, ['duskChime']);
+    g3.start();
+    g3.telegraph = { type: 'single', hidden: false, damage: DUSK_CHIME_MIN - 1, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
+    g3.tank.hp = g3.tank.maxHP;
+    g3._runEnemyPhase();
+    check('a small blow passes the Chime', !g3.chimeUsed);
+  }
+
+  // Martyr's Icon: the first death of the RUN becomes survival at 1 HP with
+  // statuses stripped; the wipe check sees the survivor; later deaths are real.
+  {
+    const g = relicGame(408, ['martyrsIcon']);
+    g.start();
+    const tank = g.tank;
+    tank.regen = 2; tank.regenTurns = 2; tank.taunt = 2;
+    const died = g._killMember(tank);
+    check('the Icon refuses the first death', !died && tank.alive);
+    eq('the spared member stands at 1 HP', tank.hp, 1);
+    eq('the brush with death strips statuses', tank.regenTurns + tank.taunt, 0);
+    check('no wipe with the survivor standing', !g.allDead());
+    check('the fight reports the spent Icon', g.spentRelicIds().includes('martyrsIcon'));
+    const died2 = g._killMember(tank);
+    check('the second death is real', died2 && !tank.alive);
+    // Pre-spent from an earlier fight: the save never fires.
+    const g2 = relicGame(409, ['martyrsIcon'], ['martyrsIcon']);
+    g2.start();
+    check('a spent Icon never fires again', g2._killMember(g2.tank) && !g2.tank.alive);
+  }
+
+  // Pact of Silence: Rest is gone; the pact pays passive MP instead.
+  {
+    const g = relicGame(410, ['pactOfSilence']);
+    g.start();
+    check('the Pact forbids Rest', !g.canSkip());
+    g.mp = 0;
+    g._startPlayerPhase();
+    eq('the Pact pays its passive MP', g.mp, PACT_PASSIVE_MP);
+  }
+
+  // Cracked Hourglass: enrage on turn 9; Poison & Bolt +2; Taunt's Defense untouched.
+  {
+    const g = relicGame(411, ['crackedHourglass']);
+    eq('the Hourglass drags enrage to turn 9', g.enrageTurn, CRACKED_HOURGLASS_ENRAGE);
+    g.start();
+    g._fireAbility(g.ranger);
+    eq('Poison gains the Hourglass bonus', g.enemy.poison, POISON_BASE + HOURGLASS_POWER_BONUS);
+    g._fireAbility(g.tank);
+    eq("Taunt's Defense is unaffected", g.tank.defenseAmount, DEFENSE_AMOUNT + g.tank.abilityPower);
+    const ehp = g.enemy.hp;
+    g.mage.charge = 0;
+    g._fireAbility(g.mage);
+    eq('Bolt gains the Hourglass bonus', ehp - g.enemy.hp, BOLT_BASE + HOURGLASS_POWER_BONUS);
+  }
+
+  // Rusty Crown: normal enemies hit +1; the bosses are exempt.
+  {
+    const g = relicGame(412, ['rustyCrown']);
+    eq('normals hit harder under the Crown', g.attackDamage('single', 1), 4 + RUSTY_CROWN_ATTACK);
+    const cfg = defaultBattleConfig();
+    cfg.relics = ['rustyCrown'];
+    cfg.enemy = { ...cfg.enemy, boss: true };
+    const gb = new Game(413, cfg);
+    eq('bosses are exempt from the Crown', gb.attackDamage('single', 1), 4);
   }
 }
 

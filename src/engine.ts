@@ -21,6 +21,9 @@ import {
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
+  WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
+  CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK,
+  isEngineCard,
   WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ATTACK_INTENT_NAMES,
   defaultBattleConfig, resolveCard, makeDeckCard,
@@ -57,6 +60,7 @@ export interface Member {
   defenseAmount: number; // per-member Defense strength while defense > 0 (#17)
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
   drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
+  ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
 }
 
 export interface Enemy {
@@ -132,6 +136,9 @@ export type GameEvent =
   | { kind: 'refreshPrimed'; stack: number }
   | { kind: 'draw'; count: number }
   | { kind: 'surge' }                                      // next card this turn costs 0 (#16)
+  | { kind: 'wardApplied'; slot: Slot; amount: number }    // Aegis Font ward gained (#22)
+  | { kind: 'chime' }                                      // Dusk Chime delays the telegraph (#22)
+  | { kind: 'martyrSave'; slot: Slot }                     // Martyr's Icon refuses a death (#22)
   | { kind: 'hymn'; bonus: number }                        // party autos buffed this phase (#16)
   | { kind: 'bloodPay'; slot: Slot; amount: number; hp: number } // Blood card HP cost paid (#16)
   | { kind: 'cleanse'; slot: Slot }
@@ -173,6 +180,9 @@ export class Game {
   echoUsed: boolean;      // Echo Locket: its once-per-fight return has fired
   stormglassUsed: boolean;// Stormglass Mirror: its once-per-fight negate has fired
   titheGained: number;    // Tithe Candle MP granted this fight (capped per fight)
+  chimeUsed: boolean;     // Dusk Chime (#22): its once-per-RUN delay has fired
+  martyrUsed: boolean;    // Martyr's Icon (#22): its once-per-RUN save has fired
+  taperFired: boolean;    // First-Light Taper (#22): the discount fired this turn
   drawPile: DeckCard[];
   discardPile: DeckCard[];
   hand: DeckCard[];
@@ -217,6 +227,7 @@ export class Game {
         defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
         drumPrimed: false, // no War Drum beat pending
+        ward: 0,       // no Aegis Ward standing
       };
     });
 
@@ -242,6 +253,14 @@ export class Game {
     this.echoUsed = false;
     this.stormglassUsed = false;
     this.titheGained = 0;
+    const spent = new Set(config.spentRelics ?? []);
+    this.chimeUsed = spent.has('duskChime');   // once per RUN (#22)
+    this.martyrUsed = spent.has('martyrsIcon'); // once per RUN (#22)
+    this.taperFired = false;
+    // Cracked Hourglass (#22): the race starts earlier, whoever the enemy is.
+    if (this.relics.has('crackedHourglass')) {
+      this.enrageTurn = Math.min(this.enrageTurn, CRACKED_HOURGLASS_ENRAGE);
+    }
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
     // own array — so reshuffles here don't disturb the persistent deck.
@@ -319,7 +338,10 @@ export class Game {
   // Per-target damage for a base value at a given turn: add the enemy's per-fight
   // attackBonus, then round up under the enrage multiplier if enraged.
   attackDamageOf(base: number, turn: number): number {
-    const b = base + this.config.enemy.attackBonus;
+    // The Rusty Crown's price (#22) is paid against NORMAL enemies only — a
+    // forced +1 on the tightly-tuned bosses read as a pure trap (F5 ~55%).
+    const crown = this.hasRelic('rustyCrown') && !this.config.enemy.boss ? RUSTY_CROWN_ATTACK : 0;
+    const b = base + this.config.enemy.attackBonus + crown;
     return this.isEnraged(turn) ? Math.ceil(b * ENRAGE_MULT) : b;
   }
 
@@ -560,9 +582,18 @@ export class Game {
     return this;
   }
 
-  _killMember(m: Member): void {
-    m.alive = false;
-    m.hp = 0;
+  // Kill a member — unless the Martyr's Icon (#22) spends its once-per-fight
+  // save, in which case they survive at 1 HP with every status stripped (the
+  // wipe check sees a living member either way). Returns true if they died.
+  _killMember(m: Member): boolean {
+    const saved = !this.martyrUsed && this.hasRelic('martyrsIcon');
+    if (saved) {
+      this.martyrUsed = true;
+      m.hp = 1;
+    } else {
+      m.alive = false;
+      m.hp = 0;
+    }
     m.shield = false;
     m.shieldTurns = 0;
     m.brace = false;
@@ -575,7 +606,14 @@ export class Game {
     m.defenseAmount = 0;
     m.charge = 0;
     m.drumPrimed = false;
+    m.ward = 0;
+    if (saved) {
+      this._log(`The Martyr's Icon glows — ${m.name} clings to life at 1 HP!`, 'status');
+      this._emit({ kind: 'martyrSave', slot: m.slot });
+      return false;
+    }
     this._log(`${m.name} has fallen!`, 'death');
+    return true;
   }
 
   // Returns true on the blow that actually finishes the enemy, so the caller can
@@ -619,7 +657,10 @@ export class Game {
   // tick, which routes through here) — so the Hexweaver's Hex (#13) only needs to
   // reduce healing in one place to cover both. While Wounded, healing is scaled by
   // WOUND_HEAL_FACTOR and floored.
-  _healMember(m: Member, amount: number): number {
+  // `direct` marks a cast heal (heal cards, Bloom, Martyr's Gift, the Lifebloom
+  // burst) as opposed to the Regen tick — the Aegis Font (#22) only converts
+  // DIRECT overheal to Ward, so a ticking Regen can't farm the buffer.
+  _healMember(m: Member, amount: number, direct = false): number {
     if (!m.alive || amount <= 0) return 0;
     // Field Triage Kit (#21): heals on a member below half max HP heal harder.
     // The bonus lands before the Hex halving — the curse dominates everything.
@@ -630,7 +671,18 @@ export class Game {
     if (effective <= 0) return 0;
     const before = m.hp;
     m.hp = Math.min(m.maxHP, m.hp + effective);
-    return m.hp - before;
+    const healed = m.hp - before;
+    // Aegis Font (#22): direct-cast overheal becomes a Ward buffer — capped,
+    // larger-replaces (no stacking), independent of Shield.
+    if (direct && this.hasRelic('aegisFont')) {
+      const over = Math.min(WARD_MAX, effective - healed);
+      if (over > m.ward) {
+        m.ward = over;
+        this._log(`The Aegis Font wells up: Ward ${m.ward} on ${m.name}.`, 'status');
+        this._emit({ kind: 'wardApplied', slot: m.slot, amount: m.ward });
+      }
+    }
+    return healed;
   }
 
   // Pay out a pending Lifebloom burst (#16). A Lifebloom Regen that ENDS while
@@ -642,7 +694,7 @@ export class Game {
     if (m.bloomBurst <= 0 || !m.alive) return;
     const burst = m.bloomBurst;
     m.bloomBurst = 0;
-    const healed = this._healMember(m, burst);
+    const healed = this._healMember(m, burst, true);
     this._log(`Lifebloom bursts on ${m.name}: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
     this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
   }
@@ -673,16 +725,15 @@ export class Game {
   // and _resolveAttack() both compute damage through here, which is what keeps
   // the telegraph preview equal to the applied damage across the whole pipeline.
   _wardedDamage(m: Member, raw: number, ignoreDefense = false, attackType?: AttackType):
-      { dmg: number; spendsBrace: boolean; spendsShield: boolean; spendsStormglass: boolean } {
+      { dmg: number; spendsBrace: boolean; spendsShield: boolean; spendsStormglass: boolean; wardSpent: number } {
     let dmg = this._effectiveDamage(m, raw, ignoreDefense);
     let spendsBrace = false;
     let spendsShield = false;
-    let spendsStormglass = false;
     // Stormglass Mirror (#21): once per fight, the first single-target hit of
     // 6+ (measured after Defense, before Brace/Shield) is negated outright.
     const singleTarget = attackType === 'single' || attackType === 'hidden' || attackType === 'heavy';
     if (!this.stormglassUsed && this.hasRelic('stormglass') && singleTarget && dmg >= STORMGLASS_MIN_HIT) {
-      return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: true };
+      return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: true, wardSpent: 0 };
     }
     if (m.brace && dmg > 0) {
       dmg = Math.max(0, dmg - BRACE_AMOUNT);
@@ -696,7 +747,10 @@ export class Game {
     if (dmg > 0 && this.hasRelic('groundingRod') && (attackType === 'aoe' || attackType === 'sweep')) {
       dmg = Math.max(0, dmg - GROUNDING_ROD_REDUCTION);
     }
-    return { dmg, spendsBrace, spendsShield, spendsStormglass };
+    // Aegis Ward (#22): the standing buffer eats what is left, point for point.
+    const wardSpent = Math.min(m.ward, dmg);
+    dmg -= wardSpent;
+    return { dmg, spendsBrace, spendsShield, spendsStormglass: false, wardSpent };
   }
 
   // ---- enemy phase ---------------------------------------------------------
@@ -755,6 +809,19 @@ export class Game {
       this._emit({ kind: 'channelTick', name: t.channelName ?? 'Channel', turnsUntilResolve: t.turnsUntilResolve ?? 0 });
       this._decayBuffs();
       return; // channel keeps standing; do not advance the rotation or re-telegraph
+    }
+
+    // Dusk Chime (#22): once per fight, a big telegraph is delayed one full
+    // turn at the moment it would land — it stays standing (like a channel
+    // wind-up) and the enemy loses the turn. Checked against the telegraphed
+    // magnitude across its targets; casts are never delayed (nothing to blunt).
+    if (t && !t.cast && !this.chimeUsed && this.hasRelic('duskChime')
+        && t.damage * Math.max(1, t.targets.length) >= DUSK_CHIME_MIN) {
+      this.chimeUsed = true;
+      this._log(`The Dusk Chime tolls — ${this.telegraphIntent() ?? 'the attack'} is delayed a turn.`, 'system');
+      this._emit({ kind: 'chime' });
+      this._decayBuffs();
+      return; // the telegraph keeps standing; no rotation advance, no re-telegraph
     }
 
     // A 'cast' telegraph runs its scripted effect (Hex / Siphon / Consume) instead
@@ -899,11 +966,17 @@ export class Game {
         m.braceTurns = 0;
         this._log(`${m.name} braces — the hit is blunted by ${BRACE_AMOUNT}.`, 'shield');
       }
+      if (w.wardSpent > 0) {
+        m.ward -= w.wardSpent;
+        this._log(`${m.name}'s Ward absorbs ${w.wardSpent}. (Ward ${m.ward})`, 'shield');
+      }
       m.hp = Math.max(0, m.hp - w.dmg);
       this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
-      const killed = m.hp <= 0;
+      // The Martyr's Icon (#22) may veto the death — resolve that BEFORE the
+      // event is emitted so the animator never stages a death that didn't happen.
+      let killed = m.hp <= 0;
+      if (killed) killed = this._killMember(m);
       this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
-      if (killed) this._killMember(m);
       // Tithe Candle (#21): post-mitigation enemy damage tithes 1 MP back
       // (a 0-damage hit gives nothing; capped at max mana AND per fight — every
       // MP engine in this game is bounded, the flaw-#7 law).
@@ -934,10 +1007,12 @@ export class Game {
         }
       }
     }
-    // Passive MP income (healer upgrade) lands at the start of the player phase.
-    if (this.passiveMp > 0 && this.mp < this.maxMana) {
+    // Passive MP income (healer upgrade, plus the Pact of Silence's tithe)
+    // lands at the start of the player phase.
+    const passive = this.passiveMp + (this.hasRelic('pactOfSilence') ? PACT_PASSIVE_MP : 0);
+    if (passive > 0 && this.mp < this.maxMana) {
       const before = this.mp;
-      this.mp = Math.min(this.maxMana, this.mp + this.passiveMp);
+      this.mp = Math.min(this.maxMana, this.mp + passive);
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
     }
@@ -946,7 +1021,10 @@ export class Game {
     for (const m of this.members) {
       if (m.alive) m.charge = Math.min(CHARGE_MAX, m.charge + 1);
     }
-    this._drawTo(this.handSize);
+    // The First-Light Taper (#22) pays for its free card in card flow — the
+    // turn AFTER the discount fires draws one fewer ("it burns what it lit").
+    this._drawTo(Math.max(1, this.handSize - (this.taperFired ? 1 : 0)));
+    this.taperFired = false;
     this.cardsPlayedThisPhase = 0;
     this.phase = 'player';
   }
@@ -976,10 +1054,16 @@ export class Game {
     }
   }
 
-  // What a card costs to play right now: 0 while a Surge (#16) is pending,
+  // What a card costs to play right now: 0 while a Surge (#16) is pending, 0
+  // for the First-Light Taper's (#22) first cheap non-engine card of the turn,
   // otherwise its resolved cost. The UI's affordability check reads this too.
   effectiveCost(card: ResolvedCard): number {
-    return this.surgePending ? 0 : card.cost;
+    if (this.surgePending) return 0;
+    if (this.hasRelic('firstLightTaper') && this.cardsPlayedThisPhase === 0
+        && card.cost <= TAPER_MAX_COST && !isEngineCard(card.id)) {
+      return 0;
+    }
+    return card.cost;
   }
 
   // Validate whether a hand card can currently be played. Returns null if ok,
@@ -1025,6 +1109,11 @@ export class Game {
     this.events = [];
     const dc = this.hand[handIndex];
     const card = resolveCard(dc);
+    // Note a Taper discount firing (Surge takes precedence and is not the Taper).
+    if (!this.surgePending && this.hasRelic('firstLightTaper') && this.cardsPlayedThisPhase === 0
+        && card.cost <= TAPER_MAX_COST && !isEngineCard(card.id) && card.cost > 0) {
+      this.taperFired = true;
+    }
     this.mp -= this.effectiveCost(card);
     // A pending Surge is spent by the next card played, whatever it is — even a
     // card that was already free (strict "next card" rule; Surge->Surge is a
@@ -1059,14 +1148,14 @@ export class Game {
       case 'lowHeal':
       case 'highHeal': {
         const m = this.members[target as number];
-        const healed = this._healMember(m, card.heal ?? 0);
+        const healed = this._healMember(m, card.heal ?? 0, true);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         break;
       }
       case 'aoeHeal': {
         for (const m of this.livingMembers()) {
-          const healed = this._healMember(m, card.heal ?? 0);
+          const healed = this._healMember(m, card.heal ?? 0, true);
           this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         }
         this._log(`Group Heal: all living members heal up to ${card.heal}.`, 'heal');
@@ -1148,7 +1237,7 @@ export class Game {
       case 'bloom': {
         const m = this.members[target as number];
         // Consume the Regen: heal per remaining turn, then the stack is gone.
-        const healed = this._healMember(m, BLOOM_HEAL_PER_TURN * m.regenTurns);
+        const healed = this._healMember(m, BLOOM_HEAL_PER_TURN * m.regenTurns, true);
         m.regen = 0;
         m.regenTurns = 0;
         this._log(`Bloom consumes ${m.name}'s Regen: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
@@ -1221,7 +1310,7 @@ export class Game {
         const paid = this._bloodPay(m, card.selfDamage ?? 0);
         for (const other of this.livingMembers()) {
           if (other.slot === m.slot) continue;
-          const healed = this._healMember(other, card.heal ?? 0);
+          const healed = this._healMember(other, card.heal ?? 0, true);
           this._emit({ kind: 'heal', slot: other.slot, amount: healed, hp: other.hp });
         }
         this._log(`Martyr's Gift: ${m.name} pays ${paid} HP; the others heal up to ${card.heal}.`, 'heal');
@@ -1278,7 +1367,8 @@ export class Game {
     if (this.hasRelic('warDrum')) m.drumPrimed = true;
     switch (m.ability) {
       case 'poison': {
-        const strength = POISON_BASE + m.abilityPower;
+        const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
+        const strength = POISON_BASE + m.abilityPower + hourglass;
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
         this.enemy.poison = Math.max(this.enemy.poison, strength);
         this.enemy.poisonTurns = POISON_TURNS;
@@ -1309,7 +1399,8 @@ export class Game {
       }
       case 'bolt': {
         // Bolt scales on the *caster's* Charge.
-        const base = BOLT_BASE + m.abilityPower;
+        const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
+        const base = BOLT_BASE + m.abilityPower + hourglass;
         const dmg = base + BOLT_CHARGE_MULT * m.charge;
         this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${m.charge}).`, 'status');
         m.charge = 0;
@@ -1326,6 +1417,7 @@ export class Game {
   // Decaying Rest (flaw #5): you may still Rest after playing a single card, but
   // it yields less. Resting is off the table once two or more cards are played.
   canSkip(): boolean {
+    if (this.hasRelic('pactOfSilence')) return false; // the Pact forbids Rest (#22)
     return this.phase === 'player' && this.cardsPlayedThisPhase <= 1;
   }
 
@@ -1400,6 +1492,15 @@ export class Game {
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
     this.hymnBonus = 0; // Battle Hymn only buffs the phase it was sung in
+  }
+
+  // Once-per-RUN relics this fight consumed (#22) — the run layer records these
+  // so the next fight's BattleConfig arrives with them pre-spent.
+  spentRelicIds(): RelicId[] {
+    const out: RelicId[] = [];
+    if (this.chimeUsed && this.hasRelic('duskChime')) out.push('duskChime');
+    if (this.martyrUsed && this.hasRelic('martyrsIcon')) out.push('martyrsIcon');
+    return out;
   }
 
   // ---- dev / cheats --------------------------------------------------------

@@ -362,6 +362,11 @@ const RELIC_VALUE: Record<RelicId, number> = {
   titheCandle: 9, vanguardsBanner: 8, prayerBeads: 7, warDrum: 7,
   fieldTriage: 6, groundingRod: 6, stormglass: 5, echoLocket: 5,
   hagglersCharm: 4, lantern: 2,
+  // Phase-B rule-changers (#22). The Taper's hand 3->2 starves this policy's
+  // tactic engine, so it never takes one; the others are solid defensive picks.
+  martyrsIcon: 6, duskChime: 6, aegisFont: 4, firstLightTaper: 0,
+  // Curses are deliberate player trades; the fixed policy never buys one.
+  pactOfSilence: 0, crackedHourglass: 0, rustyCrown: 0,
 };
 
 // Spoils are free: always take the best-valued offer.

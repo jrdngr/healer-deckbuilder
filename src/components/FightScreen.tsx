@@ -2,12 +2,14 @@ import { useEffect, useRef } from 'react';
 import { useGame } from '../useGame';
 import type { GameController } from '../useGame';
 import type { Run } from '../run';
+import type { RelicId } from '../constants';
 import { BattleScreen } from './BattleScreen';
 
 interface FightScreenProps {
   run: Run;
   onWin: () => void;
   onLose: () => void;
+  onSpent: (ids: RelicId[]) => void;
   // Publishes this fight's controller up to App so the dev panel can reach the
   // live engine; receives null when the fight unmounts.
   onController?: (ctrl: GameController | null) => void;
@@ -23,7 +25,7 @@ function fightSeed(run: Run): number {
 // One fight within the run. Mounted fresh per fight (keyed by fight index), so its
 // useGame builds a fresh battle from this fight's config. On end, resolves the
 // fight into the run.
-export function FightScreen({ run, onWin, onLose, onController }: FightScreenProps) {
+export function FightScreen({ run, onWin, onLose, onSpent, onController }: FightScreenProps) {
   // Capture config and seed once on mount (this component is remounted per fight).
   const config = useRef(run.toBattleConfig()).current;
   const seed = useRef(fightSeed(run)).current;
@@ -36,6 +38,8 @@ export function FightScreen({ run, onWin, onLose, onController }: FightScreenPro
   }, [ctrl, onController]);
 
   const onBattleEnd = () => {
+    // Report once-per-RUN relic uses (#22) before the run resolves the outcome.
+    onSpent(ctrl.game.spentRelicIds());
     if (ctrl.game.status === 'win') onWin();
     else onLose();
   };

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  CARDS, MEMBER_DEFS, MODIFIERS, CARD_REMOVAL_PRICE, DUPLICATE_PRICE,
-  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, resolveCard, makeDeckCard,
+  CARDS, MEMBER_DEFS, MODIFIERS, RELICS, CARD_REMOVAL_PRICE, DUPLICATE_PRICE,
+  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, CURSE_SHRINE_GOLD, resolveCard, makeDeckCard,
 } from '../constants';
 import type { CardId, Slot, EventChoiceKind } from '../constants';
 import type { Run } from '../run';
@@ -91,6 +91,13 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
       case 'bloodAltar':
         setStage({ kind: 'bloodAltar' });
         break;
+      case 'shrineCurse': {
+        const curse = act((r) => r.shrineAcceptCurse());
+        finish(curse
+          ? `The shrine brands you with ${RELICS[curse].name} — and pays ${CURSE_SHRINE_GOLD} gold.`
+          : 'You already bear every burden the shrine knows.');
+        break;
+      }
     }
   };
 

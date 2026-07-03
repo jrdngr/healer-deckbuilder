@@ -27,15 +27,17 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–21** (P0–P9a: all card work, the ward pipeline, the Q5 poison decision — **measured
-and left at 5×5**, full numbers in `sim/run-sim.ts` — events 3 → 8, the act-2/3 named rosters,
-and **relics phase A**: 10 relics, spoils after fights 3 & 6, the Reliquary twice per run.
-Relics as first specced read full-run **65%**; landed back in band via relic tuning — Tithe
-Candle capped 4 MP/fight, Banner +1, Beads +2 — plus the act-2/3 bosses absorbing the power:
-Hexweaver 135→142, Devourer 165→190). The three bosses hit their gates (Gatewarden ~89% /
-Hexweaver ~71% / Devourer ~58%) and the **full run is winnable end to end at ~34%** (the
-designed 25–35% band — re-checked at N=1000 after every content change). **Next up: #22 (relics
-phase B — the designated cut line).** **➤ Human playtest #2** is ready now.
+**Done: 01–22** (P0–P9 complete — nothing was cut at the Q1 cut line). Highlights: all card
+work + the ward pipeline; the Q5 poison decision (**measured and left at 5×5**); events 3 → 8;
+act-2/3 named rosters; **relics phase A** (10 relics, spoils after fights 3 & 6, Reliquary twice
+per run) and **phase B** (Aegis Font / First-Light Taper / Dusk Chime / Martyr's Icon + the
+three curses, with Chime/Icon **once per run** via spent-relic plumbing). Relic power twice
+lifted the run out of band and was absorbed by relic tuning + boss HP: Hexweaver 135→146,
+Devourer 165→198 — per-relic gate numbers and the tuning history live in `sim/run-sim.ts`. The
+bosses hit their gates (Gatewarden ~89% / Hexweaver ~70% / Devourer ~53%) and the **full run is
+winnable end to end at ~31%** (N=1000, the designed 25–35% band). **Next up: #23 (difficulty
+presets + local stats).** **➤ Human playtest #2 is overdue** — a lot of unplaytested content now
+sits on top of #14.
 
 ## Issues (implementation order)
 
@@ -62,7 +64,7 @@ phase B — the designated cut line).** **➤ Human playtest #2** is ready now.
 | 19 | ✅ Done | [Events expansion 3 → 8](./issues/19-events-expansion.md) | P7e | 10 | §4 P7 |
 | 20 | ✅ Done | [Act 2/3 named rosters](./issues/20-act23-rosters.md) | P8 | 14, 09 | §4 P8 |
 | 21 | ✅ Done | [Relics phase A: infra + 10 legible relics](./issues/21-relics-phase-a.md) | P9a | 14, 17 | §3.3; Q9 |
-| 22 | ⬜ Todo | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |
+| 22 | ✅ Done | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |
 | 23 | ⬜ Todo | [Difficulty presets + local stats](./issues/23-difficulty-presets.md) | P10 | 14 | §4 P10; Q8 |
 | 24 | ⬜ Todo | [Hardening & UX batch](./issues/24-hardening-ux.md) | P11 | 23 | flaws #15, #16, #20, #21 |
 | 25 | ⬜ Todo | [Hand-size experiment (hand 4 + carryover)](./issues/25-hand-size-experiment.md) | exp. | 06 | flaw #16; Q6 |

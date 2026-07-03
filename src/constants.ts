@@ -586,6 +586,9 @@ export interface BattleConfig {
   healer: HealerConfig;
   enemy: EnemyConfig;
   relics?: RelicId[]; // run-long passives (#21); absent/empty means fully inert
+  // Once-per-RUN relics already spent in an earlier fight (#22: Dusk Chime,
+  // Martyr's Icon). The engine treats these as used from the first turn.
+  spentRelics?: RelicId[];
 }
 
 export const DEFAULT_HEALER: HealerConfig = {
@@ -759,8 +762,8 @@ export const isActBoss = (fightIndex: number): boolean =>
 // (scaled BOSS_ENEMY_DEF) until the Gatewarden/Hexweaver/Devourer land (#12-14).
 export const ENEMY_HP_BY_FIGHT: number[] = [
   50, 75, 130,    // Act 1: two normals + boss (Gatewarden; pre-spoils, so relic-free)
-  105, 130, 142,  // Act 2: boss (Hexweaver — raised 135->142 for #21's relic power)
-  150, 150, 190,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 165->190 for relics)
+  105, 130, 146,  // Act 2: boss (Hexweaver — 135->142 for #21's relics, ->146 for #22's)
+  150, 150, 198,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 165->190->198 for relics)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
@@ -865,6 +868,7 @@ export type EventChoiceKind =
   | 'duplicateCard' // deck picker; add an unupgraded copy of the chosen card (#19)
   | 'purgeRandom'   // free removal, but the well chooses the card (#19)
   | 'bloodAltar'    // pick a member: -2 max HP for +1 damage, permanent (#19)
+  | 'shrineCurse'   // accept a random curse for gold (#22)
   | 'leave';        // decline / move on
 
 export interface EventChoiceDef {
@@ -880,6 +884,12 @@ export interface EventDef {
 }
 
 export const EVENT_CARD_OFFER_SIZE = 3;
+
+// Curse economy (#22): what the Reliquary charges for a cursed offer, and what
+// the Shrine pays for accepting a random one. Declared here (before EVENTS)
+// because the Shrine's choice text quotes the payout.
+export const CURSE_PRICE = 25;
+export const CURSE_SHRINE_GOLD = 50;
 
 // Events-expansion (#19) magnitudes. Duplication costs more than removal (20g)
 // so copy/purge stay one coherent economy; the free Purge Well removal pays its
@@ -920,6 +930,7 @@ export const EVENTS: EventDef[] = [
     choices: [
       { label: 'Bless a card', kind: 'shrineCard', detail: 'Pick a card; it gains a random upgrade.' },
       { label: 'Bless a hero', kind: 'shrineParty', detail: 'Pick a member; they gain a random boost.' },
+      { label: 'Accept a burden', kind: 'shrineCurse', detail: `Gain a random curse — and ${CURSE_SHRINE_GOLD}g for bearing it.` },
       { label: 'Leave', kind: 'leave' },
     ],
   },
@@ -988,7 +999,16 @@ export type RelicId =
   | 'prayerBeads'    // +3 MP on each draw-pile reshuffle
   | 'echoLocket'     // once/fight, the first Poison/Bolt Ability returns to hand
   | 'stormglass'     // once/fight, the first 6+ single-target hit is negated
-  | 'vanguardsBanner';// members at full HP deal +2 on their auto
+  | 'vanguardsBanner'// members at full HP deal +1 on their auto
+  // --- phase B (#22): rule-changers ------------------------------------------
+  | 'aegisFont'      // direct-cast overheal converts to a Ward buffer (max 4)
+  | 'firstLightTaper'// first card each turn costs 0 (cost <=2, non-engine); draw 1 fewer
+  | 'duskChime'      // once/fight, a 6+ telegraph is delayed one turn
+  | 'martyrsIcon'    // once/fight, a member death becomes survival at 1 HP
+  // --- phase B (#22): curses (bought only, never in spoils, never forced) ---
+  | 'pactOfSilence'  // you can no longer Rest; +1 passive MP each turn
+  | 'crackedHourglass'// enrage on turn 8; Poison & Bolt +2 power
+  | 'rustyCrown';    // all enemies +1 attack; fight wins pay +40g
 
 export interface RelicDef {
   id: RelicId;
@@ -996,6 +1016,7 @@ export interface RelicDef {
   rarity: Rarity;
   icon: string; // topbar row glyph
   desc: string;
+  curse?: boolean; // a curse: purchasable burden with an upside; never dropped
 }
 
 // Relic magnitudes (kept here so balance passes can reach them).
@@ -1012,6 +1033,15 @@ export const GROUNDING_ROD_REDUCTION = 1;
 export const PRAYER_BEADS_MP = 2;
 export const STORMGLASS_MIN_HIT = 6; // post-Defense hits this big are negated
 export const VANGUARD_BONUS = 1;
+// Phase B (#22) magnitudes.
+export const WARD_MAX = 2;             // Aegis Font's Ward buffer cap
+export const TAPER_MAX_COST = 3;       // Taper only zeroes cards this cheap
+export const DUSK_CHIME_MIN = 13;      // telegraphs totalling this much can be delayed
+export const PACT_PASSIVE_MP = 1;      // Pact of Silence's passive MP per turn
+export const CRACKED_HOURGLASS_ENRAGE = 9; // enrage turn under the Hourglass
+export const HOURGLASS_POWER_BONUS = 2;    // Poison & Bolt power under the Hourglass
+export const RUSTY_CROWN_ATTACK = 1;   // enemy attack bonus under the Crown
+export const RUSTY_CROWN_GOLD = 15;    // extra gold per fight win under the Crown
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -1034,6 +1064,22 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Once per fight, the first single-target hit of ${STORMGLASS_MIN_HIT}+ is negated.` },
   vanguardsBanner: { id: 'vanguardsBanner', name: 'Vanguard\'s Banner', rarity: 'rare', icon: '🚩',
     desc: `Members at full HP deal +${VANGUARD_BONUS} on their auto-attack.` },
+  // --- phase B (#22): rule-changers ------------------------------------------
+  aegisFont: { id: 'aegisFont', name: 'Aegis Font', rarity: 'rare', icon: '⛲',
+    desc: `Overhealing from cast heals becomes a Ward that absorbs damage (max ${WARD_MAX}).` },
+  firstLightTaper: { id: 'firstLightTaper', name: 'First-Light Taper', rarity: 'rare', icon: '🌅',
+    desc: `Your first card each turn costs 0 if it costs ${TAPER_MAX_COST} or less (never engine cards); each turn it fires, draw 1 fewer card next turn.` },
+  duskChime: { id: 'duskChime', name: 'Dusk Chime', rarity: 'rare', icon: '🔔',
+    desc: `Once per RUN, an attack totalling ${DUSK_CHIME_MIN}+ damage is delayed one turn.` },
+  martyrsIcon: { id: 'martyrsIcon', name: 'Martyr\'s Icon', rarity: 'rare', icon: '🕊',
+    desc: 'Once per RUN, a member death becomes survival at 1 HP.' },
+  // --- phase B (#22): curses -------------------------------------------------
+  pactOfSilence: { id: 'pactOfSilence', name: 'Pact of Silence', rarity: 'rare', icon: '🤐', curse: true,
+    desc: `CURSE — you can no longer Rest; gain +${PACT_PASSIVE_MP} MP at the start of each turn.` },
+  crackedHourglass: { id: 'crackedHourglass', name: 'Cracked Hourglass', rarity: 'rare', icon: '⏳', curse: true,
+    desc: `CURSE — enemies enrage on turn ${CRACKED_HOURGLASS_ENRAGE}; Poison and Bolt gain +${HOURGLASS_POWER_BONUS} power.` },
+  rustyCrown: { id: 'rustyCrown', name: 'Rusty Crown', rarity: 'rare', icon: '👑', curse: true,
+    desc: `CURSE — normal enemies attack +${RUSTY_CROWN_ATTACK} harder (bosses are proud enough); fight wins pay +${RUSTY_CROWN_GOLD}g.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

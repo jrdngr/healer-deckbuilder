@@ -272,6 +272,37 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'wardApplied': {
+        // Aegis Font (#22): overheal crystallizes into a Ward buffer.
+        push({ at: t, fx: [
+          { type: 'shield', at: ev.slot, color: C.hp },
+          { type: 'float', at: ev.slot, text: `WARD ${ev.amount}`, color: C.hp },
+        ] });
+        t += 380;
+        break;
+      }
+
+      case 'chime': {
+        // Dusk Chime (#22): the incoming blow hangs in the air a turn longer.
+        push({ at: t, shake: 3, fx: [
+          { type: 'ring', at: 'enemy', color: C.mp },
+          { type: 'float', at: 'enemy', text: 'DELAYED', color: C.mp, big: true },
+        ] });
+        t += 520;
+        break;
+      }
+
+      case 'martyrSave': {
+        // Martyr's Icon (#22): a death refused — the biggest save in the game.
+        push({ at: t, shake: 8, fx: [
+          { type: 'pillar', at: ev.slot, color: C.white },
+          { type: 'ring', at: ev.slot, color: C.taunt },
+          { type: 'float', at: ev.slot, text: 'SPARED', color: C.taunt, big: true },
+        ] });
+        t += 700;
+        break;
+      }
+
       case 'surge': {
         // Surge (#16): the next card is free — flare the mana bar.
         push({ at: t, fx: [

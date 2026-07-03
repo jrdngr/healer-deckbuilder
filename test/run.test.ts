@@ -9,7 +9,7 @@ import {
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
-  HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS,
+  HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
 } from '../src/constants';
 import type { CardId, ModifierId, Slot } from '../src/constants';
@@ -300,7 +300,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
     if (!ids.has(e.id)) inSet = false;
   }
   check('rollEvent always returns a defined event', inSet);
-  check('every event has 2-3 choices', EVENTS.every((e) => e.choices.length >= 2 && e.choices.length <= 3));
+  check('every event has 2-4 choices', EVENTS.every((e) => e.choices.length >= 2 && e.choices.length <= 4));
   check('no event id repeats', ids.size === EVENTS.length);
   // Every event keeps a walk-away branch except the shrine-style pure boons.
   check('every new event can be declined',
@@ -549,15 +549,20 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   check('reliquary content rolled', run.nodeContent?.type === 'reliquary');
   if (run.nodeContent?.type === 'reliquary') {
     const offers = run.nodeContent.offers;
-    eq('reliquary stocks 3 relics', offers.length, RELIQUARY_STOCK);
-    check('reliquary prices follow rarity', offers.every((o) => o.price === RELIC_PRICE[o.rarity]));
+    // #22: the stock is RELIQUARY_STOCK regular relics plus one cursed offer.
+    eq('reliquary stocks 3 relics + 1 cursed', offers.length, RELIQUARY_STOCK + 1);
+    const regular = offers.filter((o) => !RELICS[o.relicId].curse);
+    const cursed = offers.filter((o) => RELICS[o.relicId].curse);
+    eq('exactly one cursed offer', cursed.length, 1);
+    eq('the cursed offer costs its flat price', cursed[0].price, CURSE_PRICE);
+    check('regular reliquary prices follow rarity', regular.every((o) => o.price === RELIC_PRICE[o.rarity]));
     run.gold = 0;
     check('an empty purse buys nothing', !run.buyRelicOffer(0));
     run.gold = offers[0].price;
     const id = offers[0].relicId;
     check('an affordable relic sells', run.buyRelicOffer(0));
     check('the relic is owned', run.hasRelic(id));
-    eq('the offer is consumed', run.nodeContent.offers.length, RELIQUARY_STOCK - 1);
+    eq('the offer is consumed', run.nodeContent.offers.length, RELIQUARY_STOCK);
     // Removal: capped at RELIQUARY_REMOVALS_MAX per visit.
     run.gold = CARD_REMOVAL_PRICE * 3;
     const before = run.deck.length;
@@ -574,7 +579,8 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   check('Haggler discounts card-shop prices',
     run.rollCardShop().every((o) => o.price === Math.max(HAGGLER_FLOOR, RARITY_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
   check('Haggler discounts reliquary prices',
-    run.rollReliquary().every((o) => o.price === Math.max(HAGGLER_FLOOR, RELIC_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
+    run.rollReliquary().every((o) => o.price === Math.max(HAGGLER_FLOOR,
+      (RELICS[o.relicId].curse ? CURSE_PRICE : RELIC_PRICE[o.rarity]) - HAGGLER_DISCOUNT)));
   const plain = new Run(82);
   check('without the Charm prices are full',
     plain.rollCardShop().every((o) => o.price === RARITY_PRICE[o.rarity]));
@@ -592,6 +598,53 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   run.addRelic('prayerBeads');
   const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
   check('relics round-trip through a snapshot', restored.hasRelic('prayerBeads'));
+}
+
+// --- relics phase B: curses + once-per-run plumbing (issue 22) ----------------
+{
+  // The Shrine's burden: a random unowned curse plus its payment; never forced.
+  const run = new Run(90);
+  const goldBefore = run.gold;
+  const c1 = run.shrineAcceptCurse();
+  check('the shrine hands out a curse', c1 !== null && RELICS[c1].curse === true && run.hasRelic(c1));
+  eq('the shrine pays for the burden', run.gold, goldBefore + CURSE_SHRINE_GOLD);
+  const c2 = run.shrineAcceptCurse();
+  const c3 = run.shrineAcceptCurse();
+  check('three distinct curses exist', new Set([c1, c2, c3]).size === 3);
+  eq('a fourth burden does not exist', run.shrineAcceptCurse(), null);
+  check('the shrine event offers the burden',
+    EVENTS.find((e) => e.id === 'shrine')!.choices.some((c) => c.kind === 'shrineCurse'));
+}
+{
+  // Curses are NEVER in spoils, across seeds and both spoils rolls.
+  let clean = true;
+  for (let seed = 0; seed < 25; seed++) {
+    const run = new Run(seed);
+    for (const fi of [2, 5]) {
+      if (run.rollSpoils(fi).some((o) => RELICS[o.relicId].curse)) clean = false;
+    }
+  }
+  check('spoils never offer a curse', clean);
+}
+{
+  // Once-per-run relic state: spent ids thread into the next BattleConfig and
+  // survive the save/resume roundtrip.
+  const run = new Run(91);
+  run.addRelic('duskChime');
+  run.markRelicsSpent(['duskChime']);
+  check('spent relics reach the battle config', run.toBattleConfig().spentRelics!.includes('duskChime'));
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  check('spent relics survive the snapshot', restored.spentRelics.includes('duskChime'));
+  run.markRelicsSpent(['duskChime']);
+  eq('marking twice never duplicates', run.spentRelics.length, 1);
+}
+{
+  // The Rusty Crown pays its bonus on fight wins.
+  const run = new Run(92);
+  run.addRelic('rustyCrown');
+  run.beginRun();
+  run.winFight();
+  eq('the Crown pays extra gold per win', run.gold, GOLD_PER_FIGHT + RUSTY_CROWN_GOLD);
 }
 
 // --- issue 11: save / resume -----------------------------------------------

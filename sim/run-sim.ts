@@ -99,6 +99,25 @@
 //     Banner +2 -> +1, Prayer Beads +3 -> +2 — and (b) the act-2/3 bosses
 //     absorbing the rest: Hexweaver 135 -> 142, Devourer 165 -> 190. The
 //     Gatewarden is untouched (spoils come after it, so F2 is relic-free).
+//   after #22 (relics phase B: 4 rule-changers + 3 curses; the designated cut
+//     line SHIPPED instead of cut):  full-run 30.9 % ±2.9 at N=1000.
+//     F0 100 | F1 100 | F2 A1boss 88.8 | F3 99.7 | F4 98.6 | F5 A2boss 70.4 | F6 97.4 | F7 97.3 | F8 A3boss 53.0
+//     Per-relic gates (N=600, injected at the fight-2 boundary — relics cannot
+//     exist earlier in a real run; deltas vs that battery's 39.3% baseline):
+//       aegisFont +5.9 | firstLightTaper +2.0 | duskChime +9.2 | martyrsIcon +4.4
+//       pact alone -6.0, but +6.8 WITHIN its passive-MP build (vs a passive-only
+//       control at 74.0%) | crackedHourglass -5.6 | rustyCrown +0.4
+//     What it took to land: Dusk Chime and Martyr's Icon are once-per-RUN
+//     (spent-relic plumbing through BattleConfig) — once-per-fight versions
+//     read +13/+19pp and solved the Hexweaver outright; Chime threshold 6->13;
+//     Ward cap 4->2; Taper's ceiling 2->3 with the hand penalty made
+//     conditional on the discount firing (the unconditional -1 hand was a
+//     -18pp trap); Hourglass enrage 8->9; Rusty Crown exempts bosses and pays
+//     +15g (boss-inclusive at +40g was a -17.5pp trap; boss-exempt at +40g a
+//     +10pp freebie). The pool growth lifted the baseline out of band again,
+//     absorbed by Hexweaver 142->146 and Devourer 190->198. The N=200 pinned
+//     sample reads 35.5% (seeds 1-200 run hot); the in-test band check now
+//     carries the sample CI, with N=1000 as the authoritative gate.
 //     The Q5 poison measurement (all N=1000, on the #17 baseline):
 //       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
 //       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%
@@ -149,8 +168,11 @@ function fightSeed(runSeed: number, fightIndex: number): number {
 }
 
 // Play one full run end to end with the policy. Fully deterministic in `seed`.
-export function runSingleRun(seed: number): RunOutcome {
+// `setup` (optional) mutates the fresh Run before it begins — the balance-gate
+// hook for forcing a relic/curse into every run (#22's per-relic gates).
+export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutcome {
   const run = new Run(seed);
+  setup?.(run);
   run.beginRun();
   const fights: FightOutcome[] = [];
   let guard = 0;
@@ -161,6 +183,7 @@ export function runSingleRun(seed: number): RunOutcome {
         const fi = run.location.fightIndex;
         const game = new Game(fightSeed(seed, fi), run.toBattleConfig());
         playFight(game);
+        run.markRelicsSpent(game.spentRelicIds()); // once-per-RUN relics (#22)
         const win = game.status === 'win';
         fights.push({ fightIndex: fi, win, turns: game.turn });
         if (win) run.winFight();
@@ -199,13 +222,13 @@ function proportion(wins: number, n: number): Proportion {
   return { wins, n, rate, ci95: ci95(rate, n) };
 }
 
-export function runSim(n: number, firstSeed = 1): SimReport {
+export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): SimReport {
   let fullWins = 0;
   const fightWins = new Array(FIGHT_COUNT).fill(0);
   const fightAttempts = new Array(FIGHT_COUNT).fill(0);
   const fightTurnsTotal = new Array(FIGHT_COUNT).fill(0);
   for (let i = 0; i < n; i++) {
-    const outcome = runSingleRun(firstSeed + i);
+    const outcome = runSingleRun(firstSeed + i, setup);
     if (outcome.status === 'won') fullWins++;
     for (const f of outcome.fights) {
       fightAttempts[f.fightIndex]++;

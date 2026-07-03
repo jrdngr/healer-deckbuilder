@@ -19,7 +19,7 @@ import {
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
-  HAGGLER_DISCOUNT, HAGGLER_FLOOR,
+  HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
@@ -68,6 +68,7 @@ export interface RunSnapshot {
   party: PartyMemberConfig[];
   healer: HealerConfig;
   relics: RelicId[];
+  spentRelics: RelicId[];
   map: Fork[];
   status: RunStatus;
   location: RunLocation;
@@ -82,7 +83,8 @@ export class Run {
   deck: DeckCard[];
   party: PartyMemberConfig[];
   healer: HealerConfig;
-  relics: RelicId[];
+  relics: RelicId[];      // run-long passives (#21), in acquisition order
+  spentRelics: RelicId[]; // once-per-RUN relics already consumed (#22)
   map: Fork[];
   status: RunStatus;
   location: RunLocation;
@@ -98,6 +100,7 @@ export class Run {
     this.party = defaultParty();
     this.healer = { ...DEFAULT_HEALER };
     this.relics = [];
+    this.spentRelics = [];
     this.nextUid = this.deck.length; // new cards continue the uid sequence
     this.map = this._generateMap();
     this.status = 'playing';
@@ -123,6 +126,7 @@ export class Run {
       party: this.party,
       healer: this.healer,
       relics: this.relics,
+      spentRelics: this.spentRelics,
       map: this.map,
       status: this.status,
       location: this.location,
@@ -142,6 +146,7 @@ export class Run {
     run.party = snap.party.map((p) => ({ ...p }));
     run.healer = { ...snap.healer };
     run.relics = [...snap.relics];
+    run.spentRelics = [...(snap.spentRelics ?? [])];
     run.map = snap.map;
     run.status = snap.status;
     run.location = snap.location;
@@ -247,6 +252,7 @@ export class Run {
       party: this.party.map((p) => ({ ...p })),
       healer: { ...this.healer },
       relics: [...this.relics],
+      spentRelics: [...this.spentRelics],
       enemy: {
         maxHP: this.enemyMaxHP(),
         boss: this.isBossFight,
@@ -263,7 +269,8 @@ export class Run {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
-    this.gold += GOLD_PER_FIGHT;
+    // The Rusty Crown (#22) pays its bonus on every win it made harder.
+    this.gold += GOLD_PER_FIGHT + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
     // Spoils (#21, Q9): the act-1 and act-2 bosses drop a free relic pick.
     // (The final boss ends the run above, so this is exactly fights 3 and 6.)
     if (isActBoss(fi)) {
@@ -396,6 +403,12 @@ export class Run {
     if (!this.hasRelic(id)) this.relics.push(id);
   }
 
+  // Record once-per-RUN relic uses a fight reports (#22). Drivers call this
+  // with Game.spentRelicIds() before resolving the fight's outcome.
+  markRelicsSpent(ids: RelicId[]): void {
+    for (const id of ids) if (!this.spentRelics.includes(id)) this.spentRelics.push(id);
+  }
+
   // Haggler's Charm: every storefront price drops, floored. Applied at roll
   // time, so offers already on the table keep the price they were rolled at.
   discountedPrice(base: number): number {
@@ -425,7 +438,8 @@ export class Run {
   // the act-3-boss counters x2 and recomputes the exclusion list.
   rollSpoils(fightIndex: number): RelicOffer[] {
     const excluded = this.relicExclusions(fightIndex);
-    const pool = RELIC_IDS.filter((id) => !this.hasRelic(id) && !excluded.has(id));
+    // Curses are NEVER in spoils (#22) — they are bought, eyes open.
+    const pool = RELIC_IDS.filter((id) => !this.hasRelic(id) && !excluded.has(id) && !RELICS[id].curse);
     const boost = fightIndex >= 5 ? new Set(ACT3_COUNTER_RELICS) : null;
     const ids = this._pickDistinct(
       pool.map((id): [RelicId, number] => [id, RARITY_WEIGHT[RELICS[id].rarity] * (boost?.has(id) ? 2 : 1)]),
@@ -439,17 +453,36 @@ export class Run {
     return ids.map((relicId): RelicOffer => ({ relicId, rarity: RELICS[relicId].rarity, price: 0 }));
   }
 
-  // Reliquary stock: distinct unowned relics at their rarity price (60/30/10).
+  // Reliquary stock: distinct unowned relics at their rarity price (60/30/10),
+  // plus one cursed offer at a flat bargain price (#22) — clearly marked, never
+  // forced, and never rolled into the regular slots.
   rollReliquary(): RelicOffer[] {
-    const pool = RELIC_IDS.filter((id) => !this.hasRelic(id));
+    const pool = RELIC_IDS.filter((id) => !this.hasRelic(id) && !RELICS[id].curse);
     const ids = this._pickDistinct(
       pool.map((id): [RelicId, number] => [id, RARITY_WEIGHT[RELICS[id].rarity]]),
       RELIQUARY_STOCK,
     );
-    return ids.map((relicId): RelicOffer => ({
+    const offers = ids.map((relicId): RelicOffer => ({
       relicId, rarity: RELICS[relicId].rarity,
       price: this.discountedPrice(RELIC_PRICE[RELICS[relicId].rarity]),
     }));
+    const curses = RELIC_IDS.filter((id) => RELICS[id].curse && !this.hasRelic(id));
+    if (curses.length > 0) {
+      const cursed = curses[Math.floor(this.rng() * curses.length)];
+      offers.push({ relicId: cursed, rarity: RELICS[cursed].rarity, price: this.discountedPrice(CURSE_PRICE) });
+    }
+    return offers;
+  }
+
+  // Forgotten Shrine (#22): accept a random unowned curse for gold. Null when
+  // every curse is already borne.
+  shrineAcceptCurse(): RelicId | null {
+    const curses = RELIC_IDS.filter((id) => RELICS[id].curse && !this.hasRelic(id));
+    if (curses.length === 0) return null;
+    const curse = curses[Math.floor(this.rng() * curses.length)];
+    this.addRelic(curse);
+    this.gold += CURSE_SHRINE_GOLD;
+    return curse;
   }
 
   // Buy the Reliquary relic offer at `index`.

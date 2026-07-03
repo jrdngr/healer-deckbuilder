@@ -52,6 +52,7 @@ export function MemberCard({
       <div className="badges">
         {m.shield && <span className="badge shield">🛡 Shield</span>}
         {m.brace && <span className="badge shield">🧱 Brace</span>}
+        {m.ward > 0 && <span className="badge shield">💠 Ward {m.ward}</span>}
         {m.regen > 0 && <span className="badge regen">♻ Regen {m.regen}</span>}
         {m.defense > 0 && <span className="badge defense">🪖 Def {m.defenseAmount}·{m.defense}t</span>}
         {m.id === 'tank' && m.taunt > 0 && <span className="badge taunt">⚔ Taunt {m.taunt}</span>}
