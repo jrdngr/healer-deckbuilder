@@ -831,6 +831,14 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('two open slots applies', canApplyModifier(makeDeckCard('regen', 1, []), 'lingering'));
   check('one open slot applies', canApplyModifier(makeDeckCard('regen', 1, ['lingering']), 'lingering'));
   check('full slots reject', !canApplyModifier(makeDeckCard('regen', 1, ['lingering', 'lingering']), 'lingering'));
+  // No-op purchases are refused (playtest finding): a modifier must change the card.
+  check('efficient refuses a base-cost-1 card (floor makes it a no-op)',
+    !canApplyModifier(makeDeckCard('lowHeal', 1, []), 'efficient'));
+  check('efficient refuses a card already discounted to 1 (slot still open)',
+    !canApplyModifier(makeDeckCard('regen', 1, ['efficient']), 'efficient'));
+  check('efficient still applies while cost > 1', canApplyModifier(makeDeckCard('highHeal', 1, []), 'efficient'));
+  check('a second retain is refused', !canApplyModifier(makeDeckCard('shield', 1, ['retain']), 'retain'));
+  check('a first retain still applies', canApplyModifier(makeDeckCard('shield', 1, []), 'retain'));
 }
 {
   // Potent regen strength flows into gameplay.

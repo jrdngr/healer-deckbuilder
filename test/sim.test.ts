@@ -50,7 +50,10 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 185, 184, 183, 34, 29, 6, 0]));
+  // Re-pinned after the no-op-modifier fix: canApplyModifier now refuses
+  // Efficient on cost-1 cards, so the policy's shopper keeps ~50g it used to
+  // waste in some runs — F5 34->35, F6 29->30. Everything else unchanged.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 185, 184, 183, 35, 30, 6, 0]));
   // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).
   for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 95%`, r.perFight[fi].rate >= 0.95);
   // Issue 12 gate: the Act-1 boss (Gatewarden, F2) clears >= 85%.

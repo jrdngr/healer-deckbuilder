@@ -422,9 +422,15 @@ export const MODIFIERS: Record<ModifierId, ModifierDef> = {
 
 export const MODIFIER_IDS: ModifierId[] = ['lingering', 'efficient', 'potent', 'retain'];
 
-// Whether `mod` can be applied to `card` right now: an open slot and eligibility.
+// Whether `mod` can be applied to `card` right now: an open slot, per-card-id
+// eligibility, and the modifier must actually change the resolved card.
+// Efficient cannot bite below the 1-MP floor and a second Retain is a no-op —
+// offering either would sell the player nothing for full price.
 export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
-  return card.upgrades.length < MAX_UPGRADE_SLOTS && MODIFIERS[mod].eligible(card.id);
+  if (card.upgrades.length >= MAX_UPGRADE_SLOTS || !MODIFIERS[mod].eligible(card.id)) return false;
+  if (mod === 'efficient' && resolveCard(card).cost <= 1) return false;
+  if (mod === 'retain' && card.upgrades.includes('retain')) return false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
