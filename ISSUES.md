@@ -108,3 +108,31 @@ size, which Taper's draw penalty depends on). #26–#32 are post-demo.
 Three maintainer playtests are called out in the roadmap: **#1** after the Gatewarden ([12](./issues/12-boss-gatewarden.md)) — landed,
 **#2** after the Devourer / full-run band ([14](./issues/14-boss-devourer.md)) — **➤ ready now** (issue 14 landed; full-run ~32%),
 **#3** the final ship gate ([24](./issues/24-hardening-ux.md)).
+
+## Design review — flagged from the sim playtest (2026-07-03)
+
+A full-mechanic sim playtest after #24 (1,600 runs across all three difficulties; zero crashes,
+zero turn-cap stalls, all winrate bands intact) surfaced three **design** questions — not bugs.
+The numbers are the fixed measuring-stick policy at N=1000 Standard unless noted. These are
+inputs for playtests #2/#3; **none is a committed change yet.**
+
+- **DR1 — the healer game is secretly a sacrifice game.** *(full design pass scheduled — do not
+  pre-empt it.)* Because the party is rebuilt at full strength between fights, a mid-fight death
+  costs only that fight's lost output — so the optimal line routinely spends members. Deaths per
+  **won** fight: Gatewarden **0.87** (only 28% of wins are deathless), Hexweaver **1.35** (16%
+  deathless), Devourer **0.83** (41%); the tank dies in ~2/3 of Gatewarden fights. Every winrate
+  band was tuned on top of this, so nothing is broken — but "keep your party alive" is not what
+  winning play looks like. This is the free-revive death economy (see the balance memory) writ
+  across fights. Open question: is free between-fight revival the intended fantasy, or should a
+  death carry a scar (HP / gold / next-fight penalty)?
+- **DR2 — "race or die" has become "die on schedule."** The enrage countdown telegraphs a race,
+  but on bosses it is now a guaranteed phase: enrage fires in **89%** of Hexweaver fights and
+  **98%** of Devourer fights (mean ~13.8 turns vs enrage at 10–11). After the relic-absorption HP
+  bumps (Devourer 165→198), racing a boss down pre-enrage is arithmetically out of reach. The
+  tuning is sound; the *promise the countdown makes* no longer matches boss reality. Options: lean
+  in (reframe the boss "enrage" as an announced phase) or restore pre-enrage race headroom. Low
+  urgency — a legibility question, not a balance one.
+- **DR3 — Brutal is a cliff, not a difficulty.** 0.0% full-run; the Gatewarden alone is **2.7%**
+  with near-guaranteed triple wipes, so a Brutal player never even reaches a relic. By design
+  (dev-only, ungated per Q8) — but if Brutal ever ships visibly it needs the "tuned Brutal"
+  standing cut, not the current placeholder multipliers.
