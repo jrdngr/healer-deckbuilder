@@ -138,11 +138,13 @@ section.enemy {
   font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
   background: #b06bfe; color: #21063a;
 }
-/* Party-wide Hex banner (#13): sits above the party cards while healing is halved. */
+/* Party-wide Hex banner (#13): a full-width row above the party cards (the party
+   is a 3-column grid, so it must span every column) while healing is halved. */
 .hex-banner {
+  grid-column: 1 / -1;
   text-align: center; font-size: 12px; font-weight: 700; color: #f0c4ff;
   background: #2e1440; border: 1px solid #7a3fbf; border-radius: 8px;
-  padding: 3px 10px; margin-bottom: 8px; animation: pulse 1.6s infinite;
+  padding: 4px 10px; animation: pulse 1.6s infinite;
 }
 .buttons { display: flex; gap: 8px; }
 
