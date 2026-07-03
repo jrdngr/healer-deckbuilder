@@ -27,13 +27,13 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–19** (all of P7: 14 new shop cards, the Defense→Brace→Shield pipeline, the Resurrect
-rework, the Q5 poison decision — **measured and left at 5×5**; Consume already makes it a real
-decision, a 4×4 nerf breaks two boss gates; full numbers in `sim/run-sim.ts` — and the event
-pool grown 3 → 8). The three bosses hit their gates (Gatewarden ~89% / Hexweaver ~74% / Devourer
-~55%) and the **full run is winnable end to end at ~33%** (the designed 25–35% band — re-checked
-at N=1000 after every pool change). **Next up: #20 (Act 2/3 named rosters).** **➤ Human playtest
-#2** is ready now (the Devourer / full-run band landed).
+**Done: 01–20** (P0–P8: all card work, the ward pipeline, the Q5 poison decision — **measured
+and left at 5×5**, full numbers in `sim/run-sim.ts` — events 3 → 8, and the act-2/3 named
+rosters: Ironmaw/Needler/Leech and Juggernaut/Lancer/Devourling, boss tech at small scale). The
+three bosses hit their gates (Gatewarden ~89% / Hexweaver ~74% / Devourer ~55%) and the **full
+run is winnable end to end at ~31%** (the designed 25–35% band — re-checked at N=1000 after
+every content change). **Next up: #21 (relics phase A).** **➤ Human playtest #2** is ready now
+(the Devourer / full-run band landed).
 
 ## Issues (implementation order)
 
@@ -58,7 +58,7 @@ at N=1000 after every pool change). **Next up: #20 (Act 2/3 named rosters).** **
 | 17 | ✅ Done | [Card set phase C: Bulwark / Defense pipeline](./issues/17-cards-phase-c-bulwark.md) | P7c | 16 | §3.2; Q10 |
 | 18 | ✅ Done | [Resurrect rework + poison decision + Second Wind](./issues/18-resurrect-poison-secondwind.md) | P7d | 14, 16 | flaws #13, #14; Q5 |
 | 19 | ✅ Done | [Events expansion 3 → 8](./issues/19-events-expansion.md) | P7e | 10 | §4 P7 |
-| 20 | ⬜ Todo | [Act 2/3 named rosters](./issues/20-act23-rosters.md) | P8 | 14, 09 | §4 P8 |
+| 20 | ✅ Done | [Act 2/3 named rosters](./issues/20-act23-rosters.md) | P8 | 14, 09 | §4 P8 |
 | 21 | ⬜ Todo | [Relics phase A: infra + 10 legible relics](./issues/21-relics-phase-a.md) | P9a | 14, 17 | §3.3; Q9 |
 | 22 | ⬜ Todo | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |
 | 23 | ⬜ Todo | [Difficulty presets + local stats](./issues/23-difficulty-presets.md) | P10 | 14 | §4 P10; Q8 |

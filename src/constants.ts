@@ -297,23 +297,103 @@ export const DEVOURER_DEF: EnemyDef = {
 // Act boss per act (0-based): Gatewarden (#12), Hexweaver (#13), Devourer (#14).
 export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF];
 
-export const NORMAL_ENEMY_DEFS: EnemyDef[] = [ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER];
+// ---------------------------------------------------------------------------
+// Act 2/3 named normals (issue 20): boss tech at small scale, so the later map
+// teaches (and rewards) the reads the act bosses demand — a channeler (mini
+// Crushing Blow), a piercer (mini Piercing Bolt), a self-healer (mini Consume).
+// Total threat stays near the act-1 normals' ~4.5 party-wide dmg/turn; the
+// signature trick, not the numbers, is the difference. No channel/step name may
+// collide with a boss's (Crushing Blow / Piercing Bolt / Maw / Consume).
+// ---------------------------------------------------------------------------
+
+// Act 2 — Ironmaw (channeler): a learnable 3-step cycle whose 3rd step becomes
+// Siegebreak every 2nd cycle — a 2-turn single-target channel at 9.
+export const IRONMAW_DEF: EnemyDef = {
+  id: 'ironmaw', name: 'Ironmaw', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+  rotation: ['single', 'two', 'single'],
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 9, type: 'single', name: 'Siegebreak' },
+};
+
+// Act 2 — Needler (piercer): one step per cycle is Needle Shot — a mini
+// Piercing Bolt (ignores Taunt AND Defense, aims at the lowest-HP member) at 4.
+// Pierce-at-lowest is worth far more than its number (it bypasses the whole
+// taunt/Defense answer), so it appears once per 4-step cycle.
+export const NEEDLER_PIERCE_DMG = 4;
+export const NEEDLER_DEF: EnemyDef = {
+  id: 'needler', name: 'Needler', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+  rotation: [
+    'single',
+    { type: 'single', name: 'Needle Shot', damage: NEEDLER_PIERCE_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
+    'two',
+    'single',
+  ],
+};
+
+// Act 2 — Leech (self-healer): a mini Consume ('Gorge') every 6th turn cleanses
+// its own Poison and self-heals the remaining ticks — poison timing matters on
+// normals now, not just on the Devourer. Its plain cycle runs light because the
+// Gorge value is real threat too.
+export const LEECH_DEF: EnemyDef = {
+  id: 'leech', name: 'Leech', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+  rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Gorge', cast: 'consume' }, 'two'],
+};
+
+// Act 3 — Juggernaut (channeler, heavier): Overrun is an 11-damage 2-turn
+// channel every 2nd cycle, over a single-heavy base cycle (the channel is the
+// threat; the cycle stays on budget).
+export const JUGGERNAUT_DEF: EnemyDef = {
+  id: 'juggernaut', name: 'Juggernaut', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+  rotation: ['single', 'single', 'two'],
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 11, type: 'single', name: 'Overrun' },
+};
+
+// Act 3 — Lancer (piercer, heavier): Skewer pierces at 5, once per 4-step cycle.
+export const LANCER_PIERCE_DMG = 5;
+export const LANCER_DEF: EnemyDef = {
+  id: 'lancer', name: 'Lancer', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+  rotation: [
+    'single',
+    { type: 'single', name: 'Skewer', damage: LANCER_PIERCE_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
+    'single',
+    'two',
+  ],
+};
+
+// Act 3 — Devourling (self-healer, hungrier): Gorge every 6th turn over a
+// light cycle (long 150-HP fights sit near the enrage cliff, so every eaten
+// poison tick is expensive — the Gorge itself is the difficulty).
+export const DEVOURLING_DEF: EnemyDef = {
+  id: 'devourling', name: 'Devourling', boss: false,
+  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+  rotation: ['single', 'two', 'single', { type: 'cast', name: 'Gorge', cast: 'consume' }, 'two', 'single'],
+};
+
+export const NORMAL_ENEMY_DEFS: EnemyDef[] = [
+  ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER,
+  IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF,
+];
 export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
   Object.fromEntries(NORMAL_ENEMY_DEFS.map((d) => [d.id, d]));
 
 // Encounter table: weighted normal picks per fight index. Act-boss slots (2, 5,
-// 8) are empty — those fights always use BOSS_ENEMY_DEF. Gentler shapes early,
-// the full roster (Cleaver-weighted) later across acts — texture, not a spike.
+// 8) are empty — those fights always use the act boss. Act 1 keeps the original
+// four; acts 2/3 lead with their own named rosters (#20) — the boss-tech
+// normals — with an act-1 body as occasional filler for texture.
 export const ENCOUNTER_TABLE: Array<Array<[string, number]>> = [
-  [['spammer', 70], ['swarm', 30]],                                   // fight 0 (A1)
-  [['spammer', 45], ['swarm', 30], ['stalker', 25]],                  // fight 1 (A1)
-  [],                                                                  // fight 2 (A1 boss)
-  [['spammer', 35], ['swarm', 30], ['stalker', 25], ['cleaver', 10]], // fight 3 (A2)
-  [['spammer', 25], ['swarm', 30], ['stalker', 25], ['cleaver', 20]], // fight 4 (A2)
-  [],                                                                  // fight 5 (A2 boss)
-  [['spammer', 25], ['swarm', 25], ['stalker', 25], ['cleaver', 25]], // fight 6 (A3)
-  [['spammer', 20], ['swarm', 25], ['stalker', 25], ['cleaver', 30]], // fight 7 (A3)
-  [],                                                                  // fight 8 (A3 boss)
+  [['spammer', 70], ['swarm', 30]],                                       // fight 0 (A1)
+  [['spammer', 45], ['swarm', 30], ['stalker', 25]],                      // fight 1 (A1)
+  [],                                                                      // fight 2 (A1 boss)
+  [['ironmaw', 30], ['needler', 30], ['leech', 20], ['swarm', 20]],       // fight 3 (A2)
+  [['ironmaw', 25], ['needler', 25], ['leech', 25], ['cleaver', 25]],     // fight 4 (A2)
+  [],                                                                      // fight 5 (A2 boss)
+  [['juggernaut', 30], ['lancer', 30], ['devourling', 20], ['cleaver', 20]], // fight 6 (A3)
+  [['juggernaut', 25], ['lancer', 25], ['devourling', 25], ['cleaver', 25]], // fight 7 (A3)
+  [],                                                                      // fight 8 (A3 boss)
 ];
 
 export const ENRAGE_TURN = 11; // first enraged enemy turn (turn 11 onward)

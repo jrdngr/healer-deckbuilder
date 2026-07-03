@@ -52,13 +52,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for issue 19 (events 3 -> 8): every event roll draws from a bigger
-  // pool and the policy walks away from the five new events (no tactic values
-  // them), so event-node RNG shifts. Balance holds — N=1000 reads full-run
-  // 32.6%, bosses 88.9 / 73.9 / 55.3% (vs 33.8% and 88.8 / 74.3 / 56.7 after
-  // #17/#18). This N=200 sample: full run 63/200 = 31.5%; F2 180 (~90%),
-  // F5 130/176 (~74%), F8 63/121 (~52%).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 180, 179, 176, 130, 125, 121, 63]));
+  // Re-pinned for issue 20 (act 2/3 named rosters): fights 3/4/6/7 now roll the
+  // boss-tech normals (Ironmaw/Needler/Leech, Juggernaut/Lancer/Devourling).
+  // Balance holds within the #20 gate (every fight within ±5pp of the #19
+  // curve) — N=1000 reads full-run 31.2%, bosses 88.9 / 73.6 / 55.2%, late
+  // normals 94.2 / 94.2 (vs 95.0 / 96.9 before). This N=200 sample: full run
+  // 60/200 = 30%; F2 180 (~90%), F5 127/173 (~73%), F8 60/114 (~53%).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 180, 178, 173, 127, 120, 114, 60]));
   // Full-run lands in the 25-35% band (issue 14 gate).
   check('full-run in the 25-35% band', r.fullRun.rate >= 0.25 && r.fullRun.rate <= 0.35, `${(r.fullRun.rate * 100).toFixed(1)}%`);
   // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).

@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import type { CardId, ModifierId } from '../src/constants';
 
 let passed = 0;
@@ -1853,6 +1853,77 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('property: preview == applied across the ward pipeline (no mismatches)', mismatches === 0,
     `${mismatches} mismatches`);
   check('property test exercised real hits', checked > 20, `${checked} hits checked`);
+}
+
+// --- Act 2/3 named rosters: boss tech at small scale (issue 20) -------------
+{
+  const rosterGame = (seed: number, def: typeof IRONMAW_DEF, maxHP = 150): Game => {
+    const cfg = defaultBattleConfig();
+    cfg.enemy = { maxHP, boss: false, attackBonus: 0, def, enrageTurn: 99 };
+    return new Game(seed, cfg);
+  };
+
+  // Ironmaw: Siegebreak is a 2-turn channel at 9 in rotation slot 2 every 2nd cycle.
+  {
+    const g = rosterGame(110, IRONMAW_DEF);
+    g.rotationIndex = 2; // slot 2, cycle 0 — NOT a channel cycle
+    let t = g._generateTelegraph(2);
+    check('Ironmaw slot 2 cycle 0 is a plain attack', !t.channel);
+    g.rotationIndex = 5; // slot 2, cycle 1 — the channel cycle
+    t = g._generateTelegraph(2);
+    check('Ironmaw channels Siegebreak on cycle 2', t.channel === true);
+    eq('Siegebreak carries its name', t.channelName, 'Siegebreak');
+    eq('Siegebreak hits for 9', t.damage, 9);
+    eq('Siegebreak is a 2-turn wind-up', t.turnsUntilResolve, 2);
+  }
+
+  // Needler: Needle Shot pierces — ignores Taunt and Defense, aims at the
+  // lowest-HP member — once per 4-step cycle.
+  {
+    const g = rosterGame(111, NEEDLER_DEF);
+    g.tank.taunt = TAUNT_TURNS; g.tank.defense = DEFENSE_TURNS; g.tank.defenseAmount = 1;
+    g.mage.hp = 2; // strictly lowest
+    g.rotationIndex = 1;
+    const t = g._generateTelegraph(2);
+    eq('Needle Shot carries its name', t.name, 'Needle Shot');
+    check('Needle Shot ignores the taunt funnel', t.ignoreTaunt === true);
+    check('Needle Shot ignores Defense', t.ignoreDefense === true);
+    eq('Needle Shot aims at the lowest-HP member', JSON.stringify(t.targets), JSON.stringify([SLOT.RIGHT]));
+    eq('Needle Shot hits for 4', t.damage, NEEDLER_PIERCE_DMG);
+    eq('only one pierce per Needler cycle', NEEDLER_DEF.rotation!.filter((s) => typeof s !== 'string').length, 1);
+  }
+
+  // Leech: Gorge is a telegraphed 'cast' that cleanses its own Poison and
+  // self-heals the remaining ticks — the Devourer's Consume at small scale.
+  {
+    const g = rosterGame(112, LEECH_DEF);
+    g.start();
+    g.rotationIndex = 4; // the Gorge slot
+    g.telegraph = g._generateTelegraph(2);
+    eq('Gorge telegraphs as a cast', g.telegraph.cast, 'consume');
+    eq('Gorge carries its name', g.telegraphIntent(), 'Gorge');
+    g.enemy.hp = 100; g.enemy.poison = 5; g.enemy.poisonTurns = 3;
+    g._runEnemyPhase();
+    // One poison tick (5) lands first, then Gorge eats the remaining 2 ticks (10).
+    eq('Gorge cleanses the poison', g.enemy.poisonTurns, 0);
+    eq('Gorge heals the remaining ticks', g.enemy.hp, 100 - 5 + 10);
+  }
+
+  // Act-3 variants reuse the same machinery at heavier numbers.
+  {
+    const g = rosterGame(113, JUGGERNAUT_DEF);
+    g.rotationIndex = 5; // slot 2, cycle 1
+    const t = g._generateTelegraph(2);
+    check('Juggernaut channels Overrun', t.channel === true && t.channelName === 'Overrun');
+    eq('Overrun hits for 11', t.damage, 11);
+    const g2 = rosterGame(114, LANCER_DEF);
+    g2.rotationIndex = 1;
+    const t2 = g2._generateTelegraph(2);
+    check('Lancer Skewer pierces', t2.name === 'Skewer' && t2.ignoreTaunt === true && t2.ignoreDefense === true);
+    eq('Skewer hits for 5', t2.damage, LANCER_PIERCE_DMG);
+    check('Devourling carries a Gorge step',
+      DEVOURLING_DEF.rotation!.some((s) => typeof s !== 'string' && s.cast === 'consume'));
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

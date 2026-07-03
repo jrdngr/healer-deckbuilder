@@ -451,6 +451,23 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('Act-1 boss is the Gatewarden', ids[2], 'gatewarden');
 }
 {
+  // Act 2/3 rosters (#20): the later normal fights draw from their own named
+  // rosters (boss tech at small scale), never from act-1-only filler.
+  const A2 = new Set(['ironmaw', 'needler', 'leech', 'swarm', 'cleaver']);
+  const A3 = new Set(['juggernaut', 'lancer', 'devourling', 'cleaver']);
+  let a2ok = true, a3ok = true;
+  const seen = new Set<string>();
+  for (let seed = 0; seed < 40; seed++) {
+    for (const fi of [3, 4]) { const id = new Run(seed).rollEncounter(fi).id; seen.add(id); if (!A2.has(id)) a2ok = false; }
+    for (const fi of [6, 7]) { const id = new Run(seed).rollEncounter(fi).id; seen.add(id); if (!A3.has(id)) a3ok = false; }
+  }
+  check('act-2 fights draw only from the act-2 roster', a2ok);
+  check('act-3 fights draw only from the act-3 roster', a3ok);
+  // All six new archetypes actually appear across seeds.
+  check('every new named normal shows up in rolls',
+    ['ironmaw', 'needler', 'leech', 'juggernaut', 'lancer', 'devourling'].every((id) => seen.has(id)));
+}
+{
   // 3-act shape: 9 fights, an act boss at each act end, 8 forks in the map.
   eq('nine fights', FIGHT_COUNT, 9);
   eq('three acts of three', FIGHTS_PER_ACT * ACT_COUNT, FIGHT_COUNT);

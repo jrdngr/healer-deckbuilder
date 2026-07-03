@@ -81,6 +81,15 @@
 //     F0 100 | F1 100 | F2 A1boss 88.9 | F3 99.3 | F4 98.2 | F5 A2boss 73.9 | F6 95.0 | F7 96.9 | F8 A3boss 55.3
 //     The policy walks away from all five new events (they are player decisions,
 //     not free value), so the shift is pure event-roll RNG; bands hold.
+//   after #20 (act 2/3 named rosters — boss tech at small scale):
+//     full-run 31.2 % ±2.9 at N=1000.
+//     F0 100 | F1 100 | F2 A1boss 88.9 | F3 99.6 | F4 97.7 | F5 A2boss 73.6 | F6 94.2 | F7 94.2 | F8 A3boss 55.2
+//     Tuning lesson (two rounds of retune baked in): a rotation normal's budget
+//     must count the +1 attackBonus PER TARGET (multi-target steps run hot), and
+//     pierce-at-lowest / Gorge are worth far more than their raw numbers — one
+//     pierce per cycle and a light cycle around a Gorge is what fits the ~5.5-6
+//     party-wide dmg/turn envelope. First draft (2 pierces, aoe-heavy cycles)
+//     read F6 75% / F7 82% / full-run 20% — far out of the ±5pp gate.
 //     The Q5 poison measurement (all N=1000, on the #17 baseline):
 //       baseline (poison 5x5):        F2 88.8 | F5 74.3 | F8 56.7 | full-run 33.8%
 //       policy never poisons:         F2 70.2 | F5 40.5 | F8 71.4 | full-run 14.5%
