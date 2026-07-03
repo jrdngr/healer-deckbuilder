@@ -42,6 +42,15 @@
 //     expected and the full-run band is deferred to #14. Clean-sample normals (F0/F1/
 //     F3/F4) clear >= 95%; late-normal (F6/F7) samples are tiny and biased by the
 //     placeholder bosses.
+//   after #13 (Hexweaver as the Act-2 boss, 135 HP):  full-run still ~0 % (A3 placeholder)
+//     F0 100 | F1 100 | F2 A1boss 88.9 | F3 99.6 | F4 98.1 | F5 A2boss 70.7 | F6 91.5 | F7 24.6 | F8 A3boss 0
+//     Hexweaver lands at 70.7% ±3.0 (65-75% gate). Its heal-denial makes it a wall
+//     far below the placeholder's HP — 135 is the sweet spot (150->48%, 125->84%).
+//     Cleanse joined the pool; the policy buys/plays it (tryCleanse). A turtle policy
+//     (funnel + heal-tank only, never Cleanse) wins 0% where the adaptive policy wins
+//     ~69% — the Piercing Bolt bypasses the taunt funnel by design (see sim.test.ts).
+//     F7 (Act-3 normal, 190 HP) reads low at ~25% but its sample is gated by the A3
+//     placeholder ahead; the late-normal HP curve is revisited in #14's full-run pass.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now
