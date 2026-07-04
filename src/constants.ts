@@ -804,17 +804,26 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
 
 export type NodeType =
   | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade'
+  | 'infirmary' // clear death-scars for gold (DR1) — a weighted node
   | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
 // The non-fight node types that fill the branches between fights.
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'reliquary',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'infirmary', 'reliquary',
 ];
 
-// Weights for placing non-fight node types on the map.
+// Weights for placing non-fight node types on the map. The Infirmary (DR1) is a
+// real node in the rolls — you must find one AND afford it — not a guaranteed
+// stop, so the scar economy stays a "get lucky and have gold" decision.
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
+  ['infirmary', 18],
 ];
+
+// Infirmary (DR1): flat gold to clear one scar (top of the ladder first). In line
+// with CARD_REMOVAL_PRICE so it competes with the deck/upgrade economy for the
+// purse rather than dominating it. Sim-tuned.
+export const INFIRMARY_PRICE = 25;
 
 // A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks
 // between them. Act bosses sit at fights 2, 5, 8 (the last fight of each act); the

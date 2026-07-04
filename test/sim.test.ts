@@ -52,13 +52,15 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for issue 24: encounters are now derived from a per-fight
-  // SUB-seed (peekable fork previews, flaw #15), so every fight's foe and all
-  // downstream stream positions shift. N=1000 reads full-run 32.7%, bosses
-  // 89.5 / 70.4 / 55.8% — all in-band; Story reads 96.4%. This N=200 sample:
-  // full run 70/200 = 35.0% (seeds 1-200 run a few pp hot; the band check
-  // below carries the sample's CI for exactly that reason).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 184, 184, 181, 125, 120, 119, 70]));
+  // Re-pinned for the DR1 injury system: adding the Infirmary to NODE_TYPE_WEIGHTS
+  // reshuffles the map-generation RNG (and the injury system is otherwise inert in
+  // the sim until the policy records/uses scars — commit 6), so the exact per-fight
+  // vector shifts. This is an INTERIM pin: while the sim records no injuries, the
+  // Infirmary is a dead node that dilutes the useful-node pool, so winrates read a
+  // few pp low here; the survival-aware policy (commit 6) and the balance re-tune
+  // (commit 7) restore the bands and set the final pin. The band + boss gates below
+  // still hold on this interim value.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 177, 176, 172, 113, 109, 105, 53]));
   // Full-run lands in the 25-35% band. The authoritative gate runs at N=1000
   // (ISSUES.md ground rules; see the run-sim baseline note) — this N=200 sample
   // asserts statistical consistency with the band, not the band itself, so

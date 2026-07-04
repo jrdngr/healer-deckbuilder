@@ -20,7 +20,7 @@ import {
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS, DIFFICULTIES,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
-  MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
+  MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty, INFIRMARY_PRICE,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
@@ -53,7 +53,8 @@ export type NodeContent =
   | { type: 'healerUpgrade'; offers: HealerUpgradeOffer[] }
   | { type: 'event'; event: EventDef }
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
-  | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number };// relic shop (#21)
+  | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
+  | { type: 'infirmary'; price: number };                             // clear scars for gold (DR1)
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
@@ -349,6 +350,20 @@ export class Run {
     }
   }
 
+  // Infirmary (DR1): pay the node's flat price to clear one scar off a member,
+  // top of the ladder first (decrementing the count sheds the most-recent tier's
+  // penalty). Fails without charging if the node isn't an Infirmary, the member
+  // is unscarred, or the gold is short.
+  clearInjuryForGold(slot: Slot): boolean {
+    if (this.nodeContent?.type !== 'infirmary') return false;
+    const p = this.party[slot];
+    if (!p || p.injuries <= 0) return false;
+    if (this.gold < this.nodeContent.price) return false;
+    this.gold -= this.nodeContent.price;
+    p.injuries -= 1;
+    return true;
+  }
+
   // End-of-run score (#24, flaw #21): progress is worth the most, relics a
   // little — and HOARDED gold is penalized, so spending it is always right.
   runScore(): { fights: number; relics: number; victory: number; goldPenalty: number; total: number } {
@@ -390,6 +405,9 @@ export class Run {
       case 'event': this.nodeContent = { type: 'event', event: this.rollEvent() }; break;
       case 'reliquary':
         this.nodeContent = { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
+        break;
+      case 'infirmary':
+        this.nodeContent = { type: 'infirmary', price: this.discountedPrice(INFIRMARY_PRICE) };
         break;
       default: this.nodeContent = null; break;
     }

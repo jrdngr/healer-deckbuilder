@@ -11,7 +11,7 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
-  DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY,
+  DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
 } from '../src/constants';
 import { emptyStats, recordRunEnd } from '../src/stats';
 import { groupPile } from '../src/deckView';
@@ -823,6 +823,47 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('injuries round-trip through a snapshot', restored.party[2].injuries, MAX_INJURIES);
   eq('snapshot with injuries is byte-stable',
     JSON.stringify(restored.toJSON()), JSON.stringify(base.toJSON()));
+}
+
+// --- Infirmary node (DR1): clear scars for gold, top of the ladder first --------
+{
+  // The Infirmary is a real weighted node (unlike the injected Reliquary).
+  check('infirmary is a placeable node type', NODE_TYPE_WEIGHTS.some(([t]) => t === 'infirmary'));
+
+  const run = new Run(11);
+  run._enterNode('infirmary');
+  eq('infirmary content rolls', run.nodeContent?.type, 'infirmary');
+  if (run.nodeContent?.type === 'infirmary') eq('infirmary price is the flat rate', run.nodeContent.price, INFIRMARY_PRICE);
+
+  // A member with all three scars, and enough gold for two clears.
+  run.party[0].injuries = MAX_INJURIES;
+  run.gold = INFIRMARY_PRICE * 2;
+
+  check('treating clears one scar (top of the ladder)', run.clearInjuryForGold(0 as Slot));
+  eq('one scar healed', run.party[0].injuries, MAX_INJURIES - 1);
+  eq('the flat price was charged', run.gold, INFIRMARY_PRICE);
+
+  check('a second treatment works while gold lasts', run.clearInjuryForGold(0 as Slot));
+  eq('scars keep coming off, one per payment', run.party[0].injuries, MAX_INJURIES - 2);
+  eq('purse is spent to zero', run.gold, 0);
+
+  check('an empty purse treats nothing', !run.clearInjuryForGold(0 as Slot));
+  eq('the refused treatment left the scar', run.party[0].injuries, MAX_INJURIES - 2);
+
+  // Unscarred members and non-infirmary nodes are refused without charge.
+  run.gold = INFIRMARY_PRICE;
+  check('an unharmed member is refused', !run.clearInjuryForGold(1 as Slot));
+  eq('no gold lost refusing the unharmed', run.gold, INFIRMARY_PRICE);
+  run.nodeContent = { type: 'cardShop', offers: [] };
+  check('clearing off an infirmary is refused', !run.clearInjuryForGold(0 as Slot));
+
+  // Haggler's Charm discounts the infirmary price like any other.
+  const haggled = new Run(12);
+  haggled.addRelic('hagglersCharm');
+  haggled._enterNode('infirmary');
+  if (haggled.nodeContent?.type === 'infirmary') {
+    eq('Haggler discounts the infirmary', haggled.nodeContent.price, INFIRMARY_PRICE - HAGGLER_DISCOUNT);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
