@@ -124,6 +124,8 @@ export interface AttackSpec {
 // no DOM, no timing.
 export type GameEvent =
   // --- enemy phase ---
+  // Marks the moment the enemy's turn begins (the UI sweeps a phase banner).
+  | { kind: 'enemyPhase' }
   | { kind: 'enrage' }
   // --- channelled attacks (Gatewarden, #12): a wind-up the cast bar tracks ---
   | { kind: 'channelStart'; name: string; damage: number; turnsUntilResolve: number }
@@ -842,6 +844,7 @@ export class Game {
   // ---- enemy phase ---------------------------------------------------------
 
   _runEnemyPhase(): void {
+    this._emit({ kind: 'enemyPhase' });
     if (this.turn === this.enrageTurn && !this.enemy.enraged) {
       this.enemy.enraged = true;
       this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');

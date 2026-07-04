@@ -383,9 +383,17 @@ export function buildTimeline(events: GameEvent[]): Timeline {
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
     switch (ev.kind) {
+      case 'enemyPhase': {
+        // A quick stinger, not a pause: the banner sweeps while the enemy's
+        // first move is already winding up.
+        push({ at: t, fx: [{ type: 'banner', text: 'ENEMY PHASE', color: C.enemy, dur: 900 }] });
+        t += 300;
+        break;
+      }
+
       case 'enrage': {
         push({ at: t, shake: 11, fx: [
-          { type: 'float', at: 'enemy', text: 'ENRAGED!', color: C.danger, big: true },
+          { type: 'banner', text: 'ENRAGED', color: C.danger },
           { type: 'ring', at: 'enemy', color: C.danger },
           { type: 'burst', at: 'enemy', color: C.danger, count: 20, spread: 95 },
         ] });
@@ -738,7 +746,8 @@ export function buildTimeline(events: GameEvent[]): Timeline {
           { type: 'ring', at: 'enemy', color: C.danger },
           { type: 'pillar', at: 'enemy', color: C.hex },
           { type: 'burst', at: 'enemy', color: C.white, count: 26, spread: 120 },
-          { type: 'float', at: 'enemy', text: ev.beat, color: C.danger, big: true },
+          { type: 'banner', text: ev.beat, color: C.danger },
+          { type: 'vignette', color: C.hex, mode: 'tint', dur: 900 },
         ] });
         t += 820 + HITSTOP;
         break;
@@ -755,20 +764,28 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'defeatEnemy': {
+        // The kill lands, the world flashes and stops — then the banner calls it.
         push({ at: t, shake: 16, fx: [
+          { type: 'vignette', color: C.white, mode: 'flash', dur: 340 },
           { type: 'burst', at: 'enemy', color: C.white, count: 30, spread: 130 },
           { type: 'ring', at: 'enemy', color: C.danger },
-          { type: 'float', at: 'enemy', text: 'DEFEATED', color: C.danger, big: true },
         ] });
-        t += 600 + HITSTOP;
+        push({ at: t + HITSTOP + 140, fx: [
+          { type: 'banner', text: 'ENEMY DEFEATED', color: C.taunt, dur: 1400 },
+          { type: 'burst', at: 'enemy', color: C.taunt, count: 16, spread: 90, mode: 'rise', dur: 1100 },
+        ] });
+        t += 600 + HITSTOP + 500;
         break;
       }
 
       case 'wipe': {
         push({ at: t, shake: 14, fx: [
-          { type: 'float', at: 'enemy', text: 'DEFEAT', color: C.danger, big: true },
+          { type: 'vignette', color: C.danger, mode: 'tint', dur: 1100 },
         ] });
-        t += 500;
+        push({ at: t + 240, fx: [
+          { type: 'banner', text: 'THE PARTY FALLS', color: C.danger, dur: 1400 },
+        ] });
+        t += 900;
         break;
       }
     }

@@ -1,5 +1,5 @@
 // Tests for the pure animation timeline builder. Run via: npm test.
-import { buildTimeline, FX_DURATION, HITSTOP } from '../src/animations';
+import { buildTimeline, FX_DURATION, fxDuration, HITSTOP } from '../src/animations';
 import type { GameEvent } from '../src/engine';
 
 let passed = 0;
@@ -92,6 +92,24 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   const small = buildTimeline([{ kind: 'heal', slot: 1, amount: 2, hp: 12 }]);
   check('small heal does not tint the board', !small.entries.some((e) =>
     e.fx?.some((f) => f.type === 'vignette')));
+}
+
+// --- big beats sweep banners ---------------------------------------------------
+{
+  const phase = buildTimeline([{ kind: 'enemyPhase' }]);
+  check('enemy phase sweeps a banner', phase.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'banner' && f.text === 'ENEMY PHASE')));
+  check('the phase stinger is quick (no long pause)', phase.paceEnd <= 400, `${phase.paceEnd}`);
+  const beat = buildTimeline([{ kind: 'phaseChange', beat: 'IT MOLTS' }]);
+  check('boss beats banner their name', beat.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'banner' && f.text === 'IT MOLTS')));
+  const win = buildTimeline([{ kind: 'defeatEnemy' }]);
+  check('victory flashes then banners', win.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'vignette' && f.mode === 'flash')) &&
+    win.entries.some((e) => e.fx?.some((f) => f.type === 'banner')));
+  const loss = buildTimeline([{ kind: 'wipe' }]);
+  check('defeat banners the fall', loss.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'banner' && f.text === 'THE PARTY FALLS')));
 }
 
 // --- debuffs crumble downward instead of exploding -----------------------------
@@ -236,6 +254,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- blanket invariants across every event kind -------------------------------
 {
   const samples: GameEvent[][] = [
+    [{ kind: 'enemyPhase' }],
     [{ kind: 'enrage' }],
     [{ kind: 'poisonTick', amount: 3, enemyHp: 90 }],
     [{ kind: 'regenTick', slot: 0, amount: 2, hp: 9 }],
@@ -281,9 +300,9 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     check(`${kind}: paceEnd <= total`, tl.paceEnd <= tl.total);
     const patchAts = tl.entries.filter((e) => e.patch).map((e) => e.at);
     check(`${kind}: patches land by paceEnd`, patchAts.every((a) => a <= tl.paceEnd));
-    // total must cover every effect's fade-out.
+    // total must cover every effect's fade-out (honoring per-effect overrides).
     const covered = tl.entries.every((e) =>
-      (e.fx ?? []).every((f) => e.at + FX_DURATION[f.type] <= tl.total));
+      (e.fx ?? []).every((f) => e.at + fxDuration(f) <= tl.total));
     check(`${kind}: total covers all fades`, covered);
   }
 }
