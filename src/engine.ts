@@ -64,6 +64,8 @@ export interface Member {
   diedThisFight: boolean; // DR1: went to 0 HP at any point this fight (a later Resurrect
                           // does not clear it — death always scars; a Martyr's Icon save
                           // vetoes the death, so it never sets this).
+  injuries: number; // DR1 (display only): persistent scars carried in from the run; the
+                    // stat penalty they cause is already baked into maxHP/damage/abilityPower.
 }
 
 export interface Enemy {
@@ -232,6 +234,7 @@ export class Game {
         drumPrimed: false, // no War Drum beat pending
         ward: 0,       // no Aegis Ward standing
         diedThisFight: false, // no death yet this fight
+        injuries: p.injuries, // display-only; penalty already folded into the stats above
       };
     });
 

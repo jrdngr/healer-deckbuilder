@@ -15,6 +15,7 @@ import { defaultBattleConfig } from '../src/constants';
 import { ManaBar } from '../src/components/ManaBar';
 import { StartScreen } from '../src/components/StartScreen';
 import { Card } from '../src/components/Card';
+import { MemberCard } from '../src/components/MemberCard';
 import { makeDeckCard, resolveCard } from '../src/constants';
 
 let passed = 0;
@@ -82,6 +83,26 @@ async function render(el: React.ReactElement): Promise<string> {
   check('ineligible card leaves the tab order', inel.tabIndex === -1);
   inel.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   check('Enter does nothing on an ineligible card', clicks === 0, `clicks=${clicks}`);
+}
+
+// --- MemberCard surfaces a member's scars (DR1) --------------------------------
+{
+  const cfg = defaultBattleConfig();
+  cfg.party[0] = { ...cfg.party[0], injuries: 2 }; // ranger carries two scars
+  const game = new Game(2, cfg).start();
+  const injured = game.members[0];
+  const text = await render(
+    <MemberCard member={injured} displayHp={injured.hp} displayDead={false} mageCharge={0}
+      targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
+  );
+  check('MemberCard shows the injury badge with the scar count', text.includes('Injured 2'), text);
+
+  const whole = game.members[1]; // tank, unscarred
+  const wholeText = await render(
+    <MemberCard member={whole} displayHp={whole.hp} displayDead={false} mageCharge={0}
+      targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
+  );
+  check('an unscarred member shows no injury badge', !wholeText.includes('Injured'), wholeText);
 }
 
 await act(async () => { root.unmount(); });

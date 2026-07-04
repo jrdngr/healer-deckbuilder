@@ -1,4 +1,4 @@
-import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss } from '../constants';
+import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss, MEMBER_DEFS } from '../constants';
 import type { Run } from '../run';
 import { NODE_META } from './nodeMeta';
 
@@ -28,6 +28,15 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
       <p className="map-sub next-fight" title={boss ? 'An act boss — expect a signature mechanic.' : 'A normal fight.'}>
         Ahead: <strong>{foe.name}</strong> {threat}
       </p>
+      {(() => {
+        const injured = MEMBER_DEFS.filter((d) => run.party[d.slot].injuries > 0);
+        if (injured.length === 0) return null;
+        return (
+          <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
+            🩹 Injured: {injured.map((d) => `${d.name} ×${run.party[d.slot].injuries}`).join(' · ')}
+          </p>
+        );
+      })()}
       <div className="map-forks">
         {fork.branches.map((branch, b) => (
           <div className="map-branch" key={b}>
