@@ -1,7 +1,7 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
-import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
+import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
@@ -2279,17 +2279,24 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     eq('the Ward is consumed point for point', tank.ward, 0);
   }
 
-  // First-Light Taper: the first cheap non-engine card each turn is free; the
-  // NEXT turn draws one fewer only when the discount actually fired.
+  // First-Light Taper (#35): the first cheap non-engine card each turn costs
+  // TAPER_DISCOUNT less (min 0), not free; the NEXT turn draws one fewer only when
+  // the discount actually fired.
   {
     const g = relicGame(403, ['firstLightTaper']);
     g.start();
     eq('turn 1 draws a full hand (nothing fired yet)', g.hand.length, g.handSize);
-    const idx = giveCard(g, 'regen'); // cost 2 <= TAPER_MAX_COST, non-engine
-    eq('the first cheap card is free', g.effectiveCost(resolveCard(g.hand[idx])), 0);
+    const cheap = giveCard(g, 'regen'); // cost 2 <= TAPER_MAX_COST, non-engine
+    eq('a cost-2 card drops to 0 under the −2 discount',
+      g.effectiveCost(resolveCard(g.hand[cheap])), Math.max(0, CARDS.regen.cost - TAPER_DISCOUNT));
+    // A cost-3 card is discounted by TAPER_DISCOUNT (to 1), NOT zeroed — the #35 nerf.
+    const mid = giveCard(g, 'highHeal'); // cost 3
+    eq('a cost-3 card is discounted, not free',
+      g.effectiveCost(resolveCard(g.hand[mid])), CARDS.highHeal.cost - TAPER_DISCOUNT);
+    check('the discount really is partial (> 0)', CARDS.highHeal.cost - TAPER_DISCOUNT > 0);
     const mp = g.mp;
-    g.playCard(idx, SLOT.CENTER);
-    eq('no MP was spent', g.mp, mp);
+    g.playCard(cheap, SLOT.CENTER);
+    eq('the free cheap card spends no MP', g.mp, mp);
     const idx2 = giveCard(g, 'regen');
     eq('the second card costs full price', g.effectiveCost(resolveCard(g.hand[idx2])), 2);
     g.endTurn();

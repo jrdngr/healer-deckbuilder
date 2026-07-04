@@ -53,12 +53,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for #31 (per-composition pass). The Provoke card joined CARD_POOL (23
-  // -> 24 ids), reshuffling shop offers — the classic trio doesn't buy it (it has the
-  // Tank), so this is pure roll drift and the bands hold. N=1000 reads full-run 32.1%,
-  // bosses 85.9 / 71.5 / 53.6% (all in-band). The Warlock 7->5 nerf does not touch the
-  // trio (no Warlock). This is the N=200 sample (seeds 1-200).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 172, 172, 170, 116, 116, 114, 55]));
+  // Re-pinned for #35 (relic re-tune under player-first ordering). First-Light Taper
+  // (full zero -> −2 partial discount) and Aegis Font (WARD_MAX 2 -> 1) were nerfed
+  // into the ≤+9pp band; the classic trio naturally picks these relics at spoils, so
+  // a handful of seeds that leaned on them shift by ±1 fight. Pure balance drift and
+  // the bands hold. N=1000 reads full-run 31.5%, bosses 85.9 / 71.3 / 52.7% (all
+  // in-band). This is the N=200 sample (seeds 1-200).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 172, 172, 170, 115, 115, 113, 56]));
   // Full-run lands in the 25-35% band. The authoritative gate runs at N=1000
   // (ISSUES.md ground rules; see the run-sim baseline note) — this N=200 sample
   // asserts statistical consistency with the band, not the band itself, so

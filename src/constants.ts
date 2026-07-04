@@ -1372,9 +1372,27 @@ export const PRAYER_BEADS_MP = 2;
 export const STORMGLASS_MIN_HIT = 6; // post-Defense hits this big are negated
 export const VANGUARD_BONUS = 1;
 // Phase B (#22) magnitudes.
-export const WARD_MAX = 2;             // Aegis Font's Ward buffer cap
-export const TAPER_MAX_COST = 3;       // Taper only zeroes cards this cheap
-export const DUSK_CHIME_MIN = 13;      // telegraphs totalling this much can be delayed
+// Aegis Font's Ward buffer cap. Trimmed 2→1 (#35): under player-first ordering (#26)
+// overheal gets a safe turn to convert to Wards, drifting the relic to +9.8pp; a
+// 1-point cap lands it at +7.1pp (N=1000), inside the ≤+9pp band. See sim/relic-exp.ts.
+export const WARD_MAX = 1;             // Aegis Font's Ward buffer cap
+export const TAPER_MAX_COST = 3;       // Taper only discounts cards this cheap
+// Taper discount magnitude (#35). Under player-first ordering (#26) a FULL zeroing
+// of the first card every turn compounded to +10.8pp — the strongest relic measured,
+// out of the ≤+9pp band. A partial −2 discount keeps the per-turn relief (the whole
+// value; once-per-fight measured ~0) but lands it at +8.8pp (N=1000). A −1 discount
+// undershoots to +1.7pp; dropping TAPER_MAX_COST 3→2 measured *stronger* (fewer
+// penalty firings). See sim/relic-exp.ts.
+export const TAPER_DISCOUNT = 2;       // MP the first cheap non-engine card is reduced by
+// Telegraphs totalling this much can be delayed once per run. Lowered 13→10 (#35):
+// at 13 the once-per-run Chime drifted to +4.8pp, below a relic slot's opportunity
+// cost; letting 10+ telegraphs qualify lifts it to +5.9pp (N=1000), still in band.
+export const DUSK_CHIME_MIN = 10;      // telegraphs totalling this much can be delayed
+// Pact of Silence's passive MP per turn. Held at 1 (#35): the standalone curse reads
+// −23.9pp under player-first ordering, but the passive-MP lever swings ~±23pp PER
+// POINT — +2 flips it to +23.2pp (a top relic, absurd for a curse). No integer buff
+// lands it as a "mild curse", so it is priced as the hard trap it is; the sim policy
+// already values every curse at 0 and never takes one. See sim/relic-exp.ts.
 export const PACT_PASSIVE_MP = 1;      // Pact of Silence's passive MP per turn
 export const CRACKED_HOURGLASS_ENRAGE = 9; // enrage turn under the Hourglass
 export const HOURGLASS_POWER_BONUS = 2;    // Poison & Bolt power under the Hourglass
@@ -1406,7 +1424,7 @@ export const RELICS: Record<RelicId, RelicDef> = {
   aegisFont: { id: 'aegisFont', name: 'Aegis Font', rarity: 'rare', icon: '⛲',
     desc: `Overhealing from cast heals becomes a Ward that absorbs damage (max ${WARD_MAX}).` },
   firstLightTaper: { id: 'firstLightTaper', name: 'First-Light Taper', rarity: 'rare', icon: '🌅',
-    desc: `Your first card each turn costs 0 if it costs ${TAPER_MAX_COST} or less (never engine cards); each turn it fires, draw 1 fewer card next turn.` },
+    desc: `Your first card each turn costs ${TAPER_DISCOUNT} less (min 0) if it costs ${TAPER_MAX_COST} or less (never engine cards); each turn it fires, draw 1 fewer card next turn.` },
   duskChime: { id: 'duskChime', name: 'Dusk Chime', rarity: 'rare', icon: '🔔',
     desc: `Once per RUN, an attack totalling ${DUSK_CHIME_MIN}+ damage is delayed one turn.` },
   martyrsIcon: { id: 'martyrsIcon', name: 'Martyr\'s Icon', rarity: 'rare', icon: '🕊',

@@ -29,23 +29,28 @@ makes it the strongest relic measured), overheal has a safe turn to convert into
 
 ## Scope / acceptance criteria
 
-- [ ] **firstLightTaper** back inside the ≤ +9pp relic band (#22's implicit ceiling): candidates —
-      restore the unconditional draw penalty it lost in #22 tuning, drop `TAPER_MAX_COST` 3→2, or
-      make the discount once per fight. Re-measure each at N=600.
-- [ ] **aegisFont** trim toward band: `WARD_MAX` 2→1 or wards decay at end of fight — measure.
-- [ ] **pactOfSilence**: −23.5pp standalone is run-ending for a *purchasable* curse whose pitch is
-      "upside within a passive-MP build". Re-run the in-build control (vs a passive-only run) under
-      the new ordering before touching numbers; if it is still net-negative in its own build, buff
-      the passive (+1→+2) or price it as the trap it is.
-- [ ] **duskChime** (+4.8) drifted below its once-per-RUN opportunity cost — consider threshold
-      13→10 or restoring once-per-fight at a higher threshold. Low priority.
-- [ ] Refresh the run-sim baseline note with the new battery numbers once tuned.
+- [x] **firstLightTaper** back inside the ≤ +9pp band. Measured all three candidates: dropping
+      `TAPER_MAX_COST` 3→2 measured *stronger* (+14.3, fewer penalty firings — rejected); an
+      unconditional per-turn draw penalty overshot to −2.3 (hand size is too coarse a lever);
+      once-per-fight measured ~0 (turn-1 MP is abundant — the per-turn relief IS the value). The
+      landing lever is a **partial −2 discount** (`TAPER_DISCOUNT = 2`, "costs 2 less" not "costs 0"):
+      **+8.8pp** at N=1000, keeping the per-turn shape.
+- [x] **aegisFont** trimmed with `WARD_MAX` 2→1: **+7.2pp** at N=1000, in band.
+- [x] **pactOfSilence**: priced as the trap it is. The passive-MP lever swings ~**±23pp PER POINT**
+      (+1 → −23.9, +2 → **+23.2** — a top relic, absurd for a curse), so no in-band buff exists.
+      Held at +1; documented on the constant. The sim policy already values every curse at 0 and
+      never takes one, so it is a deliberate opt-in trade, not a trap the reference line falls into.
+- [x] **duskChime**: threshold `DUSK_CHIME_MIN` 13→10 lifts it +4.8 → **+5.9pp**, back above a relic
+      slot's opportunity cost, still in band.
+- [x] Refreshed the run-sim baseline note (the `#35` block) with the new battery numbers.
 
 ## Implementation notes
 
-- Battery method lives in the playtest record (a ~60-line loop over `Run` + `playFight`, relic
-  pushed after the fight-2 win); consider promoting it into `sim/` as a permanent tool alongside
-  `sim/injury-exp.ts` when this issue lands.
+- Battery **promoted to `sim/relic-exp.ts`** (a permanent tool alongside `sim/injury-exp.ts`): the
+  relic is force-added on top of the natural loadout at the fight-2 boundary, delta vs the no-relic
+  baseline. It reproduces the issue's table exactly (aegisFont +9.8 / Taper +10.5 / … / Pact −23.5).
+- martyrsIcon (+7.8) and the pre-existing trap curves (crackedHourglass −5.6, rustyCrown −1.4) were
+  already in their expected ranges and left untouched.
 - Related observation, same battery: **Brutal** deepened its DR3 cliff under the #26 re-anchor
   (Gatewarden 0.3% at N=300, was 2.7%). Still dev-only and ungated by design — noted for whenever
   "tuned Brutal" is picked up, not actioned here.

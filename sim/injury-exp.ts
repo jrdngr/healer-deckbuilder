@@ -101,7 +101,7 @@ function runMode(mode: InjuryMode, n: number, firstSeed = 1, healScars = true): 
     r.incapacitations += incapSeen.size;
     r.scarsAtEnd += run.party.reduce((s, p) => s + p.injuries, 0);
   }
-  INJURY_RULES.mode = 'cap'; // never leave the global flipped
+  INJURY_RULES.mode = 'incapacitate'; // restore the module default (#33), never leave it flipped
   return r;
 }
 

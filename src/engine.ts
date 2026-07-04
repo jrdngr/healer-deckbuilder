@@ -26,7 +26,7 @@ import {
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
-  WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
+  WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
   CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK,
   isEngineCard,
   WOUND_TURNS, WOUND_HEAL_FACTOR, SIPHON_AMOUNT,
@@ -1171,14 +1171,15 @@ export class Game {
     }
   }
 
-  // What a card costs to play right now: 0 while a Surge (#16) is pending, 0
-  // for the First-Light Taper's (#22) first cheap non-engine card of the turn,
-  // otherwise its resolved cost. The UI's affordability check reads this too.
+  // What a card costs to play right now: 0 while a Surge (#16) is pending,
+  // TAPER_DISCOUNT less (min 0) for the First-Light Taper's (#22) first cheap
+  // non-engine card of the turn, otherwise its resolved cost. The UI's
+  // affordability check reads this too.
   effectiveCost(card: ResolvedCard): number {
     if (this.surgePending) return 0;
     if (this.hasRelic('firstLightTaper') && this.cardsPlayedThisPhase === 0
         && card.cost <= TAPER_MAX_COST && !isEngineCard(card.id)) {
-      return 0;
+      return Math.max(0, card.cost - TAPER_DISCOUNT);
     }
     return card.cost;
   }

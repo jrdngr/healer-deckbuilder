@@ -140,6 +140,19 @@
 //     was re-run (stale after two re-anchors): Taper +10.8pp / Font +10.0 / Icon
 //     +8.2 / Chime +4.8 / Pact -23.5 / Hourglass -5.2 / Crown -1.7 vs a 31.2%
 //     baseline — re-tune tracked in issue 35.
+//   after #33 (injury default -> 'incapacitate'):  winrate-neutral (Standard 32.1%,
+//     Story 96.4%, N=200 pin bit-identical) — the honest policy never reaches a 4th
+//     death; a legibility change, not a balance one.
+//   after #35 (relic re-tune, battery promoted to sim/relic-exp.ts):  the two
+//     out-of-band phase-B relics were nerfed inside the <=+9pp band, re-measured at
+//     N=1000 (baseline ~31.5%): Taper +8.8pp (full-zero -> -2 PARTIAL discount;
+//     TAPER_DISCOUNT=2), Font +7.2 (WARD_MAX 2->1), Chime +5.9 (DUSK_CHIME_MIN 13->10,
+//     it had drifted below a slot's cost), Icon +7.8 (untouched). Pact stays a hard
+//     trap: -23.9pp standalone, but the passive-MP lever swings ~±23pp PER POINT
+//     (+2 -> +23.2pp, absurd for a curse) so no in-band buff exists; the sim values
+//     curses at 0 and never takes one. The full-run drifts 32.1 -> 31.5% (the trio
+//     naturally picks Taper/Font), dead-center in the 25-35% band. Battery: Hourglass
+//     -5.6 / Crown -1.4 (pre-existing traps, unchanged).
 //   after #23 (difficulty presets + local stats):  Standard unchanged (it IS
 //     the tuned curve — the preset is the identity, and the N=200 pins pass
 //     bit-identical). Story (HP x0.8, attack -1 floor 0, enrage +2, +25g/win)
