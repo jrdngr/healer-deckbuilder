@@ -38,7 +38,10 @@ Devourer 165→198 — per-relic gate numbers and the tuning history live in `si
 bosses hit their gates (Gatewarden ~89% / Hexweaver ~70% / Devourer ~53%) and the **full run is
 winnable end to end at ~31%** (N=1000, the designed 25–35% band); **Story reads 96% at N=1000** (Q8 gate ≥60%), Brutal is dev-only
 (`?dev`) and ungated; local stats (wins per difficulty, best act) persist beside the save — no
-meta-progression. #24's hardening batch: status tooltips, modifier text on cards, the in-fight
+meta-progression. **#25 (hand-size experiment) landed as a measured REVERT**: hand-4 + carryover
+is behind an inert `HealerConfig.carryover` flag (default 0); the demo stays hand-3 because hand
+size is a +22pp/card lever that would break the band, and carryover measured *worse* than plain
+hand-4 (see the issue file for the N=1000 table). #24's hardening batch: status tooltips, modifier text on cards, the in-fight
 deck viewer (order-hiding), fork previews (encounters now derive from per-fight sub-seeds —
 peekable and stream-independent), the end-of-run score with a hoarded-gold penalty, and DevPanel
 gated to dev builds. **The automated ship gate is green** (suite + Standard 32.7% / Story 96.4%
@@ -73,7 +76,7 @@ the final ship call.**
 | 22 | ✅ Done | [Relics phase B: rule-changers + curses](./issues/22-relics-phase-b.md) | P9b | 21 | §3.3, §3.5–6; Q1 |
 | 23 | ✅ Done | [Difficulty presets + local stats](./issues/23-difficulty-presets.md) | P10 | 14 | §4 P10; Q8 |
 | 24 | ✅ Done | [Hardening & UX batch](./issues/24-hardening-ux.md) | P11 | 23 | flaws #15, #16, #20, #21 |
-| 25 | ⬜ Todo | [Hand-size experiment (hand 4 + carryover)](./issues/25-hand-size-experiment.md) | exp. | 06 | flaw #16; Q6 |
+| 25 | ✅ Done | [Hand-size experiment (hand 4 + carryover)](./issues/25-hand-size-experiment.md) | exp. | 06 | flaw #16; Q6 |
 | 26 | ⬜ Todo | [Full turn-1 phase reorder](./issues/26-turn1-phase-reorder.md) | post-demo | 04 | flaw #12; Q7-full |
 | 27 | ⬜ Todo | [Party W1 — Warlock + Skald + draft skeleton](./issues/27-party-w1-warlock-skald.md) | post-demo | 08 | §3.4 |
 | 28 | ⬜ Todo | [Party W2 — Berserker + Grave Augur](./issues/28-party-w2-berserker-augur.md) | post-demo | 27 | §3.4 |

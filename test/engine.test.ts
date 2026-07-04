@@ -925,6 +925,53 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('retained card stays in hand', g.hand.some((c) => c.uid === -100));
   check('plain card left hand', !g.hand.some((c) => c.uid === -101));
 }
+{
+  // Hand-4 carryover experiment (#25, Q6). With carryover 1 the costliest non-retain
+  // card survives the end-of-turn discard, and next phase the hand refills to 4.
+  const cfg = defaultBattleConfig();
+  cfg.healer = { ...DEFAULT_HEALER, handSize: 4, carryover: 1 };
+  const g = new Game(8, cfg);
+  g.start();
+  eq('hand refills to 4', g.hand.length, 4);
+  g.hand = [];
+  // highHeal (cost 3) is the costliest here; lowHeal (1) / regen (1) are cheaper.
+  g.hand.push(makeDeckCard('lowHeal', -200, []), makeDeckCard('highHeal', -201, []), makeDeckCard('regen', -202, []));
+  const drawBefore = g.drawPile.length, discardBefore = g.discardPile.length;
+  g.endTurn();
+  check('carryover keeps exactly 1 card', g.hand.filter((c) => c.uid <= -200).length === 1);
+  check('carryover keeps the costliest card', g.hand.some((c) => c.uid === -201));
+  check('cheaper cards were discarded', !g.hand.some((c) => c.uid === -200) && !g.hand.some((c) => c.uid === -202));
+  // After the enemy phase the hand refilled to 4: 1 carried + 3 drawn.
+  eq('hand refilled to 4 after carryover', g.hand.length, 4);
+  check('exactly 1 of the 4 was carried', g.hand.filter((c) => c.uid === -201).length === 1);
+  void drawBefore; void discardBefore;
+}
+{
+  // Retain and carryover stack: a Retain card is kept regardless, and carryover
+  // keeps 1 additional non-retain card on top of it.
+  const cfg = defaultBattleConfig();
+  cfg.healer = { ...DEFAULT_HEALER, handSize: 4, carryover: 1 };
+  const g = new Game(9, cfg);
+  g.start();
+  g.hand = [];
+  g.hand.push(makeDeckCard('shield', -210, ['retain']), makeDeckCard('highHeal', -211, []), makeDeckCard('lowHeal', -212, []));
+  g.endTurn();
+  check('retain survives alongside carryover', g.hand.some((c) => c.uid === -210));
+  check('carryover keeps the costliest non-retain', g.hand.some((c) => c.uid === -211));
+  check('the other non-retain was discarded', !g.hand.some((c) => c.uid === -212));
+}
+{
+  // carryover 0 leaves the discard bit-identical to the classic full discard: the
+  // whole (non-retain) hand goes to the discard pile.
+  const cfg = defaultBattleConfig();
+  cfg.healer = { ...DEFAULT_HEALER, carryover: 0 };
+  const g = new Game(10, cfg);
+  g.start();
+  g.hand = [];
+  g.hand.push(makeDeckCard('highHeal', -220, []), makeDeckCard('lowHeal', -221, []));
+  g.endTurn();
+  check('carryover 0 keeps no card', !g.hand.some((c) => c.uid === -220 || c.uid === -221));
+}
 
 // --- data-driven EnemyDef plumbing (issue 07) ------------------------------
 {

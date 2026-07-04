@@ -172,6 +172,7 @@ export class Game {
   mp: number;
   maxMana: number;   // MP cap (healer stat); starting MP equals this
   handSize: number;  // cards drawn each player phase (healer stat)
+  carryover: number; // cards kept across the end-of-turn discard (#25 experiment; 0 = off)
   restRegen: number; // MP regained on rest (healer stat)
   passiveMp: number; // MP gained at the start of each player phase (healer stat)
   refresh: number;        // Refresh strength: MP restored per turn while active
@@ -245,6 +246,7 @@ export class Game {
 
     this.maxMana = config.healer.maxMana;
     this.handSize = config.healer.handSize;
+    this.carryover = config.healer.carryover ?? 0;
     this.restRegen = config.healer.restRegen;
     this.passiveMp = config.healer.passiveMp;
 
@@ -1473,10 +1475,22 @@ export class Game {
 
     // Discard the hand from the end (same ordering the prototype used, so existing
     // seeds reshuffle identically), keeping any Retain cards in hand for next phase.
+    // The hand-4 carryover experiment (#25) additionally keeps up to `carryover`
+    // non-retain cards — costliest first, the card you're saving toward — across the
+    // discard. carryover 0 leaves this loop bit-identical to the classic discard.
+    const carried = new Set<number>(
+      this.carryover > 0
+        ? this.hand
+            .filter((dc) => !resolveCard(dc).retain)
+            .sort((a, b) => resolveCard(b).cost - resolveCard(a).cost)
+            .slice(0, this.carryover)
+            .map((dc) => dc.uid)
+        : [],
+    );
     const kept: DeckCard[] = [];
     while (this.hand.length) {
       const dc = this.hand.pop() as DeckCard;
-      if (resolveCard(dc).retain) kept.push(dc);
+      if (resolveCard(dc).retain || carried.has(dc.uid)) kept.push(dc);
       else this.discardPile.push(dc);
     }
     this.hand = kept;

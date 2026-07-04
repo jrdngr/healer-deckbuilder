@@ -647,6 +647,10 @@ export interface HealerConfig {
   handSize: number;
   restRegen: number; // MP regained on rest
   passiveMp: number; // MP gained at the start of each player phase
+  // Hand-4 carryover experiment (#25, Q6): cards KEPT in hand across the end-of-turn
+  // discard (in addition to Retain cards). Absent/0 = classic full-hand discard.
+  // Behind a flag: DEFAULT_HEALER ships it at 0; only an explicit config turns it on.
+  carryover?: number;
 }
 
 export interface EnemyConfig {
@@ -669,7 +673,7 @@ export interface BattleConfig {
 }
 
 export const DEFAULT_HEALER: HealerConfig = {
-  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 0,
+  maxMana: MP_MAX, handSize: HAND_SIZE, restRegen: SKIP_REGEN, passiveMp: 0, carryover: 0,
 };
 
 export const DEFAULT_ENEMY: EnemyConfig = { maxHP: ENEMY_MAX_HP, boss: false, attackBonus: 0, def: DEFAULT_ENEMY_DEF };
