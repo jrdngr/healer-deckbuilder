@@ -71,6 +71,44 @@ check('useGame rendered at least twice (parent re-rendered)', seen.length >= 2,
 check('controller reference is stable across renders',
   seen.every((c) => c === seen[0]));
 
+// --- the played card's ghost: spawned with an origin, gone after its life ----
+{
+  const ctrl = seen[seen.length - 1];
+  // Wait out the opening staged sequence so playCard isn't dropped by the
+  // animating guard.
+  for (let i = 0; i < 40 && ctrl.animating; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    await act(async () => {});
+  }
+  // Find an affordable card the engine will accept on a member target (or a
+  // no-target play); the ghost should ride any successful play.
+  const g = ctrl.game;
+  let played = false;
+  for (let idx = 0; idx < g.hand.length && !played; idx++) {
+    for (const target of [0, 1, 2, null] as const) {
+      if (g.canPlay(idx, target) === null) {
+        await act(async () => {
+          ctrl.playCard(idx, target, { x: 10, y: 20, w: 132, h: 150 });
+        });
+        played = true;
+        break;
+      }
+    }
+  }
+  check('a playable card was found for the ghost test', played);
+  const ghosts = ctrl.fx.filter((f) => f.spec.type === 'cardGhost');
+  check('playing with an origin spawns a card ghost', ghosts.length === 1,
+    `got ${ghosts.length}`);
+  if (ghosts.length === 1 && ghosts[0].spec.type === 'cardGhost') {
+    check('the ghost launches from the measured origin', ghosts[0].spec.from.x === 10);
+  }
+  // After its lifetime the ghost is cleaned up.
+  await new Promise((r) => setTimeout(r, 600));
+  await act(async () => {});
+  check('the ghost is removed after its lifetime',
+    ctrl.fx.every((f) => f.spec.type !== 'cardGhost'));
+}
+
 await act(async () => { root.unmount(); });
 console.error = origError;
 

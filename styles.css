@@ -222,14 +222,68 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .hand-wrap h3 { margin: 0 0 8px; font-size: 14px; }
 #hand-prompt.targeting { color: var(--accent); }
 .hand-area { display: flex; align-items: flex-start; gap: 16px; }
-.hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 150px; }
+/* Extra headroom so fanned/lifted cards don't clip against the sections above. */
+.hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 150px; padding-top: 14px; }
 .card {
   width: 132px; min-height: 150px; background: var(--panel); border: 1px solid #3a4150; border-radius: 9px;
   /* top padding reserves a strip for the cost/heal badges so text starts below them */
-  padding: 44px 10px 10px; cursor: pointer; transition: transform .1s, border-color .12s; position: relative;
+  padding: 44px 10px 10px; cursor: pointer; transition: transform .14s ease, border-color .12s; position: relative;
   box-shadow: 0 4px 10px rgba(0,0,0,.4);
 }
 .card:hover { transform: translateY(-3px); }
+
+/* ---- The battle hand fans like held cards -------------------------------
+   --i (index) and --n (count) come from the Hand component; --o is the signed
+   offset from the center card. Each card tilts away from the center and sags
+   toward the edges; the hovered card straightens, lifts above its neighbors,
+   and nudges them apart. Cards deal in with a stagger — uid-keying means only
+   genuinely new cards (draws) mount and animate. */
+.hand .card {
+  --o: calc(var(--i, 0) - (var(--n, 1) - 1) / 2);
+  --part: 0px;
+  transform: translateX(var(--part)) rotate(calc(var(--o) * 2.4deg))
+             translateY(calc(var(--o) * var(--o) * 2.1px));
+  transform-origin: 50% 120%;
+  animation: card-in 260ms ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(16px) scale(.94); }
+}
+.hand .card:hover:not(.unaffordable):not(.ineligible) {
+  transform: translateY(-14px) scale(1.05);
+  z-index: 3;
+  border-color: #4a5468;
+}
+.hand .card:has(+ .card:hover:not(.unaffordable):not(.ineligible)) { --part: -8px; }
+.hand .card:hover:not(.unaffordable):not(.ineligible) + .card { --part: 8px; }
+/* Press-down: the card gives under the click before it flies off. */
+.hand .card:active:not(.unaffordable):not(.ineligible) {
+  transform: translateY(-10px) scale(.99);
+}
+/* A selected (targeting) card stays lifted and straight while you aim it. */
+.hand .card.selected { transform: translateY(-12px); z-index: 3; }
+
+/* "No." — the shake for clicking a card you can't play right now. */
+.card.denied { animation: card-denied 340ms cubic-bezier(.35,.6,.4,1); }
+@keyframes card-denied {
+  15% { transform: translateX(-6px) rotate(-1.4deg); }
+  40% { transform: translateX(5px) rotate(1.2deg); }
+  65% { transform: translateX(-3px); }
+  85% { transform: translateX(2px); }
+}
+
+/* Family edge tints: what a card does reads at a glance from across the table. */
+.card.family-heal  { border-left: 3px solid var(--hp); }
+.card.family-ward  { border-left: 3px solid var(--taunt); }
+.card.family-mana  { border-left: 3px solid var(--mp); }
+.card.family-power { border-left: 3px solid #c46bd9; }
+
+/* Playable cards' cost gem breathes gently; dimmed cards stay still. */
+.card:not(.unaffordable):not(.ineligible) .cost { animation: cost-pulse 2.2s ease-in-out infinite; }
+@keyframes cost-pulse {
+  50% { box-shadow: 0 0 10px 2px rgba(110,168,254,.55); }
+}
 /* Mana cost: blue square, inset in the top-left corner */
 .card .cost {
   position: absolute; top: 10px; left: 10px; width: 26px; height: 26px; border-radius: 6px;
@@ -439,6 +493,27 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   100% { transform: scale(1.12); opacity: 0; }
 }
 
+/* Card ghost — a mini stand-in for a just-played card that lifts out of the
+   hand and flies into its target, dissolving into the card's effect. */
+.fx-card-ghost {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 6px; overflow: hidden;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 9px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.5), 0 0 14px rgba(110,168,254,.35);
+  transform: translate(-50%, -50%);
+  animation: fx-card-ghost var(--dur, 420ms) cubic-bezier(.45,.1,.55,1) forwards;
+}
+.fx-ghost-cost {
+  width: 24px; height: 24px; border-radius: 6px; background: var(--mp); color: #06243a;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px;
+}
+.fx-ghost-name { font-weight: 700; font-size: 12px; color: var(--ink); text-align: center; }
+@keyframes fx-card-ghost {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  28%  { transform: translate(-50%, calc(-50% - 18px)) scale(1.1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.22); opacity: 0; }
+}
+
 /* Slash — a blade streak sweeping across the anchor at --angle. */
 .fx-slash {
   width: 130px; height: 9px; margin: -4.5px 0 0 -65px; border-radius: 6px;
@@ -515,7 +590,13 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   /* Member cards stay still; the FX layer's floats/bursts still tell the story. */
   .member.react-hit, .member.react-heal, .member.react-block,
   .member.react-lunge, .member.react-death { animation: none; }
+  /* Cards: no deal-in slide, no head-shake, no breathing gem; the played card's
+     ghost reduces to a quick fade where it sat. */
+  .hand .card, .card.denied { animation: none; }
+  .card:not(.unaffordable):not(.ineligible) .cost { animation: none; }
+  .fx-card-ghost { animation: fx-fade-out var(--dur, 420ms) ease-out forwards; }
 }
+@keyframes fx-fade-out { to { opacity: 0; } }
 @keyframes fx-banner-reduced {
   0%   { opacity: 0; }
   15%  { opacity: 1; }

@@ -179,6 +179,26 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
         const style: FxStyle = { color: spec.color, '--dur': dur(spec) };
         return <div key={id} className={`fx fx-vignette ${spec.mode}`} style={style} />;
       }
+      case 'cardGhost': {
+        // A mini stand-in for the played card (cost pip + name — not a DOM
+        // clone) that lifts out of the hand and flies into its target.
+        const to = spec.to === 'center'
+          ? { x: mainRect.width / 2, y: mainRect.height * 0.4 }
+          : anchor(spec.to);
+        if (!to) return null;
+        const cx = spec.from.x + spec.from.w / 2;
+        const cy = spec.from.y + spec.from.h / 2;
+        const style: FxStyle = {
+          left: cx, top: cy, width: spec.from.w, height: spec.from.h,
+          '--dx': `${to.x - cx}px`, '--dy': `${to.y - cy}px`, '--dur': dur(spec),
+        };
+        return (
+          <div key={id} className="fx fx-card-ghost" style={style}>
+            <span className="fx-ghost-cost">{spec.cost}</span>
+            <span className="fx-ghost-name">{spec.name}</span>
+          </div>
+        );
+      }
       default:
         return null;
     }

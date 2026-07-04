@@ -12,7 +12,9 @@
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { Game } from './engine';
 import type { GameEvent } from './engine';
-import type { BattleConfig } from './constants';
+import { resolveCard } from './constants';
+import type { BattleConfig, Slot } from './constants';
+import type { CardOrigin } from './animations';
 import { buildTimeline, fxDuration } from './animations';
 import { getAnimSpeed } from './settings';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec, MemberReact, MemberReactKind } from './animations';
@@ -42,7 +44,10 @@ export interface GameController {
   shakeTick: number;
   /** Start a fresh fight. Returns the seed actually used (random when omitted). */
   newGame: (seed?: number) => number;
-  playCard: (handIndex: number, target: number | null) => void;
+  /** Play a card. `origin` is the card's measured on-screen position (from the
+   *  click handler, before the engine removes it) — when given, a ghost of the
+   *  card flies from the hand into its target. */
+  playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
   skipTurn: () => void;
   endTurn: () => void;
   /** Dev-panel cheat hook: run an arbitrary engine mutation through the normal
@@ -264,11 +269,24 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     return g.seed;
   }, [clearTimers, playOpening]);
 
-  const playCard = useCallback((handIndex: number, target: number | null) => {
+  const playCard = useCallback((handIndex: number, target: number | null, origin?: CardOrigin) => {
     const g = ref.current!;
     if (g.status !== 'playing' || g.phase !== 'player') return;
+    if (animatingRef.current) return; // dispatch would drop it anyway; skip the ghost too
+    // Resolve the card BEFORE the engine removes it from the hand.
+    const dc = g.hand[handIndex];
+    const rc = dc ? resolveCard(dc) : null;
+    const handBefore = g.hand.length;
     dispatch(() => g.playCard(handIndex, target), false); // live: don't lock input
-  }, [dispatch]);
+    // Only ghost a play that actually happened (the card left the hand).
+    if (origin && rc && g.hand.length !== handBefore) {
+      spawnFx({
+        type: 'cardGhost', from: origin,
+        to: target !== null ? (target as Slot) : 'center',
+        name: rc.name, cost: rc.cost,
+      });
+    }
+  }, [dispatch, spawnFx]);
 
   const skipTurn = useCallback(() => {
     const g = ref.current!;

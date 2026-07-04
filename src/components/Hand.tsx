@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { resolveCard } from '../constants';
 import type { ResolvedCard } from '../constants';
 import type { Game } from '../engine';
@@ -53,10 +54,14 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
             return (
               <Card
                 key={dc.uid}
+                uid={dc.uid}
                 card={card}
                 affordable={affordable}
                 selected={selectedIndex === i}
                 onClick={() => onCardClick(i)}
+                // Fan geometry + draw-stagger inputs; uid-keying means only
+                // genuinely new cards mount and play the deal-in animation.
+                style={{ '--i': i, '--n': game.hand.length } as CSSProperties}
               />
             );
           })}

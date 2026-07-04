@@ -1,5 +1,18 @@
+import { useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { MODIFIERS } from '../constants';
-import type { ResolvedCard } from '../constants';
+import type { CardId, ResolvedCard } from '../constants';
+
+// Visual family of each card, for the edge tint: heals green, protective wards
+// gold, mana economy blue, aggressive power plays red-purple. Presentation only.
+const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
+  ability: 'power', lowHeal: 'heal', highHeal: 'heal', aoeHeal: 'heal',
+  regen: 'heal', shield: 'ward', resurrect: 'heal', refresh: 'mana', cleanse: 'heal',
+  overgrowth: 'heal', cultivate: 'heal', bloom: 'heal', fontOfMana: 'mana', inspiration: 'mana',
+  lifebloom: 'heal', surge: 'mana', battleHymn: 'power', barrier: 'ward',
+  bloodTithe: 'mana', martyrsGift: 'heal', grimHarvest: 'power',
+  phalanx: 'ward', brace: 'ward', provoke: 'ward',
+};
 
 interface CardProps {
   card: ResolvedCard;
@@ -9,20 +22,45 @@ interface CardProps {
   ineligible?: boolean;
   selected: boolean;
   onClick: () => void;
+  // Stable deck-card identity, exposed as data-uid so the battle screen can
+  // measure this card's box when it is played (the fly-to-target ghost).
+  uid?: number;
+  // Fan layout variables (--i index, --n count) set by the Hand.
+  style?: CSSProperties;
 }
 
-export function Card({ card, affordable, ineligible = false, selected, onClick }: CardProps) {
+export function Card({ card, affordable, ineligible = false, selected, onClick, uid, style }: CardProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const disabled = !affordable || ineligible;
-  const cls = ['card', !affordable && 'unaffordable', ineligible && 'ineligible', selected && 'selected']
+  const cls = ['card', `family-${CARD_FAMILY[card.id]}`,
+    !affordable && 'unaffordable', ineligible && 'ineligible', selected && 'selected']
     .filter(Boolean).join(' ');
+
+  // A click that can't do anything still answers: the card shakes its head.
+  const handleClick = () => {
+    if (disabled) {
+      const el = rootRef.current;
+      if (el) {
+        el.classList.remove('denied');
+        void el.offsetWidth; // reflow so the animation restarts
+        el.classList.add('denied');
+        setTimeout(() => el.classList.remove('denied'), 380);
+      }
+    }
+    onClick(); // callers guard the actual play themselves (existing contract)
+  };
+
   return (
     <div
+      ref={rootRef}
       className={cls}
+      style={style}
+      data-uid={uid}
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled || undefined}
       aria-pressed={selected || undefined}
-      onClick={onClick}
+      onClick={handleClick}
       onKeyDown={(e) => {
         if (disabled) return;
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }

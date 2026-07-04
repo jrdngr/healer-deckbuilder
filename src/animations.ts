@@ -35,7 +35,15 @@ type FxSpecBase =
   // Anchorless, full-board effects: a text band sweeping the center of the board,
   // and an edge vignette ('tint') or center flash ('flash') wash.
   | { type: 'banner'; text: string; color: string }
-  | { type: 'vignette'; color: string; mode: 'tint' | 'flash' };
+  | { type: 'vignette'; color: string; mode: 'tint' | 'flash' }
+  // A ghost of a just-played card: spawns at the card's measured hand position
+  // (container-relative px) and flies into its target, dissolving into the
+  // card's effect. 'center' is for board-wide plays with no single target.
+  | { type: 'cardGhost'; from: CardOrigin; to: Anchor | 'center'; name: string; cost: number };
+
+// Where a played card sat on screen (px relative to the battle container),
+// measured by the click handler before the engine removes it from the hand.
+export interface CardOrigin { x: number; y: number; w: number; h: number; }
 
 // Every effect may override its default lifetime — a heavy slam's lobbed orb
 // hangs in the air longer than a ranger dart even though both are projectiles.
@@ -95,6 +103,7 @@ export const FX_DURATION: Record<FxSpec['type'], number> = {
   slash: 340,
   banner: 1200,
   vignette: 700,
+  cardGhost: 420,
 };
 
 // Dead time inserted after the biggest impacts (kills, bolt, boss beats) so the

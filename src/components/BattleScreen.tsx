@@ -3,7 +3,7 @@ import { resolveCard } from '../constants';
 import type { Slot, ResolvedCard } from '../constants';
 import type { Game } from '../engine';
 import type { BattleView, MemberReactState } from '../useGame';
-import type { FxInstance } from '../animations';
+import type { CardOrigin, FxInstance } from '../animations';
 import { EnemyPanel } from './EnemyPanel';
 import { Party } from './Party';
 import { ManaBar } from './ManaBar';
@@ -26,7 +26,7 @@ interface BattleScreenProps {
   reacts: (MemberReactState | null)[];
   animating: boolean;
   shakeTick: number;
-  playCard: (handIndex: number, target: number | null) => void;
+  playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
   skipTurn: () => void;
   endTurn: () => void;
   // Resolve the fight within the run (win -> advance, loss -> run over).
@@ -67,6 +67,18 @@ export function BattleScreen({
   const isValidTarget = (slot: Slot): boolean =>
     !animating && !!selected && game.canPlay(selected.handIndex, slot) === null;
 
+  // Measure the clicked card's on-screen box (container-relative) BEFORE the
+  // engine removes it from the hand, so its ghost can fly out of that spot.
+  const cardOrigin = (handIndex: number): CardOrigin | undefined => {
+    const main = mainRef.current;
+    const uid = game.hand[handIndex]?.uid;
+    const el = uid != null ? main?.querySelector(`[data-uid="${uid}"]`) : null;
+    if (!main || !el) return undefined;
+    const r = el.getBoundingClientRect();
+    const mr = main.getBoundingClientRect();
+    return { x: r.left - mr.left, y: r.top - mr.top, w: r.width, h: r.height };
+  };
+
   const onCardClick = (handIndex: number) => {
     if (animating || game.status !== 'playing' || game.phase !== 'player') return;
     const card = resolveCard(game.hand[handIndex]);
@@ -74,7 +86,7 @@ export function BattleScreen({
     // No-target cards play immediately.
     if (card.target === 'all' || card.target === 'none') {
       setSelected(null);
-      playCard(handIndex, null);
+      playCard(handIndex, null, cardOrigin(handIndex));
       return;
     }
     // Toggle selection for cards needing a target.
@@ -88,8 +100,9 @@ export function BattleScreen({
   const onMemberClick = (slot: Slot) => {
     if (animating || !selected) return;
     if (game.canPlay(selected.handIndex, slot) !== null) return; // invalid target; ignore
+    const origin = cardOrigin(selected.handIndex);
     setSelected(null);
-    playCard(selected.handIndex, slot);
+    playCard(selected.handIndex, slot, origin);
   };
 
   const onEndTurn = () => { setSelected(null); endTurn(); };
