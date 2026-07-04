@@ -18,9 +18,10 @@ import { DraftScreen } from '../src/components/DraftScreen';
 import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen';
 import { InfirmaryScreen } from '../src/components/InfirmaryScreen';
 import { Actions } from '../src/components/Actions';
+import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
-import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL } from '../src/constants';
+import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 
@@ -177,6 +178,56 @@ async function render(el: React.ReactElement): Promise<string> {
     <Actions game={spent} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
   );
   check('below the cap the button advertises the rest MP', spentText.includes(`Rest & End Turn (+${spent.restAmount()} MP)`), spentText);
+}
+
+// --- Incapacitated member shows a distinct overlay, not plain DEAD (#33) --------
+{
+  const cfg = defaultBattleConfig();
+  cfg.party[0] = { ...cfg.party[0], injuries: INCAPACITATE_AT, incapacitated: true };
+  const game = new Game(11, cfg).start();
+  const incap = game.members[0];
+  check('an incapacitated member seats dead', !incap.alive && incap.incapacitated);
+  const text = await render(
+    <MemberCard member={incap} displayHp={0} displayDead={true} mageCharge={0} liveDamage={incap.damage} berserkerBands={null}
+      targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
+  );
+  check('incapacitated overlay names the state', text.includes('Incapacitated'), text);
+  check('incapacitated overlay says how to restore', text.includes('heal a scar to restore'), text);
+  const el = rootEl.querySelector('.member') as HTMLElement;
+  check('member card carries the incapacitated class', el.className.includes('incapacitated'), el.className);
+
+  // A plain mid-fight death (not incapacitated) keeps the ordinary DEAD overlay.
+  const whole = game.members[1];
+  await render(
+    <MemberCard member={whole} displayHp={0} displayDead={true} mageCharge={0} liveDamage={whole.damage} berserkerBands={null}
+      targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
+  );
+  const deadEl = rootEl.querySelector('.member') as HTMLElement;
+  check('an ordinary dead member is not marked incapacitated', !deadEl.className.includes('incapacitated'), deadEl.className);
+}
+
+// --- Hand surfaces the Resurrect-on-incapacitated refusal (#33) -----------------
+{
+  const cfg = defaultBattleConfig();
+  cfg.party[0] = { ...cfg.party[0], injuries: INCAPACITATE_AT, incapacitated: true };
+  const game = new Game(12, cfg).start(); // slot 0 seats dead+incapacitated, 1/2 alive
+  const resurrect = resolveCard(makeDeckCard('resurrect', -1));
+  const text = await render(
+    <Hand game={game} disabled={false} selectedIndex={null} selectedCard={resurrect} onCardClick={() => {}} />,
+  );
+  check('Resurrect prompt explains the incapacitated cannot be reached', text.includes("can't reach the Incapacitated"), text);
+  check('Resurrect prompt points at the Infirmary', text.includes('Infirmary'), text);
+}
+
+// --- Infirmary explains that healing restores an incapacitated member (#33) ------
+{
+  const infRun = new Run(13);
+  infRun.party[0] = { ...infRun.party[0], injuries: INCAPACITATE_AT };
+  infRun.nodeContent = { type: 'infirmary', price: 10 };
+  const infAct = <T,>(fn: (r: Run) => T): T => fn(infRun);
+  const text = await render(<InfirmaryScreen run={infRun} act={infAct} onDone={() => {}} />);
+  check('Infirmary flags the incapacitated member', text.includes('☠ Incapacitated'), text);
+  check('Infirmary says healing restores them', text.includes('restores them to the field'), text);
 }
 
 await act(async () => { root.unmount(); });

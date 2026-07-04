@@ -130,6 +130,16 @@ section.enemy {
   content: "DEAD"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   color: var(--danger); font-weight: 700; font-size: 20px; letter-spacing: 2px;
 }
+/* Incapacitated (#33): a distinct overlay replaces the plain DEAD text. */
+.member.incapacitated::after { content: none; }
+.member.incapacitated { opacity: .7; border-color: #7a4a8a; }
+.incap-overlay {
+  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; text-align: center;
+  background: rgba(30, 14, 34, .55);
+}
+.incap-title { color: #d79cf0; font-weight: 700; font-size: 15px; letter-spacing: 1px; }
+.incap-hint { color: #b090c0; font-size: 11px; }
 .member.targeted-by-enemy { border-color: var(--danger); }
 .member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }
 .member.valid-target:hover { background: var(--panel-2); }

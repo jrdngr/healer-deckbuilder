@@ -39,7 +39,13 @@ export function MemberCard({
   const rageTier = berserkerBands
     ? (displayHp <= berserkerBands[1] ? 2 : displayHp <= berserkerBands[0] ? 1 : 0)
     : 0;
-  const cls = ['member', displayDead && 'dead', targetedByEnemy && 'targeted-by-enemy', validTarget && 'valid-target']
+  // Incapacitated (#33, 'incapacitate' injury mode): the member entered the fight
+  // dead from a 4th scar and cannot be Resurrected — a run-layer state distinct from
+  // an in-fight death. Only relevant while it starts dead (a normal mid-fight death
+  // shows the plain DEAD overlay).
+  const incapacitated = m.incapacitated && displayDead;
+  const cls = ['member', displayDead && 'dead', incapacitated && 'incapacitated',
+    targetedByEnemy && 'targeted-by-enemy', validTarget && 'valid-target']
     .filter(Boolean).join(' ');
 
   return (
@@ -55,6 +61,12 @@ export function MemberCard({
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
       }}
     >
+      {incapacitated && (
+        <div className="incap-overlay" title="A 4th scar took this member out of the run. Heal a scar at an Infirmary (or Field Hospital / Mending Totem) to restore them.">
+          <span className="incap-title">☠ Incapacitated</span>
+          <span className="incap-hint">heal a scar to restore</span>
+        </div>
+      )}
       <div className="atk" title="Attack"><span>{liveDamage}</span></div>
       <h3>{m.name}</h3>
       <div className="bar">

@@ -13,7 +13,16 @@ interface HandProps {
   onCardClick: (handIndex: number) => void;
 }
 
-function promptFor(card: ResolvedCard): string {
+function promptFor(card: ResolvedCard, game: Game): string {
+  // A dead-target card (Resurrect) with only Incapacitated corpses can't be played
+  // on anyone — surface that here instead of a silent no-op when the card is clicked
+  // (#33). Incapacitation is a run-layer scar, healed at an Infirmary, not in-fight.
+  if (card.target === 'dead') {
+    const dead = game.members.filter((m) => !m.alive);
+    if (dead.length > 0 && dead.every((m) => m.incapacitated)) {
+      return `${card.name} can't reach the Incapacitated — heal a scar at an Infirmary to restore them.`;
+    }
+  }
   const kind = card.target === 'dead' ? 'a dead member'
     : card.target === 'ability' ? 'a living member (fires their ability)'
     : 'a living member';
@@ -29,7 +38,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
   return (
     <section className="hand-wrap">
       <h3 id="hand-prompt" className={selectedCard ? 'targeting' : undefined}>
-        {selectedCard ? promptFor(selectedCard) : 'Your hand'}
+        {selectedCard ? promptFor(selectedCard, game) : 'Your hand'}
       </h3>
       <div className={`hand-area${disabled ? ' busy' : ''}`}>
         <button className="pile draw-pile" title="Draw pile — click to view (contents shown unordered)"

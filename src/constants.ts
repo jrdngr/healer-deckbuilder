@@ -808,8 +808,9 @@ export const INJURY_DAMAGE: number[] = [0, 1, 1];  // Weakened: −1 damage from
 export const INJURY_ABILITY: number[] = [0, 0, 1]; // Broken: −1 ability power from the 3rd scar
 
 // Human-readable scar names by tier index (0 = 1st death). Used by the UI and
-// the Infirmary; capped at MAX_INJURIES.
-export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken'];
+// the Infirmary. The first MAX_INJURIES are the graded scars; the last ('Shattered')
+// is the 4th scar that incapacitates under 'incapacitate' mode (INCAPACITATE_AT).
+export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken', 'Shattered'];
 
 // ---------------------------------------------------------------------------
 // Injury-mode experiment (2026-07-04 playtest). The 3-scar cap NULLIFIES the
@@ -828,7 +829,12 @@ export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken'];
 // toggle flip it without touching the module graph.
 // ---------------------------------------------------------------------------
 export type InjuryMode = 'cap' | 'escalate' | 'incapacitate';
-export const INJURY_RULES: { mode: InjuryMode } = { mode: 'cap' };
+// Default 'incapacitate' (#33): the 2026-07-04 playtest measured all three modes
+// winrate-identical on the honest line (32.1%), so the choice is legibility, not
+// balance — and 'incapacitate' is the legible one (a 4th death visibly takes the
+// member off the field until a scar is healed), biting exactly the sacrifice line
+// the 'cap' rule let go free. Still mutable at runtime for sim experiments.
+export const INJURY_RULES: { mode: InjuryMode } = { mode: 'incapacitate' };
 export const INCAPACITATE_AT = MAX_INJURIES + 1; // the scar count that incapacitates ('incapacitate' mode)
 
 // Scar count a run may record for one member under the active mode.

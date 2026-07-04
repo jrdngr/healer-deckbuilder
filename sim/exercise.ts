@@ -24,7 +24,7 @@ import type { Telegraph } from '../src/engine';
 import { Run } from '../src/run';
 import {
   CARDS, RELIC_IDS, RELICS, SLOT, RARITY_PRICE, GROUNDING_ROD_REDUCTION,
-  POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, MAX_INJURIES,
+  POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, injuryRecordCap,
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig,
 } from '../src/constants';
 import type {
@@ -282,8 +282,10 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
 const DR1_PROBES: Record<string, () => boolean> = {
   recordInjuries: () => {
     const run = new Run(101);
-    run.recordInjuries([0 as Slot, 0 as Slot, 0 as Slot, 0 as Slot]); // caps at MAX_INJURIES
-    return run.party[0].injuries === MAX_INJURIES;
+    // Five deaths; the record cap is mode-dependent (3 under 'cap', 4 under the
+    // shipped 'incapacitate' default). Assert it stops at whatever the mode allows.
+    run.recordInjuries([0, 0, 0, 0, 0].map((s) => s as Slot));
+    return run.party[0].injuries === injuryRecordCap();
   },
   infirmary: () => {
     const run = new Run(102);

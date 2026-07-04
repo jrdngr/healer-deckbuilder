@@ -53,15 +53,18 @@ punishes on paper more than in play.
 
 ## Scope / acceptance criteria (the remaining work)
 
-- [ ] Flip `INJURY_RULES.mode` default to `'incapacitate'` (one line).
-- [ ] UI affordances: an **Incapacitated** state on the MemberCard (distinct from the in-fight DEAD
-      overlay — e.g. "☠ Incapacitated — heal a scar to restore"), the 4th-scar name in
-      `INJURY_NAMES` (e.g. "Shattered"), and Infirmary copy that says healing restores them.
-- [ ] The Resurrect card's "target is incapacitated" refusal already exists; surface it in the
-      card-hint UI rather than a silent no-op.
-- [ ] N=1000 Standard + Story re-run after the flip (expected unchanged per the table above); the
-      N=200 pin should be bit-identical (the honest policy almost never reaches a 4th death).
+- [x] Flip `INJURY_RULES.mode` default to `'incapacitate'` (one line).
+- [x] UI affordances: an **Incapacitated** state on the MemberCard (distinct DEAD overlay —
+      "☠ Incapacitated / heal a scar to restore", its own class), the 4th-scar name `'Shattered'`
+      in `INJURY_NAMES`, and Infirmary copy that says healing restores them (member flagged
+      "☠ Incapacitated" + a hint line).
+- [x] The Resurrect card's "target is incapacitated" refusal is surfaced in the hand prompt:
+      selecting Resurrect when every corpse is Incapacitated reads "can't reach the Incapacitated —
+      heal a scar at an Infirmary to restore them" instead of a silent no-op.
+- [x] N=1000 Standard **32.1%** (dead-center) + Story **96.4%** after the flip — both unchanged
+      from the table; the N=200 pin stayed bit-identical (the honest policy never reaches a 4th death).
 - [ ] Playtest feel check: a maintainer run where a member is deliberately spent to 4 deaths.
+      *(maintainer-manual — left for the human gate.)*
 
 ## Implementation notes (already landed)
 

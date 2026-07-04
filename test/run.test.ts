@@ -791,6 +791,9 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 
 // --- injuries / scars (DR1): accrual, caps, stat penalties, save round-trip ----
 {
+  // This block exercises the graded-scar model and its 3-scar cap; pin it to 'cap'
+  // mode (the module default is now 'incapacitate', #33) and restore it at the end.
+  INJURY_RULES.mode = 'cap';
   const run = new Run(7);
   eq('party starts unscarred', run.party.every((p) => p.injuries === 0), true);
 
@@ -831,6 +834,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('injuries round-trip through a snapshot', restored.party[2].injuries, MAX_INJURIES);
   eq('snapshot with injuries is byte-stable',
     JSON.stringify(restored.toJSON()), JSON.stringify(base.toJSON()));
+  INJURY_RULES.mode = 'incapacitate'; // restore the module default
 }
 
 // --- Infirmary node (DR1): clear scars for gold, top of the ladder first --------
@@ -993,8 +997,11 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 
 // --- injury-mode experiments (2026-07-04 playtest) ---------------------------
 {
-  // Default 'cap': today's exact behavior — scars stop at MAX_INJURIES.
-  eq('default injury mode is cap', INJURY_RULES.mode, 'cap');
+  // The shipped default is 'incapacitate' (#33): the 4th scar takes the member out.
+  eq('default injury mode is incapacitate', INJURY_RULES.mode, 'incapacitate');
+
+  // 'cap' (the old default): scars stop at MAX_INJURIES, further deaths are free.
+  INJURY_RULES.mode = 'cap';
   eq('cap mode records at most MAX_INJURIES', injuryRecordCap(), MAX_INJURIES);
   const run = new Run(30);
   for (let i = 0; i < 6; i++) run.recordInjuries([0 as Slot]);
@@ -1025,7 +1032,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   // Healing one scar restores them (recoverable, like the rest of DR1).
   inc.healInjury(2 as Slot);
   check('healing a scar un-incapacitates', inc.toBattleConfig().party[2].incapacitated === false);
-  INJURY_RULES.mode = 'cap'; // restore the default for every later test
+  INJURY_RULES.mode = 'incapacitate'; // restore the module default for every later test
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

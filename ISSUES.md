@@ -100,7 +100,7 @@ the final ship call.**
 | 30 | ✅ Done | [Party W4 — full draft + weight-surfacing UI](./issues/30-party-w4-draft-ui.md) | post-demo | 29 | §3.4 |
 | 31 | ✅ Done | [Party W5 — per-composition balance pass](./issues/31-party-w5-balance-pass.md) | post-demo | 30 | §3.4 |
 | 32 | 📥 Backlog | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
-| 33 | ⬜ Todo | [Injuries past the cap: adopt a harder scar mode](./issues/33-injury-mode-harder-scars.md) | post-demo | DR1 | playtest 2026-07-04 |
+| 33 | ✅ Done | [Injuries past the cap: adopt a harder scar mode](./issues/33-injury-mode-harder-scars.md) | post-demo | DR1 | playtest 2026-07-04 |
 | 34 | ⬜ Todo | [Composition re-baseline after the identity fix](./issues/34-comp-rebaseline-after-identity-fix.md) | post-demo | 31 | playtest 2026-07-04 |
 | 35 | ⬜ Todo | [Relic power re-tune under player-first ordering](./issues/35-relic-retune-player-first.md) | post-demo | 26 | playtest 2026-07-04 |
 | 36 | ✅ Done | [Drafted names in run-layer screens](./issues/36-drafted-names-in-run-screens.md) | post-demo | 27 | UI playtest 2026-07-04 |

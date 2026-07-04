@@ -1,4 +1,4 @@
-import { memberDefAt, INJURY_NAMES } from '../constants';
+import { memberDefAt, INJURY_NAMES, injuryIncapacitates } from '../constants';
 import type { Slot } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
@@ -18,6 +18,7 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
   if (run.nodeContent?.type !== 'infirmary') return null;
   const price = run.nodeContent.price;
   const anyInjured = run.party.some((p) => p.injuries > 0);
+  const anyIncapacitated = run.party.some((p) => injuryIncapacitates(p.injuries));
 
   return (
     <ShopFrame
@@ -32,9 +33,10 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
           const scars = INJURY_NAMES.slice(0, p.injuries); // tiers 0..injuries-1
           const top = scars[scars.length - 1];             // most recent scar heals first
           const canTreat = p.injuries > 0 && run.gold >= price;
+          const incap = injuryIncapacitates(p.injuries);   // 4th scar: out of the run until treated
           return (
-            <div key={slot} className="member-pick infirmary-member">
-              <span className="member-name">{d.name}</span>
+            <div key={slot} className={`member-pick infirmary-member${incap ? ' incapacitated' : ''}`}>
+              <span className="member-name">{d.name}{incap ? ' — ☠ Incapacitated' : ''}</span>
               <span className="member-stats">
                 {p.injuries === 0 ? 'Unharmed' : scars.join(' · ')}
               </span>
@@ -49,6 +51,11 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
           );
         })}
       </div>
+      {anyIncapacitated && (
+        <p className="shop-hint">
+          An <strong>Incapacitated</strong> member fights no more until treated — healing their Shattered scar restores them to the field.
+        </p>
+      )}
       {!anyInjured && <p className="shop-hint">Your party bears no lasting wounds. Rest easy.</p>}
     </ShopFrame>
   );
