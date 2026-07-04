@@ -57,6 +57,7 @@ section.enemy {
 .enrage { font-size: 11px; background: var(--danger); color: #fff; padding: 1px 8px; border-radius: 10px; animation: pulse 1.2s infinite; }
 .enrage-countdown { font-size: 11px; margin-left: 8px; background: #3a2a12; color: #f0b866; border: 1px solid #7a5a22; padding: 1px 8px; border-radius: 10px; }
 .enemy-intent { color: #d0a0e0; font-weight: 600; }
+.turn-chip { font-size: 11px; margin-right: 8px; background: #1a2230; color: #9db4d0; border: 1px solid #3a4a60; padding: 1px 8px; border-radius: 10px; }
 .cast-bar { margin-top: 6px; }
 .cast-label { font-size: 12px; color: #f0a0a0; font-weight: 600; }
 .cast-track { height: 6px; background: #2a1414; border: 1px solid #6a2a2a; border-radius: 4px; overflow: hidden; margin-top: 3px; }

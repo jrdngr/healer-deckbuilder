@@ -104,7 +104,7 @@ the final ship call.**
 | 34 | ⬜ Todo | [Composition re-baseline after the identity fix](./issues/34-comp-rebaseline-after-identity-fix.md) | post-demo | 31 | playtest 2026-07-04 |
 | 35 | ⬜ Todo | [Relic power re-tune under player-first ordering](./issues/35-relic-retune-player-first.md) | post-demo | 26 | playtest 2026-07-04 |
 | 36 | ✅ Done | [Drafted names in run-layer screens](./issues/36-drafted-names-in-run-screens.md) | post-demo | 27 | UI playtest 2026-07-04 |
-| 37 | ⬜ Todo | [UI polish batch](./issues/37-ui-polish-batch-2026-07-04.md) | post-demo | — | UI playtest 2026-07-04 |
+| 37 | ✅ Done | [UI polish batch](./issues/37-ui-polish-batch-2026-07-04.md) | post-demo | — | UI playtest 2026-07-04 |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses

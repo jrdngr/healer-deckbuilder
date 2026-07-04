@@ -40,6 +40,9 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
           <span className="bar-label">{displayHp} / {e.maxHP} HP</span>
         </div>
         <div className="enemy-status">
+          {game.status === 'playing' && (
+            <span className="turn-chip" title="The current turn. The standing telegraph resolves at the end of it.">Turn {game.turn}</span>
+          )}
           {intent && <span className="enemy-intent">Intends: {intent}</span>}
           {e.poison > 0 ? <span title={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}> ☠ Poison {e.poison}</span> : ''}
         </div>

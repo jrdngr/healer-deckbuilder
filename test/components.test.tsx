@@ -17,9 +17,11 @@ import { StartScreen } from '../src/components/StartScreen';
 import { DraftScreen } from '../src/components/DraftScreen';
 import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen';
 import { InfirmaryScreen } from '../src/components/InfirmaryScreen';
+import { Actions } from '../src/components/Actions';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
-import { makeDeckCard, resolveCard, partyFromMembers } from '../src/constants';
+import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL } from '../src/constants';
+import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 
 let passed = 0;
@@ -144,6 +146,37 @@ async function render(el: React.ReactElement): Promise<string> {
   check('Infirmary shows drafted names', infText.includes('Skald') && infText.includes('Grave Augur'), infText);
   check('Infirmary does not mislabel the drafted party as the classic trio',
     !infText.includes('Ranger') && !infText.includes('Tank'), infText);
+}
+
+// --- Draft cards show ability FLAVOR, not the raw id (#37 item 1) ---------------
+{
+  const draftRun = new Run(5);
+  draftRun.beginDraft();
+  const shown = (draftRun.nodeContent as { pairs: MemberId[][] }).pairs.flat();
+  const noop = <T,>(fn: (r: Run) => T): T => fn(draftRun);
+  const text = await render(<DraftScreen run={draftRun} act={noop} />);
+  for (const id of shown) {
+    check(`draft card shows ${id}'s ability flavor`, text.includes(MEMBER_ABILITY_FLAVOR[id]), id);
+    // The raw ability id (e.g. "graveChill") must never leak to the player.
+    check(`draft card hides ${id}'s raw ability id`, !text.includes(MEMBER_POOL[id].ability), id);
+  }
+}
+
+// --- Actions button drops the "+0 MP" rest label at full MP (#37 item 4) --------
+{
+  const full = new Game(9, defaultBattleConfig()).start(); // starts at full MP, 0 cards played
+  const fullText = await render(
+    <Actions game={full} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
+  );
+  check('at full MP the rest button is plain "End Turn"',
+    fullText.includes('End Turn') && !fullText.includes('+0 MP') && !fullText.includes('Rest & End Turn'), fullText);
+
+  const spent = new Game(9, defaultBattleConfig()).start();
+  spent.mp = 4; // below the cap → a rest now yields MP
+  const spentText = await render(
+    <Actions game={spent} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
+  );
+  check('below the cap the button advertises the rest MP', spentText.includes(`Rest & End Turn (+${spent.restAmount()} MP)`), spentText);
 }
 
 await act(async () => { root.unmount(); });

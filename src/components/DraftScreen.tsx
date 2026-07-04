@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
-import { MEMBER_POOL, PARTY_SIZE, CLASSIC_TRIO, SLOT_WEIGHTS, DRAFT_RATING, CONVENTIONALLY_HEALABLE } from '../constants';
+import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, PARTY_SIZE, CLASSIC_TRIO, SLOT_WEIGHTS, DRAFT_RATING, CONVENTIONALLY_HEALABLE } from '../constants';
 import type { MemberId } from '../constants';
 
 interface DraftScreenProps {
@@ -37,13 +37,17 @@ export function DraftScreen({ run, act }: DraftScreenProps) {
   const MemberButton = ({ id, chosenNow, onClick }: { id: MemberId; chosenNow: boolean; onClick: () => void }) => {
     const d = MEMBER_POOL[id];
     const healable = CONVENTIONALLY_HEALABLE.has(id);
+    const flavor = MEMBER_ABILITY_FLAVOR[id];
     return (
-      <button className={`draft-member${chosenNow ? ' chosen' : ''}`} onClick={onClick} title={`Ability: ${d.ability}`}>
+      // aria-pressed exposes the chosen state to AT (and to text-based tests); the
+      // .chosen class is styling only. The ability shows its player-facing flavor,
+      // never the raw id (#37) — the pick is no longer blind.
+      <button className={`draft-member${chosenNow ? ' chosen' : ''}`} onClick={onClick} aria-pressed={chosenNow} title={flavor}>
         <span className="draft-member-name">{d.name}</span>
         <span className="draft-member-stats">
           HP {d.maxHP} · DMG {d.damage} · rated {DRAFT_RATING[id]}{healable ? '' : ' · self-reliant'}
         </span>
-        <span className="draft-member-ability">{d.ability}</span>
+        <span className="draft-member-ability">{flavor}</span>
       </button>
     );
   };

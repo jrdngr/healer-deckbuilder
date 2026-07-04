@@ -40,10 +40,14 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, reli
         >
           Speed {animSpeedLabel()}
         </button>
-        <label>
+        <label htmlFor="seed">
           Seed{' '}
           <input
+            id="seed"
+            name="seed"
             type="number"
+            min={0}
+            max={4294967295}
             value={seedField}
             onChange={(e) => onSeedChange(e.target.value)}
           />
