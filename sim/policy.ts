@@ -14,7 +14,8 @@ import type { Member } from '../src/engine';
 import { Run } from '../src/run';
 import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
-  BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, TITHE_AMOUNT, memberDefAt,
+  BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, TITHE_AMOUNT,
+  SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId } from '../src/constants';
 
@@ -36,24 +37,33 @@ function affordable(game: Game, idx: number): boolean {
   return idx >= 0 && game.mp >= cardCost(game, idx);
 }
 
-// Damage each living member would take on the next enemy phase, folding in
-// Defense (attackTargets() already applies it). Hidden attacks preview as null;
-// treat them as a worst-case single-hit so the policy still reacts.
+// Damage each living member would take before its next turn, folding in Defense
+// (attackTargets() already applies it). Hidden attacks preview as null; treat them
+// as a worst-case single-hit so the policy still reacts. #38: the Warlock's Soul
+// Tithe (−TITHE_AMOUNT/turn, self-inflicted at the end of the party phase) lands on
+// him every turn regardless of the enemy, so fold it into his incoming — otherwise
+// the policy heals him on the flat fraction only and the tithe quietly kills the
+// party's 7-damage body on a taunt-less comp.
 function incomingDamage(game: Game): Map<Slot, number> {
   const out = new Map<Slot, number>();
   for (const spec of game.attackTargets()) {
     const dmg = spec.hidden ? 5 : spec.damage ?? 0;
     out.set(spec.slot, (out.get(spec.slot) ?? 0) + dmg);
   }
+  for (const m of game.members) {
+    if (m.alive && m.ability === 'darkBargain') out.set(m.slot, (out.get(m.slot) ?? 0) + TITHE_AMOUNT);
+  }
   return out;
 }
 
 // Members in the order we care about saving them from a lethal blow: the fragile,
-// high-value DPS first (mage's 5 damage + Bolt, then ranger), and the tank last —
-// it carries the most HP and its Regen, so it is the least likely to be lethal.
+// high-value DPS first, the tank/soak last. #38: value it by actual strike (damage
+// desc) instead of fixed trio slots — a drafted party may seat its 7-damage Warlock
+// or 5-damage Mage at center, and the old slot order (RIGHT, LEFT, CENTER) would
+// then save the party's best striker LAST as if it were the tank. For the classic
+// trio this still yields mage(5) > ranger(4) > tank(2) = the original order.
 function saveOrder(game: Game): Member[] {
-  const order: Slot[] = [SLOT.RIGHT, SLOT.LEFT, SLOT.CENTER];
-  return order.map((s) => game.members[s]).filter((m) => m.alive);
+  return game.livingMembers().sort((a, b) => game.memberDamage(b) - game.memberDamage(a));
 }
 
 // Keep Taunt (and its bundled Defense) live so every attack — including the
@@ -108,14 +118,19 @@ function tryBraceChannel(game: Game): boolean {
 // card (a boss, or the party already taking damage) — mirrors tryRetaunt's discipline.
 function tryProvoke(game: Game): boolean {
   if (game.members.some((m) => m.alive && m.ability === 'taunt')) return false;
-  if (game.livingMembers().some((m) => m.taunt > 1)) return false;
-  const anyoneHurt = game.livingMembers().some((m) => m.hp < m.maxHP * 0.5);
+  const living = game.livingMembers();
+  if (living.length <= 1) return false; // nothing to redirect hits away from
+  if (living.some((m) => m.taunt > 1)) return false;
+  const anyoneHurt = living.some((m) => m.hp < m.maxHP * 0.5);
   if (!game.config.enemy.boss && !anyoneHurt) return false;
   const idx = handIndexOf(game, 'provoke');
   if (!affordable(game, idx)) return false;
-  // The sink is the highest-maxHP living member (the seated tank-substitute).
-  const sink = [...game.livingMembers()].sort((a, b) => b.maxHP - a.maxHP)[0];
-  if (!sink) return false;
+  // The sink is the most DURABLE living member. #38: exclude the Warlock even when
+  // he is the highest-maxHP body — Soul Tithe drains him every turn, so funnelling
+  // hits onto him (plus the tithe) kills the party's main striker, the opposite of
+  // what Provoke is for. With ≥2 alive at least one non-Warlock body exists.
+  const durable = living.filter((m) => m.ability !== 'darkBargain');
+  const sink = (durable.length ? durable : living).sort((a, b) => b.maxHP - a.maxHP)[0];
   game.playCard(idx, sink.slot);
   return true;
 }
@@ -382,9 +397,35 @@ function tryCallBoar(game: Game): boolean {
   return true;
 }
 
+// Skald tempo (#38): his party-phase strike is 2×(cards played this phase), so a
+// Rest turn zeroes his damage. When a Skald is alive, the party is safe, and MP is
+// near full (a Rest would bank almost nothing anyway), spend a cheap card to keep his
+// strike fed instead of resting to 0 — Battle Hymn is ideal (it counts a card AND
+// buffs every member's auto this phase). Bounded: stops once his strike is (about)
+// capped, so it can't loop, and it is the LAST tactic, so it only ever replaces a Rest.
+function trySkaldTempo(game: Game): boolean {
+  const s = memberByAbility(game, 'crescendo');
+  if (!s) return false;
+  if (channelThreatUnanswered(game)) return false;
+  if (game.mp < game.maxMana - 1) return false; // only spend "free" MP a Rest wouldn't recover
+  if (game.cardsPlayedThisPhase >= SKALD_DMG_CAP / SKALD_DMG_PER_CARD) return false; // strike already maxed
+  const incoming = incomingDamage(game);
+  if (saveOrder(game).some((m) => !m.shield && (incoming.get(m.slot) ?? 0) >= m.hp)) return false; // never feed into a death
+  // Battle Hymn first (buffs the whole party's strike); else a cheap card with a
+  // guaranteed-valid target (a living member) so the play never no-ops into a spin.
+  const hymn = handIndexOf(game, 'battleHymn');
+  if (affordable(game, hymn)) { game.playCard(hymn, null); return true; }
+  const hurt = [...game.livingMembers()].sort((a, b) => a.hp / a.maxHP - b.hp / b.maxHP)[0];
+  for (const id of ['brace', 'lowHeal'] as CardId[]) {
+    const idx = handIndexOf(game, id);
+    if (affordable(game, idx) && hurt) { game.playCard(idx, hurt.slot); return true; }
+  }
+  return false;
+}
+
 const TACTICS: Array<(game: Game) => boolean> = [
   tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
-  tryBolt, tryPoison, tryRampage, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh,
+  tryBolt, tryPoison, tryRampage, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).

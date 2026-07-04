@@ -165,6 +165,15 @@
 //     members off a stick that under-pilots them is miscalibration -> deferred to
 //     human calibration (issue 34). The trio's numbers were never touched (its
 //     identity IS the fallback); the taunt-less Provoke line lifted 15/35 comps >0%.
+//   after #38 (per-identity damage lines):  tested whether the #34 floor was a stick
+//     artifact by FIXING the measurement — value-based saveOrder (was trio-slot
+//     hardcoded), Soul-Tithe folded into the Warlock's incoming, Provoke sink excludes
+//     the tithe-drained Warlock, Skald tempo line (play a cheap card / Battle Hymn over
+//     a Rest that banks nothing). N=300: trio 29.3% byte-identical; comps at 0% 27->26;
+//     taunt-less >0 15->16; non-trio F8 ceiling 50.9->60.0. VERDICT: the floor is REAL
+//     balance, NOT a stick artifact — with correct lines the deep no-poison/no-bolt comps
+//     still can't race the Devourer. The stick is no longer the confound; member balance
+//     is cleanly deferred to human calibration. No member/card/boss change.
 //   after #23 (difficulty presets + local stats):  Standard unchanged (it IS
 //     the tuned curve — the preset is the identity, and the N=200 pins pass
 //     bit-identical). Story (HP x0.8, attack -1 floor 0, enrage +2, +25g/win)

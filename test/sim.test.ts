@@ -267,6 +267,29 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   }
 }
 
+// --- issue 38: the Provoke sink never funnels hits onto the tithe-drained Warlock -
+// The Warlock is often the highest-maxHP body on a taunt-less comp, but Soul Tithe
+// makes him the WORST sink — provoking him would help kill the party's main striker.
+{
+  let everProvoked = false;
+  let everProvokedWarlock = false;
+  for (let s = 1; s <= 30; s++) {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['warlock', 'skald', 'beastWarden']); // taunt-less; warlock = highest maxHP
+    cfg.deck = [...cfg.deck.slice(0, cfg.deck.length - 1), makeDeckCard('provoke', 999)];
+    cfg.enemy = { ...cfg.enemy, boss: true, maxHP: 200 };
+    const g = new Game(s, cfg);
+    playFight(g, 10);
+    for (const e of g.log) {
+      if (!e.text.includes('Provokes')) continue;
+      everProvoked = true;
+      if (e.text.includes(MEMBER_POOL.warlock.name)) everProvokedWarlock = true;
+    }
+  }
+  check('the taunt-less Warlock comp does play Provoke', everProvoked);
+  check('Provoke never sinks onto the tithe-drained Warlock (#38)', !everProvokedWarlock);
+}
+
 // --- per-composition sweep harness (#31) ------------------------------------
 {
   eq('there are 56 compositions (8-choose-3)', allCompositions().length, 56);

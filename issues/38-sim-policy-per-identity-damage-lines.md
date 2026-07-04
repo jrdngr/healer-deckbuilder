@@ -34,16 +34,48 @@ The zero-comps split into two failure modes:
 
 ## Scope / acceptance criteria
 
-- [ ] **Warlock survival line:** fold Soul Tithe into the save math so the Warlock is healed *before*
-      the tithe drops him, not on the flat fraction; keep his 7-damage body alive as the DPS plan.
-- [ ] **Provoke sink fix:** the taunt-less redirection tactic must not pick a tithe-drained (or
-      otherwise fragile-despite-high-maxHP) member as the sink — redirect onto a genuinely durable body.
-- [ ] **Skald tempo line:** on a comp with a live Skald, prefer playing a cheap, non-wasteful card
-      over Rest when the party is safe and MP has a reserve, so his cards-played strike stays fed.
-- [ ] Re-run `runCompositionSweep` at **N=300**; publish the new bands next to #34's.
-- [ ] Judge: does the floor lift (stick artifact) or hold (real balance)? Record the verdict. **No
-      member/card/boss-HP changes** — that stays deferred to human calibration.
-- [ ] Trio untouched (N=200 pins + wave policy tests hold); new sim.test coverage for the added lines.
+- [x] **Warlock survival line:** `incomingDamage` now folds Soul Tithe (−`TITHE_AMOUNT`/turn) into the
+      Warlock's incoming, so the lethal-check and proactive heal see the drain and keep his 7-damage
+      body alive instead of waiting on the flat 0.6 fraction.
+- [x] **Value-based `saveOrder`:** was hardcoded to trio slots (RIGHT/LEFT/CENTER), which saved a
+      drafted Warlock/Mage seated at center *last*, like a tank. Now sorts living members by actual
+      strike (`memberDamage` desc) — identical for the trio (mage 5 > ranger 4 > tank 2), correct for
+      drafted comps.
+- [x] **Provoke sink fix:** the taunt-less redirection tactic excludes the tithe-drained Warlock from
+      the sink (funnelling hits onto him + the tithe killed the party's main striker); requires ≥2
+      alive (nothing to redirect otherwise), which also guarantees a non-Warlock body exists.
+- [x] **Skald tempo line (`trySkaldTempo`):** when a Skald is alive, the board is safe, and MP is near
+      full (a Rest would bank ~nothing anyway), spend a cheap card — Battle Hymn first (it counts a
+      card AND buffs every auto) — instead of resting his `2×cards-played` strike to 0. Bounded so it
+      can't loop and is the LAST tactic, so it only ever replaces a Rest.
+- [x] Re-ran `runCompositionSweep` at N=300 (below).
+- [x] Judged (below). **No member/card/boss-HP change.**
+- [x] Trio untouched (N=200 pins + wave-1/2/3 policy tests hold — the trio's per-turn decisions are
+      byte-identical); new sim.test locks the Provoke-sink fix (never sinks onto the Warlock).
+
+## Result (N=300, seeds 1–300) and verdict
+
+| metric | #34 (real lines) | #38 (per-identity lines) |
+|---|---|---|
+| trio full-run (ceiling) | 29.3% | **29.3%** (byte-identical) |
+| comps at 0.0% full-run | 27 / 56 | **26 / 56** |
+| taunt-less comps clearing >0% | 15 / 35 | **16 / 35** |
+| non-trio F8 ceiling | 50.9% | **60.0%** |
+| full-run range | 0–29.3% | 0–29.3% |
+
+**Verdict — the floor is REAL balance, not a stick artifact.** With correct per-identity damage and
+survival lines, the floor barely moved (one comp off 0%, the alt-comp F8 ceiling up ~9pp) — the deep
+no-ranger/no-mage comps still cannot race the trio-tuned Devourer. This is the valuable outcome: #34
+*suspected* the floor was under-measurement; #38 tested that hypothesis by fixing the measurement, and
+the answer is **no** — the comp floor is a genuine burst-DPS deficit. The stick is no longer the
+confound, so the member-balance question is now honestly framed for the human-calibration follow-up
+(a member/card tune, never a per-comp boss change). The lines are kept regardless: they are simply
+the correct way to pilot those members, and they raised the alt-comp ceiling without touching the trio.
+
+## Out of scope
+
+- Member / card / boss tuning (the human-calibration follow-up — now cleanly separated from the stick).
+- The Grave Augur / Berserker / Beast Warden lines from #34 were left as-is (no cheap win surfaced).
 
 ## Out of scope
 

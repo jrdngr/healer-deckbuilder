@@ -29,8 +29,9 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–37 — the demo (01–24), the experiments, the full post-demo party subsystem, and the
-2026-07-04 playtest batch. No numbered issue is open.** #32 (the standing backlog holding file) was
+**Done: 01–38 — the demo (01–24), the experiments, the full post-demo party subsystem, the
+2026-07-04 playtest batch, and the #34 sim-policy follow-up (#38). No numbered issue is open.**
+#32 (the standing backlog holding file) was
 **closed as a tracker row** on 2026-07-04 — it was never buildable; its deferred ideas live on inside
 the file and each is promoted to its own numbered issue when picked up. What remains is not tracked
 issues but standing *design* questions and human gates — see [Remaining open design questions](#remaining-open-design-questions).
@@ -93,10 +94,13 @@ With #01–#37 landed and #32 closed, **nothing is open in the numbered tracker.
 - **DR3 — Brutal is a cliff, not a difficulty.** 0% full-run, Gatewarden alone ~0.3%. **By design**
   (dev-only, ungated) — but if Brutal ever ships visibly it needs the standing "tuned Brutal" cut,
   not the current placeholder multipliers.
-- **#34 follow-up — a per-identity burst LINE in the sim policy.** The comp floor is a burst-DPS gap
-  vs the trio-tuned Devourer, under-measured because the fixed policy has no Warlock/Skald/Berserker
-  damage plan. A real per-identity line would raise the stick's ceiling for those comps and let the
-  member-balance question be judged fairly (currently deferred to human calibration).
+- **Alt-comp member balance (now honestly framed by #38).** #38 gave the fixed policy real
+  per-identity damage/survival lines (value-based save order, Soul-Tithe-aware Warlock healing,
+  Provoke sink fix, Skald tempo) and re-measured: the floor barely moved (26/56 comps still 0% at
+  N=300), which **confirms the floor is real balance, not a stick artifact** — the deep no-poison/
+  no-bolt comps genuinely can't race the trio-tuned Devourer. The stick is no longer the confound, so
+  whether (and how) to lift those members is a clean **human-calibration** question — a member/card
+  tune, never a per-comp boss change (`ENEMY_ATTACK_BONUS` stays composition-agnostic per #31).
 - **#32 backlog (closed as a row, ideas still standing).** Telegraph lists · multi-enemy fights /
   adds · meta-progression revisit · overheal-as-ammo card (**reconcile with Aegis Font first**) ·
   hidden-info expansion (normals only, never bosses) · the "Wanderer" mid-run swap node. Promote any
@@ -143,7 +147,7 @@ With #01–#37 landed and #32 closed, **nothing is open in the numbered tracker.
 | 35 | ✅ Done | [Relic power re-tune under player-first ordering](./issues/35-relic-retune-player-first.md) | post-demo | 26 | playtest 2026-07-04 |
 | 36 | ✅ Done | [Drafted names in run-layer screens](./issues/36-drafted-names-in-run-screens.md) | post-demo | 27 | UI playtest 2026-07-04 |
 | 37 | ✅ Done | [UI polish batch](./issues/37-ui-polish-batch-2026-07-04.md) | post-demo | — | UI playtest 2026-07-04 |
-| 38 | ⬜ Todo | [Sim policy: per-identity damage lines](./issues/38-sim-policy-per-identity-damage-lines.md) | post-demo | 34 | #34 follow-up |
+| 38 | ✅ Done | [Sim policy: per-identity damage lines](./issues/38-sim-policy-per-identity-damage-lines.md) | post-demo | 34 | #34 follow-up |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses
