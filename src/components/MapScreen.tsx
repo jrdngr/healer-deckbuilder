@@ -31,10 +31,11 @@ const PATH_D = [
 
 type MapStyle = CSSProperties & Record<string, string | number>;
 
-// The fork between two fights: two branches, each of two visible typed nodes
-// that will be visited in sequence, drawn as real diverging trails that
-// reconverge on the next fight. Choosing a branch commits to both its nodes:
-// the party token travels the chosen trail before the run advances.
+// The fork between two fights: two branches of visible typed nodes, drawn as
+// real diverging trails that reconverge on the next fight. Choosing a branch
+// leads to its hub (BranchScreen), where the stops can be visited in any order
+// before moving on. Nodes the party can't use right now (an Infirmary with no
+// one injured) aren't shown.
 export function MapScreen({ run, onChoose }: MapScreenProps) {
   const [hovered, setHovered] = useState<number | null>(null);
   const [leaving, setLeaving] = useState<number | null>(null);
@@ -70,7 +71,7 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
   return (
     <main className="map-screen">
       <h2 className="map-title">Choose your path</h2>
-      <p className="map-sub">You will visit both nodes on the path you pick, then reach the next fight.</p>
+      <p className="map-sub">Visit the stops on the path you pick in any order — as often as you like — before the next fight.</p>
       {injured.length > 0 && (
         <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
           🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}
@@ -86,7 +87,7 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
         {fork.branches.map((branch, b) => (
           <div key={b} className={`map-branch-group branch-${b}${leaving === b ? ' chosen' : ''}`}
             onMouseEnter={() => setHovered(b)} onMouseLeave={() => setHovered(null)}>
-            {branch.nodes.map((node, i) => {
+            {branch.nodes.filter((node) => run.nodeAvailable(node.type)).map((node, i) => {
               const meta = NODE_META[node.type];
               const style: MapStyle = {
                 left: `${BRANCH_X[b]}%`, top: `${NODE_Y[i]}%`,

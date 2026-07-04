@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { useRun } from './useRun';
 import type { Run } from './run';
 import type { GameController } from './useGame';
-import { FIGHTS_PER_ACT, ACT_COUNT, NODES_PER_BRANCH, isActBoss, actOfFight } from './constants';
+import { FIGHTS_PER_ACT, ACT_COUNT, isActBoss, actOfFight } from './constants';
 import type { Difficulty } from './constants';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
 import { DraftScreen } from './components/DraftScreen';
 import { FightScreen } from './components/FightScreen';
 import { MapScreen } from './components/MapScreen';
+import { BranchScreen } from './components/BranchScreen';
+import { NODE_META } from './components/nodeMeta';
 import { NodeScreen } from './components/NodeScreen';
 import { SpoilsScreen } from './components/SpoilsScreen';
 import { RunOverScreen } from './components/RunOverScreen';
@@ -29,7 +31,8 @@ function progressLabel(run: Run): string {
   }
   if (loc.kind === 'forkChoice') return 'Choose a path';
   if (loc.kind === 'spoils') return 'Spoils of victory';
-  return `Node ${loc.index + 1} / ${NODES_PER_BRANCH}`;
+  if (loc.kind === 'branch') return 'Along the trail';
+  return NODE_META[loc.nodeType].label;
 }
 
 export function App() {
@@ -80,6 +83,14 @@ export function App() {
     screen = <SpoilsScreen run={run} act={act} />;
   } else if (run.location.kind === 'forkChoice') {
     screen = <MapScreen run={run} onChoose={(b) => act((r) => r.chooseBranch(b))} />;
+  } else if (run.location.kind === 'branch') {
+    screen = (
+      <BranchScreen
+        run={run}
+        onEnter={(i) => act((r) => r.enterNode(i))}
+        onFight={() => act((r) => r.startNextFight())}
+      />
+    );
   } else {
     screen = <NodeScreen run={run} act={act} onDone={() => act((r) => r.completeNode())} />;
   }

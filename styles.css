@@ -820,6 +820,15 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   animation: node-in 340ms cubic-bezier(.3,1.3,.5,1) backwards;
   animation-delay: var(--d, 0ms);
 }
+/* ---- Branch hub (the chosen path's stops) ---------------------------------
+   Stops are .map-node tiles rendered as buttons: enter any, in any order, as
+   often as you like, then commit to the fight. */
+.branch-screen { text-align: center; animation: fade-in 300ms ease-out; }
+.branch-stops { display: flex; flex-direction: column; gap: 12px; align-items: center; margin: 18px 0; }
+.branch-stop { width: min(320px, 80vw); color: inherit; font: inherit; cursor: pointer; }
+.branch-stop:hover { border-color: #4a5468; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+.branch-fight { margin-top: 4px; }
+
 .start-branch { max-width: 320px; margin: 0 auto; }
 /* StartScreen still composes .map-branch panels. */
 .map-branch {

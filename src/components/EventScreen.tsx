@@ -28,13 +28,20 @@ type Stage =
 
 // A single-step event: a scenario with a few choices. Some choices need a follow-up
 // pick (which card to add/remove, which card/member to bless); all end in a result
-// the player acknowledges before leaving.
+// the player acknowledges before leaving. An event resolves ONCE — the branch hub
+// allows revisits, and a spent event only offers the way out.
 export function EventScreen({ run, act, onDone }: EventScreenProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'choices' });
   if (run.nodeContent?.type !== 'event') return null;
   const event = run.nodeContent.event;
+  const spent = run.nodeContent.done && stage.kind === 'choices';
 
-  const finish = (text: string) => setStage({ kind: 'result', text });
+  // Reaching a result means the event resolved: mark it spent in the run so a
+  // revisit can't farm the choices again.
+  const finish = (text: string) => {
+    act((r) => r.markEventDone());
+    setStage({ kind: 'result', text });
+  };
 
   const choose = (kind: EventChoiceKind) => {
     switch (kind) {
@@ -157,7 +164,14 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
         <h2>{event.title}</h2>
         <p className="event-text">{event.text}</p>
 
-        {stage.kind === 'choices' && (
+        {spent && (
+          <div className="event-result">
+            <p>The moment has passed — there is nothing more to do here.</p>
+            <button className="primary" onClick={onDone}>Leave</button>
+          </div>
+        )}
+
+        {!spent && stage.kind === 'choices' && (
           <div className="event-choices">
             {event.choices.map((c) => (
               <button key={c.kind + c.label} className="event-choice" onClick={() => choose(c.kind)}>

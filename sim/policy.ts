@@ -668,6 +668,20 @@ const NODE_DESIRABILITY: Record<string, number> = {
   partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, cardUpgrade: 4, cardShop: 3, event: 2, infirmary: 0, fight: 0,
 };
 
+// Walk the chosen branch's hub one step per driver tick: enter the first
+// unvisited stop that's open (the Infirmary hides from an unscarred party),
+// or head to the next fight once every stop has been seen. The policy never
+// revisits — cached content means a second look buys nothing.
+export function advanceBranch(run: Run): void {
+  if (run.location.kind !== 'branch') return;
+  const { forkIndex, branch } = run.location;
+  const nodes = run.map[forkIndex].branches[branch].nodes;
+  for (let i = 0; i < nodes.length; i++) {
+    if (run.branchContent[i] == null && run.nodeAvailable(nodes[i].type)) { run.enterNode(i); return; }
+  }
+  run.startNextFight();
+}
+
 export function chooseBranch(run: Run): number {
   if (run.location.kind !== 'forkChoice') return 0;
   const fork = run.map[run.location.forkIndex];

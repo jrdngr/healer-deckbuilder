@@ -46,15 +46,18 @@ export type RunLocation =
   | { kind: 'fight'; fightIndex: number }
   | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
   | { kind: 'forkChoice'; forkIndex: number }
+  | { kind: 'branch'; forkIndex: number; branch: number } // the hub on a chosen branch: pick a stop, or move on
   | { kind: 'node'; forkIndex: number; branch: number; index: number; nodeType: NodeType };
 
-// The rolled content of the current non-fight node (stable for the visit).
+// The rolled content of the current non-fight node. Rolled once on FIRST entry
+// and cached for the whole branch stay (branchContent), so leaving and coming
+// back never rerolls a storefront or restocks what was bought.
 export type NodeContent =
   | { type: 'cardShop'; offers: CardOffer[] }
   | { type: 'cardUpgrade'; offers: ModifierOffer[] }
   | { type: 'partyUpgrade'; offers: PartyUpgradeOffer[] }
   | { type: 'healerUpgrade'; offers: HealerUpgradeOffer[] }
-  | { type: 'event'; event: EventDef }
+  | { type: 'event'; event: EventDef; done: boolean } // done: resolved once — revisits find it spent
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
   | { type: 'infirmary'; price: number }                              // clear scars for gold (DR1)
@@ -63,8 +66,9 @@ export type NodeContent =
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
 // v3: difficulty, #23; v4: fightsWon, #24; v5: per-member injuries + infirmary
-// node content, DR1; v6: drafted member identity + draft location/content, #27.)
-export const RUN_SAVE_VERSION = 6;
+// node content, DR1; v6: drafted member identity + draft location/content, #27;
+// v7: branch hub location + per-branch cached node content.)
+export const RUN_SAVE_VERSION = 7;
 
 export interface RunSnapshot {
   version: number;
@@ -83,6 +87,7 @@ export interface RunSnapshot {
   status: RunStatus;
   location: RunLocation;
   nodeContent: NodeContent | null;
+  branchContent: (NodeContent | null)[];
   currentEnemyDef: EnemyDef | null;
 }
 
@@ -101,6 +106,10 @@ export class Run {
   status: RunStatus;
   location: RunLocation;
   nodeContent: NodeContent | null;
+  // Per-node content of the current branch stay, by node index. null = not yet
+  // visited; filled (and thereafter shared with nodeContent) on first entry, so
+  // revisits see the same stock/state instead of a fresh roll.
+  branchContent: (NodeContent | null)[];
   currentEnemyDef: EnemyDef | null; // enemy rolled for the current fight (stable for the visit)
   private nextUid: number;
 
@@ -120,6 +129,7 @@ export class Run {
     this.status = 'playing';
     this.location = { kind: 'start' };
     this.nodeContent = null;
+    this.branchContent = [];
     this.currentEnemyDef = null;
   }
 
@@ -147,6 +157,7 @@ export class Run {
       status: this.status,
       location: this.location,
       nodeContent: this.nodeContent,
+      branchContent: this.branchContent,
       currentEnemyDef: this.currentEnemyDef,
     };
   }
@@ -167,7 +178,13 @@ export class Run {
     run.map = snap.map;
     run.status = snap.status;
     run.location = snap.location;
-    run.nodeContent = snap.nodeContent;
+    run.branchContent = snap.branchContent ?? [];
+    // Inside a node, nodeContent must be the SAME object as its branchContent
+    // slot (JSON split them), so mutations (buying an offer) stay visible on
+    // revisit after a resume.
+    run.nodeContent = snap.location.kind === 'node'
+      ? run.branchContent[snap.location.index] ?? snap.nodeContent
+      : snap.nodeContent;
     run.currentEnemyDef = snap.currentEnemyDef;
     return run;
   }
@@ -202,6 +219,7 @@ export class Run {
   _enterFight(fightIndex: number): void {
     this.location = { kind: 'fight', fightIndex };
     this.nodeContent = null;
+    this.branchContent = []; // the previous branch's storefronts are behind us
     this.currentEnemyDef = this.peekEncounter(fightIndex);
   }
 
@@ -267,6 +285,7 @@ export class Run {
       case 'fight': return location.fightIndex;
       case 'spoils': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
+      case 'branch': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'node': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       default: return 0;
     }
@@ -420,43 +439,74 @@ export class Run {
     return { fights, relics, victory, goldPenalty, total: Math.max(0, fights + relics + victory + goldPenalty) };
   }
 
-  // Commit to a branch at the current fork and enter its first node.
+  // Commit to a branch at the current fork and land on its hub, from which the
+  // player visits the branch's stops in any order, as often as they like, before
+  // heading to the next fight (startNextFight).
   chooseBranch(branch: number): void {
     if (this.location.kind !== 'forkChoice') return;
     const forkIndex = this.location.forkIndex;
-    this._gotoNode(forkIndex, branch, 0);
+    this.location = { kind: 'branch', forkIndex, branch };
+    this.nodeContent = null;
+    this.branchContent = this.map[forkIndex].branches[branch].nodes.map(() => null);
   }
 
-  // Finish the current node, moving to the branch's next node or the next fight.
+  // A member carries at least one unhealed scar.
+  hasInjuredMember(): boolean {
+    return this.party.some((p) => p.injuries > 0);
+  }
+
+  // Whether a node of this type can be visited right now. The Infirmary only
+  // opens its doors to a wounded party — with no scars to treat it isn't shown
+  // (map + hub) and can't be entered.
+  nodeAvailable(type: NodeType): boolean {
+    return type !== 'infirmary' || this.hasInjuredMember();
+  }
+
+  // Enter one of the current branch's stops from the hub. First entry rolls the
+  // node's content; revisits reuse the cached content (same stock, same state).
+  enterNode(index: number): void {
+    if (this.location.kind !== 'branch') return;
+    const { forkIndex, branch } = this.location;
+    const node = this.map[forkIndex].branches[branch].nodes[index];
+    if (!node || !this.nodeAvailable(node.type)) return;
+    this.location = { kind: 'node', forkIndex, branch, index, nodeType: node.type };
+    this.branchContent[index] ??= this._rollNodeContent(node.type);
+    this.nodeContent = this.branchContent[index];
+  }
+
+  // Leave the current node, back to the branch hub (the content stays cached
+  // there, so coming back finds the node as it was left).
   completeNode(): void {
     if (this.location.kind !== 'node') return;
-    const { forkIndex, branch, index } = this.location;
-    if (index < NODES_PER_BRANCH - 1) this._gotoNode(forkIndex, branch, index + 1);
-    else this._enterFight(forkIndex + 1);
+    const { forkIndex, branch } = this.location;
+    this.location = { kind: 'branch', forkIndex, branch };
+    this.nodeContent = null;
   }
 
-  _gotoNode(forkIndex: number, branch: number, index: number): void {
-    const nodeType = this.map[forkIndex].branches[branch].nodes[index].type;
-    this.location = { kind: 'node', forkIndex, branch, index, nodeType };
-    this._enterNode(nodeType);
+  // Done with the branch: head to the fight the fork was walking toward.
+  startNextFight(): void {
+    if (this.location.kind !== 'branch') return;
+    this._enterFight(this.location.forkIndex + 1);
   }
 
-  // Roll (once) the storefront / event for the node just entered.
-  _enterNode(nodeType: NodeType): void {
+  // Roll the storefront / event for a node's first visit.
+  _rollNodeContent(nodeType: NodeType): NodeContent | null {
     switch (nodeType) {
-      case 'cardShop': this.nodeContent = { type: 'cardShop', offers: this.rollCardShop() }; break;
-      case 'cardUpgrade': this.nodeContent = { type: 'cardUpgrade', offers: this.rollCardUpgradeShop() }; break;
-      case 'partyUpgrade': this.nodeContent = { type: 'partyUpgrade', offers: this.rollPartyShop() }; break;
-      case 'healerUpgrade': this.nodeContent = { type: 'healerUpgrade', offers: this.rollHealerShop() }; break;
-      case 'event': this.nodeContent = { type: 'event', event: this.rollEvent() }; break;
-      case 'reliquary':
-        this.nodeContent = { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
-        break;
-      case 'infirmary':
-        this.nodeContent = { type: 'infirmary', price: this.discountedPrice(INFIRMARY_PRICE) };
-        break;
-      default: this.nodeContent = null; break;
+      case 'cardShop': return { type: 'cardShop', offers: this.rollCardShop() };
+      case 'cardUpgrade': return { type: 'cardUpgrade', offers: this.rollCardUpgradeShop() };
+      case 'partyUpgrade': return { type: 'partyUpgrade', offers: this.rollPartyShop() };
+      case 'healerUpgrade': return { type: 'healerUpgrade', offers: this.rollHealerShop() };
+      case 'event': return { type: 'event', event: this.rollEvent(), done: false };
+      case 'reliquary': return { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
+      case 'infirmary': return { type: 'infirmary', price: this.discountedPrice(INFIRMARY_PRICE) };
+      default: return null;
     }
+  }
+
+  // An event resolves once: mark it spent so revisits (now that nodes can be
+  // re-entered freely) can't farm its choices.
+  markEventDone(): void {
+    if (this.nodeContent?.type === 'event') this.nodeContent.done = true;
   }
 
   // ---- storefront rolls ----------------------------------------------------

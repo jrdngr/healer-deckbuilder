@@ -32,6 +32,15 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
 
 const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id)!.uid;
 
+// Cross the current fork: take a branch, visit every open stop once (a closed
+// Infirmary is skipped — enterNode refuses it and completeNode then no-ops),
+// and head on to the next fight.
+const crossBranch = (run: Run, branch = 0): void => {
+  run.chooseBranch(branch);
+  for (let i = 0; i < NODES_PER_BRANCH; i++) { run.enterNode(i); run.completeNode(); }
+  run.startNextFight();
+};
+
 // --- map shape & determinism ------------------------------------------------
 {
   const run = new Run(1);
@@ -89,14 +98,115 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
   eq('gold awarded for fight', run.gold, GOLD_PER_FIGHT);
 
-  // Choose a branch -> first node; complete twice -> next fight.
+  // Choose a branch -> its hub; stops open in ANY order, leaving a stop returns
+  // to the hub, and the hub decides when the next fight starts. Pin the stops so
+  // the assertions don't depend on the seed's roll (a closed Infirmary hides).
+  run.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
   run.chooseBranch(0);
-  check('branch choice -> node', run.location.kind === 'node' && run.location.index === 0);
+  check('branch choice -> the branch hub', run.location.kind === 'branch');
+  run.enterNode(1);
+  check('stops open in any order (second first)', run.location.kind === 'node' && run.location.index === 1);
   run.completeNode();
-  check('node -> second node', run.location.kind === 'node' && run.location.index === 1);
+  check('leaving a stop returns to the hub', run.location.kind === 'branch');
+  run.enterNode(0);
+  check('the other stop opens from the hub', run.location.kind === 'node' && run.location.index === 0);
   run.completeNode();
-  check('branch end -> fight 1', run.location.kind === 'fight' && run.location.fightIndex === 1);
+  run.startNextFight();
+  check('the hub leads to fight 1', run.location.kind === 'fight' && run.location.fightIndex === 1);
 }
+// --- branch hub: revisits keep state, events resolve once ---------------------
+{
+  const run = new Run(31);
+  run.beginRun();
+  run.winFight();
+  run.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
+  run.chooseBranch(0);
+
+  // First visit rolls the shop; buy something.
+  run.enterNode(0);
+  const stock = run.nodeContent?.type === 'cardShop' ? run.nodeContent.offers.length : 0;
+  check('the shop rolls on first entry', stock > 0);
+  run.gold = 999;
+  check('a purchase goes through', run.buyCardOffer(0));
+  run.completeNode();
+
+  // Revisit: same content object, reduced stock, and the rng stream untouched.
+  const rngBefore = run.rng.getState();
+  run.enterNode(0);
+  check('a revisited shop keeps its (reduced) stock — no reroll',
+    run.nodeContent?.type === 'cardShop' && run.nodeContent.offers.length === stock - 1);
+  eq('a revisit consumes no rng', run.rng.getState(), rngBefore);
+  check('the revisit shares the cached content object', run.nodeContent === run.branchContent[0]);
+  run.completeNode();
+
+  // Events roll live, resolve once, and stay spent across revisits.
+  run.enterNode(1);
+  check('an event rolls unspent', run.nodeContent?.type === 'event' && !run.nodeContent.done);
+  run.markEventDone();
+  run.completeNode();
+  run.enterNode(1);
+  check('a resolved event stays spent on revisit', run.nodeContent?.type === 'event' && run.nodeContent.done);
+  run.completeNode();
+
+  // Moving on reaches the fight and drops the branch cache.
+  run.startNextFight();
+  check('the hub leads to the next fight', run.location.kind === 'fight' && run.location.fightIndex === 1);
+  eq('the branch cache is dropped at the fight boundary', run.branchContent.length, 0);
+}
+
+// --- branch hub: the Infirmary only opens to a wounded party ------------------
+{
+  const run = new Run(32);
+  run.beginRun();
+  run.winFight();
+  run.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
+  run.chooseBranch(0);
+
+  check('unscarred party: the infirmary is closed', !run.nodeAvailable('infirmary'));
+  run.enterNode(0);
+  check('entering a closed infirmary is refused', run.location.kind === 'branch');
+
+  run.party[0].injuries = 2;
+  check('a scarred party opens the infirmary', run.nodeAvailable('infirmary'));
+  run.enterNode(0);
+  check('the infirmary opens once someone is hurt',
+    run.location.kind === 'node' && run.nodeContent?.type === 'infirmary');
+
+  // Heal every scar at the counter; on leaving, the door closes again.
+  run.gold = INFIRMARY_PRICE * 2;
+  check('scar 1 treated', run.clearInjuryForGold(0 as Slot));
+  check('scar 2 treated', run.clearInjuryForGold(0 as Slot));
+  run.completeNode();
+  check('a fully-healed party closes the infirmary again', !run.nodeAvailable('infirmary'));
+  check('every other stop stays open', run.nodeAvailable('event') && run.nodeAvailable('cardShop'));
+}
+
+// --- branch hub: a mid-branch save/resume keeps the cached stops ---------------
+{
+  const run = new Run(33);
+  run.beginRun();
+  run.winFight();
+  run.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
+  run.chooseBranch(1);
+  run.enterNode(0);
+  run.gold = 999;
+  run.buyCardOffer(0);
+
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  check('a mid-node resume lands back in the node', restored.location.kind === 'node');
+  check('the resumed node IS its cached branch slot (one object, not two copies)',
+    restored.nodeContent === restored.branchContent[0]);
+  eq('a mid-branch snapshot round-trips byte-stable',
+    JSON.stringify(restored.toJSON()), JSON.stringify(run.toJSON()));
+
+  // The resumed shop still shows the purchase, and a resumed revisit keeps it.
+  const offers = restored.nodeContent?.type === 'cardShop' ? restored.nodeContent.offers.length : -1;
+  restored.completeNode();
+  restored.enterNode(0);
+  check('the resumed revisit keeps the reduced stock',
+    restored.nodeContent?.type === 'cardShop' && restored.nodeContent.offers.length === offers);
+}
+
 {
   // Drive through all 9 fights: three acts, an act boss at the end of each
   // (fights 2, 5, 8), only the final fight wins the run.
@@ -119,9 +229,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
         run.skipSpoils();
       }
       check(`win of fight ${f} -> forkChoice`, run.location.kind === 'forkChoice');
-      run.chooseBranch(run.rng() < 0.5 ? 0 : 1);
-      run.completeNode();
-      run.completeNode();
+      crossBranch(run, run.rng() < 0.5 ? 0 : 1);
     }
   }
   eq('act bosses sit at fights 2/5/8', JSON.stringify(bossFights), JSON.stringify([2, 5, 8]));
@@ -142,9 +250,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       if (run.location.kind === 'spoils') run.skipSpoils();
-      run.chooseBranch(0);
-      run.completeNode();
-      run.completeNode();
+      crossBranch(run);
     }
   }
   eq('HP curve matches ENEMY_HP_BY_FIGHT', JSON.stringify(seen), JSON.stringify(ENEMY_HP_BY_FIGHT));
@@ -509,7 +615,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   run.beginRun();
   for (let f = 0; f < 2; f++) {
     run.winFight();
-    run.chooseBranch(0); run.completeNode(); run.completeNode();
+    crossBranch(run);
   }
   eq('at the act-1 boss', run.fightIndex, 2);
   run.winFight();
@@ -556,7 +662,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   // Reliquary storefront: unowned relics at rarity prices; gold-gated buys;
   // card removal at the standard price, capped per visit.
   const run = new Run(81);
-  run._enterNode('reliquary');
+  run.nodeContent = run._rollNodeContent('reliquary');
   check('reliquary content rolled', run.nodeContent?.type === 'reliquary');
   if (run.nodeContent?.type === 'reliquary') {
     const offers = run.nodeContent.offers;
@@ -763,7 +869,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 }
 {
   // A save+resume at a boundary produces the same run as never interrupting.
-  const finish = (r: Run): void => { r.chooseBranch(0); r.completeNode(); r.completeNode(); };
+  const finish = (r: Run): void => crossBranch(r);
   const uninterrupted = new Run(9);
   uninterrupted.beginRun();
   uninterrupted.winFight();
@@ -784,6 +890,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('start heads to fight 0', Run.upcomingFightIndex({ kind: 'start' }), 0);
   eq('a fight is its own fight', Run.upcomingFightIndex({ kind: 'fight', fightIndex: 4 }), 4);
   eq('a fork heads to the next fight', Run.upcomingFightIndex({ kind: 'forkChoice', forkIndex: 4 }), 5);
+  eq('a branch hub heads to the next fight', Run.upcomingFightIndex({ kind: 'branch', forkIndex: 2, branch: 1 }), 3);
   eq('a node heads to the next fight',
     Run.upcomingFightIndex({ kind: 'node', forkIndex: 2, branch: 0, index: 1, nodeType: 'event' }), 3);
   eq('the last fork clamps to the final fight', Run.upcomingFightIndex({ kind: 'forkChoice', forkIndex: 8 }), 8);
@@ -843,7 +950,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   check('infirmary is a placeable node type', NODE_TYPE_WEIGHTS.some(([t]) => t === 'infirmary'));
 
   const run = new Run(11);
-  run._enterNode('infirmary');
+  run.nodeContent = run._rollNodeContent('infirmary');
   eq('infirmary content rolls', run.nodeContent?.type, 'infirmary');
   if (run.nodeContent?.type === 'infirmary') eq('infirmary price is the flat rate', run.nodeContent.price, INFIRMARY_PRICE);
 
@@ -872,7 +979,7 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   // Haggler's Charm discounts the infirmary price like any other.
   const haggled = new Run(12);
   haggled.addRelic('hagglersCharm');
-  haggled._enterNode('infirmary');
+  haggled.nodeContent = haggled._rollNodeContent('infirmary');
   if (haggled.nodeContent?.type === 'infirmary') {
     eq('Haggler discounts the infirmary', haggled.nodeContent.price, INFIRMARY_PRICE - HAGGLER_DISCOUNT);
   }

@@ -257,7 +257,7 @@ import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
 import { FIGHT_COUNT, isActBoss, actOfFight, DRAFT_POOL, MEMBER_POOL, partyFromMembers } from '../src/constants';
 import type { MemberId } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch } from './policy';
 
 export interface FightOutcome {
   fightIndex: number;
@@ -308,6 +308,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
       }
       case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
+      case 'branch': advanceBranch(run); break;
       case 'node': {
         const wasInfirmary = run.nodeContent?.type === 'infirmary';
         const before = run.gold;

@@ -22,7 +22,9 @@ import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
 import { MapScreen } from '../src/components/MapScreen';
-import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT } from '../src/constants';
+import { BranchScreen } from '../src/components/BranchScreen';
+import { EventScreen } from '../src/components/EventScreen';
+import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 
@@ -235,6 +237,10 @@ async function render(el: React.ReactElement): Promise<string> {
 {
   const mapRun = new Run(21);
   mapRun.location = { kind: 'forkChoice', forkIndex: 0 };
+  // Pin the fork so the node count doesn't depend on the seed's roll (an
+  // Infirmary node hides from an unscarred party — asserted separately below).
+  mapRun.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
+  mapRun.map[0].branches[1].nodes = [{ type: 'partyUpgrade' }, { type: 'healerUpgrade' }];
   let chosen: number | null = null;
   await render(<MapScreen run={mapRun} onChoose={(b) => { chosen = b; }} />);
   check('map draws both trails', rootEl.querySelectorAll('.map-path').length === 2);
@@ -254,6 +260,61 @@ async function render(el: React.ReactElement): Promise<string> {
   await new Promise((r) => setTimeout(r, 900));
   await act(async () => {});
   check('choose fires after the travel delay with the picked branch', chosen === 1, String(chosen));
+}
+
+// --- MapScreen hides an Infirmary node while the party is unscarred -------------
+{
+  const infMap = new Run(24);
+  infMap.location = { kind: 'forkChoice', forkIndex: 0 };
+  infMap.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
+  infMap.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
+  let text = await render(<MapScreen run={infMap} onChoose={() => {}} />);
+  check('an unscarred party sees no Infirmary on the map', !text.includes('Infirmary'), text);
+  infMap.party[0] = { ...infMap.party[0], injuries: 1 };
+  text = await render(<MapScreen run={infMap} onChoose={() => {}} />);
+  check('a scarred party sees the Infirmary on the map', text.includes('Infirmary'), text);
+}
+
+// --- BranchScreen: the hub lists open stops and leads to the fight --------------
+{
+  const hubRun = new Run(22);
+  hubRun.beginRun();
+  hubRun.winFight();
+  hubRun.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
+  hubRun.chooseBranch(0);
+  let entered: number | null = null;
+  let fought = false;
+  let text = await render(
+    <BranchScreen run={hubRun} onEnter={(i) => { entered = i; }} onFight={() => { fought = true; }} />,
+  );
+  check('hub hides the closed infirmary', !text.includes('Infirmary'), text);
+  check('hub shows the open stop', text.includes('Event'), text);
+  check('hub offers the way to the fight', text.includes('Onward to the fight'), text);
+
+  const stop = rootEl.querySelector('.branch-stop') as HTMLElement;
+  await act(async () => { stop.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
+  check('clicking the only visible stop enters the event (node 1)', entered === 1, String(entered));
+
+  hubRun.party[0] = { ...hubRun.party[0], injuries: 1 };
+  text = await render(
+    <BranchScreen run={hubRun} onEnter={() => {}} onFight={() => { fought = true; }} />,
+  );
+  check('a scarred party sees the infirmary stop', text.includes('Infirmary'), text);
+
+  const go = rootEl.querySelector('.branch-fight') as HTMLElement;
+  await act(async () => { go.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
+  check('the fight button fires onFight', fought);
+}
+
+// --- EventScreen: a spent event offers only the way out --------------------------
+{
+  const evRun = new Run(23);
+  evRun.nodeContent = { type: 'event', event: EVENTS[0], done: true };
+  const evAct = <T,>(fn: (r: Run) => T): T => fn(evRun);
+  const text = await render(<EventScreen run={evRun} act={evAct} onDone={() => {}} />);
+  check('a spent event says the moment has passed', text.includes('The moment has passed'), text);
+  check('a spent event hides its choices', !text.includes(EVENTS[0].choices[0].label), text);
+  check('a spent event still offers the way out', text.includes('Leave'), text);
 }
 
 await act(async () => { root.unmount(); });

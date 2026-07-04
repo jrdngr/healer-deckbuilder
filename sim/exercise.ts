@@ -290,7 +290,7 @@ const DR1_PROBES: Record<string, () => boolean> = {
   infirmary: () => {
     const run = new Run(102);
     run.party[1].injuries = 2; run.gold = 999;
-    run._enterNode('infirmary');
+    run.nodeContent = run._rollNodeContent('infirmary');
     return run.clearInjuryForGold(1 as Slot) && run.party[1].injuries === 1;
   },
   fieldHospital: () => {
