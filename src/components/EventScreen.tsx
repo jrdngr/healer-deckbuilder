@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   CARDS, MEMBER_DEFS, MODIFIERS, RELICS, CARD_REMOVAL_PRICE, DUPLICATE_PRICE,
-  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, CURSE_SHRINE_GOLD, resolveCard, makeDeckCard,
+  BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, CURSE_SHRINE_GOLD, INJURY_NAMES, resolveCard, makeDeckCard,
 } from '../constants';
 import type { CardId, Slot, EventChoiceKind } from '../constants';
 import type { Run } from '../run';
@@ -23,6 +23,7 @@ type Stage =
   | { kind: 'shrineParty' }
   | { kind: 'duplicateCard' }
   | { kind: 'bloodAltar' }
+  | { kind: 'healInjury' }
   | { kind: 'result'; text: string };
 
 // A single-step event: a scenario with a few choices. Some choices need a follow-up
@@ -91,6 +92,9 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
       case 'bloodAltar':
         setStage({ kind: 'bloodAltar' });
         break;
+      case 'healInjury':
+        setStage({ kind: 'healInjury' });
+        break;
       case 'shrineCurse': {
         const curse = act((r) => r.shrineAcceptCurse());
         finish(curse
@@ -136,6 +140,13 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
     finish(result
       ? `The altar drinks. ${MEMBER_DEFS[slot].name}: −${result.hpLoss} max HP, +${result.damageGain} damage.`
       : `${MEMBER_DEFS[slot].name} is too frail to sacrifice.`);
+  };
+
+  const tendInjury = (slot: Slot) => {
+    const healed = act((r) => r.healInjury(slot));
+    finish(healed
+      ? `The medic tends ${MEMBER_DEFS[slot].name}, and one wound closes for good.`
+      : `${MEMBER_DEFS[slot].name} bears no lasting wounds.`);
   };
 
   return (
@@ -246,6 +257,32 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
                   >
                     <span className="member-name">{d.name}{able ? '' : ' (too frail)'}</span>
                     <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
+          </div>
+        )}
+
+        {stage.kind === 'healInjury' && (
+          <div className="event-pick">
+            <h3>Choose a hero to tend</h3>
+            <div className="member-row">
+              {MEMBER_DEFS.map((d) => {
+                const p = run.party[d.slot];
+                const injured = p.injuries > 0;
+                return (
+                  <button
+                    key={d.id}
+                    className="member-pick"
+                    disabled={!injured}
+                    onClick={() => injured && tendInjury(d.slot as Slot)}
+                  >
+                    <span className="member-name">{d.name}{injured ? '' : ' (unharmed)'}</span>
+                    <span className="member-stats">
+                      {injured ? INJURY_NAMES.slice(0, p.injuries).join(' · ') : 'No injuries'}
+                    </span>
                   </button>
                 );
               })}

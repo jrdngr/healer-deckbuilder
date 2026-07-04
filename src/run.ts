@@ -731,6 +731,16 @@ export class Run {
     return def;
   }
 
+  // Field Hospital (DR1): clear one death-scar (top of the ladder) off a chosen
+  // member for free — a soft, random anti-spiral valve to complement the paid
+  // Infirmary. Returns false (nothing tended) if the member is unharmed.
+  healInjury(slot: Slot): boolean {
+    const p = this.party[slot];
+    if (!p || p.injuries <= 0) return false;
+    p.injuries -= 1;
+    return true;
+  }
+
   // ---- events expansion (#19) -----------------------------------------------
 
   // Cursed Chest: the gold is guaranteed; the price is a card of the CHEST's

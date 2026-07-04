@@ -294,8 +294,11 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 }
 
 {
-  // Event catalog & rollEvent stay within the defined set (expanded 3 -> 8, #19).
-  eq('eight events (expansion, #19)', EVENTS.length, 8);
+  // Event catalog & rollEvent stay within the defined set (3 -> 8 in #19, + the
+  // DR1 Field Hospital = 9).
+  eq('nine events (incl. DR1 Field Hospital)', EVENTS.length, 9);
+  check('the Field Hospital tends injuries',
+    EVENTS.find((e) => e.id === 'fieldHospital')!.choices.some((c) => c.kind === 'healInjury'));
   const ids = new Set(EVENTS.map((e) => e.id));
   let inSet = true;
   for (let seed = 0; seed < 30; seed++) {
@@ -864,6 +867,14 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   if (haggled.nodeContent?.type === 'infirmary') {
     eq('Haggler discounts the infirmary', haggled.nodeContent.price, INFIRMARY_PRICE - HAGGLER_DISCOUNT);
   }
+
+  // Field Hospital event: heal one scar free (top of the ladder), no-op if unharmed.
+  const fh = new Run(13);
+  fh.party[0].injuries = 2;
+  check('the Field Hospital tends a scar for free', fh.healInjury(0 as Slot));
+  eq('one scar closed, no gold spent', fh.party[0].injuries, 1);
+  eq('the free tend costs nothing', fh.gold, 0);
+  check('tending an unharmed member does nothing', !fh.healInjury(1 as Slot));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

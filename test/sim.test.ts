@@ -60,7 +60,7 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // few pp low here; the survival-aware policy (commit 6) and the balance re-tune
   // (commit 7) restore the bands and set the final pin. The band + boss gates below
   // still hold on this interim value.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 177, 176, 172, 113, 109, 105, 53]));
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 178, 177, 173, 113, 108, 105, 54]));
   // Full-run lands in the 25-35% band. The authoritative gate runs at N=1000
   // (ISSUES.md ground rules; see the run-sim baseline note) — this N=200 sample
   // asserts statistical consistency with the band, not the band itself, so

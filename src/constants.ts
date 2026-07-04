@@ -955,6 +955,7 @@ export type EventChoiceKind =
   | 'purgeRandom'   // free removal, but the well chooses the card (#19)
   | 'bloodAltar'    // pick a member: -2 max HP for +1 damage, permanent (#19)
   | 'shrineCurse'   // accept a random curse for gold (#22)
+  | 'healInjury'    // pick a member: clear one death-scar, free (DR1)
   | 'leave';        // decline / move on
 
 export interface EventChoiceDef {
@@ -1056,6 +1057,15 @@ export const EVENTS: EventDef[] = [
       { label: 'Feed it a burden', kind: 'removeCard', detail: `Choose a card to remove (${CARD_REMOVAL_PRICE}g).` },
       { label: 'Let the well choose', kind: 'purgeRandom', detail: 'Free — a random card is removed.' },
       { label: 'Step away', kind: 'leave' },
+    ],
+  },
+  {
+    id: 'fieldHospital',
+    title: 'Field Hospital',
+    text: 'A tent of clean linen and boiling water. "Bring me your wounded, healer — I\'ll not charge a coin for mending what the road has broken. One soul, mind you; I\'ve others to see."',
+    choices: [
+      { label: 'Tend a hero', kind: 'healInjury', detail: 'Heal one lasting injury on a chosen member (free).' },
+      { label: 'Move on', kind: 'leave' },
     ],
   },
   {
