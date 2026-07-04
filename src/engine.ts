@@ -1371,7 +1371,9 @@ export class Game {
     switch (m.ability) {
       case 'poison': {
         const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
-        const strength = POISON_BASE + m.abilityPower + hourglass;
+        // Floored at 1: a Broken member (DR1) can carry negative abilityPower, but
+        // an ability never resolves to 0-or-below damage.
+        const strength = Math.max(1, POISON_BASE + m.abilityPower + hourglass);
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
         this.enemy.poison = Math.max(this.enemy.poison, strength);
         this.enemy.poisonTurns = POISON_TURNS;
@@ -1383,7 +1385,9 @@ export class Game {
         // Taunt and its bundled Defense are attributed to the caster, not a slot.
         // Defense strength is per-member (#17): the caster's abilityPower scales
         // it, and a stronger Defense already standing (Phalanx) is kept.
-        const strength = DEFENSE_AMOUNT + m.abilityPower;
+        // Floored at 0 (DR1): a Broken member's negative abilityPower may zero out
+        // the bundled Defense, but must never turn it into bonus incoming damage.
+        const strength = Math.max(0, DEFENSE_AMOUNT + m.abilityPower);
         m.defenseAmount = m.defense > 0 ? Math.max(m.defenseAmount, strength) : strength;
         m.taunt = TAUNT_TURNS;
         m.defense = DEFENSE_TURNS;
@@ -1403,7 +1407,9 @@ export class Game {
       case 'bolt': {
         // Bolt scales on the *caster's* Charge.
         const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
-        const base = BOLT_BASE + m.abilityPower + hourglass;
+        // Floored at 1 (DR1): see the poison note — a Broken member still bolts for
+        // at least its Charge scaling.
+        const base = Math.max(1, BOLT_BASE + m.abilityPower + hourglass);
         const dmg = base + BOLT_CHARGE_MULT * m.charge;
         this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${m.charge}).`, 'status');
         m.charge = 0;

@@ -602,7 +602,45 @@ export interface PartyMemberConfig {
   maxHP: number;
   damage: number;
   abilityPower: number; // bonus added to the member's base ability strength
+  // Persistent death-scars (DR1). A member accrues one each time it dies in a
+  // won fight (see Run.recordInjuries); the count drives an escalating stat
+  // penalty (injuryPenalty below) that is applied to the fight config in
+  // Run.toBattleConfig and cleared for gold at an Infirmary node. Kept SEPARATE
+  // from the base stats so clearing restores them exactly and does not entangle
+  // with permanent party upgrades.
+  injuries: number; // 0..MAX_INJURIES
 }
+
+// ---------------------------------------------------------------------------
+// Injuries / scars (DR1). Death used to cost only the current fight's output —
+// the party was rebuilt at full HP for free — so optimal play spent members.
+// A death now leaves a persistent, escalating scar, so protecting members is
+// correct play (and the revive kit finally earns its cost). Each member scars
+// by ITS OWN death count, capped at MAX_INJURIES:
+//   1st death → "Cracked"  (−max HP)
+//   2nd death → "Weakened" (−1 damage)
+//   3rd death → "Broken"   (−1 ability power)
+// The tables give the TOTAL penalty at a given injury count (indexed count−1),
+// i.e. they are cumulative-by-tier, not per-tier increments: a Cracked member
+// keeps just the HP penalty even after taking the Weakened and Broken scars.
+// Flat, not percentage — legible on the card and clean to sim/pin (a percentage
+// rounds ugly on the 9-HP mage). Exact magnitudes are sim-tuned.
+// ---------------------------------------------------------------------------
+export const MAX_INJURIES = 3;
+export const INJURY_MAXHP: number[] = [3, 3, 3];   // Cracked: −3 max HP from the 1st scar on
+export const INJURY_DAMAGE: number[] = [0, 1, 1];  // Weakened: −1 damage from the 2nd scar on
+export const INJURY_ABILITY: number[] = [0, 0, 1]; // Broken: −1 ability power from the 3rd scar
+
+// Human-readable scar names by tier index (0 = 1st death). Used by the UI and
+// the Infirmary; capped at MAX_INJURIES.
+export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken'];
+
+// Total penalty of each kind for a member carrying `injuries` scars.
+const injuryPenalty = (table: number[], injuries: number): number =>
+  injuries <= 0 ? 0 : table[Math.min(injuries, MAX_INJURIES) - 1];
+export const injuryMaxHPPenalty = (injuries: number): number => injuryPenalty(INJURY_MAXHP, injuries);
+export const injuryDamagePenalty = (injuries: number): number => injuryPenalty(INJURY_DAMAGE, injuries);
+export const injuryAbilityPenalty = (injuries: number): number => injuryPenalty(INJURY_ABILITY, injuries);
 
 export interface HealerConfig {
   maxMana: number;   // MP cap; starting MP each fight equals this
@@ -643,7 +681,7 @@ export function makeDeckCard(id: CardId, uid: number, upgrades: ModifierId[] = [
 }
 
 export function defaultParty(): PartyMemberConfig[] {
-  return MEMBER_DEFS.map((d) => ({ maxHP: d.maxHP, damage: d.damage, abilityPower: 0 }));
+  return MEMBER_DEFS.map((d) => ({ maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0 }));
 }
 
 // The original 15-card deck as concrete instances (uid = position).

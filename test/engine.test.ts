@@ -603,6 +603,29 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('aoe heal emits per-member events', g.events.filter((e) => e.kind === 'heal').length, 3);
 }
 
+// --- injury ability floor (DR1): a Broken member carries negative abilityPower,
+//     but no ability ever resolves to 0-or-below --------------------------------
+{
+  const cfg = defaultBattleConfig();
+  cfg.party = cfg.party.map((p) => ({ ...p, abilityPower: -10 }));
+  const g = new Game(31, cfg);
+  g.start();
+
+  g.mp = 10; g.events = [];
+  g.playCard(giveCard(g, 'ability'), SLOT.LEFT); // poison: max(1, 5−10)
+  const pois = g.events.find((e) => e.kind === 'poisonApplied') as any;
+  eq('Broken poison strength floored at 1', pois.amount, 1);
+
+  g.mp = 10; g.mageCharge = 0; g.enemy.hp = 100; g.events = [];
+  g.playCard(giveCard(g, 'ability'), SLOT.RIGHT); // bolt base: max(1, 5−10), +0 charge
+  const bolt = g.events.find((e) => e.kind === 'bolt') as any;
+  eq('Broken bolt base floored at 1', bolt.amount, 1);
+
+  g.mp = 10; g.events = [];
+  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt: defense max(0, 1−10)
+  eq('Broken taunt Defense floored at 0', g.members[SLOT.CENTER].defenseAmount, 0);
+}
+
 // --- events: bolt, poison, taunt, shield, regen, refresh, resurrect ---------
 {
   const g = new Game(23);
@@ -784,7 +807,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
 {
   // Custom party stats and enemy HP feed straight through.
   const cfg = defaultBattleConfig();
-  cfg.party[SLOT.LEFT] = { maxHP: 20, damage: 7, abilityPower: 0 };
+  cfg.party[SLOT.LEFT] = { maxHP: 20, damage: 7, abilityPower: 0, injuries: 0 };
   cfg.enemy = { maxHP: 50, boss: false, attackBonus: 0 };
   const g = new Game(6, cfg);
   eq('custom member maxHP', g.members[SLOT.LEFT].maxHP, 20);

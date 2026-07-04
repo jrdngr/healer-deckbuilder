@@ -20,6 +20,7 @@ import {
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS, DIFFICULTIES,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
+  MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
@@ -56,8 +57,9 @@ export type NodeContent =
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
-// v3: difficulty, #23; v4: fightsWon, #24.)
-export const RUN_SAVE_VERSION = 4;
+// v3: difficulty, #23; v4: fightsWon, #24; v5: per-member injuries + infirmary
+// node content, DR1.)
+export const RUN_SAVE_VERSION = 5;
 
 export interface RunSnapshot {
   version: number;
@@ -152,7 +154,7 @@ export class Run {
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
-    run.party = snap.party.map((p) => ({ ...p }));
+    run.party = snap.party.map((p) => ({ ...p, injuries: p.injuries ?? 0 }));
     run.healer = { ...snap.healer };
     run.relics = [...snap.relics];
     run.spentRelics = [...(snap.spentRelics ?? [])];
@@ -264,7 +266,17 @@ export class Run {
     const d = DIFFICULTIES[this.difficulty];
     return {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
-      party: this.party.map((p) => ({ ...p })),
+      // Injuries (DR1) bite here: the fight gets a member with reduced base
+      // stats, so every downstream engine site (HP construction, healing clamp,
+      // Vanguard full-HP check, ability strength) sees the scarred numbers with
+      // no further plumbing. maxHP floored at 1 and damage at 0; abilityPower may
+      // go negative (a Broken member), floored where each ability resolves.
+      party: this.party.map((p) => ({
+        maxHP: Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries)),
+        damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
+        abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
+        injuries: p.injuries,
+      })),
       healer: { ...this.healer },
       relics: [...this.relics],
       spentRelics: [...this.spentRelics],
@@ -322,6 +334,19 @@ export class Run {
 
   loseFight(): void {
     this.status = 'lost';
+  }
+
+  // Record the scars a won fight left (DR1). The driver passes the slots of
+  // members that DIED during the fight (Game.diedThisFightSlots) — a member who
+  // died and was later Resurrected still counts (death always scars), while a
+  // Martyr's Icon save vetoes the death itself, so its slot never appears here.
+  // Only wins reach this (a loss ends the run), and each member's count caps at
+  // MAX_INJURIES.
+  recordInjuries(slots: Slot[]): void {
+    for (const s of slots) {
+      const p = this.party[s];
+      if (p) p.injuries = Math.min(MAX_INJURIES, p.injuries + 1);
+    }
   }
 
   // End-of-run score (#24, flaw #21): progress is worth the most, relics a

@@ -11,7 +11,7 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
-  DIFFICULTIES,
+  DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY,
 } from '../src/constants';
 import { emptyStats, recordRunEnd } from '../src/stats';
 import { groupPile } from '../src/deckView';
@@ -779,6 +779,50 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('a node heads to the next fight',
     Run.upcomingFightIndex({ kind: 'node', forkIndex: 2, branch: 0, index: 1, nodeType: 'event' }), 3);
   eq('the last fork clamps to the final fight', Run.upcomingFightIndex({ kind: 'forkChoice', forkIndex: 8 }), 8);
+}
+
+// --- injuries / scars (DR1): accrual, caps, stat penalties, save round-trip ----
+{
+  const run = new Run(7);
+  eq('party starts unscarred', run.party.every((p) => p.injuries === 0), true);
+
+  // recordInjuries: one scar per death slot, capped at MAX_INJURIES.
+  run.recordInjuries([0 as Slot]);
+  eq('a death scars the member', run.party[0].injuries, 1);
+  run.recordInjuries([0 as Slot, 0 as Slot, 0 as Slot, 0 as Slot]);
+  eq('injuries cap at MAX_INJURIES', run.party[0].injuries, MAX_INJURIES);
+  eq('untouched members stay unscarred', run.party[1].injuries, 0);
+
+  // Escalating stat penalty flows through toBattleConfig (base − cumulative-by-tier).
+  const base = new Run(7);
+  const baseCfg = base.toBattleConfig().party;
+  base.recordInjuries([2 as Slot]); // Cracked (1st): only HP
+  let cfg = base.toBattleConfig().party;
+  eq('Cracked cuts max HP', baseCfg[2].maxHP - cfg[2].maxHP, INJURY_MAXHP[0]);
+  eq('Cracked leaves damage', cfg[2].damage, baseCfg[2].damage);
+  eq('Cracked leaves ability', cfg[2].abilityPower, baseCfg[2].abilityPower);
+
+  base.recordInjuries([2 as Slot]); // Weakened (2nd): + damage
+  cfg = base.toBattleConfig().party;
+  eq('Weakened cuts damage', baseCfg[2].damage - cfg[2].damage, INJURY_DAMAGE[1]);
+  eq('Weakened keeps the HP penalty flat', baseCfg[2].maxHP - cfg[2].maxHP, INJURY_MAXHP[1]);
+
+  base.recordInjuries([2 as Slot]); // Broken (3rd): + ability
+  cfg = base.toBattleConfig().party;
+  eq('Broken cuts ability power', baseCfg[2].abilityPower - cfg[2].abilityPower, INJURY_ABILITY[2]);
+
+  // Penalties never drive a stat below its floor.
+  const frail = new Run(9);
+  frail.party[2] = { maxHP: 1, damage: 0, abilityPower: 0, injuries: MAX_INJURIES };
+  const fcfg = frail.toBattleConfig().party[2];
+  check('max HP floored at 1', fcfg.maxHP >= 1);
+  check('damage floored at 0', fcfg.damage >= 0);
+
+  // Injuries survive the save/resume round-trip and don't corrupt the stream.
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(base.toJSON())));
+  eq('injuries round-trip through a snapshot', restored.party[2].injuries, MAX_INJURIES);
+  eq('snapshot with injuries is byte-stable',
+    JSON.stringify(restored.toJSON()), JSON.stringify(base.toJSON()));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
