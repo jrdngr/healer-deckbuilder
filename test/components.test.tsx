@@ -14,9 +14,11 @@ import { Game } from '../src/engine';
 import { defaultBattleConfig } from '../src/constants';
 import { ManaBar } from '../src/components/ManaBar';
 import { StartScreen } from '../src/components/StartScreen';
+import { DraftScreen } from '../src/components/DraftScreen';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
 import { makeDeckCard, resolveCard } from '../src/constants';
+import { Run } from '../src/run';
 
 let passed = 0;
 let failed = 0;
@@ -103,6 +105,18 @@ async function render(el: React.ReactElement): Promise<string> {
       targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
   );
   check('an unscarred member shows no injury badge', !wholeText.includes('Injured'), wholeText);
+}
+
+// --- DraftScreen surfaces the placement weights and the classic-trio path (#30) -
+{
+  const run = new Run(5);
+  run.beginDraft();
+  const noop = <T,>(fn: (r: Run) => T): T => fn(run);
+  const text = await render(<DraftScreen run={run} act={noop} />);
+  check('draft surfaces the open-attack slot weights', text.includes('25%') && text.includes('50%'), text);
+  check('draft surfaces the veiled-attack slot weights', text.includes('40%') && text.includes('20%'), text);
+  check('draft offers the classic-trio shortcut', text.includes('Accept the classic trio'), text);
+  check('draft prompts for one pick per pair', text.includes('Pick 1'), text);
 }
 
 await act(async () => { root.unmount(); });

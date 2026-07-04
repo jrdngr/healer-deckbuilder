@@ -130,6 +130,69 @@ export const PARTY_SIZE = 3;
 // land (#28 Berserker/Augur, #29 Beast Warden).
 export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden'];
 
+// ---------------------------------------------------------------------------
+// Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
+// The generator guarantees a viable party is achievable so a bad roll can't hand
+// the player a dead run; taunt-less drafts are intended variance, not a failure.
+// ---------------------------------------------------------------------------
+
+// Conservative damage rating per member (the review's numbers), used only by the
+// draft generator's viability check — NOT the in-fight damage (that is on the pool).
+export const DRAFT_RATING: Record<MemberId, number> = {
+  ranger: 4, tank: 2, mage: 5, warlock: 7, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
+};
+
+// Members healing works "conventionally" on. The Warlock burns himself regardless
+// and the Berserker wants to STAY low (healing him is friendly fire), so neither
+// counts toward the healable floor.
+export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
+  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden'],
+);
+
+export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
+export const DRAFT_MIN_DAMAGE = 8;        // a viable party's conservative damage floor
+export const DRAFT_STRONG_DAMAGE = 4;     // "one member >= 4" — a real damage threat
+export const DRAFT_MIN_HEALABLE = 2;      // a viable party needs >= 2 conventionally-healable members
+
+// Does this exact party (a member per slot) clear the draft's viability bar?
+export function partyMeetsDraftConstraints(ids: MemberId[]): boolean {
+  const total = ids.reduce((s, id) => s + DRAFT_RATING[id], 0);
+  const hasStrong = ids.some((id) => DRAFT_RATING[id] >= DRAFT_STRONG_DAMAGE);
+  const healable = ids.filter((id) => CONVENTIONALLY_HEALABLE.has(id)).length;
+  return total >= DRAFT_MIN_DAMAGE && hasStrong && healable >= DRAFT_MIN_HEALABLE;
+}
+
+// Every party the player could assemble from an offer (one option per pair).
+function draftCombos(pairs: MemberId[][]): MemberId[][] {
+  return pairs.reduce<MemberId[][]>(
+    (acc, pair) => acc.flatMap((prefix) => pair.map((id) => [...prefix, id])),
+    [[]],
+  );
+}
+
+// An offer is viable if AT LEAST ONE assemblable party clears the bar — so the
+// player can always build a viable comp (while still being free to pick a spicy one).
+export function draftOfferViable(pairs: MemberId[][]): boolean {
+  return draftCombos(pairs).some((ids) => partyMeetsDraftConstraints(ids));
+}
+
+// Roll DRAFT_PICKS pairs of two distinct members (no member repeats across pairs),
+// re-rolling until the offer is viable; a hard fallback guarantees termination.
+export function rollDraft(shuffled: MemberId[]): MemberId[][] {
+  // `shuffled` is the pool already permuted by the caller's seeded RNG. Take the
+  // first DRAFT_PICKS*2 as the pairs.
+  const pairs: MemberId[][] = [];
+  for (let i = 0; i < DRAFT_PICKS; i++) pairs.push([shuffled[i * 2], shuffled[i * 2 + 1]]);
+  return draftOfferViable(pairs) ? pairs : DRAFT_FALLBACK_PAIRS;
+}
+
+// A known-viable offer used only if a roll somehow fails to (it cannot, with the
+// current pool — every 6-of-8 split contains a viable party — but the guarantee is
+// explicit): the classic trio each paired with a strong alternative.
+export const DRAFT_FALLBACK_PAIRS: MemberId[][] = [
+  ['ranger', 'warlock'], ['tank', 'berserker'], ['mage', 'skald'],
+];
+
 export const ENEMY_MAX_HP = 100;
 
 // Base (pre-enrage) per-target damage by attack type. 'cast' deals no damage —

@@ -484,10 +484,15 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 }
 .draft-member:hover:not(:disabled) { border-color: var(--accent); }
 .draft-member:disabled { opacity: .5; cursor: not-allowed; }
-.draft-member.chosen { border-color: var(--gold); }
+.draft-member.chosen { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,193,78,.3); }
 .draft-member-name { font-weight: 700; }
 .draft-member-stats { font-size: 11px; color: var(--muted); }
+.draft-member-ability { font-size: 11px; color: var(--accent); }
 .draft-actions { display: flex; gap: 12px; margin-top: 18px; }
+.draft-weights { font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
+.draft-pairs { display: flex; flex-direction: column; gap: 14px; }
+.draft-pair { border-top: 1px solid #2a2f3a; padding-top: 10px; }
+.draft-pair-label { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
 
 /* ---- Events -------------------------------------------------------------- */
 .event-screen { display: grid; place-items: center; }

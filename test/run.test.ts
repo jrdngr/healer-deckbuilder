@@ -12,7 +12,9 @@ import {
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
+  DRAFT_PICKS, DRAFT_POOL, rollDraft, draftOfferViable, partyMeetsDraftConstraints, CLASSIC_TRIO,
 } from '../src/constants';
+import { shuffle } from '../src/rng';
 import { emptyStats, recordRunEnd } from '../src/stats';
 import { groupPile } from '../src/deckView';
 import type { CardId, ModifierId, Slot } from '../src/constants';
@@ -899,8 +901,9 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const run = new Run(20);
   run.beginDraft();
   eq('beginDraft enters the draft location', run.location.kind, 'draft');
-  check('draft offers the member pool', run.nodeContent?.type === 'draft'
-    && run.nodeContent.pool.includes('warlock') && run.nodeContent.pool.includes('skald'));
+  check('draft offers three 1-of-2 pairs', run.nodeContent?.type === 'draft'
+    && run.nodeContent.pairs.length === DRAFT_PICKS
+    && run.nodeContent.pairs.every((p) => p.length === 2));
 
   // Seat a drafted party and confirm it opens fight 0 with those members.
   run.chooseDraft(['warlock', 'tank', 'skald']);
@@ -930,6 +933,37 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const restored = Run.fromJSON(drafted.toJSON());
   eq('drafted identity survives save/resume', restored.party[0].member, 'warlock');
   eq('drafted skald survives save/resume', restored.party[2].member, 'skald');
+}
+
+// --- full draft generator constraints (#30) ---------------------------------
+{
+  // The generator always offers a viable party, uses distinct members with no
+  // repeats across pairs, across many seeds.
+  let allViable = true, allDistinct = true;
+  for (let seed = 1; seed <= 500; seed++) {
+    const pairs = rollDraft(shuffle([...DRAFT_POOL], makeRng(seed)));
+    if (!draftOfferViable(pairs)) allViable = false;
+    const flat = pairs.flat();
+    if (new Set(flat).size !== flat.length) allDistinct = false;
+    if (pairs.length !== DRAFT_PICKS || pairs.some((p) => p.length !== 2)) allDistinct = false;
+  }
+  check('every rolled draft offers a viable party', allViable);
+  check('draft pairs use distinct members (no repeats)', allDistinct);
+
+  // The viability bar itself: the classic trio clears it; a triple of the weakest
+  // members (all rated 2, none "strong") does not.
+  check('the classic trio meets the draft bar', partyMeetsDraftConstraints(CLASSIC_TRIO));
+  check('an all-weak party fails the strong-damage floor', !partyMeetsDraftConstraints(['tank', 'berserker', 'tank']));
+  check('a low-total party fails the damage floor',
+    !partyMeetsDraftConstraints(['tank', 'berserker', 'berserker']));
+  // Two self-reliant members + one healable fails the healable floor.
+  check('too few healable members fails the bar', !partyMeetsDraftConstraints(['warlock', 'berserker', 'mage']));
+
+  // beginDraft is deterministic in the run seed (same offer on the same seed).
+  const a = new Run(77); a.beginDraft();
+  const b = new Run(77); b.beginDraft();
+  check('the draft offer is deterministic in the seed',
+    JSON.stringify((a.nodeContent as { pairs: unknown }).pairs) === JSON.stringify((b.nodeContent as { pairs: unknown }).pairs));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
