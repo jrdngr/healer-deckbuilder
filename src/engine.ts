@@ -135,12 +135,17 @@ export type GameEvent =
   | { kind: 'siphon'; amount: number; mp: number }         // Siphon: MP drained
   | { kind: 'consume'; heal: number; enemyHp: number }     // Devourer: self-heal off its own poison
   | { kind: 'phaseChange'; beat: string }                  // Devourer: transformation beat
+  // `attackType` is the telegraph geometry that produced the hit, so the
+  // animator can give each attack shape its own visual signature.
   | { kind: 'enemyAttack'; slot: Slot; amount: number; hp: number;
-      result: 'hit' | 'shield' | 'whiff'; killed: boolean; hidden: boolean }
+      result: 'hit' | 'shield' | 'whiff'; killed: boolean; hidden: boolean;
+      attackType: AttackType }
   // --- player phase start (regen resolves after the enemy's blow has landed) ---
   | { kind: 'regenTick'; slot: Slot; amount: number; hp: number }
   // --- party phase (one per attacking member, left to right) ---
-  | { kind: 'partyAttack'; slot: Slot; amount: number; enemyHp: number }
+  // `memberId` names the striker: any member can occupy any slot in a drafted
+  // party, so identity (not slot) drives the strike's visual signature.
+  | { kind: 'partyAttack'; slot: Slot; memberId: MemberId; amount: number; enemyHp: number }
   // --- healing / buffs / spells ---
   | { kind: 'heal'; slot: Slot; amount: number; hp: number }
   | { kind: 'regenApplied'; slot: Slot; stack: number }
@@ -1047,7 +1052,7 @@ export class Game {
       const m = this.members[slot];
       if (!m || !m.alive) {
         this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
-        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden });
+        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden, attackType: t.type });
         continue;
       }
       // Beast Warden's Boar (#29): a standing Boar eats the WHOLE instance aimed at
@@ -1068,14 +1073,14 @@ export class Game {
       if (w.spendsStormglass) {
         this.stormglassUsed = true;
         this._log(`The Stormglass Mirror shatters the blow aimed at ${m.name}.`, 'shield');
-        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
+        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
         continue;
       }
       if (w.spendsShield) {
         m.shield = false;
         m.shieldTurns = 0;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
-        this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden });
+        this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
         continue;
       }
       if (w.spendsBrace) {
@@ -1093,7 +1098,7 @@ export class Game {
       // event is emitted so the animator never stages a death that didn't happen.
       let killed = m.hp <= 0;
       if (killed) killed = this._killMember(m);
-      this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden });
+      this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden, attackType: t.type });
       // Tithe Candle (#21): post-mitigation enemy damage tithes 1 MP back
       // (a 0-damage hit gives nothing; capped at max mana AND per fight — every
       // MP engine in this game is bounded, the flaw-#7 law).
@@ -1442,7 +1447,7 @@ export class Game {
         const paid = this._bloodPay(m, card.selfDamage ?? 0);
         this._log(`Grim Harvest: ${m.name} pays ${paid} HP.`, 'status');
         const killed = this._damageEnemy(GRIM_HARVEST_DMG, 'Grim Harvest');
-        this._emit({ kind: 'partyAttack', slot: m.slot, amount: GRIM_HARVEST_DMG, enemyHp: this.enemy.hp });
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: GRIM_HARVEST_DMG, enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
@@ -1580,7 +1585,7 @@ export class Game {
         // self-damage clamps to leave 1 HP (a nuke, not a suicide button).
         const dmg = 2 * this.memberDamage(m) + m.abilityPower;
         const killed = this._damageEnemy(dmg, `${m.name} (Rampage)`);
-        this._emit({ kind: 'partyAttack', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: dmg, enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
         this._bloodPay(m, RAMPAGE_SELF_DMG);
         break;
@@ -1702,7 +1707,7 @@ export class Game {
         this._log(`The War Drum beats — ${m.name}'s strike doubles!`, 'status');
       }
       const killed = this._damageEnemy(dmg, `${m.name}`);
-      this._emit({ kind: 'partyAttack', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
+      this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: dmg, enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }

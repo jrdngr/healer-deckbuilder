@@ -16,9 +16,9 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- party attacks: a projectile + stepped enemy-HP patch per strike --------
 {
   const events: GameEvent[] = [
-    { kind: 'partyAttack', slot: 0, amount: 3, enemyHp: 97 },
-    { kind: 'partyAttack', slot: 1, amount: 1, enemyHp: 96 },
-    { kind: 'partyAttack', slot: 2, amount: 5, enemyHp: 91 },
+    { kind: 'partyAttack', slot: 0, memberId: 'ranger', amount: 3, enemyHp: 97 },
+    { kind: 'partyAttack', slot: 1, memberId: 'tank', amount: 1, enemyHp: 96 },
+    { kind: 'partyAttack', slot: 2, memberId: 'mage', amount: 5, enemyHp: 91 },
   ];
   const tl = buildTimeline(events);
   eq('three projectiles', fxTypes(tl).filter((t) => t === 'projectile').length, 3);
@@ -34,7 +34,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- a lethal enemy attack stages the death and shakes the screen -----------
 {
   const events: GameEvent[] = [
-    { kind: 'enemyAttack', slot: 2, amount: 4, hp: 0, result: 'hit', killed: true, hidden: false },
+    { kind: 'enemyAttack', slot: 2, amount: 4, hp: 0, result: 'hit', killed: true, hidden: false, attackType: 'single' },
   ];
   const tl = buildTimeline(events);
   check('death is staged in the view', tl.entries.some((e) => e.patch?.memberDead === 2));
@@ -46,7 +46,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- a blocked attack shows a shield, not a HP patch ------------------------
 {
   const events: GameEvent[] = [
-    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 12, result: 'shield', killed: false, hidden: false },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 12, result: 'shield', killed: false, hidden: false, attackType: 'single' },
   ];
   const tl = buildTimeline(events);
   check('shield effect present', fxTypes(tl).includes('shield'));
@@ -85,8 +85,8 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- input resumes at the pacing end, before the cosmetic fade-out ----------
 {
   const events: GameEvent[] = [
-    { kind: 'partyAttack', slot: 0, amount: 3, enemyHp: 97 },
-    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
+    { kind: 'partyAttack', slot: 0, memberId: 'ranger', amount: 3, enemyHp: 97 },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false, attackType: 'single' },
   ];
   const tl = buildTimeline(events);
   check('input resumes before the full fade-out', tl.paceEnd < tl.total);
@@ -113,10 +113,10 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- hitstop: a kill stops the world for a beat ------------------------------
 {
   const hit: GameEvent[] = [
-    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false, attackType: 'single' },
   ];
   const kill: GameEvent[] = [
-    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 0, result: 'hit', killed: true, hidden: false },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 0, result: 'hit', killed: true, hidden: false, attackType: 'single' },
   ];
   const tlHit = buildTimeline(hit);
   const tlKill = buildTimeline(kill);
@@ -137,10 +137,10 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 // --- member reactions ride the timeline --------------------------------------
 {
   const events: GameEvent[] = [
-    { kind: 'partyAttack', slot: 0, amount: 3, enemyHp: 97 },
-    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
-    { kind: 'enemyAttack', slot: 2, amount: 9, hp: 0, result: 'hit', killed: true, hidden: false },
-    { kind: 'enemyAttack', slot: 0, amount: 4, hp: 12, result: 'shield', killed: false, hidden: false },
+    { kind: 'partyAttack', slot: 0, memberId: 'ranger', amount: 3, enemyHp: 97 },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false, attackType: 'single' },
+    { kind: 'enemyAttack', slot: 2, amount: 9, hp: 0, result: 'hit', killed: true, hidden: false, attackType: 'single' },
+    { kind: 'enemyAttack', slot: 0, amount: 4, hp: 12, result: 'shield', killed: false, hidden: false, attackType: 'single' },
     { kind: 'heal', slot: 1, amount: 3, hp: 11 },
   ];
   const tl = buildTimeline(events);
@@ -169,8 +169,8 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     [{ kind: 'siphon', amount: 3, mp: 2 }],
     [{ kind: 'consume', heal: 6, enemyHp: 80 }],
     [{ kind: 'phaseChange', beat: 'IT MOLTS' }],
-    [{ kind: 'enemyAttack', slot: 0, amount: 5, hp: 5, result: 'hit', killed: false, hidden: true }],
-    [{ kind: 'partyAttack', slot: 1, amount: 2, enemyHp: 88 }],
+    [{ kind: 'enemyAttack', slot: 0, amount: 5, hp: 5, result: 'hit', killed: false, hidden: true, attackType: 'hidden' }],
+    [{ kind: 'partyAttack', slot: 1, memberId: 'tank', amount: 2, enemyHp: 88 }],
     [{ kind: 'heal', slot: 2, amount: 4, hp: 10 }],
     [{ kind: 'regenApplied', slot: 0, stack: 2 }],
     [{ kind: 'shieldApplied', slot: 1 }],
