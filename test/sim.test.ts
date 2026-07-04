@@ -230,6 +230,43 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   check('the Beast Warden party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
 }
 
+// --- issue 34: the re-lined tactics actually engage the new abilities ---------
+// Not gates: the policy plans around Dark Bargain, Crescendo, and Provoke rather
+// than firing them only in a corner case.
+{
+  // Dark Bargain FRONT-LOADS and CAPS: over a long fight the Warlock is bargained
+  // early (once MP has headroom) but never past 2 casts — the growth curve is
+  // respected, so he is not slowly bled to death.
+  let everBargained = false;
+  let maxCasts = 0;
+  for (let s = 1; s <= 40; s++) {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['warlock', 'mage', 'graveAugur']); // taunt-less, warlock present
+    cfg.enemy = { ...cfg.enemy, maxHP: 200 }; // a wall, so MP gets spent and turns pass
+    const g = new Game(s, cfg);
+    playFight(g, 12);
+    const casts = g.members[0].bargainCasts;
+    if (casts > 0) everBargained = true;
+    maxCasts = Math.max(maxCasts, casts);
+  }
+  check('Dark Bargain front-loads (fires at least once across seeds)', everBargained);
+  check('Dark Bargain is capped at 2 front-load casts (never bled dry)', maxCasts <= 2, `maxCasts=${maxCasts}`);
+
+  // Provoke is the taunt-less redirection line: a party with no Tank plays Provoke,
+  // so a member that does NOT have the Taunt ability ends up holding Taunt.
+  {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['ranger', 'mage', 'graveAugur']); // no tank
+    // Ensure a Provoke is in hand to play (the deck is the policy's, so seed it).
+    cfg.deck = [...cfg.deck.slice(0, cfg.deck.length - 1), makeDeckCard('provoke', 999)];
+    cfg.enemy = { ...cfg.enemy, boss: true, maxHP: 200 };
+    const g = new Game(3, cfg);
+    playFight(g, 10);
+    const provoked = g.log.some((e) => e.text.includes('Provokes'));
+    check('a taunt-less party plays Provoke to redirect', provoked);
+  }
+}
+
 // --- per-composition sweep harness (#31) ------------------------------------
 {
   eq('there are 56 compositions (8-choose-3)', allCompositions().length, 56);

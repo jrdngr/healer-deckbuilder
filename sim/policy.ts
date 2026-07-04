@@ -14,7 +14,7 @@ import type { Member } from '../src/engine';
 import { Run } from '../src/run';
 import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
-  BARGAIN_HP_BASE, BARGAIN_HP_GROWTH,
+  BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, TITHE_AMOUNT, memberDefAt,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId } from '../src/constants';
 
@@ -98,6 +98,26 @@ function tryBraceChannel(game: Game): boolean {
     }
   }
   return false;
+}
+
+// Taunt-lite for a taunt-less draft (#31, lined for #34): with no Tank ability in
+// the party, Provoke is the redirection tool — make the most DURABLE living member
+// the enemy's aim (bundled +1 Defense) so the fragile strikers stop eating the
+// heavy/sweep. Only run it when there is no real Taunt in the party (a Tank does it
+// better and cheaper via its ability), nobody is already provoked, and it is worth a
+// card (a boss, or the party already taking damage) — mirrors tryRetaunt's discipline.
+function tryProvoke(game: Game): boolean {
+  if (game.members.some((m) => m.alive && m.ability === 'taunt')) return false;
+  if (game.livingMembers().some((m) => m.taunt > 1)) return false;
+  const anyoneHurt = game.livingMembers().some((m) => m.hp < m.maxHP * 0.5);
+  if (!game.config.enemy.boss && !anyoneHurt) return false;
+  const idx = handIndexOf(game, 'provoke');
+  if (!affordable(game, idx)) return false;
+  // The sink is the highest-maxHP living member (the seated tank-substitute).
+  const sink = [...game.livingMembers()].sort((a, b) => b.maxHP - a.maxHP)[0];
+  if (!sink) return false;
+  game.playCard(idx, sink.slot);
+  return true;
 }
 
 // Stop an otherwise-lethal blow: Shield fully blocks it; failing that, top the
@@ -190,9 +210,15 @@ function tryPoison(game: Game): boolean {
 // lethal blows are covered, this keeps everyone (and their party-phase damage)
 // alive without over-spending on members who are merely scratched.
 function tryHeal(game: Game): boolean {
+  const [, band2] = game.berserkerThresholds();
   let worst: Member | null = null;
   let worstFrac = SAFE_FRACTION;
   for (const m of game.livingMembers()) {
+    // Band-riding (#28/#34): the Berserker hits harder the LOWER his HP, so healing
+    // him is friendly fire — leave him in his rage band. tryPreventLethal still saves
+    // him from a previewed killing blow; only pull him out of the deepest band (below
+    // band2, one bad roll from death) proactively.
+    if (m.ability === 'rampage' && m.hp > band2) continue;
     const frac = m.hp / m.maxHP;
     if (frac < worstFrac) { worst = m; worstFrac = frac; }
   }
@@ -272,34 +298,43 @@ function memberByAbility(game: Game, ability: AbilityId): Member | null {
   return game.members.find((m) => m.alive && m.ability === ability) ?? null;
 }
 
-// Warlock burn-out timing (#27): Dark Bargain trades HP for MP, but the cost GROWS
-// each cast, so overusing it kills him. Bargain only when MP is genuinely starved
-// AND the Warlock keeps a safety cushion above the (growing) cost.
+// Warlock as a planned MP engine (#27, re-lined for #34): Dark Bargain trades HP
+// for MP and the cost GROWS each cast, so the value is FRONT-LOADED — bargain a
+// couple of times while he is near full and the cost is cheapest (cast 0 = 3 HP,
+// cast 1 = 6), banking MP the healer can spend on the opening turns, then STOP
+// before the growth curve (and Soul Tithe) eat his 7-damage body. Only when the MP
+// has somewhere to go (headroom) and he keeps a real cushion above the cost + tithe.
 function tryDarkBargain(game: Game): boolean {
   const w = memberByAbility(game, 'darkBargain');
   if (!w) return false;
-  if (game.mp >= 4) return false; // not starved — no reason to bleed him
   if (channelThreatUnanswered(game)) return false;
+  if (game.mp + BARGAIN_MP > game.maxMana) return false; // no room to bank the MP
   const idx = handIndexOf(game, 'ability');
   if (!affordable(game, idx)) return false;
   const cost = BARGAIN_HP_BASE + BARGAIN_HP_GROWTH * w.bargainCasts;
-  // Keep a cushion: Soul Tithe also chips him, so don't bargain into the danger zone.
-  if (w.hp - cost < Math.max(5, cost + 2)) return false;
+  // Front-load only: cap the casts, and keep him well clear of the danger zone
+  // (the cost itself plus a Soul-Tithe turn plus a margin) so a bargain never
+  // strands the party's biggest striker one blow from death.
+  if (w.bargainCasts >= 2) return false;
+  if (w.hp - cost < cost + TITHE_AMOUNT + 4) return false;
   game.playCard(idx, w.slot);
   return true;
 }
 
-// Skald rest-timing tension (#27): his strike scales on cards played this phase, so
-// Crescendo (draw 2, counts as a card) both fuels the hand and feeds the strike.
-// Play it when there is MP to spare and cards to draw — never when a channel needs
-// answering first.
+// Skald turn-shaping (#27, re-lined for #34): his party-phase strike is
+// 2×(cards played this phase), so his damage is something the policy BUILDS — play
+// Crescendo early (it draws 2 AND counts as a card, so it both feeds the strike and
+// refills the hand to play more), then let the other tactics spend those cards, then
+// he strikes for the accumulated count. Fire it whenever it is affordable without
+// stranding us at 0 MP and no channel needs answering first — the draw makes it
+// close to free, and every card played this phase compounds his hit.
 function tryCrescendo(game: Game): boolean {
   const s = memberByAbility(game, 'crescendo');
   if (!s) return false;
   if (channelThreatUnanswered(game)) return false;
-  if (game.mp < 4) return false; // keep MP for heals/answers when tight
   const idx = handIndexOf(game, 'ability');
   if (!affordable(game, idx)) return false;
+  if (game.mp - cardCost(game, idx) < 1) return false; // never strand ourselves at 0 MP
   game.playCard(idx, s.slot);
   return true;
 }
@@ -348,7 +383,7 @@ function tryCallBoar(game: Game): boolean {
 }
 
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryBraceChannel, tryRetaunt, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   tryBolt, tryPoison, tryRampage, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh,
 ];
 
@@ -406,6 +441,18 @@ const HEALER_STAT_VALUE: Record<string, number> = {
   passiveMp: 4, maxMana: 3, restRegen: 2, handSize: 1,
 };
 
+// Provoke is dead weight for a party that already has the Tank's Taunt, but on a
+// TAUNT-LESS draft (#34) it is the only redirection tool — value it like a core
+// ability card so the taunt-less floor actually gets to play its mitigation.
+function partyIsTauntless(run: Run): boolean {
+  return !run.party.some((_, slot) => memberDefAt(run.party, slot).ability === 'taunt');
+}
+
+function cardBuyValue(run: Run, id: CardId): number {
+  if (id === 'provoke' && partyIsTauntless(run)) return 6;
+  return CARD_BUY_VALUE[id];
+}
+
 function shopCardNode(run: Run): void {
   if (run.nodeContent?.type !== 'cardShop') return;
   let bought = 0;
@@ -415,7 +462,7 @@ function shopCardNode(run: Run): void {
     let best = -1, bestVal = 2;
     offers.forEach((o, i) => {
       if (o.price > run.gold) return;
-      const v = CARD_BUY_VALUE[o.cardId];
+      const v = cardBuyValue(run, o.cardId);
       if (v > bestVal) { bestVal = v; best = i; }
     });
     if (best < 0 || !run.buyCardOffer(best)) break;

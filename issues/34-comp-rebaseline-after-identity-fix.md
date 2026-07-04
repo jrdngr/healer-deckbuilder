@@ -34,24 +34,60 @@ lose the policy's core tactics, and the wave-1–3 tactics (`tryDarkBargain`, `t
 
 ## Scope / acceptance criteria
 
-- [ ] **Policy lines, not gates**, for the five new abilities: Dark Bargain as a planned MP engine
-      (bargain early at full HP, stop before the growth curve bites), Crescendo-then-strike turn
-      shaping, Berserker band-riding (heal *to* a band, not out of it), Chill on the biggest
-      telegraph each cycle, Boar uptime + re-summon timing. Buy Provoke on taunt-less comps
-      (raise its `CARD_BUY_VALUE` conditionally) and play it.
-- [ ] Re-run `runCompositionSweep` (N≥100, then N=300 for the top/bottom deciles) — publish the
-      real bands.
-- [ ] Only then judge balance: if the trio is still the runaway ceiling or whole comp families
-      floor at 0% *with real lines*, tune members/cards (never per-comp boss stats —
-      `ENEMY_ATTACK_BONUS` stays composition-agnostic per #31).
-- [ ] Re-validate the taunt-less floor with a Provoke-buying policy (the ~15% question #30/#31
-      deferred).
+- [x] **Policy lines, not gates** for the five abilities (sim/policy.ts): Dark Bargain is a planned
+      MP engine that **front-loads** (bargain only while near-full and MP has headroom, capped at 2
+      casts — the cost grows +3/cast, so value is all up front) and stops before the growth curve /
+      Soul Tithe bleed his 7-damage body; Crescendo is played whenever affordable without stranding
+      us (it draws 2 AND counts a card, so it feeds his cards-played strike and refills the hand);
+      Berserker **band-riding** (`tryHeal` no longer heals the Rampage member out of a rage band —
+      only pulls him from below band2, where he is a roll from death); Grave Chill on a real
+      standing blow; Boar uptime kept. New `tryProvoke` tactic + conditional `cardBuyValue` so a
+      **taunt-less** party buys Provoke (value 6) and plays it on its most durable member.
+- [x] Re-ran `runCompositionSweep` at N=100 and **N=300** (authoritative). Real bands below.
+- [x] Judged balance (below) — **no blind member re-tune**; the floor is a race-DPS gap at the
+      Devourer, not something a stick-driven buff can safely close.
+- [x] Taunt-less floor re-validated with the Provoke-buying policy: **15 / 35** taunt-less comps now
+      clear >0% (were near-all 0 pre-line); Provoke lifts the ranger/mage-anchored taunt-less comps
+      (graveAugur 9.3%, berserker 4.3%, skald 3.0% full-run) but cannot rescue the no-ranger/no-mage
+      taunt-less comps — their loss is a DPS race, not a mitigation failure Provoke addresses.
+
+## Real bands (N=300, seeds 1–300, real lines)
+
+- **Ceiling:** classic trio **29.3%** full-run (F2 86.7 / F5 68.2 / F8 50.9) — the reference, by
+  design (its identity is the fallback; no demo re-tune implied).
+- **Next tier:** ranger/mage/graveAugur 9.3% · ranger/tank/berserker 9.0% · tank/mage/graveAugur
+  5.0% · ranger/tank/warlock 4.7% · ranger/mage/berserker 4.3%.
+- **Floor:** full-run range **0.0–29.3%**; F8 range 0.0–50.9%; **0 comps > 85% anywhere**;
+  **27 / 56 comps floor at 0.0%** full-run.
+
+## Balance judgment
+
+**Every one of the 27 zero-comps loses at F8 (Devourer F8 = 0.0% for all of them)** while many still
+reach F5 at 14–50% — so the floor is a **damage-RACE loss at the final boss, not a survival loss**.
+The common thread is precise: every zero-comp lacks **both** the ranger (Poison chip) and the mage
+(Bolt burst). The Devourer's "race or die" HP was tuned to the trio's poison+bolt output (#14/#22),
+and #31 fixed `ENEMY_ATTACK_BONUS` as **composition-agnostic** — so the boss cannot be adjusted per
+comp, and a global cut would break the trio's tuned 50.9% F8.
+
+That leaves member/card buffs as the only lever — and buffing alt-damage members up to beat a
+trio-tuned boss, **off a stick that under-pilots them** (the fixed policy has a poison+bolt+heal
+spine and no burst line for Warlock/Skald/Berserker damage), is exactly the miscalibration this
+issue warns against ("the stick measures relative strength, not fun"). The re-lined stick has done
+its job: it confirms the trio is the reference ceiling and localizes the floor to a burst-DPS gap
+vs the Devourer. **Recommendation: defer member balance to the human-playtest calibration already
+scoped as the follow-up — do not re-tune members off the stick.** The concrete, safe win banked
+here is the Provoke line for taunt-less mid-comps.
 
 ## Implementation notes
 
 - Harness and seating heuristic (`allCompositions`, `seatComposition`) are sound and reusable.
-- The trio's numbers were never affected (its identity IS the fallback) — no demo re-tune implied.
+- The trio's numbers were never affected (its identity IS the fallback) — the N=200 sim pins and
+  the wave-1/2/3 policy tests all held; new sim.test assertions lock the Dark-Bargain front-load
+  (fires + caps at 2) and the taunt-less Provoke line.
 
 ## Out of scope / follow-ups
 
-- Human-playtest calibration of the new members (the stick measures relative strength, not fun).
+- **Human-playtest calibration of the new members** (the stick measures relative strength, not fun)
+  — this is now the gating follow-up for the alt-comp floor, per the judgment above.
+- A per-identity burst LINE in the fixed policy (a real Warlock/Skald damage plan) would raise the
+  stick's ceiling for those comps and re-open the balance question on a fairer measurement.

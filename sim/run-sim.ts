@@ -153,6 +153,18 @@
 //     curses at 0 and never takes one. The full-run drifts 32.1 -> 31.5% (the trio
 //     naturally picks Taper/Font), dead-center in the 25-35% band. Battery: Hourglass
 //     -5.6 / Crown -1.4 (pre-existing traps, unchanged).
+//   after #34 (composition re-baseline, real policy lines):  the five new abilities
+//     got real LINES not gates (Dark Bargain front-loads capped at 2 casts; Crescendo
+//     turn-shaping; Berserker band-riding — tryHeal won't heal him out of a band;
+//     Provoke bought+played on taunt-less comps). Authoritative SWEEP at N=300: trio
+//     29.3% is the reference ceiling (F8 50.9), next tier 9.3/9.0%, full-run range
+//     0-29.3%, 0 comps >85% anywhere, 27/56 floor at 0%. JUDGMENT: every zero-comp
+//     loses the F8 Devourer RACE (F8=0 for all) and lacks BOTH poison (ranger) and
+//     bolt (mage) — a burst-DPS gap vs a trio-tuned boss, not a survival or mitigation
+//     gap. ENEMY_ATTACK_BONUS is comp-agnostic (#31) so the boss can't move; buffing
+//     members off a stick that under-pilots them is miscalibration -> deferred to
+//     human calibration (issue 34). The trio's numbers were never touched (its
+//     identity IS the fallback); the taunt-less Provoke line lifted 15/35 comps >0%.
 //   after #23 (difficulty presets + local stats):  Standard unchanged (it IS
 //     the tuned curve — the preset is the identity, and the N=200 pins pass
 //     bit-identical). Story (HP x0.8, attack -1 floor 0, enrage +2, +25g/win)
