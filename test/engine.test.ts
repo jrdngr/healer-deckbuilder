@@ -439,8 +439,9 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('skip added at least +5 MP (minus any refresh noise)', g.mp >= mpBefore); // sanity
 }
 
-// --- decaying Rest: +5 at 0 cards, +2 at 1 card (issue 05) ------------------
+// --- decaying Rest: +5 at 0 cards, +1 at 1 card (issue 05) ------------------
 {
+  eq('decayed rest is worth 1 MP', SKIP_REGEN_DECAYED, 1);
   const g = new Game(21);
   g.start();
   g.mp = 0;
@@ -457,7 +458,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('rest decays to SKIP_REGEN_DECAYED after one card', g.restRegenNow(), SKIP_REGEN_DECAYED);
   const before = g.mp;
   g.skipTurn();
-  eq('rested +2 MP after one card', g.mp, before + SKIP_REGEN_DECAYED);
+  eq('rested +1 MP after one card', g.mp, before + SKIP_REGEN_DECAYED);
 }
 
 // --- Refresh cannot exceed its per-cast MP cap (flaw #7) --------------------

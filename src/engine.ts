@@ -216,7 +216,7 @@ export class Game {
   turn: number;
   phase: Phase;
   status: Status;
-  cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +2 at 1)
+  cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +1 at 1)
   telegraph: Telegraph | null;
   rotationIndex: number; // index into a rotation enemy's fixed attack cycle (see EnemyDef.rotation)
   phaseTriggered: boolean; // whether the enemy's HP-threshold phase has fired (edge-detect, #14)
