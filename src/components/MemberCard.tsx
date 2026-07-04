@@ -1,11 +1,7 @@
 import {
-  CHARGE_MAX, POISON_BASE, POISON_TURNS, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE, BOLT_CHARGE_MULT,
-  TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
-  BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
-  BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
-  INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
+  CHARGE_MAX, BERSERKER_BAND_BONUS,
+  INJURY_NAMES, MEMBER_ABILITY_FLAVOR, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
-import type { MemberId } from '../constants';
 import type { Member } from '../engine';
 
 // One-line summary of the stat penalty a member's scars currently impose (DR1).
@@ -16,18 +12,6 @@ export function injuryPenaltyText(injuries: number): string {
   if (injuryAbilityPenalty(injuries)) parts.push(`ability −${injuryAbilityPenalty(injuries)}`);
   return parts.join(', ');
 }
-
-// Short flavor of each member's ability, shown on their card.
-const ABILITY: Record<MemberId, string> = {
-  ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
-  tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
-  mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
-  warlock: `Dark Bargain — lose ${BARGAIN_HP_BASE}+${BARGAIN_HP_GROWTH}/cast HP for +${BARGAIN_MP} MP. Soul Tithe: −${TITHE_AMOUNT} HP each turn.`,
-  skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
-  berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
-  graveAugur: `Grave Chill — shave ${GRAVE_CHILL_REDUCTION} damage per target off the enemy's telegraphed attack.`,
-  beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
-};
 
 interface MemberCardProps {
   member: Member;
@@ -95,7 +79,7 @@ export function MemberCard({
           🔥 {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg
         </div>
       )}
-      <div className="ability">{ABILITY[m.id]}</div>
+      <div className="ability">{MEMBER_ABILITY_FLAVOR[m.id]}</div>
     </div>
   );
 }

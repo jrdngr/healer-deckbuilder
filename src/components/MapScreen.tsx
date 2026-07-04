@@ -1,4 +1,4 @@
-import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss, MEMBER_DEFS } from '../constants';
+import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss, memberDefAt } from '../constants';
 import type { Run } from '../run';
 import { NODE_META } from './nodeMeta';
 
@@ -29,11 +29,13 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
         Ahead: <strong>{foe.name}</strong> {threat}
       </p>
       {(() => {
-        const injured = MEMBER_DEFS.filter((d) => run.party[d.slot].injuries > 0);
+        const injured = run.party
+          .map((p, slot) => ({ p, name: memberDefAt(run.party, slot).name }))
+          .filter(({ p }) => p.injuries > 0);
         if (injured.length === 0) return null;
         return (
           <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
-            🩹 Injured: {injured.map((d) => `${d.name} ×${run.party[d.slot].injuries}`).join(' · ')}
+            🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}
           </p>
         );
       })()}

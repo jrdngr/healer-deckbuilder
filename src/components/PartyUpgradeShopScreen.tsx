@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MEMBER_DEFS } from '../constants';
+import { memberDefAt } from '../constants';
 import type { Slot } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
@@ -46,16 +46,16 @@ export function PartyUpgradeShopScreen({ run, act, onDone }: PartyUpgradeShopScr
       </div>
 
       <div className="member-row">
-        {MEMBER_DEFS.map((d) => {
-          const p = run.party[d.slot];
+        {run.party.map((p, slot) => {
+          const d = memberDefAt(run.party, slot);
           return (
             <button
-              key={d.id}
+              key={slot}
               className="member-pick"
               disabled={!selectedOffer}
               onClick={() => {
                 if (selected == null) return;
-                act((r) => r.buyPartyOffer(selected, d.slot as Slot));
+                act((r) => r.buyPartyOffer(selected, slot as Slot));
                 setSelected(null);
               }}
             >

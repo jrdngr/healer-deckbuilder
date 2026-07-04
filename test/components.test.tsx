@@ -15,9 +15,11 @@ import { defaultBattleConfig } from '../src/constants';
 import { ManaBar } from '../src/components/ManaBar';
 import { StartScreen } from '../src/components/StartScreen';
 import { DraftScreen } from '../src/components/DraftScreen';
+import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen';
+import { InfirmaryScreen } from '../src/components/InfirmaryScreen';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
-import { makeDeckCard, resolveCard } from '../src/constants';
+import { makeDeckCard, resolveCard, partyFromMembers } from '../src/constants';
 import { Run } from '../src/run';
 
 let passed = 0;
@@ -117,6 +119,31 @@ async function render(el: React.ReactElement): Promise<string> {
   check('draft surfaces the veiled-attack slot weights', text.includes('40%') && text.includes('20%'), text);
   check('draft offers the classic-trio shortcut', text.includes('Accept the classic trio'), text);
   check('draft prompts for one pick per pair', text.includes('Pick 1'), text);
+}
+
+// --- Run-layer screens show DRAFTED names, not the classic trio (#36) ----------
+{
+  // A drafted party where every slot differs from the classic Ranger/Tank/Mage.
+  const drafted = partyFromMembers(['mage', 'skald', 'graveAugur']);
+
+  const hallRun = new Run(7);
+  hallRun.party = drafted;
+  hallRun.nodeContent = { type: 'partyUpgrade', offers: [] };
+  const hallAct = <T,>(fn: (r: Run) => T): T => fn(hallRun);
+  const hallText = await render(<PartyUpgradeShopScreen run={hallRun} act={hallAct} onDone={() => {}} />);
+  check('Training Hall shows drafted names', hallText.includes('Skald') && hallText.includes('Grave Augur'), hallText);
+  check('Training Hall does not show classic-trio names for a drafted party',
+    !hallText.includes('Ranger') && !hallText.includes('Tank'), hallText);
+
+  const infRun = new Run(8);
+  infRun.party = partyFromMembers(['mage', 'skald', 'graveAugur']);
+  infRun.party[1] = { ...infRun.party[1], injuries: 1 }; // scar the Skald
+  infRun.nodeContent = { type: 'infirmary', price: 10 };
+  const infAct = <T,>(fn: (r: Run) => T): T => fn(infRun);
+  const infText = await render(<InfirmaryScreen run={infRun} act={infAct} onDone={() => {}} />);
+  check('Infirmary shows drafted names', infText.includes('Skald') && infText.includes('Grave Augur'), infText);
+  check('Infirmary does not mislabel the drafted party as the classic trio',
+    !infText.includes('Ranger') && !infText.includes('Tank'), infText);
 }
 
 await act(async () => { root.unmount(); });

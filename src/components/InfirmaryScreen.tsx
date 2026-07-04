@@ -1,4 +1,4 @@
-import { MEMBER_DEFS, INJURY_NAMES } from '../constants';
+import { memberDefAt, INJURY_NAMES } from '../constants';
 import type { Slot } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
@@ -27,13 +27,13 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
       onLeave={onDone}
     >
       <div className="member-row">
-        {MEMBER_DEFS.map((d) => {
-          const p = run.party[d.slot];
+        {run.party.map((p, slot) => {
+          const d = memberDefAt(run.party, slot);
           const scars = INJURY_NAMES.slice(0, p.injuries); // tiers 0..injuries-1
           const top = scars[scars.length - 1];             // most recent scar heals first
           const canTreat = p.injuries > 0 && run.gold >= price;
           return (
-            <div key={d.id} className="member-pick infirmary-member">
+            <div key={slot} className="member-pick infirmary-member">
               <span className="member-name">{d.name}</span>
               <span className="member-stats">
                 {p.injuries === 0 ? 'Unharmed' : scars.join(' · ')}
@@ -41,7 +41,7 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
               <button
                 className="leave-btn"
                 disabled={!canTreat}
-                onClick={() => act((r) => r.clearInjuryForGold(d.slot as Slot))}
+                onClick={() => act((r) => r.clearInjuryForGold(slot as Slot))}
               >
                 {p.injuries > 0 ? `Treat ${top} (${price}g)` : 'Healthy'}
               </button>

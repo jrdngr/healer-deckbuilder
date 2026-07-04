@@ -612,6 +612,29 @@ export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fad
 export const TAUNT_LITE_TURNS = 2;   // enemy turns the provoked member holds Taunt
 export const TAUNT_LITE_DEFENSE = 1; // bundled Defense strength while provoked
 
+// Short flavor of each member's ability — name + one-liner. Shown on the live
+// MemberCard AND the draft card (#37), so it lives here rather than in a component
+// (the draft must not leak raw ability ids like `graveChill`). Keyed by MemberId.
+export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
+  ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
+  tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
+  mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
+  warlock: `Dark Bargain — lose ${BARGAIN_HP_BASE}+${BARGAIN_HP_GROWTH}/cast HP for +${BARGAIN_MP} MP. Soul Tithe: −${TITHE_AMOUNT} HP each turn.`,
+  skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
+  berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
+  graveAugur: `Grave Chill — shave ${GRAVE_CHILL_REDUCTION} damage per target off the enemy's telegraphed attack.`,
+  beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
+};
+
+// The MemberDef that actually sits in a party slot: the drafted member's identity
+// if one was drafted (#27), else the classic-trio def for that slot. Every run-layer
+// screen must resolve names/abilities/flavor through this — reading MEMBER_DEFS[slot]
+// directly shows classic-trio names for a drafted party (the #36 bug).
+export function memberDefAt(party: PartyMemberConfig[], slot: number): MemberDef {
+  const m = party[slot]?.member;
+  return (m && MEMBER_POOL[m]) || MEMBER_DEFS[slot];
+}
+
 // Card set phase A (#15) magnitudes.
 export const CULTIVATE_STRENGTH = 1;  // Regen strength Cultivate adds in place
 export const CULTIVATE_TURNS = 1;     // Regen turns Cultivate adds in place

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CARDS, makeDeckCard, resolveCard } from '../constants';
+import { CARDS, MEMBER_DEFS, makeDeckCard, resolveCard } from '../constants';
 import type { GameController } from '../useGame';
 import { Card } from './Card';
 
@@ -9,12 +9,6 @@ interface DevPanelProps {
   // Grant gold at the run level (lives outside the battle engine).
   addGold: () => void;
 }
-
-const HEAL_SLOTS = [
-  { slot: 0, label: 'Ranger' },
-  { slot: 1, label: 'Tank' },
-  { slot: 2, label: 'Mage' },
-];
 
 // A developer cheat panel that slides out from the right edge. Fight-only controls
 // are disabled outside a fight (or once it's over); the gold grant always works.
@@ -28,6 +22,13 @@ export function DevPanel({ ctrl, addGold }: DevPanelProps) {
   const canPlayCards = inFight && ctrl.game.phase === 'player';
 
   const dev = (mutate: Parameters<GameController['devAction']>[0]) => () => ctrl?.devAction(mutate);
+
+  // Heal buttons act on a slot; label them from the live fight's seated members so
+  // a drafted party reads its real names (not the hardcoded classic trio — #36).
+  // Out of a fight there are no seated members; fall back to the classic labels.
+  const healSlots = inFight
+    ? ctrl.game.members.map((m, slot) => ({ slot, label: m.name }))
+    : MEMBER_DEFS.map((d) => ({ slot: d.slot as number, label: d.name }));
 
   return (
     <>
@@ -76,7 +77,7 @@ export function DevPanel({ ctrl, addGold }: DevPanelProps) {
             <section className="dev-section">
               <label>Heal party to full</label>
               <div className="dev-row">
-                {HEAL_SLOTS.map(({ slot, label }) => (
+                {healSlots.map(({ slot, label }) => (
                   <button
                     key={slot}
                     disabled={!inFight}

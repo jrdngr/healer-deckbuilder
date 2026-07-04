@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  CARDS, MEMBER_DEFS, MODIFIERS, RELICS, CARD_REMOVAL_PRICE, DUPLICATE_PRICE,
+  CARDS, memberDefAt, MODIFIERS, RELICS, CARD_REMOVAL_PRICE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, CURSE_SHRINE_GOLD, INJURY_NAMES, resolveCard, makeDeckCard,
 } from '../constants';
 import type { CardId, Slot, EventChoiceKind } from '../constants';
@@ -75,7 +75,7 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
       case 'mercenary': {
         const hired = act((r) => r.hireMercenary());
         finish(hired
-          ? `The mercenary drills ${MEMBER_DEFS[hired.slot].name} — +${hired.amount} damage.`
+          ? `The mercenary drills ${memberDefAt(run.party, hired.slot).name} — +${hired.amount} damage.`
           : 'You can\'t afford the fee.');
         break;
       }
@@ -125,7 +125,7 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
 
   const blessMember = (slot: Slot) => {
     const def = act((r) => r.shrineBlessMember(slot));
-    finish(`The shrine grants ${MEMBER_DEFS[slot].name} ${def.name}.`);
+    finish(`The shrine grants ${memberDefAt(run.party, slot).name} ${def.name}.`);
   };
 
   const duplicate = (uid: number) => {
@@ -137,16 +137,18 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
 
   const sacrifice = (slot: Slot) => {
     const result = act((r) => r.bloodAltarSacrifice(slot));
+    const name = memberDefAt(run.party, slot).name;
     finish(result
-      ? `The altar drinks. ${MEMBER_DEFS[slot].name}: −${result.hpLoss} max HP, +${result.damageGain} damage.`
-      : `${MEMBER_DEFS[slot].name} is too frail to sacrifice.`);
+      ? `The altar drinks. ${name}: −${result.hpLoss} max HP, +${result.damageGain} damage.`
+      : `${name} is too frail to sacrifice.`);
   };
 
   const tendInjury = (slot: Slot) => {
     const healed = act((r) => r.healInjury(slot));
+    const name = memberDefAt(run.party, slot).name;
     finish(healed
-      ? `The medic tends ${MEMBER_DEFS[slot].name}, and one wound closes for good.`
-      : `${MEMBER_DEFS[slot].name} bears no lasting wounds.`);
+      ? `The medic tends ${name}, and one wound closes for good.`
+      : `${name} bears no lasting wounds.`);
   };
 
   return (
@@ -214,10 +216,10 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
           <div className="event-pick">
             <h3>Choose a hero to bless</h3>
             <div className="member-row">
-              {MEMBER_DEFS.map((d) => {
-                const p = run.party[d.slot];
+              {run.party.map((p, slot) => {
+                const d = memberDefAt(run.party, slot);
                 return (
-                  <button key={d.id} className="member-pick" onClick={() => blessMember(d.slot as Slot)}>
+                  <button key={slot} className="member-pick" onClick={() => blessMember(slot as Slot)}>
                     <span className="member-name">{d.name}</span>
                     <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
                   </button>
@@ -245,15 +247,15 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
           <div className="event-pick">
             <h3>Choose who bleeds (−{BLOOD_ALTAR_HP} max HP, +{BLOOD_ALTAR_DAMAGE} damage)</h3>
             <div className="member-row">
-              {MEMBER_DEFS.map((d) => {
-                const p = run.party[d.slot];
-                const able = run.canSacrifice(d.slot as Slot);
+              {run.party.map((p, slot) => {
+                const d = memberDefAt(run.party, slot);
+                const able = run.canSacrifice(slot as Slot);
                 return (
                   <button
-                    key={d.id}
+                    key={slot}
                     className="member-pick"
                     disabled={!able}
-                    onClick={() => able && sacrifice(d.slot as Slot)}
+                    onClick={() => able && sacrifice(slot as Slot)}
                   >
                     <span className="member-name">{d.name}{able ? '' : ' (too frail)'}</span>
                     <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
@@ -269,15 +271,15 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
           <div className="event-pick">
             <h3>Choose a hero to tend</h3>
             <div className="member-row">
-              {MEMBER_DEFS.map((d) => {
-                const p = run.party[d.slot];
+              {run.party.map((p, slot) => {
+                const d = memberDefAt(run.party, slot);
                 const injured = p.injuries > 0;
                 return (
                   <button
-                    key={d.id}
+                    key={slot}
                     className="member-pick"
                     disabled={!injured}
-                    onClick={() => injured && tendInjury(d.slot as Slot)}
+                    onClick={() => injured && tendInjury(slot as Slot)}
                   >
                     <span className="member-name">{d.name}{injured ? '' : ' (unharmed)'}</span>
                     <span className="member-stats">
