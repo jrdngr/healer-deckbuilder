@@ -21,9 +21,10 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty, INFIRMARY_PRICE,
+  partyFromMembers, PARTY_SIZE, DRAFT_POOL,
 } from './constants';
 import type {
-  Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig,
+  Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
   NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId, Difficulty,
   CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer, RelicOffer,
 } from './constants';
@@ -40,6 +41,7 @@ export type RunStatus = 'playing' | 'won' | 'lost';
 // from which the player manually enters the first fight.
 export type RunLocation =
   | { kind: 'start' }
+  | { kind: 'draft' } // party draft before the first fight (#27 skeleton, #30 full)
   | { kind: 'fight'; fightIndex: number }
   | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
   | { kind: 'forkChoice'; forkIndex: number }
@@ -54,13 +56,14 @@ export type NodeContent =
   | { type: 'event'; event: EventDef }
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
-  | { type: 'infirmary'; price: number };                             // clear scars for gold (DR1)
+  | { type: 'infirmary'; price: number }                              // clear scars for gold (DR1)
+  | { type: 'draft'; pool: MemberId[] };                              // party draft pool (#27)
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
 // v3: difficulty, #23; v4: fightsWon, #24; v5: per-member injuries + infirmary
-// node content, DR1.)
-export const RUN_SAVE_VERSION = 5;
+// node content, DR1; v6: drafted member identity + draft location/content, #27.)
+export const RUN_SAVE_VERSION = 6;
 
 export interface RunSnapshot {
   version: number;
@@ -171,6 +174,24 @@ export class Run {
   // Leave the opening map and enter the first fight.
   beginRun(): void {
     if (this.location.kind !== 'start') return;
+    this._enterFight(0);
+  }
+
+  // Draft skeleton (#27; the full 1-of-2 pick flow is #30). Enter the draft from the
+  // start screen with the current member pool; the player then seats a party.
+  beginDraft(): void {
+    if (this.location.kind !== 'start') return;
+    this.location = { kind: 'draft' };
+    this.nodeContent = { type: 'draft', pool: [...DRAFT_POOL] };
+  }
+
+  // Seat a drafted party (one member id per slot) and open the first fight. Ignores
+  // malformed picks (wrong size / unknown id) so a crude UI can't wedge the run.
+  chooseDraft(ids: MemberId[]): void {
+    if (this.location.kind !== 'draft') return;
+    if (ids.length !== PARTY_SIZE || !ids.every((id) => DRAFT_POOL.includes(id))) return;
+    this.party = partyFromMembers(ids);
+    this.nodeContent = null;
     this._enterFight(0);
   }
 

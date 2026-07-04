@@ -46,14 +46,14 @@ async function render(el: React.ReactElement): Promise<string> {
 {
   const noop = () => {};
   let text = await render(
-    <StartScreen onBegin={noop} hasSave={true} savedFightIndex={4} onContinue={noop} difficulty="standard" onDifficulty={noop} />,
+    <StartScreen onBegin={noop} onDraft={noop} hasSave={true} savedFightIndex={4} onContinue={noop} difficulty="standard" onDifficulty={noop} />,
   );
   check('resume card shows the saved act', text.includes('Act 2 / 3'), text);
   check('resume card shows the saved fight', text.includes('Fight 5 / 9'), text);
   check('continue button present', text.includes('Continue your saved run'));
 
   text = await render(
-    <StartScreen onBegin={noop} hasSave={false} savedFightIndex={null} onContinue={noop} difficulty="standard" onDifficulty={noop} />,
+    <StartScreen onBegin={noop} onDraft={noop} hasSave={false} savedFightIndex={null} onContinue={noop} difficulty="standard" onDifficulty={noop} />,
   );
   check('fresh run still describes the first fight', text.includes('Fight 1 / 9'), text);
   check('no continue button without a save', !text.includes('Continue your saved run'));

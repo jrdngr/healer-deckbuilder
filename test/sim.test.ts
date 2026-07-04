@@ -9,7 +9,7 @@
 import { runSingleRun, runSim } from '../sim/run-sim';
 import { Game } from '../src/engine';
 import { playFight } from '../sim/policy';
-import { HEXWEAVER_DEF, SLOT, defaultBattleConfig, makeDeckCard, resolveCard } from '../src/constants';
+import { HEXWEAVER_DEF, SLOT, defaultBattleConfig, makeDeckCard, resolveCard, partyFromMembers } from '../src/constants';
 import type { CardId } from '../src/constants';
 
 let passed = 0;
@@ -161,6 +161,39 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   const tHi = tr + ci95(tr, N), aLo = ar - ci95(ar, N);
   check('adaptive beats turtle with non-overlapping 95% CIs against the Hexweaver',
     aLo > tHi, `turtle ${(tr * 100).toFixed(1)}% (hi ${(tHi * 100).toFixed(1)}) vs adaptive ${(ar * 100).toFixed(1)}% (lo ${(aLo * 100).toFixed(1)})`);
+}
+
+// --- roster wave 1: the policy drives a drafted Warlock/Skald party (#27) ----
+// The full composition sweep is #31; here we only prove the per-wave policy can
+// pilot the new members without wedging, and that it wins ordinary fights.
+{
+  let wins = 0, terminated = 0;
+  const N = 60;
+  for (let s = 1; s <= N; s++) {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['warlock', 'tank', 'skald']);
+    cfg.enemy = { ...cfg.enemy, maxHP: 75 }; // an ordinary early normal
+    const g = new Game(s, cfg);
+    playFight(g);
+    if (g.status !== 'playing') terminated++;
+    if (g.status === 'win') wins++;
+  }
+  check('the policy always resolves a drafted Warlock/Skald fight (no stall)', terminated === N, `${terminated}/${N}`);
+  check('the drafted party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
+
+  // The Warlock's burn-out is real: against a wall he can be spent, but the policy's
+  // safety cushion means he doesn't suicide on turn 1 of an easy fight.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
+  cfg.enemy = { ...cfg.enemy, maxHP: 50 };
+  const g = new Game(7, cfg);
+  g.start();
+  const w = g.members[0];
+  const hp0 = w.hp;
+  // One full turn: Soul Tithe fires once; the Warlock is chipped but not gone.
+  g.enemy.hp = 999;
+  g.endTurn();
+  check('the Warlock survives an opening turn (Soul Tithe chips, does not kill)', w.alive && w.hp < hp0);
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

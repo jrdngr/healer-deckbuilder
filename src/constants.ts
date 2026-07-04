@@ -8,8 +8,12 @@ export type Slot = 0 | 1 | 2;
 // Hex/Siphon, the Devourer's Consume) whose resolution runs game logic, not a hit.
 export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep' | 'cast';
 export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
-export type MemberId = 'ranger' | 'tank' | 'mage';
-export type AbilityId = 'poison' | 'taunt' | 'bolt';
+// The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
+// any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald';
+// 'darkBargain' (Warlock) trades his HP for the healer's MP; 'crescendo' (Skald)
+// draws cards and feeds his cards-played strike. Both are fired via the Ability card.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo';
 export type CardId =
   | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -83,7 +87,36 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   ranger: MEMBER_DEFS[0],
   tank: MEMBER_DEFS[1],
   mage: MEMBER_DEFS[2],
+  // Post-demo roster wave 1 (#27). `slot` here is a nominal home slot only — a
+  // drafted member takes whatever slot it is assigned; the engine uses the map
+  // index for placement and reads only id/name/ability/stats from the pool.
+  // Warlock: highest damage in the game, but Soul Tithe burns him each turn and
+  // Dark Bargain trades HP for MP — an HP-bottleneck DPS.
+  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 15, damage: 7, ability: 'darkBargain' },
+  // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
+  // both draws and counts toward that), attacking Rest timing.
+  skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
 };
+
+// Build a party config from an ordered list of member ids (slot = list index).
+// Fresh members carry no injuries and the pool's base stats. Used by the draft
+// (#27 skeleton, #30 full) to seat arbitrary compositions.
+export function partyFromMembers(ids: MemberId[]): PartyMemberConfig[] {
+  return ids.map((id): PartyMemberConfig => {
+    const d = MEMBER_POOL[id];
+    return { maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, member: id };
+  });
+}
+
+// The classic demo trio, as a member-id list (Ranger / Tank / Mage). The draft
+// pre-selects this so returning players lose nothing (#30).
+export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
+
+// A drafted party seats this many members (one per slot).
+export const PARTY_SIZE = 3;
+// The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
+// land (#28 Berserker/Augur, #29 Beast Warden).
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald'];
 
 export const ENEMY_MAX_HP = 100;
 
@@ -466,6 +499,14 @@ export const REGEN_TURNS = 3;   // player phases Regen lasts
 export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
 export const TAUNT_TURNS = 4;
 export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
+// Post-demo roster wave 1 abilities (#27).
+export const TITHE_AMOUNT = 2;       // Soul Tithe: HP the Warlock loses each party phase (can kill him)
+export const BARGAIN_HP_BASE = 3;    // Dark Bargain: base HP cost
+export const BARGAIN_HP_GROWTH = 3;  // Dark Bargain: extra HP cost per prior cast this fight
+export const BARGAIN_MP = 3;         // Dark Bargain: MP granted to the healer
+export const SKALD_DMG_PER_CARD = 2; // Skald strike: damage per card played this phase
+export const SKALD_DMG_CAP = 8;      // Skald strike: cap on the cards-played bonus
+export const CRESCENDO_DRAW = 2;     // Crescendo: cards drawn (and it counts as 1 card played)
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
 
@@ -609,6 +650,9 @@ export interface PartyMemberConfig {
   // from the base stats so clearing restores them exactly and does not entangle
   // with permanent party upgrades.
   injuries: number; // 0..MAX_INJURIES
+  // Drafted identity (#27): which pool member sits in this slot. Absent means the
+  // classic trio member for the slot (backward-compatible with pre-draft configs).
+  member?: MemberId;
 }
 
 // ---------------------------------------------------------------------------
@@ -751,6 +795,12 @@ const cardHasDuration = (id: CardId): boolean => {
 
 // Shared engine tag: any card that generates MP or draws cards.
 export const isEngineCard = (id: CardId): boolean => CARDS[id].engine === true;
+
+// A member ability counts as an "engine" effect when firing it generates MP or
+// draws cards (#27): Dark Bargain mints MP, Crescendo draws. Same spirit as the
+// engine-card tag (economy-fueling), surfaced for the Ability card that fires them.
+export const isEngineAbility = (ability: AbilityId): boolean =>
+  ability === 'darkBargain' || ability === 'crescendo';
 
 // Retain may not lock in the always-on Ability card, any engine card (that would
 // make the MP-economy loop deterministic), or a 0-cost card (free perpetual value).

@@ -10,7 +10,9 @@
 // Read state off the public fields; read game.log for a running event feed.
 
 import {
-  MEMBER_DEFS, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,
+  MEMBER_DEFS, MEMBER_POOL, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,
+  TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP,
+  SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
@@ -61,6 +63,7 @@ export interface Member {
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
   drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
+  bargainCasts: number; // Warlock (#27): Dark Bargains cast this fight; grows the next cost
   diedThisFight: boolean; // DR1: went to 0 HP at any point this fight (a later Resurrect
                           // does not clear it — death always scars; a Martyr's Icon save
                           // vetoes the death, so it never sets this).
@@ -216,9 +219,12 @@ export class Game {
     this.enrageTurn = config.enemy.enrageTurn ?? ENRAGE_TURN;
 
     this.members = config.party.map((p, slot): Member => {
-      const d = MEMBER_DEFS[slot];
+      // Identity comes from the drafted member id (#27) when present, else the
+      // classic trio member that homes this slot. The engine seats it at the map
+      // index, so any member can occupy any slot.
+      const d = p.member ? MEMBER_POOL[p.member] : MEMBER_DEFS[slot];
       return {
-        slot: d.slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
+        slot: slot as Slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
         ability: d.ability, abilityPower: p.abilityPower,
         hp: p.maxHP, alive: true,
         shield: false, // pending shield (blocks the next damaging instance)
@@ -234,6 +240,7 @@ export class Game {
         charge: 0,     // per-member Charge
         drumPrimed: false, // no War Drum beat pending
         ward: 0,       // no Aegis Ward standing
+        bargainCasts: 0, // no Dark Bargains cast yet (#27)
         diedThisFight: false, // no death yet this fight
         injuries: p.injuries, // display-only; penalty already folded into the stats above
       };
@@ -315,7 +322,15 @@ export class Game {
   // Vanguard's Banner (#21) rewards a member kept at full HP.
   memberDamage(m: Member): number {
     const banner = this.hasRelic('vanguardsBanner') && m.hp === m.maxHP ? VANGUARD_BONUS : 0;
-    return m.damage + this.hymnBonus + banner;
+    // The Skald (#27) has no fixed strike — it scales on cards played this phase
+    // (capped), so a busy turn hits hard and a Rest turn barely swings. His base
+    // `damage` is 0, but a Weakened scar can push it below 0; fold that in, floored.
+    let base = m.damage;
+    if (m.ability === 'crescendo') {
+      const crescendo = Math.min(SKALD_DMG_CAP, SKALD_DMG_PER_CARD * this.cardsPlayedThisPhase);
+      base = Math.max(0, crescendo + m.damage);
+    }
+    return base + this.hymnBonus + banner;
   }
 
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
@@ -722,6 +737,17 @@ export class Game {
     m.hp -= paid;
     this._emit({ kind: 'bloodPay', slot: m.slot, amount: paid, hp: m.hp });
     return paid;
+  }
+
+  // A LETHAL HP drain (#27): unlike _bloodPay it is not clamped to leave 1 HP, so it
+  // can kill the member (Soul Tithe / Dark Bargain burn-out). Kills and re-checks the
+  // wipe when it empties them. Reuses the bloodPay FX event (HP cost paid).
+  _drainMember(m: Member, amount: number): number {
+    const lost = Math.min(amount, m.hp);
+    m.hp -= lost;
+    this._emit({ kind: 'bloodPay', slot: m.slot, amount: lost, hp: Math.max(0, m.hp) });
+    if (m.hp <= 0) { this._killMember(m); this._checkWipe(); }
+    return lost;
   }
 
   // Damage a member actually takes from a raw attack value, after their Defense
@@ -1444,6 +1470,32 @@ export class Game {
         if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
+      case 'darkBargain': {
+        // The Warlock (#27) trades HP for the healer's MP; the cost GROWS each cast
+        // this fight (3, 6, 9, ...), so overcasting burns him out (it can kill him).
+        const cost = BARGAIN_HP_BASE + BARGAIN_HP_GROWTH * m.bargainCasts;
+        m.bargainCasts += 1;
+        const before = this.mp;
+        this.mp = Math.min(this.maxMana, this.mp + BARGAIN_MP);
+        this._log(`${m.name} strikes a Dark Bargain: -${cost} HP for +${this.mp - before} MP.`, 'status');
+        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
+        this._drainMember(m, cost); // paid last so the MP lands even on the lethal cast
+        break;
+      }
+      case 'crescendo': {
+        // The Skald (#27) draws CRESCENDO_DRAW cards; the Ability card that fired it
+        // already counted as the "1 card played" toward his cards-played strike.
+        let drawn = 0;
+        for (let i = 0; i < CRESCENDO_DRAW; i++) {
+          const c = this._drawOne();
+          if (c == null) break;
+          this.hand.push(c);
+          drawn += 1;
+        }
+        this._log(`${m.name} plays a Crescendo — draws ${drawn}.`, 'status');
+        this._emit({ kind: 'draw', count: drawn });
+        break;
+      }
       default:
         break;
     }
@@ -1540,6 +1592,17 @@ export class Game {
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
     this.hymnBonus = 0; // Battle Hymn only buffs the phase it was sung in
+    // Soul Tithe (#27): the Warlock burns TITHE_AMOUNT HP at the end of each party
+    // phase, after his strike — his signature burn-out cost, and it can kill him.
+    // Skipped once the enemy is dead (the fight is already won).
+    if (this.status === 'playing') {
+      for (const m of this.members) {
+        if (m.alive && m.ability === 'darkBargain') {
+          this._log(`Soul Tithe drains ${m.name} for ${TITHE_AMOUNT}.`, 'status');
+          this._drainMember(m, TITHE_AMOUNT);
+        }
+      }
+    }
   }
 
   // Once-per-RUN relics this fight consumed (#22) — the run layer records these

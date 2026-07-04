@@ -463,6 +463,28 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 
 .leave-btn { justify-self: start; width: max-content; }
 
+/* ---- Draft (#27 skeleton) ------------------------------------------------ */
+.draft-slots { display: flex; gap: 12px; margin: 14px 0; }
+.draft-slot {
+  flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: center;
+  background: var(--panel); border: 1px dashed #3a4150; border-radius: 10px; padding: 12px 14px;
+}
+.draft-slot.filled { border-style: solid; border-color: var(--accent); }
+.draft-slot-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.draft-slot-name { font-weight: 700; }
+.draft-offers { margin-top: 4px; }
+.draft-member {
+  width: 200px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 10px; padding: 12px 14px;
+  color: var(--ink); cursor: pointer; text-align: left;
+}
+.draft-member:hover:not(:disabled) { border-color: var(--accent); }
+.draft-member:disabled { opacity: .5; cursor: not-allowed; }
+.draft-member.chosen { border-color: var(--gold); }
+.draft-member-name { font-weight: 700; }
+.draft-member-stats { font-size: 11px; color: var(--muted); }
+.draft-actions { display: flex; gap: 12px; margin-top: 18px; }
+
 /* ---- Events -------------------------------------------------------------- */
 .event-screen { display: grid; place-items: center; }
 .event-card {

@@ -2,6 +2,7 @@
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
+import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -2393,6 +2394,89 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     const gb = new Game(413, cfg);
     eq('bosses are exempt from the Crown', gb.attackDamage('single', 1), 4);
   }
+}
+
+// --- party roster wave 1: Hexen Warlock + Skald (#27) -----------------------
+{
+  // Warlock identity is read from the drafted member id, seated at its slot.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
+  const g = new Game(1, cfg); g.start();
+  const w = g.members[0];
+  eq('drafted Warlock seated in slot 0', w.id, 'warlock');
+  eq('Warlock name from the pool', w.name, 'Hexen Warlock');
+  eq('Warlock ability is Dark Bargain', w.ability, 'darkBargain');
+  eq('Warlock has the highest damage', w.damage, 7);
+
+  // Dark Bargain: -HP (growing per cast) for +MP.
+  g.mp = 10; w.hp = 15;
+  g._fireAbility(w);
+  eq('first Dark Bargain costs BARGAIN_HP_BASE', 15 - w.hp, BARGAIN_HP_BASE);
+  g.mp = 4; // room for the +MP to land unclamped
+  const beforeMp = g.mp;
+  g._fireAbility(w);
+  eq('second Dark Bargain costs base + growth', w.hp, 15 - BARGAIN_HP_BASE - (BARGAIN_HP_BASE + BARGAIN_HP_GROWTH));
+  eq('Dark Bargain grants BARGAIN_MP', g.mp - beforeMp, BARGAIN_MP);
+  eq('bargainCasts tracks casts this fight', w.bargainCasts, 2);
+}
+{
+  // Dark Bargain can BURN OUT the Warlock (lethal, unlike Blood cards).
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
+  const g = new Game(2, cfg); g.start();
+  const w = g.members[0];
+  w.hp = 2; // less than the base cost
+  g._fireAbility(w);
+  check('Dark Bargain can kill the Warlock', !w.alive && w.hp <= 0);
+  check('the lethal Dark Bargain marks a death (DR1 scar)', w.diedThisFight);
+}
+{
+  // Soul Tithe drains the Warlock every party phase, after his strike, and can kill him.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
+  const g = new Game(3, cfg); g.start();
+  const w = g.members[0];
+  const hp0 = w.hp;
+  g.enemy.hp = 999; // keep the fight alive
+  g.endTurn();      // party phase applies Soul Tithe
+  eq('Soul Tithe drains TITHE_AMOUNT per party phase', hp0 - w.hp, TITHE_AMOUNT);
+  // Push him to the brink and confirm the tithe can be lethal.
+  w.hp = TITHE_AMOUNT;
+  g.endTurn();
+  check('Soul Tithe can kill the Warlock', !w.alive);
+}
+{
+  // Skald: 0 base, strikes for SKALD_DMG_PER_CARD × cards played, capped.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['ranger', 'tank', 'skald']);
+  const g = new Game(4, cfg); g.start();
+  const s = g.members[2];
+  eq('drafted Skald seated in slot 2', s.id, 'skald');
+  eq('Skald base damage is 0', s.damage, 0);
+  g.cardsPlayedThisPhase = 0;
+  eq('Skald strikes for 0 on an empty turn', g.memberDamage(s), 0);
+  g.cardsPlayedThisPhase = 3;
+  eq('Skald strike scales with cards played', g.memberDamage(s), SKALD_DMG_PER_CARD * 3);
+  g.cardsPlayedThisPhase = 10;
+  eq('Skald strike is capped', g.memberDamage(s), SKALD_DMG_CAP);
+}
+{
+  // Crescendo draws CRESCENDO_DRAW, counts as a card played, and is engine-tagged.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['ranger', 'tank', 'skald']);
+  const g = new Game(5, cfg); g.start();
+  // Ensure the draw pile has cards to pull.
+  g.drawPile = [makeDeckCard('lowHeal', -900), makeDeckCard('lowHeal', -901), makeDeckCard('lowHeal', -902)];
+  const handBefore = g.hand.length;
+  g.mp = 10;
+  const idx = giveCard(g, 'ability');
+  const played0 = g.cardsPlayedThisPhase;
+  g.playCard(idx, 2); // fire the Skald's Crescendo
+  eq('Crescendo drew CRESCENDO_DRAW cards', g.hand.length, handBefore + CRESCENDO_DRAW);
+  eq('Crescendo counts as one card played', g.cardsPlayedThisPhase, played0 + 1);
+  check('Crescendo is engine-tagged', isEngineAbility('crescendo'));
+  check('Dark Bargain is engine-tagged', isEngineAbility('darkBargain'));
+  check('Poison is not engine-tagged', !isEngineAbility('poison'));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -6,6 +6,7 @@ import { loadStats } from '../stats';
 
 interface StartScreenProps {
   onBegin: () => void;
+  onDraft: () => void;
   hasSave: boolean;
   /** Fight index the save is at or headed toward (null when no save). */
   savedFightIndex: number | null;
@@ -17,7 +18,7 @@ interface StartScreenProps {
 // The opening map: the run starts here, and the player manually enters the first
 // (easiest) fight. If a saved run exists, offer to resume it.
 export function StartScreen({
-  onBegin, hasSave, savedFightIndex, onContinue, difficulty, onDifficulty,
+  onBegin, onDraft, hasSave, savedFightIndex, onContinue, difficulty, onDifficulty,
 }: StartScreenProps) {
   const stats = loadStats();
   const presets = DIFFICULTY_IDS.filter((d) => !DIFFICULTIES[d].devOnly || devUnlocked);
@@ -66,6 +67,9 @@ export function StartScreen({
         <p className="map-node-desc">{DIFFICULTIES[difficulty].desc}</p>
         <button className={hasSave ? 'map-take' : 'primary map-take'} onClick={onBegin}>
           {hasSave ? 'Start a new run instead' : 'Enter the first fight'}
+        </button>
+        <button className="map-take" onClick={onDraft} title="Pick your party from the roster">
+          Draft your party
         </button>
       </div>
       {stats.bestAct > 0 && (

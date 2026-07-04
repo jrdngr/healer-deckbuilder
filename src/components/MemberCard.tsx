@@ -1,5 +1,6 @@
 import {
   CHARGE_MAX, POISON_BASE, POISON_TURNS, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE, BOLT_CHARGE_MULT,
+  TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
 import type { MemberId } from '../constants';
@@ -19,6 +20,8 @@ const ABILITY: Record<MemberId, string> = {
   ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
   tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
   mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
+  warlock: `Dark Bargain — lose ${BARGAIN_HP_BASE}+${BARGAIN_HP_GROWTH}/cast HP for +${BARGAIN_MP} MP. Soul Tithe: −${TITHE_AMOUNT} HP each turn.`,
+  skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
 };
 
 interface MemberCardProps {

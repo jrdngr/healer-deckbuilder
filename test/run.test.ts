@@ -894,5 +894,43 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('without the Totem, victory mends nothing', noTotem.party[1].injuries, 2);
 }
 
+// --- draft skeleton (#27) ---------------------------------------------------
+{
+  const run = new Run(20);
+  run.beginDraft();
+  eq('beginDraft enters the draft location', run.location.kind, 'draft');
+  check('draft offers the member pool', run.nodeContent?.type === 'draft'
+    && run.nodeContent.pool.includes('warlock') && run.nodeContent.pool.includes('skald'));
+
+  // Seat a drafted party and confirm it opens fight 0 with those members.
+  run.chooseDraft(['warlock', 'tank', 'skald']);
+  eq('chooseDraft opens the first fight', run.location.kind, 'fight');
+  eq('slot 0 is the drafted Warlock', run.party[0].member, 'warlock');
+  eq('slot 2 is the drafted Skald', run.party[2].member, 'skald');
+
+  // A malformed pick (wrong size / unknown id) is ignored — the run can't wedge.
+  const bad = new Run(21);
+  bad.beginDraft();
+  bad.chooseDraft(['warlock', 'tank'] as never);      // too few
+  eq('a short draft pick is refused', bad.location.kind, 'draft');
+  bad.chooseDraft(['warlock', 'tank', 'ranger', 'mage'] as never); // too many
+  eq('an over-long draft pick is refused', bad.location.kind, 'draft');
+
+  // The classic trio path seats the demo party (returning players lose nothing).
+  const trio = new Run(22);
+  trio.beginDraft();
+  trio.chooseDraft(['ranger', 'tank', 'mage']);
+  eq('classic trio drafts into a fight', trio.location.kind, 'fight');
+  eq('classic draft seats the ranger in slot 0', trio.party[0].member, 'ranger');
+
+  // A drafted run round-trips through a save snapshot (v6 carries member identity).
+  const drafted = new Run(23);
+  drafted.beginDraft();
+  drafted.chooseDraft(['warlock', 'mage', 'skald']);
+  const restored = Run.fromJSON(drafted.toJSON());
+  eq('drafted identity survives save/resume', restored.party[0].member, 'warlock');
+  eq('drafted skald survives save/resume', restored.party[2].member, 'skald');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

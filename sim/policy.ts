@@ -14,8 +14,9 @@ import type { Member } from '../src/engine';
 import { Run } from '../src/run';
 import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
+  BARGAIN_HP_BASE, BARGAIN_HP_GROWTH,
 } from '../src/constants';
-import type { CardId, Slot, RelicId } from '../src/constants';
+import type { CardId, Slot, RelicId, AbilityId } from '../src/constants';
 
 // ---------------------------------------------------------------------------
 // Fight policy
@@ -151,15 +152,18 @@ function tryResurrect(game: Game): boolean {
 // Race the enemy down with the mage's Bolt when Charge is worth spending (or
 // when it lands the kill).
 function tryBolt(game: Game): boolean {
-  const mage = game.mage;
-  if (!mage.alive) return false;
+  // Find the Bolt member by ability, not slot — a drafted party may not seat the
+  // mage at RIGHT (or seat one at all). For the classic trio this is the mage at
+  // RIGHT, so the trio's line is unchanged.
+  const mage = memberByAbility(game, 'bolt');
+  if (!mage) return false;
   const idx = handIndexOf(game, 'ability');
   if (!affordable(game, idx)) return false;
-  const dmg = BOLT_BASE + mage.abilityPower + BOLT_CHARGE_MULT * game.mageCharge;
-  if (dmg >= game.enemy.hp) { game.playCard(idx, SLOT.RIGHT); return true; } // the kill ends it now
+  const dmg = BOLT_BASE + mage.abilityPower + BOLT_CHARGE_MULT * mage.charge;
+  if (dmg >= game.enemy.hp) { game.playCard(idx, mage.slot); return true; } // the kill ends it now
   if (channelThreatUnanswered(game)) return false;
-  if (game.mageCharge >= Math.min(BOLT_CHARGE_GATE, CHARGE_MAX)) {
-    game.playCard(idx, SLOT.RIGHT);
+  if (mage.charge >= Math.min(BOLT_CHARGE_GATE, CHARGE_MAX)) {
+    game.playCard(idx, mage.slot);
     return true;
   }
   return false;
@@ -168,11 +172,14 @@ function tryBolt(game: Game): boolean {
 // Keep Poison ticking on the enemy for steady chip damage.
 function tryPoison(game: Game): boolean {
   if (game.enemy.poisonTurns > 0) return false;
-  if (!game.ranger.alive) return false;
+  // Find the Poison member by ability, not slot (see tryBolt). Classic trio: the
+  // ranger at LEFT, so unchanged.
+  const ranger = memberByAbility(game, 'poison');
+  if (!ranger) return false;
   if (channelThreatUnanswered(game)) return false;
   const idx = handIndexOf(game, 'ability');
   if (!affordable(game, idx)) return false;
-  game.playCard(idx, SLOT.LEFT);
+  game.playCard(idx, ranger.slot);
   return true;
 }
 
@@ -256,18 +263,61 @@ function tryRefresh(game: Game): boolean {
 // the fragile DPS alive. Then win the damage race (Bolt/Poison) before enrage
 // snowballs; banking MP instead only drags fights past the turn-11 enrage and
 // loses. Proactive single-target healing and MP economy fill the leftovers.
+// The living member whose ability matches, or null. Post-demo roster members
+// (#27-#29) can occupy any slot, so tactics find them by ability, not slot.
+function memberByAbility(game: Game, ability: AbilityId): Member | null {
+  return game.members.find((m) => m.alive && m.ability === ability) ?? null;
+}
+
+// Warlock burn-out timing (#27): Dark Bargain trades HP for MP, but the cost GROWS
+// each cast, so overusing it kills him. Bargain only when MP is genuinely starved
+// AND the Warlock keeps a safety cushion above the (growing) cost.
+function tryDarkBargain(game: Game): boolean {
+  const w = memberByAbility(game, 'darkBargain');
+  if (!w) return false;
+  if (game.mp >= 4) return false; // not starved — no reason to bleed him
+  if (channelThreatUnanswered(game)) return false;
+  const idx = handIndexOf(game, 'ability');
+  if (!affordable(game, idx)) return false;
+  const cost = BARGAIN_HP_BASE + BARGAIN_HP_GROWTH * w.bargainCasts;
+  // Keep a cushion: Soul Tithe also chips him, so don't bargain into the danger zone.
+  if (w.hp - cost < Math.max(5, cost + 2)) return false;
+  game.playCard(idx, w.slot);
+  return true;
+}
+
+// Skald rest-timing tension (#27): his strike scales on cards played this phase, so
+// Crescendo (draw 2, counts as a card) both fuels the hand and feeds the strike.
+// Play it when there is MP to spare and cards to draw — never when a channel needs
+// answering first.
+function tryCrescendo(game: Game): boolean {
+  const s = memberByAbility(game, 'crescendo');
+  if (!s) return false;
+  if (channelThreatUnanswered(game)) return false;
+  if (game.mp < 4) return false; // keep MP for heals/answers when tight
+  const idx = handIndexOf(game, 'ability');
+  if (!affordable(game, idx)) return false;
+  game.playCard(idx, s.slot);
+  return true;
+}
+
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryBraceChannel, tryRetaunt, tryPreventLethal, tryCleanse, tryGroupHeal, tryResurrect, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
+  tryBraceChannel, tryRetaunt, tryPreventLethal, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBolt, tryPoison, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).
 function takeFightTurn(game: Game): void {
+  // A heuristic policy must always make progress toward ending the turn; this guard
+  // is a backstop so a mis-registered tactic can never hang the sim (it would leave
+  // status 'playing', which the caller reads as a loss).
+  let guard = 0;
   while (game.phase === 'player') {
     let acted = false;
     for (const tactic of TACTICS) {
       if (tactic(game)) { acted = true; break; }
     }
-    if (!acted) break;
+    if (!acted || ++guard > 200) break;
   }
   if (game.phase !== 'player') return; // a Bolt / Poison tick finished the enemy
   // Nothing left worth doing: rest to bank MP if we still have room and haven't

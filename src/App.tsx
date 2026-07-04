@@ -6,6 +6,7 @@ import { FIGHTS_PER_ACT, ACT_COUNT, NODES_PER_BRANCH, isActBoss, actOfFight } fr
 import type { Difficulty } from './constants';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
+import { DraftScreen } from './components/DraftScreen';
 import { FightScreen } from './components/FightScreen';
 import { MapScreen } from './components/MapScreen';
 import { NodeScreen } from './components/NodeScreen';
@@ -19,6 +20,7 @@ function progressLabel(run: Run): string {
   if (run.status === 'lost') return 'Run over';
   const loc = run.location;
   if (loc.kind === 'start') return 'The journey begins';
+  if (loc.kind === 'draft') return 'Draft your party';
   if (loc.kind === 'fight') {
     const act = actOfFight(loc.fightIndex) + 1;
     const inAct = (loc.fightIndex % FIGHTS_PER_ACT) + 1;
@@ -51,6 +53,7 @@ export function App() {
     screen = (
       <StartScreen
         onBegin={() => act((r) => { r.difficulty = difficulty; r.beginRun(); })}
+        onDraft={() => act((r) => { r.difficulty = difficulty; r.beginDraft(); })}
         hasSave={hasSave}
         savedFightIndex={savedFightIndex}
         onContinue={onContinue}
@@ -58,6 +61,8 @@ export function App() {
         onDifficulty={setDifficulty}
       />
     );
+  } else if (run.location.kind === 'draft') {
+    screen = <DraftScreen run={run} act={act} />;
   } else if (run.location.kind === 'fight') {
     // Keyed so each fight remounts with a fresh battle from its own config.
     screen = (
