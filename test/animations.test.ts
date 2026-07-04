@@ -13,7 +13,7 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
 const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   tl.entries.flatMap((e) => (e.fx ?? []).map((f) => f.type));
 
-// --- party attacks: a projectile + stepped enemy-HP patch per strike --------
+// --- party attacks: each identity strikes with its own signature ------------
 {
   const events: GameEvent[] = [
     { kind: 'partyAttack', slot: 0, memberId: 'ranger', amount: 3, enemyHp: 97 },
@@ -21,14 +21,89 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     { kind: 'partyAttack', slot: 2, memberId: 'mage', amount: 5, enemyHp: 91 },
   ];
   const tl = buildTimeline(events);
-  eq('three projectiles', fxTypes(tl).filter((t) => t === 'projectile').length, 3);
+  // ranger: a three-dart volley; tank: one heavy arc lob; mage: a beam.
+  const projs = tl.entries.flatMap((e) => (e.fx ?? []).filter((f) => f.type === 'projectile'));
+  eq('ranger volley + tank slam projectiles', projs.length, 4);
+  eq('tank slam is an arc lob', projs.filter((p) => p.type === 'projectile' && p.variant === 'arc').length, 1);
+  check('mage fires a beam', fxTypes(tl).includes('beam'));
+  check('tank slam rakes a slash', fxTypes(tl).includes('slash'));
   const hpPatches = tl.entries.filter((e) => e.patch?.enemyHp != null).map((e) => e.patch!.enemyHp);
   check('enemy HP steps down across strikes',
     JSON.stringify(hpPatches) === JSON.stringify([97, 96, 91]), JSON.stringify(hpPatches));
   // strikes are staggered in time, not all at zero
   const times = tl.entries.filter((e) => e.fx?.some((f) => f.type === 'projectile')).map((e) => e.at);
-  check('strikes are sequenced', times[0] < times[1] && times[1] < times[2], JSON.stringify(times));
-  check('total covers the last effect fade', tl.total >= times[2] + FX_DURATION.projectile);
+  check('strikes are sequenced', times.every((a, i) => i === 0 || a > times[i - 1]), JSON.stringify(times));
+  check('every member lunges', tl.entries.filter((e) => e.react?.some((r) => r.kind === 'lunge')).length === 3);
+}
+
+// --- every identity has a working signature ----------------------------------
+{
+  const ids = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden'] as const;
+  for (const memberId of ids) {
+    const tl = buildTimeline([{ kind: 'partyAttack', slot: 1, memberId, amount: 4, enemyHp: 90 }]);
+    check(`${memberId}: strike patches enemy HP`, tl.entries.some((e) => e.patch?.enemyHp === 90));
+    check(`${memberId}: strike floats its damage`,
+      tl.entries.some((e) => e.fx?.some((f) => f.type === 'float' && f.text.includes('4'))));
+    check(`${memberId}: strike shakes on impact`, tl.entries.some((e) => (e.shake ?? 0) > 0));
+  }
+  // berserker crosses two slashes; graveAugur lobs an arc.
+  const zerk = buildTimeline([{ kind: 'partyAttack', slot: 0, memberId: 'berserker', amount: 6, enemyHp: 80 }]);
+  eq('berserker crosses two slashes', fxTypes(zerk).filter((t) => t === 'slash').length, 2);
+}
+
+// --- enemy attack geometries have distinct signatures -------------------------
+{
+  const twoTargets = (attackType: 'aoe' | 'sweep' | 'two'): GameEvent[] => [
+    { kind: 'enemyAttack', slot: 0, amount: 3, hp: 7, result: 'hit', killed: false, hidden: false, attackType },
+    { kind: 'enemyAttack', slot: 1, amount: 3, hp: 9, result: 'hit', killed: false, hidden: false, attackType },
+  ];
+  // AoE: one detonation, both targets struck at the same instant.
+  const aoe = buildTimeline(twoTargets('aoe'));
+  const aoeImpacts = aoe.entries.filter((e) => e.patch?.memberHp).map((e) => e.at);
+  check('aoe strikes all targets at once', aoeImpacts.length === 2 && aoeImpacts[0] === aoeImpacts[1],
+    JSON.stringify(aoeImpacts));
+  check('aoe opens with a shockwave ring', aoe.entries[0].fx?.some((f) => f.type === 'ring') === true);
+  // Sweep: a slash rakes each target, left to right.
+  const sweep = buildTimeline(twoTargets('sweep'));
+  eq('sweep slashes each target', fxTypes(sweep).filter((t) => t === 'slash').length, 2);
+  const sweepImpacts = sweep.entries.filter((e) => e.patch?.memberHp).map((e) => e.at);
+  check('sweep rakes in sequence', sweepImpacts[0] < sweepImpacts[1], JSON.stringify(sweepImpacts));
+  // Heavy: a wind-up glow, then a big arc lob.
+  const heavy = buildTimeline([
+    { kind: 'enemyAttack', slot: 1, amount: 9, hp: 1, result: 'hit', killed: false, hidden: false, attackType: 'heavy' },
+  ]);
+  check('heavy winds up with a glow', heavy.entries[0].fx?.some((f) => f.type === 'glow') === true);
+  check('heavy lobs an arc', heavy.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'projectile' && f.variant === 'arc')));
+  const heavyShake = Math.max(...heavy.entries.map((e) => e.shake ?? 0));
+  const plainShake = Math.max(...buildTimeline([
+    { kind: 'enemyAttack', slot: 1, amount: 9, hp: 1, result: 'hit', killed: false, hidden: false, attackType: 'single' },
+  ]).entries.map((e) => e.shake ?? 0));
+  check('heavy shakes harder than a plain hit', heavyShake > plainShake, `${heavyShake} <= ${plainShake}`);
+}
+
+// --- heals are warm: rising motes, slow floats, big heals warm the board ------
+{
+  const tl = buildTimeline([{ kind: 'heal', slot: 1, amount: 7, hp: 12 }]);
+  check('big heal tints the board', tl.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'vignette' && f.mode === 'tint')));
+  check('heal motes rise', tl.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'burst' && f.mode === 'rise')));
+  const small = buildTimeline([{ kind: 'heal', slot: 1, amount: 2, hp: 12 }]);
+  check('small heal does not tint the board', !small.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'vignette')));
+}
+
+// --- debuffs crumble downward instead of exploding -----------------------------
+{
+  const hex = buildTimeline([{ kind: 'wound', turns: 2 }]);
+  check('hex crumbles down over the party', hex.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'burst' && f.mode === 'fall')));
+  check('hex creeps in as a vignette', hex.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'vignette' && f.mode === 'tint')));
+  const siphon = buildTimeline([{ kind: 'siphon', amount: 3, mp: 4 }]);
+  check('siphon crumbles the mana', siphon.entries.some((e) =>
+    e.fx?.some((f) => f.type === 'burst' && f.mode === 'fall')));
 }
 
 // --- a lethal enemy attack stages the death and shakes the screen -----------

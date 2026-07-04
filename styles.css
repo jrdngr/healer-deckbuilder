@@ -144,6 +144,46 @@ section.enemy {
 .member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }
 .member.valid-target:hover { background: var(--panel-2); }
 
+/* One-shot member reactions, driven by the animation timeline's react channel
+   (MemberCard re-applies the class with a reflow so repeats restart). These
+   move the card itself — the FX layer draws over it, reactions make it flinch. */
+.member.react-hit { animation: member-hit 360ms cubic-bezier(.3,.6,.3,1); }
+@keyframes member-hit {
+  0%   { transform: none; filter: none; }
+  12%  { transform: translate(6px, 2px); filter: brightness(2) saturate(.55); }
+  38%  { transform: translate(-5px, 0); filter: brightness(1.25); }
+  70%  { transform: translate(2px, 0); filter: none; }
+  100% { transform: none; }
+}
+.member.react-heal { animation: member-heal 520ms ease-out; }
+@keyframes member-heal {
+  0%   { transform: none; }
+  30%  { transform: scale(1.025); box-shadow: 0 0 0 3px rgba(127,230,164,.45), 0 0 22px rgba(255,223,158,.35), 0 6px 14px rgba(0,0,0,.45); }
+  100% { transform: none; }
+}
+.member.react-block { animation: member-block 400ms cubic-bezier(.3,.7,.4,1); }
+@keyframes member-block {
+  0%   { transform: none; }
+  30%  { transform: scale(.982); }
+  62%  { transform: scale(1.012); }
+  100% { transform: none; }
+}
+.member.react-lunge { animation: member-lunge 420ms cubic-bezier(.3,.7,.3,1); }
+@keyframes member-lunge {
+  0%   { transform: none; }
+  28%  { transform: translateY(-13px) scale(1.02); }
+  100% { transform: none; }
+}
+.member.react-death { animation: member-death 700ms cubic-bezier(.4,.05,.6,1); }
+@keyframes member-death {
+  /* Ends on the .dead resting values (opacity .5, no transform) so the collapse
+     hands off to the persistent dead state without a pop. */
+  0%   { transform: none; opacity: 1; filter: brightness(2.2); }
+  30%  { transform: translateY(6px) rotate(-1.6deg) scale(.955); filter: brightness(.75) saturate(.4); }
+  70%  { transform: translateY(2px) scale(.985); filter: saturate(.3); opacity: .6; }
+  100% { transform: none; filter: none; opacity: .5; }
+}
+
 /* Controls — centered MP bar at half width */
 .controls { display: flex; justify-content: center; }
 .mp-bar { width: 50%; height: 26px; }
@@ -472,6 +512,9 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   /* Full-board washes are the strongest movers — drop them entirely. */
   .fx-vignette, .fx-vignette.flash { animation: none; opacity: 0; }
   .fx-banner { animation: fx-banner-reduced var(--dur, 1200ms) ease-out forwards; }
+  /* Member cards stay still; the FX layer's floats/bursts still tell the story. */
+  .member.react-hit, .member.react-heal, .member.react-block,
+  .member.react-lunge, .member.react-death { animation: none; }
 }
 @keyframes fx-banner-reduced {
   0%   { opacity: 0; }

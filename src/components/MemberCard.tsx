@@ -1,8 +1,18 @@
+import { useEffect, useRef } from 'react';
 import {
   CHARGE_MAX, BERSERKER_BAND_BONUS,
   INJURY_NAMES, MEMBER_ABILITY_FLAVOR, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
 import type { Member } from '../engine';
+import type { MemberReactKind } from '../animations';
+import type { MemberReactState } from '../useGame';
+
+// How long each one-shot reaction class stays on the card (matches the CSS
+// animation lengths in styles.css).
+const REACT_MS: Record<MemberReactKind, number> = {
+  hit: 360, heal: 520, death: 700, block: 400, lunge: 420,
+};
+const REACT_CLASSES = ['react-hit', 'react-heal', 'react-death', 'react-block', 'react-lunge'];
 
 // One-line summary of the stat penalty a member's scars currently impose (DR1).
 export function injuryPenaltyText(injuries: number): string {
@@ -19,6 +29,9 @@ interface MemberCardProps {
   // overlay land in step with the hit (or heal / resurrect) effect.
   displayHp: number;
   displayDead: boolean;
+  // The latest one-shot reaction for this card (recoil / heal pulse / collapse);
+  // seq bumps on every trigger so repeats restart the animation.
+  react: MemberReactState | null;
   mageCharge: number;
   // The member's CURRENT strike (game.memberDamage) — differs from the static base
   // for dynamic members (Skald cards-played, Berserker HP bands, #27/#28).
@@ -32,8 +45,23 @@ interface MemberCardProps {
 }
 
 export function MemberCard({
-  member: m, displayHp, displayDead, mageCharge, liveDamage, berserkerBands, targetedByEnemy, validTarget, onClick,
+  member: m, displayHp, displayDead, react, mageCharge, liveDamage, berserkerBands, targetedByEnemy, validTarget, onClick,
 }: MemberCardProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Play the one-shot reaction by (re)applying its class — the remove + reflow
+  // dance restarts the CSS animation even when the same reaction repeats (same
+  // trick the board shake uses in BattleScreen).
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !react) return;
+    el.classList.remove(...REACT_CLASSES);
+    void el.offsetWidth; // reflow so the animation restarts
+    el.classList.add(`react-${react.kind}`);
+    const timer = setTimeout(() => el.classList.remove(`react-${react.kind}`), REACT_MS[react.kind]);
+    return () => clearTimeout(timer);
+  }, [react?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const hpPct = (displayHp / m.maxHP) * 100;
   // Berserker rage tier the card shows live (0 = calm, 1 = past band1, 2 = past band2).
   const rageTier = berserkerBands
@@ -50,6 +78,7 @@ export function MemberCard({
 
   return (
     <div
+      ref={rootRef}
       className={cls}
       // A member card is only a control while the player is picking a target;
       // the rest of the time it is a status panel and stays out of the tab order.

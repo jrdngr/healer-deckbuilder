@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { resolveCard } from '../constants';
 import type { Slot, ResolvedCard } from '../constants';
 import type { Game } from '../engine';
-import type { BattleView } from '../useGame';
+import type { BattleView, MemberReactState } from '../useGame';
 import type { FxInstance } from '../animations';
 import { EnemyPanel } from './EnemyPanel';
 import { Party } from './Party';
@@ -23,6 +23,7 @@ interface BattleScreenProps {
   game: Game;
   view: BattleView;
   fx: FxInstance[];
+  reacts: (MemberReactState | null)[];
   animating: boolean;
   shakeTick: number;
   playCard: (handIndex: number, target: number | null) => void;
@@ -33,7 +34,7 @@ interface BattleScreenProps {
 }
 
 export function BattleScreen({
-  game, view, fx, animating, shakeTick, playCard, skipTurn, endTurn, onBattleEnd,
+  game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -100,6 +101,7 @@ export function BattleScreen({
       <Party
         game={game}
         view={view}
+        reacts={reacts}
         animating={animating}
         isValidTarget={isValidTarget}
         onMemberClick={onMemberClick}

@@ -13,7 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState }
 import { Game } from './engine';
 import type { GameEvent } from './engine';
 import type { BattleConfig } from './constants';
-import { buildTimeline, FX_DURATION } from './animations';
+import { buildTimeline, fxDuration } from './animations';
 import { getAnimSpeed } from './settings';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec, MemberReact, MemberReactKind } from './animations';
 
@@ -145,7 +145,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const spawnFx = useCallback((spec: FxSpec) => {
     const id = fxId.current++;
     setFx((cur) => [...cur, { id, spec }]);
-    schedule(() => setFx((cur) => cur.filter((f) => f.id !== id)), FX_DURATION[spec.type] + 40);
+    schedule(() => setFx((cur) => cur.filter((f) => f.id !== id)), fxDuration(spec) + 40);
   }, [schedule]);
 
   // Trigger member-card reactions (flash / recoil / lunge / collapse). Each gets

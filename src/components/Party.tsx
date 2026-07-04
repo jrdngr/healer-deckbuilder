@@ -1,17 +1,18 @@
 import { MemberCard } from './MemberCard';
 import type { Slot } from '../constants';
 import type { Game } from '../engine';
-import type { BattleView } from '../useGame';
+import type { BattleView, MemberReactState } from '../useGame';
 
 interface PartyProps {
   game: Game;
   view: BattleView;
+  reacts: (MemberReactState | null)[];
   animating: boolean;
   isValidTarget: (slot: Slot) => boolean;
   onMemberClick: (slot: Slot) => void;
 }
 
-export function Party({ game, view, animating, isValidTarget, onMemberClick }: PartyProps) {
+export function Party({ game, view, reacts, animating, isValidTarget, onMemberClick }: PartyProps) {
   const over = game.status !== 'playing';
   const tg = game.telegraph;
   return (
@@ -32,6 +33,7 @@ export function Party({ game, view, animating, isValidTarget, onMemberClick }: P
             member={m}
             displayHp={view.memberHp[m.slot]}
             displayDead={view.memberDead[m.slot]}
+            react={reacts[m.slot]}
             mageCharge={game.mageCharge}
             liveDamage={game.memberDamage(m)}
             berserkerBands={m.ability === 'rampage' ? game.berserkerThresholds() : null}

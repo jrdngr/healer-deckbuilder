@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { CSSProperties, RefObject } from 'react';
-import { FX_DURATION } from '../animations';
+import { fxDuration } from '../animations';
 import type { Anchor, FxInstance, FxSpec } from '../animations';
 import { getAnimSpeed } from '../settings';
 
@@ -23,7 +23,7 @@ type FxStyle = CSSProperties & Record<string, string | number>;
 
 // Every effect gets its CSS duration from here so the animation-speed setting
 // scales the visuals in step with the JS timers that spawn/remove them.
-const dur = (type: FxSpec['type']): string => `${FX_DURATION[type] * getAnimSpeed()}ms`;
+const dur = (spec: FxSpec): string => `${fxDuration(spec) * getAnimSpeed()}ms`;
 
 export function FxLayer({ fx, containerRef }: FxLayerProps) {
   const dirs = useRef<Map<number, Pt[]>>(new Map());
@@ -87,21 +87,21 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
           const style: FxStyle = {
             left: from.x, top: from.y, width: len, color: spec.color,
             transform: `translateY(-50%) rotate(${deg}deg)`,
-            '--dur': dur('beam'),
+            '--dur': dur(spec),
           };
           return <div key={id} className="fx fx-beam" style={style} />;
         }
         const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
         const style: FxStyle = {
           left: from.x, top: from.y, color: spec.color,
-          '--dx': `${dx}px`, '--dy': `${dy}px`, '--dur': dur('projectile'),
+          '--dx': `${dx}px`, '--dy': `${dy}px`, '--dur': dur(spec),
           '--ang': `${deg}deg`, '--pscale': spec.scale ?? 1,
         };
         if (spec.variant === 'arc') {
           // Outer div flies the straight line; inner div adds the vertical hump.
           return (
             <div key={id} className="fx fx-proj-arc" style={style}>
-              <div className="fx-proj-arc-inner" style={{ '--dur': dur('projectile') } as FxStyle}>
+              <div className="fx-proj-arc-inner" style={{ '--dur': dur(spec) } as FxStyle}>
                 <div className="fx-proj-visual" />
               </div>
             </div>
@@ -113,7 +113,7 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
         const at = anchor(spec.at);
         if (!at) return null;
         const mode = spec.mode ?? 'radial';
-        const style: FxStyle = { left: at.x, top: at.y, color: spec.color, '--dur': dur('burst') };
+        const style: FxStyle = { left: at.x, top: at.y, color: spec.color, '--dur': dur(spec) };
         return (
           <div key={id} className="fx fx-burst" style={style}>
             {offsets(id, spec.count, spec.spread, mode).map((o, k) => {
@@ -126,7 +126,7 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
       case 'float': {
         const at = anchor(spec.at);
         if (!at) return null;
-        const style: FxStyle = { left: at.x, top: at.y, color: spec.color, '--dur': dur('float') };
+        const style: FxStyle = { left: at.x, top: at.y, color: spec.color, '--dur': dur(spec) };
         return (
           <div key={id} className={`fx fx-float${spec.big ? ' big' : ''}`} style={style}>
             {spec.text}
@@ -137,32 +137,32 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
         const at = anchor(spec.at);
         if (!at) return null;
         return <div key={id} className="fx fx-ring"
-          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur('ring') } as FxStyle} />;
+          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur(spec) } as FxStyle} />;
       }
       case 'shield': {
         const at = anchor(spec.at);
         if (!at) return null;
         return <div key={id} className="fx fx-shield"
-          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur('shield') } as FxStyle} />;
+          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur(spec) } as FxStyle} />;
       }
       case 'pillar': {
         const at = anchor(spec.at);
         if (!at) return null;
         return <div key={id} className="fx fx-pillar"
-          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur('pillar') } as FxStyle} />;
+          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur(spec) } as FxStyle} />;
       }
       case 'glow': {
         const at = anchor(spec.at);
         if (!at) return null;
         return <div key={id} className="fx fx-glow"
-          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur('glow') } as FxStyle} />;
+          style={{ left: at.x, top: at.y, color: spec.color, '--dur': dur(spec) } as FxStyle} />;
       }
       case 'slash': {
         const at = anchor(spec.at);
         if (!at) return null;
         const style: FxStyle = {
           left: at.x, top: at.y, color: spec.color,
-          '--angle': `${spec.angle ?? -28}deg`, '--dur': dur('slash'),
+          '--angle': `${spec.angle ?? -28}deg`, '--dur': dur(spec),
         };
         return <div key={id} className="fx fx-slash" style={style} />;
       }
@@ -170,13 +170,13 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
         // Anchorless: a text band across the board, vertically near the center.
         const style: FxStyle = {
           left: 0, right: 0, top: mainRect.height * 0.38, color: spec.color,
-          '--dur': dur('banner'),
+          '--dur': dur(spec),
         };
         return <div key={id} className="fx fx-banner" style={style}>{spec.text}</div>;
       }
       case 'vignette': {
         // Anchorless: a full-container wash — edge tint or center flash.
-        const style: FxStyle = { color: spec.color, '--dur': dur('vignette') };
+        const style: FxStyle = { color: spec.color, '--dur': dur(spec) };
         return <div key={id} className={`fx fx-vignette ${spec.mode}`} style={style} />;
       }
       default:

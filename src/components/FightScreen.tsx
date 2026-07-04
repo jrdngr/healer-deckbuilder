@@ -55,6 +55,7 @@ export function FightScreen({ run, onWin, onLose, onSpent, onInjuries, onControl
       game={ctrl.game}
       view={ctrl.view}
       fx={ctrl.fx}
+      reacts={ctrl.reacts}
       animating={ctrl.animating}
       shakeTick={ctrl.shakeTick}
       playCard={ctrl.playCard}

@@ -8,13 +8,13 @@
 // on-screen coordinates. Keeping this pure means the whole feel can be unit-tested.
 
 import type { GameEvent } from './engine';
-import type { Slot } from './constants';
+import type { Slot, MemberId } from './constants';
 
 // Where an effect is pinned. Slot indices point at party member cards; 'enemy'
 // is the enemy panel, 'mp' the mana bar. The overlay measures these from the DOM.
 export type Anchor = 'enemy' | 'mp' | 0 | 1 | 2;
 
-export type FxSpec =
+type FxSpecBase =
   // `variant` shapes the projectile's flight: 'trail' drags a streak behind it,
   // 'arc' lobs it along a parabola. `scale` multiplies the comet size (tank slam
   // reads heavy at 1.6, ranger darts light at 0.7).
@@ -36,6 +36,13 @@ export type FxSpec =
   // and an edge vignette ('tint') or center flash ('flash') wash.
   | { type: 'banner'; text: string; color: string }
   | { type: 'vignette'; color: string; mode: 'tint' | 'flash' };
+
+// Every effect may override its default lifetime — a heavy slam's lobbed orb
+// hangs in the air longer than a ranger dart even though both are projectiles.
+export type FxSpec = FxSpecBase & { dur?: number };
+
+// An effect's on-screen lifetime: its own override, else the per-type default.
+export const fxDuration = (f: FxSpec): number => f.dur ?? FX_DURATION[f.type];
 
 // A short-lived reaction played on a party member's card itself (flash, recoil,
 // lunge, collapse) — the card moves, unlike FxLayer effects which overlay it.
@@ -113,12 +120,251 @@ const C = {
   damageText: '#ffd9d9',
   hex: '#c46bd9',   // Hexweaver curse (healing-reduction)
   drain: '#b06bfe', // MP siphon
+  warm: '#ffdf9e',  // the golden warmth around heals
 };
 
-// Per-member tint for the party auto-attack strikes (ranger / tank / mage).
-const SLOT_COLOR: Record<Slot, string> = { 0: '#a8e85d', 1: '#cdd6e6', 2: '#b388ff' };
-
 const TRAVEL = 240; // projectile flight time before impact lands
+
+type Push = (e: TimelineEntry) => void;
+type PartyAttackEv = Extract<GameEvent, { kind: 'partyAttack' }>;
+type EnemyAttackEv = Extract<GameEvent, { kind: 'enemyAttack' }>;
+
+// Each identity's strike signature: how its auto-attack looks and feels. Any
+// member can occupy any slot in a drafted party, so signatures key off the
+// event's memberId. A builder pushes its own launch/impact entries (the lunge
+// react is shared by the caller) and returns the timeline cursor after settle.
+const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number) => number> = {
+  ranger: (ev, push, t) => {
+    // Dart volley: three quick, light trail-darts; the payload lands with the last.
+    const c = '#a8e85d';
+    for (let k = 0; k < 3; k++) {
+      push({ at: t + k * 70, fx: [
+        { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'trail', scale: 0.65, dur: 200 },
+      ] });
+      push({
+        at: t + k * 70 + 200,
+        shake: k === 2 ? 5 : 2,
+        patch: k === 2 ? { enemyHp: ev.enemyHp } : undefined,
+        fx: [{ type: 'burst', at: 'enemy', color: c, count: 6, spread: 34 }],
+      });
+    }
+    push({ at: t + 140 + 200, fx: [
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return t + 140 + 200 + 160;
+  },
+  tank: (ev, push, t) => {
+    // Wind-up, then a heavy lobbed slam that lands like a wall falling over.
+    const c = '#cdd6e6';
+    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 300 }] });
+    push({ at: t + 220, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 1.7, dur: 340 },
+    ] });
+    const impact = t + 220 + 340;
+    push({ at: impact, shake: 10, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'slash', at: 'enemy', color: c, angle: -50 },
+      { type: 'burst', at: 'enemy', color: c, count: 16, spread: 70 },
+      { type: 'burst', at: 'enemy', color: C.smoke, count: 8, spread: 48, mode: 'fall' },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c, big: true },
+    ] });
+    return impact + 280;
+  },
+  mage: (ev, push, t) => {
+    // Charge, then a crackling beam that blooms on impact.
+    const c = '#b388ff';
+    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 280 }] });
+    push({ at: t + 240, fx: [{ type: 'beam', from: ev.slot, to: 'enemy', color: c }] });
+    const impact = t + 240 + 180;
+    push({ at: impact, shake: 7, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'ring', at: 'enemy', color: c },
+      { type: 'burst', at: 'enemy', color: c, count: 14, spread: 64 },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 220;
+  },
+  warlock: (ev, push, t) => {
+    // An occult bolt; what it touches decays and sloughs off downward.
+    const c = '#b06bfe';
+    push({ at: t, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'trail', scale: 1.1, dur: 300 },
+    ] });
+    const impact = t + 300;
+    push({ at: impact, shake: 5, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'glow', at: 'enemy', color: c },
+      { type: 'burst', at: 'enemy', color: c, count: 13, spread: 58, mode: 'fall' },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 200;
+  },
+  skald: (ev, push, t) => {
+    // A rising chord — notes lift off the Skald as the strike flies.
+    const c = '#f2c14e';
+    push({ at: t, fx: [
+      { type: 'burst', at: ev.slot, color: c, count: 7, spread: 44, mode: 'rise' },
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'trail', dur: 260 },
+    ] });
+    const impact = t + 260;
+    push({ at: impact, shake: 5, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'ring', at: 'enemy', color: c },
+      { type: 'burst', at: 'enemy', color: c, count: 11, spread: 54 },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 200;
+  },
+  berserker: (ev, push, t) => {
+    // A wild rush ending in two crossing slashes.
+    const c = '#e85d5d';
+    push({ at: t, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'trail', scale: 1.2, dur: 190 },
+    ] });
+    const first = t + 190;
+    push({ at: first, shake: 6, fx: [
+      { type: 'slash', at: 'enemy', color: c, angle: -35 },
+      { type: 'burst', at: 'enemy', color: c, count: 9, spread: 48 },
+    ] });
+    push({ at: first + 110, shake: 9, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'slash', at: 'enemy', color: c, angle: 30 },
+      { type: 'burst', at: 'enemy', color: c, count: 13, spread: 62 },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c, big: true },
+    ] });
+    return first + 110 + 240;
+  },
+  graveAugur: (ev, push, t) => {
+    // A cold, lobbed omen; shards sleet down where it lands.
+    const c = '#7fd0ff';
+    push({ at: t, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 0.9, dur: 320 },
+    ] });
+    const impact = t + 320;
+    push({ at: impact, shake: 4, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'ring', at: 'enemy', color: c },
+      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 52, mode: 'fall' },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 200;
+  },
+  beastWarden: (ev, push, t) => {
+    // A feral strike — the claw rakes across on arrival.
+    const c = '#7fe6a4';
+    push({ at: t, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'trail', dur: 220 },
+    ] });
+    const impact = t + 220;
+    push({ at: impact, shake: 6, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'slash', at: 'enemy', color: c, angle: 12 },
+      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 56 },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 200;
+  },
+};
+
+// Resolve one enemy-attack target at `at`: a whiff, a block, a hit, or a kill
+// (which stops the world for a beat). `boost` deepens the shake for heavy
+// geometry. Returns when the moment settles.
+function resolveEnemyHit(ev: EnemyAttackEv, push: Push, at: number, color: string, boost = 0): number {
+  if (ev.result === 'whiff') {
+    push({ at, fx: [{ type: 'burst', at: ev.slot, color: C.smoke, count: 6, spread: 32 }] });
+    return at + 160;
+  }
+  if (ev.result === 'shield') {
+    push({ at, shake: 4, react: [{ slot: ev.slot, kind: 'block' }], fx: [
+      { type: 'shield', at: ev.slot, color: C.shield },
+      { type: 'ring', at: ev.slot, color: C.shield },
+      { type: 'burst', at: ev.slot, color: C.shield, count: 12, spread: 58 },
+      { type: 'float', at: ev.slot, text: 'BLOCK', color: C.shield },
+    ] });
+    return at + 360;
+  }
+  if (ev.killed) {
+    push({
+      at, shake: 13 + boost, react: [{ slot: ev.slot, kind: 'death' }],
+      fx: [
+        { type: 'vignette', color: C.white, mode: 'flash', dur: 320 },
+        { type: 'burst', at: ev.slot, color, count: 14, spread: 62 },
+        { type: 'burst', at: ev.slot, color: C.white, count: 22, spread: 90 },
+      ],
+      patch: { memberHp: { slot: ev.slot, hp: ev.hp }, memberDead: ev.slot },
+    });
+    push({ at: at + HITSTOP, fx: [
+      { type: 'float', at: ev.slot, text: `-${ev.amount}`, color: C.danger, big: true },
+    ] });
+    return at + HITSTOP + 520;
+  }
+  push({
+    at, shake: 7 + boost, react: [{ slot: ev.slot, kind: 'hit' }],
+    fx: [
+      { type: 'burst', at: ev.slot, color, count: 14, spread: 62 },
+      { type: 'float', at: ev.slot, text: `-${ev.amount}`, color: C.danger },
+    ],
+    patch: { memberHp: { slot: ev.slot, hp: ev.hp } },
+  });
+  return at + 360;
+}
+
+// Play a whole enemy volley (the consecutive attack events of one geometry) with
+// a signature per attack shape: aoe detonates once and strikes everyone at the
+// same instant, sweep rakes the row left to right, heavy winds up then lobs a
+// massive blow, two double-taps, single/hidden dart at their target.
+function enemyVolley(run: EnemyAttackEv[], push: Push, t0: number): number {
+  const type = run[0].attackType;
+  const color = run[0].hidden ? C.unknown : C.enemy;
+  let end = t0;
+
+  if (type === 'aoe') {
+    push({ at: t0, shake: 3, fx: [
+      { type: 'ring', at: 'enemy', color },
+      { type: 'glow', at: 'enemy', color, dur: 280 },
+    ] });
+    const impact = t0 + 260;
+    for (const ev of run) end = Math.max(end, resolveEnemyHit(ev, push, impact, color, 2));
+    return end;
+  }
+
+  if (type === 'sweep') {
+    for (let k = 0; k < run.length; k++) {
+      const ev = run[k];
+      const at = t0 + k * 110;
+      push({ at, fx: [{ type: 'slash', at: ev.slot, color, angle: -12 }] });
+      end = Math.max(end, resolveEnemyHit(ev, push, at + 90, color));
+    }
+    return end;
+  }
+
+  if (type === 'heavy') {
+    push({ at: t0, fx: [{ type: 'glow', at: 'enemy', color, dur: 340 }] });
+    let cursor = t0 + 300;
+    for (const ev of run) {
+      push({ at: cursor, fx: [
+        { type: 'projectile', from: 'enemy', to: ev.slot, color, variant: 'arc', scale: 1.8, dur: 360 },
+      ] });
+      cursor = resolveEnemyHit(ev, push, cursor + 360, color, 3);
+    }
+    return cursor;
+  }
+
+  if (type === 'two') {
+    for (let k = 0; k < run.length; k++) {
+      const ev = run[k];
+      const at = t0 + k * 130;
+      push({ at, fx: [{ type: 'projectile', from: 'enemy', to: ev.slot, color, dur: TRAVEL }] });
+      end = Math.max(end, resolveEnemyHit(ev, push, at + TRAVEL, color));
+    }
+    return end;
+  }
+
+  // single / hidden / cast: one dart per target in sequence. Hidden attacks
+  // drag a smear behind them — you saw it coming, just not what it was.
+  let cursor = t0;
+  for (const ev of run) {
+    push({ at: cursor, fx: [
+      { type: 'projectile', from: 'enemy', to: ev.slot, color,
+        variant: ev.hidden ? 'trail' : 'plain', dur: TRAVEL },
+    ] });
+    cursor = resolveEnemyHit(ev, push, cursor + TRAVEL, color);
+  }
+  return cursor;
+}
 
 export function buildTimeline(events: GameEvent[]): Timeline {
   const entries: TimelineEntry[] = [];
@@ -140,7 +386,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
 
       case 'poisonTick': {
         push({ at: t, patch: { enemyHp: ev.enemyHp }, fx: [
-          { type: 'burst', at: 'enemy', color: C.poison, count: 11, spread: 55 },
+          { type: 'burst', at: 'enemy', color: C.poison, count: 11, spread: 50, mode: 'fall', dur: 780 },
           { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: C.poison },
         ] });
         t += 360;
@@ -151,8 +397,8 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         if (ev.amount > 0) {
           push({ at: t, patch: { memberHp: { slot: ev.slot, hp: ev.hp } },
             react: [{ slot: ev.slot, kind: 'heal' }], fx: [
-            { type: 'burst', at: ev.slot, color: C.regen, count: 8, spread: 42 },
-            { type: 'float', at: ev.slot, text: `+${ev.amount}`, color: C.regen },
+            { type: 'burst', at: ev.slot, color: C.regen, count: 8, spread: 42, mode: 'rise', dur: 820 },
+            { type: 'float', at: ev.slot, text: `+${ev.amount}`, color: C.regen, dur: 950 },
           ] });
           t += 320;
         }
@@ -171,60 +417,23 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'enemyAttack': {
-        const color = ev.hidden ? C.unknown : C.enemy;
-        push({ at: t, fx: [{ type: 'projectile', from: 'enemy', to: ev.slot, color }] });
-        const impact = t + TRAVEL;
-        if (ev.result === 'whiff') {
-          push({ at: impact, fx: [{ type: 'burst', at: ev.slot, color: C.smoke, count: 6, spread: 32 }] });
-          t = impact + 160;
-        } else if (ev.result === 'shield') {
-          push({ at: impact, shake: 4, react: [{ slot: ev.slot, kind: 'block' }], fx: [
-            { type: 'shield', at: ev.slot, color: C.shield },
-            { type: 'ring', at: ev.slot, color: C.shield },
-            { type: 'burst', at: ev.slot, color: C.shield, count: 12, spread: 58 },
-            { type: 'float', at: ev.slot, text: 'BLOCK', color: C.shield },
-          ] });
-          t = impact + 360;
-        } else if (ev.killed) {
-          // A kill stops the world for a beat: the blow, flash and collapse land
-          // at impact; the damage number and the rest of the timeline wait out
-          // the hitstop.
-          push({
-            at: impact, shake: 13, react: [{ slot: ev.slot, kind: 'death' }],
-            fx: [
-              { type: 'burst', at: ev.slot, color, count: 14, spread: 62 },
-              { type: 'burst', at: ev.slot, color: C.white, count: 22, spread: 90 },
-            ],
-            patch: { memberHp: { slot: ev.slot, hp: ev.hp }, memberDead: ev.slot },
-          });
-          push({ at: impact + HITSTOP, fx: [
-            { type: 'float', at: ev.slot, text: `-${ev.amount}`, color: C.danger, big: true },
-          ] });
-          t = impact + HITSTOP + 520;
-        } else {
-          push({
-            at: impact, shake: 7, react: [{ slot: ev.slot, kind: 'hit' }],
-            fx: [
-              { type: 'burst', at: ev.slot, color, count: 14, spread: 62 },
-              { type: 'float', at: ev.slot, text: `-${ev.amount}`, color: C.danger },
-            ],
-            patch: { memberHp: { slot: ev.slot, hp: ev.hp } },
-          });
-          t = impact + 360;
+        // Gather the volley: consecutive attack events of one geometry play as
+        // a single signature move (sweep rakes the row, aoe detonates once).
+        const run: EnemyAttackEv[] = [ev];
+        while (i + 1 < events.length) {
+          const next = events[i + 1];
+          if (next.kind !== 'enemyAttack' || next.attackType !== ev.attackType) break;
+          run.push(events[++i] as EnemyAttackEv);
         }
+        t = enemyVolley(run, push, t);
         break;
       }
 
       case 'partyAttack': {
-        const color = SLOT_COLOR[ev.slot];
-        push({ at: t, react: [{ slot: ev.slot, kind: 'lunge' }],
-          fx: [{ type: 'projectile', from: ev.slot, to: 'enemy', color }] });
-        const impact = t + TRAVEL;
-        push({ at: impact, shake: 5, patch: { enemyHp: ev.enemyHp }, fx: [
-          { type: 'burst', at: 'enemy', color, count: 12, spread: 58 },
-          { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: C.damageText },
-        ] });
-        t = impact + 200; // tight cadence so the three strikes read as a combo
+        // The striker's card lunges toward the enemy; the rest of the strike is
+        // the member's own signature (see MEMBER_STRIKE).
+        push({ at: t, react: [{ slot: ev.slot, kind: 'lunge' }] });
+        t = MEMBER_STRIKE[ev.memberId](ev, push, t);
         break;
       }
 
@@ -233,19 +442,25 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         // cascade them so they land together rather than dragging out one by one.
         const run: typeof ev[] = [ev];
         while (i + 1 < events.length && events[i + 1].kind === 'heal') run.push(events[++i] as typeof ev);
+        // A big heal warms the whole board for a moment, not just the target.
+        if (run.some((h) => h.amount >= 6)) {
+          push({ at: t, fx: [{ type: 'vignette', color: C.warm, mode: 'tint', dur: 900 }] });
+        }
         let maxOff = 0;
         run.forEach((h, k) => {
           const off = k * 110;
           maxOff = off;
           if (h.amount > 0) {
+            // Warm and comforting: a golden bloom, motes drifting upward, and a
+            // number that floats away slowly instead of snapping.
             push({ at: t + off, patch: { memberHp: { slot: h.slot, hp: h.hp } },
               react: [{ slot: h.slot, kind: 'heal' }], fx: [
-              { type: 'glow', at: h.slot, color: C.hp },
-              { type: 'burst', at: h.slot, color: C.hp, count: 12, spread: 52 },
-              { type: 'float', at: h.slot, text: `+${h.amount}`, color: C.hp },
+              { type: 'glow', at: h.slot, color: C.warm, dur: 780 },
+              { type: 'burst', at: h.slot, color: C.regen, count: 10, spread: 46, mode: 'rise', dur: 900 },
+              { type: 'float', at: h.slot, text: `+${h.amount}`, color: C.hp, dur: 1050 },
             ] });
           } else {
-            push({ at: t + off, fx: [{ type: 'burst', at: h.slot, color: C.hp, count: 5, spread: 30 }] });
+            push({ at: t + off, fx: [{ type: 'burst', at: h.slot, color: C.hp, count: 5, spread: 30, mode: 'rise' }] });
           }
         });
         t += maxOff + 360;
@@ -263,7 +478,8 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'shieldApplied': {
-        push({ at: t, fx: [
+        // Protective: the bubble forms and "locks in" with a settle on the card.
+        push({ at: t, react: [{ slot: ev.slot, kind: 'block' }], fx: [
           { type: 'shield', at: ev.slot, color: C.shield },
           { type: 'ring', at: ev.slot, color: C.shield },
           { type: 'float', at: ev.slot, text: '🛡', color: C.shield, big: true },
@@ -274,7 +490,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
 
       case 'defenseApplied': {
         // Phalanx (#17): a standing damage reduction settles on the member.
-        push({ at: t, fx: [
+        push({ at: t, react: [{ slot: ev.slot, kind: 'block' }], fx: [
           { type: 'glow', at: ev.slot, color: C.taunt },
           { type: 'ring', at: ev.slot, color: C.taunt },
           { type: 'float', at: ev.slot, text: `DEF ${ev.amount}`, color: C.taunt },
@@ -285,7 +501,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
 
       case 'braceApplied': {
         // Brace (#17): a one-shot blunting ward, visually a lighter Shield.
-        push({ at: t, fx: [
+        push({ at: t, react: [{ slot: ev.slot, kind: 'block' }], fx: [
           { type: 'shield', at: ev.slot, color: C.smoke },
           { type: 'float', at: ev.slot, text: 'BRACE', color: C.white },
         ] });
@@ -318,7 +534,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
 
       case 'wardApplied': {
         // Aegis Font (#22): overheal crystallizes into a Ward buffer.
-        push({ at: t, fx: [
+        push({ at: t, react: [{ slot: ev.slot, kind: 'block' }], fx: [
           { type: 'shield', at: ev.slot, color: C.hp },
           { type: 'float', at: ev.slot, text: `WARD ${ev.amount}`, color: C.hp },
         ] });
@@ -403,12 +619,15 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'poisonApplied': {
-        push({ at: t, fx: [{ type: 'projectile', from: ev.slot, to: 'enemy', color: C.poison }] });
-        push({ at: t + TRAVEL, fx: [
-          { type: 'burst', at: 'enemy', color: C.poison, count: 16, spread: 70 },
+        // A lobbed venom glob; the splash oozes downward rather than exploding.
+        push({ at: t, fx: [
+          { type: 'projectile', from: ev.slot, to: 'enemy', color: C.poison, variant: 'arc', dur: 300 },
+        ] });
+        push({ at: t + 300, fx: [
+          { type: 'burst', at: 'enemy', color: C.poison, count: 14, spread: 58, mode: 'fall', dur: 820 },
           { type: 'float', at: 'enemy', text: `☠ +${ev.amount}`, color: C.poison },
         ] });
-        t += TRAVEL + 360;
+        t += 300 + 360;
         break;
       }
 
@@ -465,23 +684,29 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'wound': {
-        // Hex settles over the whole party — a curse pulse on each member.
-        push({ at: t, shake: 5, fx: [
+        // Hex settles over the whole party — destructive but not punchy: the
+        // curse creeps in as a vignette and crumbles down over each member.
+        push({ at: t, shake: 3, fx: [
+          { type: 'vignette', color: C.hex, mode: 'tint', dur: 950 },
           { type: 'float', at: 'enemy', text: 'HEX', color: C.hex, big: true },
-          { type: 'glow', at: 0, color: C.hex },
-          { type: 'glow', at: 1, color: C.hex },
-          { type: 'glow', at: 2, color: C.hex },
-          { type: 'burst', at: 1, color: C.hex, count: 16, spread: 90 },
+          { type: 'glow', at: 0, color: C.hex, dur: 800 },
+          { type: 'glow', at: 1, color: C.hex, dur: 800 },
+          { type: 'glow', at: 2, color: C.hex, dur: 800 },
         ] });
-        t += 560;
+        push({ at: t + 220, fx: [
+          { type: 'burst', at: 0, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 },
+          { type: 'burst', at: 1, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 },
+          { type: 'burst', at: 2, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 },
+        ] });
+        t += 640;
         break;
       }
 
       case 'siphon': {
         push({ at: t, fx: [{ type: 'beam', from: 'mp', to: 'enemy', color: C.drain }] });
         const impact = t + 200;
-        push({ at: impact, shake: 5, patch: { mp: ev.mp }, fx: [
-          { type: 'burst', at: 'mp', color: C.drain, count: 14, spread: 60 },
+        push({ at: impact, shake: 3, patch: { mp: ev.mp }, fx: [
+          { type: 'burst', at: 'mp', color: C.drain, count: 14, spread: 55, mode: 'fall', dur: 850 },
           { type: 'float', at: 'mp', text: `-${ev.amount} MP`, color: C.drain },
         ] });
         t = impact + 420;
@@ -547,7 +772,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
   let maxEnd = t;
   for (const e of entries) {
     if (!e.fx) continue;
-    for (const f of e.fx) maxEnd = Math.max(maxEnd, e.at + FX_DURATION[f.type]);
+    for (const f of e.fx) maxEnd = Math.max(maxEnd, e.at + fxDuration(f));
   }
   return { entries, total: maxEnd, paceEnd };
 }
