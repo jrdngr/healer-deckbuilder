@@ -103,6 +103,8 @@ the final ship call.**
 | 33 | ⬜ Todo | [Injuries past the cap: adopt a harder scar mode](./issues/33-injury-mode-harder-scars.md) | post-demo | DR1 | playtest 2026-07-04 |
 | 34 | ⬜ Todo | [Composition re-baseline after the identity fix](./issues/34-comp-rebaseline-after-identity-fix.md) | post-demo | 31 | playtest 2026-07-04 |
 | 35 | ⬜ Todo | [Relic power re-tune under player-first ordering](./issues/35-relic-retune-player-first.md) | post-demo | 26 | playtest 2026-07-04 |
+| 36 | ⬜ Todo | [Drafted names in run-layer screens](./issues/36-drafted-names-in-run-screens.md) | post-demo | 27 | UI playtest 2026-07-04 |
+| 37 | ⬜ Todo | [UI polish batch](./issues/37-ui-polish-batch-2026-07-04.md) | post-demo | — | UI playtest 2026-07-04 |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses
@@ -152,6 +154,17 @@ measured is recorded in issues [33](./issues/33-injury-mode-harder-scars.md) /
   relic measured) and pactOfSilence to **−23.5pp** standalone under player-first ordering → issue 35.
 - Trio baseline holds (N=1000: F2 85.9 / F5 71.5 / F8 53.6 / full 32.1%); Story 96.6%; Brutal's
   DR3 cliff deepened (F2 0.3%) — still dev-only by design.
+
+**UI round (Chrome DevTools, maintainer-authorized):** a drafted run was driven end to end — draft
+→ fight → victory → fork → Training Hall → save/resume. Two issues filed:
+[36](./issues/36-drafted-names-in-run-screens.md) — **every run-layer screen shows classic-trio
+names for drafted parties** (Training Hall offered "Ranger" wearing the Mage's stats; the dev
+panel's "Tank" heal button healed the Skald) — and
+[37](./issues/37-ui-polish-batch-2026-07-04.md) — polish batch (draft cards leak raw ability ids
+with no descriptions, CSS-only pick state, "Rest & End Turn (+0 MP)" label, unlabeled seed input,
+favicon 404, no visible turn number). Verified-good in the same round: drafted identity in fights,
+Grave Chill's preview==applied on the live attack lines, the Skald's live attack badge, the deck
+viewer, save/resume position, and a console clean of errors except the favicon 404.
 
 ## Design review — flagged from the sim playtest (2026-07-03)
 
