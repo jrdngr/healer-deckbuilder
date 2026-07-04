@@ -52,12 +52,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for the DR1 injury system. Deaths now leave persistent scars, the
-  // policy revives fallen DPS / heals scars at the Infirmary, and the act-2/3 boss
-  // HP was re-anchored to the smarter measuring stick (Hexweaver 146->158, Devourer
-  // 198->182). N=1000 reads full-run 30.8%, bosses 88.3 / 70.6 / 53.3% (all in-band),
-  // ~1.0 residual scar/run; Story reads 97.2%. This is the N=200 sample (seeds 1-200).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 177, 177, 175, 118, 113, 107, 53]));
+  // Re-pinned for #26 (player-first ordering). The party now acts before the enemy's
+  // opening blow — a systemic +~30pp buff — so all three bosses were re-anchored on
+  // HP: Gatewarden 130->155, Hexweaver 158->184, Devourer 182->208. N=1000 reads
+  // full-run 31.7%, bosses 87.2 / 70.2 / 52.7% (all dead-center in-band); Story reads
+  // high (a cruise). This is the N=200 sample (seeds 1-200).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 175, 175, 174, 118, 117, 116, 53]));
   // Full-run lands in the 25-35% band. The authoritative gate runs at N=1000
   // (ISSUES.md ground rules; see the run-sim baseline note) — this N=200 sample
   // asserts statistical consistency with the band, not the band itself, so

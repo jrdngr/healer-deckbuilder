@@ -169,6 +169,20 @@
 //     battery before leaning on its deltas. The injury system is 100%-avoidable
 //     (a member that never dies never scars), self-capping at 3, and recoverable —
 //     the intended shape: it punishes the sacrifice line without ending the run.
+//   after #26 (full turn-1 phase reorder — PLAYER-FIRST ordering):  full-run 31.7 %
+//     ±2.9 at N=1000; Story 95.5%.
+//     F0 100 | F1 100 | F2 A1boss 87.2 | F3 99.9 | F4 99.6 | F5 A2boss 70.2 | F6 99.2 | F7 99.4 | F8 A3boss 52.7
+//     The party now acts BEFORE the enemy's opening blow (start() no longer resolves
+//     an enemy phase on mount; the turn counter moved into _runEnemyPhase, which owns
+//     the advance and still ticks across channel/Chime wind-ups so enrage/rotation
+//     timing is bit-identical). This retired the #04 turn-1-single patch. The free
+//     planning turn is a systemic +~30pp buff (pre-tune it read full-run 66.5%, bosses
+//     99.1 / 90.8 / 75.3%), re-anchored ENTIRELY on boss HP — the one lever that keeps
+//     ENEMY_ATTACK_BONUS composition-agnostic for #31: Gatewarden 130->155, Hexweaver
+//     158->184, Devourer 182->208. All three land dead-center in their gates and the
+//     act-3 normals also eased (F6/F7 ~99%). NOTE for the maintainer: this HP re-anchor
+//     again shifts the #22 per-relic gate baseline (last measured at Devourer 198 /
+//     Hexweaver 146) — re-run that battery before leaning on its deltas.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now

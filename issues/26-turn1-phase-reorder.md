@@ -11,10 +11,17 @@ resolves first** — is a larger change with real test-migration cost, so it's d
 after playtest #1 confirms whether the patch feels good enough.
 
 ## Scope / acceptance criteria
-- [ ] Reorder the fight loop so the player acts before the first enemy resolution (or an equivalent
-      that removes the mount-time hit entirely).
-- [ ] Migrate the affected engine tests (turn/phase ordering assumptions are widespread).
-- [ ] Confirm no regression in boss telegraph timing (all three bosses assume the current order).
+- [x] Reorder the fight loop so the player acts before the first enemy resolution. `start()` now
+      telegraphs turn 1 and opens the player phase directly (no mount-time enemy phase); the turn
+      counter moved into `_runEnemyPhase`, which owns the advance and still ticks across channel /
+      Dusk-Chime wind-ups so enrage/rotation timing is bit-identical to the pre-#26 order.
+- [x] Migrate the affected engine tests — only three assertions keyed on the old order (turn-1-single
+      patch + one enrage-timing pin); rewritten to assert player-first behavior. Suite green.
+- [x] Confirm no regression in boss telegraph timing: rotations/channels/enrage still land on the
+      same turn numbers (this.turn counts identically). The change is a systemic difficulty *buff*
+      (the party gets a free planning turn), so all three bosses were re-anchored on HP —
+      **Gatewarden 130→155, Hexweaver 158→184, Devourer 182→208** — landing F2 87.2% / F5 70.2% /
+      F8 52.7% / full-run 31.7% at N=1000 (all dead-center in-band); Story 95.5% (≥60% gate).
 
 ## Implementation notes
 - `start()` currently resolves the enemy phase on mount (`engine.ts:313-314`); the turn loop
@@ -22,8 +29,10 @@ after playtest #1 confirms whether the patch feels good enough.
 - Budget explicitly for test churn — this is why it's deferred, not a P1 item.
 
 ## Tests (required per CLAUDE.md)
-- Player phase precedes the first enemy resolution; all boss rotations still land on the intended
-  turns; full suite migrated and green.
+- [x] Player phase precedes the first enemy resolution (party untouched after `start()`, no mount
+      'hit' log, `this.turn === 1`); enrage fires when the enemy phase resolves turn `ENRAGE_TURN`;
+      the N=200 sim pin re-anchored; full suite migrated and green.
 
 ## Out of scope / follow-ups
-- Keep the #04 patch until this fully lands; they must not both be half-applied.
+- The #04 turn-1-single patch is **retired** (removed from `_generateTelegraph`) now that the reorder
+  landed — they are not both half-applied.

@@ -851,9 +851,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // boss attack pool, so their flat attackBonus is 0. A2/A3 bosses are placeholders
 // (scaled BOSS_ENEMY_DEF) until the Gatewarden/Hexweaver/Devourer land (#12-14).
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  50, 75, 130,    // Act 1: two normals + boss (Gatewarden; pre-spoils, so relic-free)
-  105, 130, 158,  // Act 2: boss (Hexweaver — 146->158 re-anchored for DR1's smarter policy)
-  150, 150, 182,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 198->182 for the DR1 scar handicap)
+  50, 75, 155,    // Act 1: two normals + boss (Gatewarden; pre-spoils, so relic-free; 130->155 for #26's free planning turn)
+  105, 130, 184,  // Act 2: boss (Hexweaver — 158->184 re-anchored for #26 player-first ordering)
+  150, 150, 208,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 182->208 for #26 player-first ordering)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.

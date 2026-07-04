@@ -41,7 +41,12 @@ winnable end to end at ~31%** (N=1000, the designed 25–35% band); **Story read
 meta-progression. **#25 (hand-size experiment) landed as a measured REVERT**: hand-4 + carryover
 is behind an inert `HealerConfig.carryover` flag (default 0); the demo stays hand-3 because hand
 size is a +22pp/card lever that would break the band, and carryover measured *worse* than plain
-hand-4 (see the issue file for the N=1000 table). #24's hardening batch: status tooltips, modifier text on cards, the in-fight
+hand-4 (see the issue file for the N=1000 table). **#26 (full turn-1 reorder) landed player-first
+ordering**: the party now acts before the enemy's opening blow (the #04 turn-1-single patch is
+retired). That free planning turn was a ~30pp systemic buff, re-anchored entirely on boss HP
+(Gatewarden 130→155, Hexweaver 158→184, Devourer 182→208) — F2 87.2% / F5 70.2% / F8 52.7% /
+full-run 31.7% at N=1000, all dead-center in-band; Story 95.5%. **NOTE:** this HP re-anchor shifts
+the #22 per-relic gate baseline again — re-run that battery before leaning on its deltas. #24's hardening batch: status tooltips, modifier text on cards, the in-fight
 deck viewer (order-hiding), fork previews (encounters now derive from per-fight sub-seeds —
 peekable and stream-independent), the end-of-run score with a hoarded-gold penalty, and DevPanel
 gated to dev builds. **The automated ship gate is green** (suite + Standard 32.7% / Story 96.4%
@@ -77,7 +82,7 @@ the final ship call.**
 | 23 | ✅ Done | [Difficulty presets + local stats](./issues/23-difficulty-presets.md) | P10 | 14 | §4 P10; Q8 |
 | 24 | ✅ Done | [Hardening & UX batch](./issues/24-hardening-ux.md) | P11 | 23 | flaws #15, #16, #20, #21 |
 | 25 | ✅ Done | [Hand-size experiment (hand 4 + carryover)](./issues/25-hand-size-experiment.md) | exp. | 06 | flaw #16; Q6 |
-| 26 | ⬜ Todo | [Full turn-1 phase reorder](./issues/26-turn1-phase-reorder.md) | post-demo | 04 | flaw #12; Q7-full |
+| 26 | ✅ Done | [Full turn-1 phase reorder](./issues/26-turn1-phase-reorder.md) | post-demo | 04 | flaw #12; Q7-full |
 | 27 | ⬜ Todo | [Party W1 — Warlock + Skald + draft skeleton](./issues/27-party-w1-warlock-skald.md) | post-demo | 08 | §3.4 |
 | 28 | ⬜ Todo | [Party W2 — Berserker + Grave Augur](./issues/28-party-w2-berserker-augur.md) | post-demo | 27 | §3.4 |
 | 29 | ⬜ Todo | [Party W3 — Beast Warden + pet subsystem](./issues/29-party-w3-beast-warden.md) | post-demo | 28 | §3.4 |

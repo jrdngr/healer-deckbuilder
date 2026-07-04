@@ -1343,22 +1343,31 @@ function devourerGame(seed: number, maxHP = 200, enrageTurn = 99): Game {
   check('Maw resolved for DEVOURER_MAW_DMG on each member', allTookMaw);
 }
 
-// --- turn-1 attack is always a plain single (flaw #12) ----------------------
+// --- player-first ordering: the party acts before the first enemy blow (#26) -
 {
-  // Turn 1 resolves on mount before any input, so it must not be a heavy/sweep.
-  // Check both regular and boss configs across many seeds.
+  // The proper fix for flaw #12: start() no longer resolves an enemy attack on
+  // mount. The opening telegraph stands and the player gets a full turn first, so
+  // the turn-1-single patch (#04) is retired — turn 1 may now be any type.
   const boss = defaultBattleConfig(); boss.enemy = { maxHP: 150, boss: true, attackBonus: 0 };
-  let allSingle = true;
-  for (let seed = 0; seed < 400; seed++) {
-    if (new Game(seed)._generateTelegraph(1).type !== 'single') allSingle = false;
-    if (new Game(seed, boss)._generateTelegraph(1).type !== 'single') allSingle = false;
-  }
-  check('turn-1 telegraph is always single (regular + boss)', allSingle);
-  // The mounted fight opens on a single-target blow.
   const g = new Game(3, boss);
   g.start();
-  const opener = g.log.find((l) => l.kind === 'hit');
-  check('boss opening blow is single-target', opener !== undefined && !/Sweep|Heavy|AoE|Two/.test(opener!.text));
+  eq('player phase opens the fight', g.phase, 'player');
+  check('party is untouched before the first player turn', g.members.every((m) => m.hp === m.maxHP));
+  check('no enemy hit landed on mount', !g.log.some((l) => l.kind === 'hit'));
+  check('an opening telegraph is standing', g.telegraph !== null);
+  eq('this.turn is 1 during the opening player phase', g.turn, 1);
+  // Turn 1 is no longer forced to single — the boss pool opens on heavy/sweep too.
+  let sawNonSingle = false;
+  for (let seed = 0; seed < 400; seed++) {
+    if (new Game(seed, boss)._generateTelegraph(1).type !== 'single') { sawNonSingle = true; break; }
+  }
+  check('turn-1 boss telegraph is no longer forced to single', sawNonSingle);
+  // The very first end-of-turn resolves turn 1's blow (party phase runs first).
+  const g2 = new Game(3, boss); g2.start();
+  const before = g2.members.reduce((s, m) => s + m.hp, 0);
+  g2.endTurn();
+  check('the enemy resolves its opening blow at end of turn 1',
+    g2.log.some((l) => l.kind === 'hit') || g2.members.reduce((s, m) => s + m.hp, 0) < before || g2.status !== 'playing');
 }
 
 // --- enrage fires exactly on ENRAGE_TURN; countdown counts down -------------
@@ -1368,10 +1377,12 @@ function devourerGame(seed: number, maxHP = 200, enrageTurn = 99): Game {
   eq('not enraged at turn 1', g.enemy.enraged, false);
   // Countdown legibility: ENRAGE_TURN - turn until it fires.
   eq('turnsUntilEnrage at turn 1', g.turnsUntilEnrage(), ENRAGE_TURN - 1);
-  // Fast-forward to just before enrage without ending the fight.
+  // Under player-first ordering (#26) enrage fires when the enemy phase resolves
+  // the turn equal to ENRAGE_TURN — i.e. when this.turn is ENRAGE_TURN at endTurn.
   g.turn = ENRAGE_TURN - 1;
   eq('countdown reads 1 the turn before enrage', g.turnsUntilEnrage(), 1);
   g.enemy.hp = 999; // keep the fight alive through the enrage turn
+  g.turn = ENRAGE_TURN;
   g.endTurn();
   eq('enrage fires exactly on ENRAGE_TURN', g.enemy.enraged, true);
   eq('turnsUntilEnrage is 0 once enraged', g.turnsUntilEnrage(), 0);

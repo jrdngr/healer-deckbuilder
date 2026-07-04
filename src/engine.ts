@@ -1,12 +1,12 @@
 // Core battle engine for the Healer Deckbuilder prototype.
 // Pure logic, no DOM. Drives one handcrafted fight end to end.
 //
-// Phase cycle per turn: enemy phase -> player phase -> party phase.
+// Phase cycle per turn (player-first, #26): player phase -> party phase -> enemy phase.
 // The UI drives it by calling:
-//   new Game(seed); game.start();          // runs turn 1's enemy phase, opens player phase
+//   new Game(seed); game.start();          // telegraphs turn 1, opens the player phase (no mount-time blow)
 //   game.playCard(handIndex, target);      // during player phase
 //   game.skipTurn();                        // regen MP instead of playing (before any card)
-//   game.endTurn();                         // discard, party phase, then next enemy + player phases
+//   game.endTurn();                         // discard, party phase, then the enemy resolves + telegraphs next
 // Read state off the public fields; read game.log for a running event feed.
 
 import {
@@ -277,7 +277,7 @@ export class Game {
     this.discardPile = [];
     this.hand = [];
 
-    this.turn = 1;           // turn whose enemy phase is current/next to run
+    this.turn = 1;           // the turn whose telegraph stands during the player phase (resolves at end of turn, #26)
     this.phase = 'idle';     // 'idle' | 'player' | 'over'
     this.status = 'playing'; // 'playing' | 'win' | 'loss'
     this.cardsPlayedThisPhase = 0;
@@ -484,9 +484,10 @@ export class Game {
       }
       return this._telegraphFromStep(this._normalizeStep(rotation[idx]), turn);
     }
-    // The turn-1 blow resolves on mount, before any player input, so it must not
-    // open on a heavy or a sweep — force it to a plain single-target hit (flaw #12).
-    const type = turn === 1 ? 'single' : this._pickType(turn);
+    // #26 retired the turn-1-single patch (#04): under player-first ordering the
+    // party acts and can Brace/Shield before the opening blow ever resolves, so the
+    // first attack no longer needs to be forced to a plain single hit.
+    const type = this._pickType(turn);
     const primary = this._pickPrimary(type);
     const targets = this._geometry(type, primary);
     return {
@@ -584,10 +585,13 @@ export class Game {
   start(): this {
     this.events = [];
     this._log('Combat begins.', 'system');
-    // First telegraph is generated before turn 1's enemy phase.
+    // Player-first ordering (#26 / flaw #12): the opening telegraph stands and the
+    // player acts BEFORE the enemy's first resolution — no more free mount-time
+    // blow. The enemy phase now runs only at end of turn (_endTurnInternal), so the
+    // party always gets a planning turn against turn 1's telegraph.
     this.telegraph = this._generateTelegraph(this.turn);
-    this._runEnemyPhase();
-    if (this.status === 'playing') this._startPlayerPhase();
+    this._announceChannel(this.telegraph);
+    this._startPlayerPhase();
     return this;
   }
 
@@ -819,7 +823,11 @@ export class Game {
       this._log(`${this.enemyDef.name} channels ${t.channelName} — ${t.turnsUntilResolve} turn(s) to resolve.`, 'system');
       this._emit({ kind: 'channelTick', name: t.channelName ?? 'Channel', turnsUntilResolve: t.turnsUntilResolve ?? 0 });
       this._decayBuffs();
-      return; // channel keeps standing; do not advance the rotation or re-telegraph
+      // The channel keeps standing (no rotation advance, no re-telegraph), but the
+      // turn counter still ticks so enrage/rotation timing across a wind-up is
+      // unchanged from the pre-#26 order (the counter used to live in endTurn).
+      this.turn += 1;
+      return;
     }
 
     // Dusk Chime (#22): once per fight, a big telegraph is delayed one full
@@ -832,7 +840,10 @@ export class Game {
       this._log(`The Dusk Chime tolls — ${this.telegraphIntent() ?? 'the attack'} is delayed a turn.`, 'system');
       this._emit({ kind: 'chime' });
       this._decayBuffs();
-      return; // the telegraph keeps standing; no rotation advance, no re-telegraph
+      // As with a channel wind-up, the telegraph keeps standing but the turn
+      // counter still advances (see #26 note above).
+      this.turn += 1;
+      return;
     }
 
     // A 'cast' telegraph runs its scripted effect (Hex / Siphon / Consume) instead
@@ -853,9 +864,13 @@ export class Game {
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
     this._decayBuffs();
 
-    // 4) advance any rotation and telegraph the next attack (enrage baked in).
+    // 4) advance any rotation, step the turn counter, and telegraph the next attack
+    // (enrage baked in). The turn increment lives here now (#26): under player-first
+    // ordering the enemy phase owns the advance so the standing telegraph and
+    // this.turn stay in lockstep during the player phase.
     this.rotationIndex += 1;
-    this.telegraph = this._generateTelegraph(this.turn + 1);
+    this.turn += 1;
+    this.telegraph = this._generateTelegraph(this.turn);
     this._announceChannel(this.telegraph);
   }
 
@@ -1499,8 +1514,9 @@ export class Game {
     this._runPartyPhase();
     if (this.status !== 'playing') return; // enemy died -> no further enemy phase
 
-    // Advance to the next turn.
-    this.turn += 1;
+    // Enemy resolves THIS turn's standing telegraph, then advances the turn counter
+    // and telegraphs the next (player-first ordering, #26 — the turn no longer
+    // increments before the enemy phase; _runEnemyPhase owns the advance).
     this._runEnemyPhase();
     if (this.status === 'playing') this._startPlayerPhase();
   }
