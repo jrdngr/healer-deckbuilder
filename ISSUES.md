@@ -24,11 +24,22 @@ truth for where the project stands; a stale Status column costs the next session
 - **Phase** — the roadmap milestone the issue belongs to (P0–P11, or post-demo).
 - **Depends** — issues that must land first.
 - **Addresses** — flaw numbers / open questions / review sections it resolves.
+- **Status 📥 Backlog** — a standing holding file (not a buildable issue); its items become their own
+  numbered issues when picked up.
 
 ## Progress
 
-**Done: 01–24 — every committed demo issue has landed** (P0–P11; nothing was cut at the Q1 cut
-line). Remaining rows are the #25 experiment and post-demo work (#26–#32). Highlights: all card
+**Done: 01–31 — the demo (01–24) plus the experiments and the full post-demo party subsystem.**
+Only #32 (the standing post-demo backlog index) is open, and it is a holding file, not a buildable
+issue. Post-demo highlights: **#25** hand-4/carryover measured and REVERTED (behind an inert flag);
+**#26** player-first turn ordering (bosses re-anchored on HP to 155/184/208, full-run 32.1%);
+**#27–#29** five new members via a data-driven roster — Warlock (Dark Bargain / Soul Tithe), Skald
+(Crescendo), Berserker (rage bands / Rampage), Grave Augur (Grave Chill), Beast Warden (a Boar pet
+that soaks whole hits); **#30** the full draft (three 1-of-2 picks + slot assignment + surfaced
+weights + one-click classic trio, with a striker/damage/healable generator guarantee); **#31** the
+56-composition sweep harness that nerfed the Warlock ceiling (7→5, 0 comps >85% at F8) and shipped
+the Provoke "Taunt-lite" card. The party subsystem is sim-piloted (every ability found by identity,
+not slot) and all trio sim pins stayed in band. Highlights (demo): all card
 work + the ward pipeline; the Q5 poison decision (**measured and left at 5×5**); events 3 → 8;
 act-2/3 named rosters; **relics phase A** (10 relics, spoils after fights 3 & 6, Reliquary twice
 per run) and **phase B** (Aegis Font / First-Light Taper / Dusk Chime / Martyr's Icon + the
@@ -88,7 +99,7 @@ the final ship call.**
 | 29 | ✅ Done | [Party W3 — Beast Warden + pet subsystem](./issues/29-party-w3-beast-warden.md) | post-demo | 28 | §3.4 |
 | 30 | ✅ Done | [Party W4 — full draft + weight-surfacing UI](./issues/30-party-w4-draft-ui.md) | post-demo | 29 | §3.4 |
 | 31 | ✅ Done | [Party W5 — per-composition balance pass](./issues/31-party-w5-balance-pass.md) | post-demo | 30 | §3.4 |
-| 32 | ⬜ Todo | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
+| 32 | 📥 Backlog | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses
