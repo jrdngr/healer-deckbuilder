@@ -2,6 +2,7 @@ import {
   CHARGE_MAX, POISON_BASE, POISON_TURNS, TAUNT_TURNS, DEFENSE_AMOUNT, BOLT_BASE, BOLT_CHARGE_MULT,
   TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
+  BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
 import type { MemberId } from '../constants';
@@ -25,6 +26,7 @@ const ABILITY: Record<MemberId, string> = {
   skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
   berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
   graveAugur: `Grave Chill — shave ${GRAVE_CHILL_REDUCTION} damage per target off the enemy's telegraphed attack.`,
+  beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
 };
 
 interface MemberCardProps {
@@ -85,6 +87,7 @@ export function MemberCard({
         {m.defense > 0 && <span className="badge defense" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}>🪖 Def {m.defenseAmount}·{m.defense}t</span>}
         {m.id === 'tank' && m.taunt > 0 && <span className="badge taunt" title={`Taunt — aimed attacks funnel onto this member for ${m.taunt} more enemy turn(s).`}>⚔ Taunt {m.taunt}</span>}
         {m.injuries > 0 && <span className="badge injury" title={`Injuries — ${INJURY_NAMES.slice(0, m.injuries).join(', ')} (${injuryPenaltyText(m.injuries)}). Heal at an Infirmary.`}>🩹 Injured {m.injuries}</span>}
+        {m.boarHp > 0 && <span className="badge shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}>🐗 Boar {m.boarHp}·{m.boarTurns}t</span>}
       </div>
       {m.id === 'mage' && <div className="charge">⚡ Charge {mageCharge}/{CHARGE_MAX}</div>}
       {berserkerBands && (

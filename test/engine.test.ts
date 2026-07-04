@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
-import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION } from '../src/constants';
+import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -2540,6 +2540,86 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   augur.abilityPower = 2; g.telegraph.damage = 3;
   g._fireAbility(augur);
   eq('Grave Chill floors telegraph damage at 0', g.telegraph.damage, 0);
+}
+
+// --- party roster wave 3: Beast Warden + Boar pet (#29) ---------------------
+function wardenGame(seed: number) {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['beastWarden', 'tank', 'mage']);
+  return new Game(seed, cfg).start();
+}
+{
+  // Call Boar summons a Boar (7 + abilityPower HP, 4 turns) and lends +4 strike.
+  const g = wardenGame(1);
+  const w = g.members[0];
+  eq('Beast Warden seated in slot 0', w.id, 'beastWarden');
+  eq('Warden strikes for 1 without a Boar', g.memberDamage(w), 1);
+  g._fireAbility(w);
+  eq('Call Boar sets Boar HP', w.boarHp, BOAR_HP);
+  eq('Call Boar sets Boar turns', w.boarTurns, BOAR_TURNS);
+  eq('the Boar lends +4 strike (1 -> 5)', g.memberDamage(w), 1 + BOAR_STRIKE_BONUS);
+  w.abilityPower = 3; g._fireAbility(w);
+  eq('Boar HP scales with abilityPower', w.boarHp, BOAR_HP + 3);
+}
+{
+  // The Boar absorbs a WHOLE instance aimed at the slot — no spill to the Warden —
+  // and a base heavy (7) is exactly one Boar.
+  const g = wardenGame(2);
+  const w = g.members[0];
+  g._fireAbility(w); // Boar 7 HP
+  const wardenHp = w.hp;
+  g.telegraph = { type: 'heavy', hidden: false, damage: 7, targets: [0], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
+  // Preview shows 0 to the Warden while the Boar stands (preview == applied).
+  const preview = g.attackTargets().find((s) => s.slot === 0);
+  eq('the preview shows 0 to the Warden behind a Boar', preview?.damage, 0);
+  g._resolveAttack();
+  eq('the Warden takes no spill', w.hp, wardenHp);
+  eq('a base heavy exactly kills the Boar', w.boarHp, 0);
+  eq('a fallen Boar clears its timer', w.boarTurns, 0);
+}
+{
+  // A small hit only chips the Boar; the Warden still takes nothing.
+  const g = wardenGame(3);
+  const w = g.members[0];
+  g._fireAbility(w); // Boar 7
+  const wardenHp = w.hp;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [0], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
+  g._resolveAttack();
+  eq('the Boar soaks the small hit', w.boarHp, 7 - 4);
+  eq('the Warden is untouched', w.hp, wardenHp);
+  check('the Boar still stands', w.boarHp > 0);
+}
+{
+  // The Boar is unhealable: healing the Warden raises HER HP, never the Boar.
+  const g = wardenGame(4);
+  const w = g.members[0];
+  g._fireAbility(w);
+  w.hp = 3; const boar0 = w.boarHp;
+  g.mp = 10;
+  g.playCard(giveCard(g, 'highHeal'), 0);
+  check('the heal raises the Warden HP', w.hp > 3);
+  eq('the heal never touches the Boar', w.boarHp, boar0);
+}
+{
+  // The Boar returns to the wild after BOAR_TURNS enemy turns.
+  const g = wardenGame(5);
+  const w = g.members[0];
+  g._fireAbility(w);
+  g.enemy.hp = 999; // keep the fight alive across turns
+  for (let i = 0; i < BOAR_TURNS; i++) g._decayBuffs();
+  eq('the Boar expires after BOAR_TURNS', w.boarHp, 0);
+  eq('the expired Boar clears its timer', w.boarTurns, 0);
+}
+{
+  // The Boar is exempt from the wipe check: a lone Warden behind a Boar is not a
+  // wipe even when a killing blow lands on her slot.
+  const g = wardenGame(6);
+  const w = g.members[0];
+  g.members[1].alive = false; g.members[2].alive = false; // only the Warden lives
+  g._fireAbility(w);
+  g.telegraph = { type: 'heavy', hidden: false, damage: 99, targets: [0], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
+  g._resolveAttack();
+  check('the lone Warden survives behind the Boar', w.alive && g.status === 'playing');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

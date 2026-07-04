@@ -399,6 +399,24 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'boarSummon': {
+        push({ at: t, fx: [{ type: 'float', at: ev.slot, text: `🐗 Boar ${ev.hp}`, color: C.hp }] });
+        t += 320;
+        break;
+      }
+      case 'boarHit': {
+        push({ at: t, shake: 8, fx: [
+          { type: 'float', at: ev.slot, text: ev.killed ? 'Boar falls' : `Boar −${ev.amount}`, color: C.shield },
+        ] });
+        t += 340;
+        break;
+      }
+      case 'boarExpire': {
+        push({ at: t, fx: [{ type: 'float', at: ev.slot, text: 'Boar leaves', color: C.smoke }] });
+        t += 260;
+        break;
+      }
+
       case 'wound': {
         // Hex settles over the whole party — a curse pulse on each member.
         push({ at: t, shake: 5, fx: [

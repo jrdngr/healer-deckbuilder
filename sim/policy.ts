@@ -331,8 +331,21 @@ function tryRampage(game: Game): boolean {
   return false;
 }
 
+// Beast Warden re-summon timing (#29): keep a Boar standing — it soaks whole hits
+// aimed at her slot AND lends +4 strike, so the moment it is down (killed or
+// expired) call another. Bounded (returns false once one stands).
+function tryCallBoar(game: Game): boolean {
+  const warden = memberByAbility(game, 'callBoar');
+  if (!warden || warden.boarHp > 0) return false;
+  if (channelThreatUnanswered(game)) return false; // answer a channel first
+  const idx = handIndexOf(game, 'ability');
+  if (!affordable(game, idx)) return false;
+  game.playCard(idx, warden.slot);
+  return true;
+}
+
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryBraceChannel, tryRetaunt, tryPreventLethal, tryGraveChill, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   tryBolt, tryPoison, tryRampage, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh,
 ];
 

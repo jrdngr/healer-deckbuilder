@@ -9,19 +9,29 @@ The Beast Warden introduces a **pet** — a unit on her slot that can't be heale
 hits. It's the most invasive member (a new kind of board entity), so it ships last of the five.
 
 ## Scope / acceptance criteria
-- [ ] **Beast Warden** — 9 HP, 1 dmg. *Call Boar* (2 MP): summon a **Boar (7 HP + abilityPower)** on
-      her slot for **4 enemy turns** (recast replaces at full; no stack).
-- [ ] Boar behavior: adds **+4** to her strike (total 5); **absorbs every instance aimed at her
-      slot, whole**; **unhealable**; no damage spill to the Warden.
-- [ ] Boar HP 7 = exactly one base heavy — the re-summon-early-vs-heal-the-tank decision is the point.
+- [x] **Beast Warden** — 9 HP, 1 dmg. *Call Boar* (2 MP, Ability card): summon a **Boar
+      (`BOAR_HP 7` + abilityPower)** on her slot for **`BOAR_TURNS 4` enemy turns**; recast replaces
+      at full (no stack).
+- [x] Boar behavior: adds **+`BOAR_STRIKE_BONUS 4`** to her strike (1 → 5); **absorbs every instance
+      aimed at her slot, whole** (intercepts in `_resolveAttack` before the ward pipeline, and
+      `_wardedDamage` previews it as 0 so preview == applied); **unhealable** (not a member — no heal
+      path); **no spill** to the Warden.
+- [x] Boar HP 7 = exactly one base heavy. Modeled as `boarHp`/`boarTurns` fields on the Warden
+      (not a members-array entry), so it is exempt from heal targeting and the wipe check; cleared on
+      the Warden's death. New `boarSummon`/`boarHit`/`boarExpire` events + animations; live Boar badge
+      on the MemberCard.
 
 ## Implementation notes
 - New pet entity in the member/board model (post-#08). It occupies a slot but is exempt from heal
   targeting and from the wipe check as a member. Emit summon/expire `GameEvent`s for animation.
 
 ## Tests (required per CLAUDE.md)
-- Boar absorbs a full instance aimed at the slot; is unhealable; expires after 4 enemy turns;
-  recast replaces at full HP; adds +4 to the Warden's strike.
+- [x] `test/engine.test.ts`: Call Boar summons 7 (+abilityPower) HP for 4 turns and lends +4 strike;
+      the Boar absorbs a whole instance (a base heavy = one Boar) with no spill and previews as 0 to
+      the Warden; a small hit only chips it; it is unhealable; it expires after 4 enemy turns; it is
+      exempt from the wipe check (a lone Warden behind a Boar survives a 99-damage blow).
+- [x] `test/sim.test.ts`: the policy keeps a Boar up and pilots the Beast Warden to completion,
+      winning ordinary fights. Trio pins bit-identical.
 
 ## Out of scope / follow-ups
 - Full draft UI + weight surfacing is #30.

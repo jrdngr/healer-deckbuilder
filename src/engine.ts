@@ -14,6 +14,7 @@ import {
   TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
+  BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
@@ -65,6 +66,8 @@ export interface Member {
   drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
   bargainCasts: number; // Warlock (#27): Dark Bargains cast this fight; grows the next cost
+  boarHp: number;   // Beast Warden (#29): standing Boar's HP (0 = no Boar); it soaks whole hits
+  boarTurns: number; // Beast Warden (#29): enemy turns the Boar has left before it returns to the wild
   diedThisFight: boolean; // DR1: went to 0 HP at any point this fight (a later Resurrect
                           // does not clear it — death always scars; a Martyr's Icon save
                           // vetoes the death, so it never sets this).
@@ -157,6 +160,9 @@ export type GameEvent =
   | { kind: 'taunt'; slot: Slot; turns: number }
   | { kind: 'bolt'; slot: Slot; amount: number; enemyHp: number }
   | { kind: 'graveChill'; slot: Slot; amount: number } // Grave Chill weakens the telegraph (#28)
+  | { kind: 'boarSummon'; slot: Slot; hp: number; turns: number } // Beast Warden calls a Boar (#29)
+  | { kind: 'boarHit'; slot: Slot; amount: number; boarHp: number; killed: boolean } // Boar soaks a hit (#29)
+  | { kind: 'boarExpire'; slot: Slot } // Boar returns to the wild (#29)
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -243,6 +249,8 @@ export class Game {
         drumPrimed: false, // no War Drum beat pending
         ward: 0,       // no Aegis Ward standing
         bargainCasts: 0, // no Dark Bargains cast yet (#27)
+        boarHp: 0,     // no Boar summoned yet (#29)
+        boarTurns: 0,
         diedThisFight: false, // no death yet this fight
         injuries: p.injuries, // display-only; penalty already folded into the stats above
       };
@@ -338,6 +346,9 @@ export class Game {
       const [b1, b2] = this.berserkerThresholds();
       if (m.hp <= b1) base += BERSERKER_BAND_BONUS;
       if (m.hp <= b2) base += BERSERKER_BAND_BONUS;
+    } else if (m.ability === 'callBoar' && m.boarHp > 0) {
+      // The Boar (#29) fights alongside the Warden, lending its strike (1 -> 5).
+      base += BOAR_STRIKE_BONUS;
     }
     return base + this.hymnBonus + banner;
   }
@@ -653,6 +664,8 @@ export class Game {
     m.charge = 0;
     m.drumPrimed = false;
     m.ward = 0;
+    m.boarHp = 0;    // the Boar has no summoner left (#29)
+    m.boarTurns = 0;
     if (saved) {
       this._log(`The Martyr's Icon glows — ${m.name} clings to life at 1 HP!`, 'status');
       this._emit({ kind: 'martyrSave', slot: m.slot });
@@ -783,6 +796,11 @@ export class Game {
   // the telegraph preview equal to the applied damage across the whole pipeline.
   _wardedDamage(m: Member, raw: number, ignoreDefense = false, attackType?: AttackType):
       { dmg: number; spendsBrace: boolean; spendsShield: boolean; spendsStormglass: boolean; wardSpent: number } {
+    // Beast Warden's Boar (#29) stands in front of her slot and eats the WHOLE
+    // instance, so the Warden takes 0 and none of her own wards are spent. Checked
+    // FIRST so the preview (attackTargets) equals the applied damage — the boar's
+    // own HP loss is resolved in _resolveAttack, not here (this stays a pure read).
+    if (m.boarHp > 0) return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: false, wardSpent: 0 };
     let dmg = this._effectiveDamage(m, raw, ignoreDefense);
     let spendsBrace = false;
     let spendsShield = false;
@@ -947,6 +965,16 @@ export class Game {
           this._log(`Brace fades from ${m.name}.`, 'status');
         }
       }
+      // The Boar (#29) returns to the wild after BOAR_TURNS enemy turns (or the
+      // moment its HP runs out, handled at the point of the hit).
+      if (m.alive && m.boarTurns > 0) {
+        m.boarTurns -= 1;
+        if (m.boarTurns === 0) {
+          m.boarHp = 0;
+          this._log(`${m.name}'s Boar returns to the wild.`, 'status');
+          this._emit({ kind: 'boarExpire', slot: m.slot });
+        }
+      }
     }
   }
 
@@ -1014,6 +1042,18 @@ export class Game {
       if (!m || !m.alive) {
         this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
         this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden });
+        continue;
+      }
+      // Beast Warden's Boar (#29): a standing Boar eats the WHOLE instance aimed at
+      // her slot — no spill to the Warden, her own wards untouched. The Boar takes
+      // the raw per-target damage and dies when its HP runs out (a base heavy = one
+      // Boar). Resolved before the ward pipeline; _wardedDamage previews it as 0.
+      if (m.boarHp > 0) {
+        m.boarHp = Math.max(0, m.boarHp - t.damage);
+        const boarDied = m.boarHp <= 0;
+        if (boarDied) m.boarTurns = 0;
+        this._log(`${m.name}'s Boar takes the ${label} for ${t.damage}${boarDied ? ' and falls' : ''}. (Boar ${m.boarHp})`, 'shield');
+        this._emit({ kind: 'boarHit', slot, amount: t.damage, boarHp: m.boarHp, killed: boarDied });
         continue;
       }
       // Defense -> Brace -> Shield (#17); the same pipeline attackTargets()
@@ -1537,6 +1577,16 @@ export class Game {
         } else {
           this._log(`${m.name} reaches for the telegraph, but there is nothing to chill.`, 'status');
         }
+        break;
+      }
+      case 'callBoar': {
+        // The Beast Warden (#29) summons a Boar on her slot: it soaks whole hits
+        // aimed at her, lends her its strike, and lasts BOAR_TURNS enemy turns.
+        // Recasting replaces it at full HP (no stack).
+        m.boarHp = BOAR_HP + m.abilityPower;
+        m.boarTurns = BOAR_TURNS;
+        this._log(`${m.name} calls a Boar (${m.boarHp} HP) to her side for ${m.boarTurns} enemy turns.`, 'status');
+        this._emit({ kind: 'boarSummon', slot: m.slot, hp: m.boarHp, turns: m.boarTurns });
         break;
       }
       default:

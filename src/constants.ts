@@ -10,12 +10,13 @@ export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep'
 export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden';
 // 'darkBargain' (Warlock) trades his HP for the healer's MP; 'crescendo' (Skald)
 // draws cards and feeds his cards-played strike; 'rampage' (Berserker) doubles his
-// current strike at an HP cost; 'graveChill' (Augur) weakens the standing telegraph.
-// All are fired via the Ability card.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo' | 'rampage' | 'graveChill';
+// current strike at an HP cost; 'graveChill' (Augur) weakens the standing telegraph;
+// 'callBoar' (Beast Warden) summons a pet that soaks whole hits. All fire via the
+// Ability card.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar';
 export type CardId =
   | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -103,6 +104,10 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // redirection substitute).
   berserker: { slot: 0, id: 'berserker', name: 'Berserker', maxHP: 16, damage: 2, ability: 'rampage' },
   graveAugur: { slot: 2, id: 'graveAugur', name: 'Grave Augur', maxHP: 10, damage: 4, ability: 'graveChill' },
+  // Roster wave 3 (#29). Beast Warden: 9 HP / 1 dmg, but Call Boar summons a pet on
+  // her slot that soaks whole hits and lends her its strike — the most invasive
+  // member (a new board entity).
+  beastWarden: { slot: 0, id: 'beastWarden', name: 'Beast Warden', maxHP: 9, damage: 1, ability: 'callBoar' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -123,7 +128,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden'];
 
 export const ENEMY_MAX_HP = 100;
 
@@ -520,6 +525,10 @@ export const BERSERKER_BAND2_HP = 4; // Berserker: a further +BAND_BONUS while H
 export const BERSERKER_BAND_BONUS = 2; // per-band damage bonus (net 2 / 4 / 6 across the bands)
 export const RAMPAGE_SELF_DMG = 2;   // Rampage: HP the Berserker loses after the doubled strike
 export const GRAVE_CHILL_REDUCTION = 2; // Grave Chill: per-target damage shaved off the standing telegraph
+// Roster wave 3 abilities (#29).
+export const BOAR_HP = 7;           // Call Boar: pet HP (+ abilityPower) — exactly one base heavy
+export const BOAR_TURNS = 4;        // Call Boar: enemy turns the Boar stands before returning to the wild
+export const BOAR_STRIKE_BONUS = 4; // the Boar lends the Warden this much strike while it stands (1 -> 5)
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
 

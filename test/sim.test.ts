@@ -211,6 +211,22 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   check('the policy always resolves a Berserker/Augur fight (no stall)', terminated === N, `${terminated}/${N}`);
   check('the Berserker/Augur party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
 }
+{
+  // Roster wave 3 (#29): the policy keeps a Boar up and pilots the Beast Warden.
+  let wins = 0, terminated = 0;
+  const N = 60;
+  for (let s = 1; s <= N; s++) {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['beastWarden', 'tank', 'mage']);
+    cfg.enemy = { ...cfg.enemy, maxHP: 75 };
+    const g = new Game(s, cfg);
+    playFight(g);
+    if (g.status !== 'playing') terminated++;
+    if (g.status === 'win') wins++;
+  }
+  check('the policy always resolves a Beast Warden fight (no stall)', terminated === N, `${terminated}/${N}`);
+  check('the Beast Warden party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
+}
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }
 else console.log(`sim.test: ${passed} passed`);
