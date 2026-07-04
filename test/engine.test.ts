@@ -2406,7 +2406,9 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('drafted Warlock seated in slot 0', w.id, 'warlock');
   eq('Warlock name from the pool', w.name, 'Hexen Warlock');
   eq('Warlock ability is Dark Bargain', w.ability, 'darkBargain');
-  eq('Warlock damage (nerfed to 5 in #31)', w.damage, 5);
+  // 7 per the spec. (#31's 7->5 nerf was calibrated against the toBattleConfig
+  // identity bug and was reverted by the 2026-07-04 playtest.)
+  eq('Warlock has the highest damage', w.damage, 7);
 
   // Dark Bargain: -HP (growing per cast) for +MP.
   g.mp = 10; w.hp = 15;
@@ -2639,6 +2641,32 @@ function wardenGame(seed: number) {
   check('the enemy aims a single at the provoked member', tg.type !== 'single' || tg.targets.includes(2));
   // Provoke is a real, purchasable card in the pool.
   check('Provoke is in the shop pool', CARD_POOL.includes('provoke'));
+}
+
+// --- incapacitated members ('incapacitate' injury mode, 2026-07-04) ---------
+{
+  const cfg = defaultBattleConfig();
+  cfg.party[0] = { ...cfg.party[0], incapacitated: true };
+  const g = new Game(1, cfg); g.start();
+  const m = g.members[0];
+  check('an incapacitated member starts the fight dead', !m.alive && m.hp === 0);
+  check('no death is recorded for a fight they never stood in', !m.diedThisFight);
+  check('the incapacitated slot is excluded from scar recording', !g.diedThisFightSlots().includes(0));
+
+  // Resurrect refuses them — only the run layer restores an incapacitated member.
+  g.mp = 10;
+  const idx = giveCard(g, 'resurrect');
+  eq('Resurrect refuses an incapacitated member', g.canPlay(idx, 0), 'target is incapacitated');
+
+  // A normally-dead member is still resurrectable in the same fight.
+  g.members[2].alive = false; g.members[2].hp = 0;
+  eq('a plain corpse is still a legal Resurrect target', g.canPlay(idx, 2), null);
+
+  // The fight still runs with two members — no stall, and the wipe check counts
+  // the incapacitated member as dead.
+  g.members[2].alive = true; g.members[2].hp = 1;
+  g.members[1].alive = false; g.members[2].alive = false;
+  check('wipe check counts the incapacitated slot as dead', g._checkWipe());
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

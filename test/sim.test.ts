@@ -236,9 +236,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   const seated = seatComposition(['mage', 'tank', 'skald']); // maxHP 9 / 18 / 10
   eq('the tankiest member is seated in center', seated[1], 'tank');
 
-  // The #31 ceiling nerf is pinned: at Warlock 7 every Warlock comp cleared the
-  // sweep >85%; 5 caps the ceiling (0 comps clear F8 >85% at N=100 — see the issue).
-  eq('Warlock damage nerfed to tame the ceiling', MEMBER_POOL.warlock.damage, 5);
+  // The Warlock is back at the spec's 7 (2026-07-04 playtest): #31's 7->5 nerf was
+  // calibrated against the toBattleConfig identity bug — "warlock" comps were
+  // fighting as poison-firing trio members with warlock stats. With REAL abilities,
+  // warlock comps read 2.5-3% full-run even at 7 (no ceiling; the fixed policy can
+  // barely pilot Dark Bargain), so the nerf had no justification left.
+  eq('Warlock damage restored to the spec value', MEMBER_POOL.warlock.damage, 7);
 
   // A tiny sweep runs over all 56 comps without stalling and returns finite rates.
   const reps = runCompositionSweep(4, 1);

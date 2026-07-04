@@ -138,7 +138,10 @@ function channelThreatUnanswered(game: Game): boolean {
 // long as the living are safe first. Revives the highest-value dead member.
 function tryResurrect(game: Game): boolean {
   const order: Slot[] = [SLOT.RIGHT, SLOT.LEFT, SLOT.CENTER]; // mage, ranger, tank by output
-  const dead = order.map((s) => game.members[s]).find((m) => !m.alive);
+  // An incapacitated member ('incapacitate' injury mode) cannot be revived —
+  // targeting one would fail canPlay and this tactic would claim a turn it
+  // didn't take (a spin). Skip them.
+  const dead = order.map((s) => game.members[s]).find((m) => !m.alive && !m.incapacitated);
   if (!dead) return false;
   if (channelThreatUnanswered(game)) return false;
   const incoming = incomingDamage(game);

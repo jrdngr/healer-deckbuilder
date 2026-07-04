@@ -93,11 +93,13 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // Post-demo roster wave 1 (#27). `slot` here is a nominal home slot only — a
   // drafted member takes whatever slot it is assigned; the engine uses the map
   // index for placement and reads only id/name/ability/stats from the pool.
-  // Warlock: a high-damage DPS, but Soul Tithe burns him each turn and Dark Bargain
-  // trades HP for MP — an HP-bottleneck DPS. (#31 nerf: 7 -> 5 damage. At 7, every
-  // Warlock comp cleared the sweep at 86-93% — a +34pp ceiling outlier the
-  // comp-agnostic boss HP couldn't absorb without wrecking the trio baseline.)
-  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 15, damage: 5, ability: 'darkBargain' },
+  // Warlock: highest damage in the game, but Soul Tithe burns him each turn and
+  // Dark Bargain trades HP for MP — an HP-bottleneck DPS. (History: #31 briefly
+  // nerfed 7 -> 5 off a sweep that was measuring a BUG — toBattleConfig dropped
+  // drafted identity, so "warlock" comps fought as poison-firing trio members with
+  // warlock stats. With real abilities, warlock comps read 2.5-3% full-run even at
+  // 7 — no ceiling — so the spec value is restored. See the 2026-07-04 playtest issue.)
+  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 15, damage: 7, ability: 'darkBargain' },
   // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
   skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
@@ -141,7 +143,7 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // Conservative damage rating per member (the review's numbers), used only by the
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
-  ranger: 4, tank: 2, mage: 5, warlock: 5, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
+  ranger: 4, tank: 2, mage: 5, warlock: 7, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
@@ -757,6 +759,9 @@ export interface PartyMemberConfig {
   // Drafted identity (#27): which pool member sits in this slot. Absent means the
   // classic trio member for the slot (backward-compatible with pre-draft configs).
   member?: MemberId;
+  // 'incapacitate' injury mode: the member enters the fight dead and cannot be
+  // Resurrected (see INJURY_RULES). Absent/false everywhere else.
+  incapacitated?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -783,9 +788,57 @@ export const INJURY_ABILITY: number[] = [0, 0, 1]; // Broken: −1 ability power
 // the Infirmary; capped at MAX_INJURIES.
 export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken'];
 
+// ---------------------------------------------------------------------------
+// Injury-mode experiment (2026-07-04 playtest). The 3-scar cap NULLIFIES the
+// system at its limit: once a member is Broken, every further death is free and
+// the DR1 sacrifice line returns for that member. Two harder variants, behind a
+// runtime switch so they can be simmed / play-felt without a build:
+//   'cap'          — today's rule: scars stop at 3, further deaths cost nothing.
+//   'escalate'     — scars never cap; each death past the 3rd repeats the cycle
+//                    (4th −2 max HP, 5th −1 damage, 6th −1 ability, ...).
+//   'incapacitate' — the 4th death takes the member OUT: they start every fight
+//                    dead and cannot be Resurrected; the Infirmary / Field
+//                    Hospital / Mending Totem can still heal the 4th scar to
+//                    restore them (recoverable, like the rest of DR1).
+// Default 'cap' (the tuned demo rule); the sim experiments read the findings
+// issue. Mutable at runtime on purpose — sim scripts and a future settings
+// toggle flip it without touching the module graph.
+// ---------------------------------------------------------------------------
+export type InjuryMode = 'cap' | 'escalate' | 'incapacitate';
+export const INJURY_RULES: { mode: InjuryMode } = { mode: 'cap' };
+export const INCAPACITATE_AT = MAX_INJURIES + 1; // the scar count that incapacitates ('incapacitate' mode)
+
+// Scar count a run may record for one member under the active mode.
+export function injuryRecordCap(): number {
+  switch (INJURY_RULES.mode) {
+    case 'cap': return MAX_INJURIES;
+    case 'incapacitate': return INCAPACITATE_AT;
+    case 'escalate': return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+// Whether this scar count incapacitates the member (starts fights dead,
+// unresurrectable) under the active mode.
+export const injuryIncapacitates = (injuries: number): boolean =>
+  INJURY_RULES.mode === 'incapacitate' && injuries >= INCAPACITATE_AT;
+
 // Total penalty of each kind for a member carrying `injuries` scars.
-const injuryPenalty = (table: number[], injuries: number): number =>
-  injuries <= 0 ? 0 : table[Math.min(injuries, MAX_INJURIES) - 1];
+// 'escalate' extends the 3-tier cycle indefinitely: tier i (1-indexed) grants the
+// table's ((i-1) % 3)-th penalty, so the 4th scar is another Cracked, the 5th
+// another Weakened, and so on. The other modes clamp at the table edge.
+const injuryPenalty = (table: number[], injuries: number): number => {
+  if (injuries <= 0) return 0;
+  if (INJURY_RULES.mode !== 'escalate' || injuries <= MAX_INJURIES) {
+    return table[Math.min(injuries, MAX_INJURIES) - 1];
+  }
+  let total = table[MAX_INJURIES - 1];
+  for (let tier = MAX_INJURIES + 1; tier <= injuries; tier++) {
+    // Per-tier increment of the cycled tier = the table delta at that position.
+    const pos = (tier - 1) % MAX_INJURIES;
+    total += table[pos] - (pos > 0 ? table[pos - 1] : 0);
+  }
+  return total;
+};
 export const injuryMaxHPPenalty = (injuries: number): number => injuryPenalty(INJURY_MAXHP, injuries);
 export const injuryDamagePenalty = (injuries: number): number => injuryPenalty(INJURY_DAMAGE, injuries);
 export const injuryAbilityPenalty = (injuries: number): number => injuryPenalty(INJURY_ABILITY, injuries);

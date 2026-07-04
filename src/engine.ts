@@ -74,6 +74,8 @@ export interface Member {
                           // vetoes the death, so it never sets this).
   injuries: number; // DR1 (display only): persistent scars carried in from the run; the
                     // stat penalty they cause is already baked into maxHP/damage/abilityPower.
+  incapacitated: boolean; // 'incapacitate' injury mode: starts the fight dead and cannot be
+                          // Resurrected (the run layer heals the scar to restore them).
 }
 
 export interface Enemy {
@@ -235,7 +237,9 @@ export class Game {
       return {
         slot: slot as Slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
         ability: d.ability, abilityPower: p.abilityPower,
-        hp: p.maxHP, alive: true,
+        // An incapacitated member ('incapacitate' injury mode) starts the fight
+        // dead; diedThisFight stays false (no NEW scar for a fight they never stood in).
+        hp: p.incapacitated ? 0 : p.maxHP, alive: !p.incapacitated,
         shield: false, // pending shield (blocks the next damaging instance)
         shieldTurns: 0,
         brace: false,  // pending Brace (one-shot damage reduction)
@@ -254,6 +258,7 @@ export class Game {
         boarTurns: 0,
         diedThisFight: false, // no death yet this fight
         injuries: p.injuries, // display-only; penalty already folded into the stats above
+        incapacitated: p.incapacitated ?? false,
       };
     });
 
@@ -1204,6 +1209,9 @@ export class Game {
       case 'dead': {
         const m = target == null ? undefined : this.members[target];
         if (!m || m.alive) return 'target must be a dead member';
+        // 'incapacitate' injury mode: the 4th scar is beyond a battlefield revive —
+        // only the run layer (Infirmary / Field Hospital / Mending Totem) restores them.
+        if (m.incapacitated) return 'target is incapacitated';
         if (this.livingMembers().length === 0) return 'no living member remains';
         break;
       }

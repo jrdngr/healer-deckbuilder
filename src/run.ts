@@ -21,6 +21,7 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty, INFIRMARY_PRICE,
+  injuryRecordCap, injuryIncapacitates,
   partyFromMembers, PARTY_SIZE, DRAFT_POOL, rollDraft,
 } from './constants';
 import type {
@@ -300,6 +301,10 @@ export class Run {
         damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
         abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
         injuries: p.injuries,
+        member: p.member, // drafted identity (#27) — dropping this reverts the fight to trio abilities
+        // 'incapacitate' injury mode: the member enters the fight dead and cannot
+        // be Resurrected (healing the scar at an Infirmary restores them).
+        incapacitated: injuryIncapacitates(p.injuries),
       })),
       healer: { ...this.healer },
       relics: [...this.relics],
@@ -368,12 +373,13 @@ export class Run {
   // members that DIED during the fight (Game.diedThisFightSlots) — a member who
   // died and was later Resurrected still counts (death always scars), while a
   // Martyr's Icon save vetoes the death itself, so its slot never appears here.
-  // Only wins reach this (a loss ends the run), and each member's count caps at
-  // MAX_INJURIES.
+  // Only wins reach this (a loss ends the run). The per-member cap depends on the
+  // active injury mode (injuryRecordCap): MAX_INJURIES under 'cap', one past it
+  // under 'incapacitate', uncapped under 'escalate'.
   recordInjuries(slots: Slot[]): void {
     for (const s of slots) {
       const p = this.party[s];
-      if (p) p.injuries = Math.min(MAX_INJURIES, p.injuries + 1);
+      if (p) p.injuries = Math.min(injuryRecordCap(), p.injuries + 1);
     }
   }
 

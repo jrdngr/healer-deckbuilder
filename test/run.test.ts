@@ -14,6 +14,8 @@ import {
   DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
   DRAFT_PICKS, DRAFT_POOL, rollDraft, draftOfferViable, partyMeetsDraftConstraints, CLASSIC_TRIO,
   CONVENTIONAL_STRIKERS,
+  INJURY_RULES, INCAPACITATE_AT, injuryRecordCap, injuryIncapacitates,
+  injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../src/constants';
 import { shuffle } from '../src/rng';
 import { emptyStats, recordRunEnd } from '../src/stats';
@@ -934,6 +936,14 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const restored = Run.fromJSON(drafted.toJSON());
   eq('drafted identity survives save/resume', restored.party[0].member, 'warlock');
   eq('drafted skald survives save/resume', restored.party[2].member, 'skald');
+
+  // Regression (found in the 2026-07-04 playtest): toBattleConfig must carry the
+  // drafted identity through to the fight — dropping `member` silently reverted
+  // every drafted fight to classic-trio abilities (a Warlock arrived as a
+  // poison-firing "Ranger" with Warlock stats).
+  const cfg = drafted.toBattleConfig();
+  eq('toBattleConfig carries drafted identity (slot 0)', cfg.party[0].member, 'warlock');
+  eq('toBattleConfig carries drafted identity (slot 2)', cfg.party[2].member, 'skald');
 }
 
 // --- full draft generator constraints (#30) ---------------------------------
@@ -979,6 +989,43 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   const b = new Run(77); b.beginDraft();
   check('the draft offer is deterministic in the seed',
     JSON.stringify((a.nodeContent as { pairs: unknown }).pairs) === JSON.stringify((b.nodeContent as { pairs: unknown }).pairs));
+}
+
+// --- injury-mode experiments (2026-07-04 playtest) ---------------------------
+{
+  // Default 'cap': today's exact behavior — scars stop at MAX_INJURIES.
+  eq('default injury mode is cap', INJURY_RULES.mode, 'cap');
+  eq('cap mode records at most MAX_INJURIES', injuryRecordCap(), MAX_INJURIES);
+  const run = new Run(30);
+  for (let i = 0; i < 6; i++) run.recordInjuries([0 as Slot]);
+  eq('cap: six deaths still cap at 3 scars', run.party[0].injuries, 3);
+  check('cap never incapacitates', !injuryIncapacitates(3) && !injuryIncapacitates(99));
+
+  // 'escalate': the penalty cycle repeats past 3 (4th −2 HP, 5th −1 dmg, 6th −1 ability).
+  INJURY_RULES.mode = 'escalate';
+  const esc = new Run(31);
+  for (let i = 0; i < 6; i++) esc.recordInjuries([1 as Slot]);
+  eq('escalate: scars keep counting', esc.party[1].injuries, 6);
+  eq('escalate: maxHP penalty cycles (6 scars = −4)', injuryMaxHPPenalty(6), 4);
+  eq('escalate: damage penalty cycles (5 scars = −2)', injuryDamagePenalty(5), 2);
+  eq('escalate: ability penalty cycles (6 scars = −2)', injuryAbilityPenalty(6), 2);
+  eq('escalate: totals at 3 match the cap tables', injuryMaxHPPenalty(3), INJURY_MAXHP[2]);
+
+  // 'incapacitate': the 4th scar takes the member out; the Infirmary restores them.
+  INJURY_RULES.mode = 'incapacitate';
+  eq('incapacitate mode records one past the cap', injuryRecordCap(), INCAPACITATE_AT);
+  const inc = new Run(32);
+  for (let i = 0; i < 6; i++) inc.recordInjuries([2 as Slot]);
+  eq('incapacitate: scars stop at INCAPACITATE_AT', inc.party[2].injuries, INCAPACITATE_AT);
+  check('the 4th scar incapacitates', injuryIncapacitates(INCAPACITATE_AT));
+  check('3 scars do not incapacitate', !injuryIncapacitates(MAX_INJURIES));
+  const cfg = inc.toBattleConfig();
+  check('toBattleConfig marks the member incapacitated', cfg.party[2].incapacitated === true);
+  check('the other members are not incapacitated', !cfg.party[0].incapacitated && !cfg.party[1].incapacitated);
+  // Healing one scar restores them (recoverable, like the rest of DR1).
+  inc.healInjury(2 as Slot);
+  check('healing a scar un-incapacitates', inc.toBattleConfig().party[2].incapacitated === false);
+  INJURY_RULES.mode = 'cap'; // restore the default for every later test
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
