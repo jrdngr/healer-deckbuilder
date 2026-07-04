@@ -627,7 +627,7 @@ export interface PartyMemberConfig {
 // rounds ugly on the 9-HP mage). Exact magnitudes are sim-tuned.
 // ---------------------------------------------------------------------------
 export const MAX_INJURIES = 3;
-export const INJURY_MAXHP: number[] = [3, 3, 3];   // Cracked: −3 max HP from the 1st scar on
+export const INJURY_MAXHP: number[] = [2, 2, 2];   // Cracked: −2 max HP from the 1st scar on
 export const INJURY_DAMAGE: number[] = [0, 1, 1];  // Weakened: −1 damage from the 2nd scar on
 export const INJURY_ABILITY: number[] = [0, 0, 1]; // Broken: −1 ability power from the 3rd scar
 
@@ -817,13 +817,13 @@ export const NON_FIGHT_NODES: NodeType[] = [
 // stop, so the scar economy stays a "get lucky and have gold" decision.
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
-  ['infirmary', 18],
+  ['infirmary', 24],
 ];
 
-// Infirmary (DR1): flat gold to clear one scar (top of the ladder first). In line
-// with CARD_REMOVAL_PRICE so it competes with the deck/upgrade economy for the
-// purse rather than dominating it. Sim-tuned.
-export const INFIRMARY_PRICE = 25;
+// Infirmary (DR1): flat gold to clear one scar (top of the ladder first). Kept
+// below CARD_REMOVAL_PRICE so a wounded party can realistically pay its scars
+// down rather than hoard — the scar economy is meant to be recoverable. Sim-tuned.
+export const INFIRMARY_PRICE = 20;
 
 // A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks
 // between them. Act bosses sit at fights 2, 5, 8 (the last fight of each act); the
@@ -848,8 +848,8 @@ export const isActBoss = (fightIndex: number): boolean =>
 // (scaled BOSS_ENEMY_DEF) until the Gatewarden/Hexweaver/Devourer land (#12-14).
 export const ENEMY_HP_BY_FIGHT: number[] = [
   50, 75, 130,    // Act 1: two normals + boss (Gatewarden; pre-spoils, so relic-free)
-  105, 130, 146,  // Act 2: boss (Hexweaver — 135->142 for #21's relics, ->146 for #22's)
-  150, 150, 198,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 165->190->198 for relics)
+  105, 130, 158,  // Act 2: boss (Hexweaver — 146->158 re-anchored for DR1's smarter policy)
+  150, 150, 182,  // Act 3: two normals (under the enrage-14 cliff) + boss (Devourer, 198->182 for the DR1 scar handicap)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.

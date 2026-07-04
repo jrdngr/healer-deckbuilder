@@ -130,6 +130,24 @@ function channelThreatUnanswered(game: Game): boolean {
   });
 }
 
+// Revive a fallen member once no live member is about to die. A death is already
+// a permanent scar (DR1), but a dead body is also lost output for the rest of the
+// fight — and losing the fight is worse than the scar. At 4 MP (the #18 rework)
+// putting a high-value DPS back on the field to help win the race is worth it, so
+// long as the living are safe first. Revives the highest-value dead member.
+function tryResurrect(game: Game): boolean {
+  const order: Slot[] = [SLOT.RIGHT, SLOT.LEFT, SLOT.CENTER]; // mage, ranger, tank by output
+  const dead = order.map((s) => game.members[s]).find((m) => !m.alive);
+  if (!dead) return false;
+  if (channelThreatUnanswered(game)) return false;
+  const incoming = incomingDamage(game);
+  if (saveOrder(game).some((m) => !m.shield && (incoming.get(m.slot) ?? 0) >= m.hp)) return false; // save the living first
+  const idx = handIndexOf(game, 'resurrect');
+  if (!affordable(game, idx)) return false;
+  game.playCard(idx, dead.slot);
+  return true;
+}
+
 // Race the enemy down with the mage's Bolt when Charge is worth spending (or
 // when it lands the kill).
 function tryBolt(game: Game): boolean {
@@ -239,7 +257,7 @@ function tryRefresh(game: Game): boolean {
 // snowballs; banking MP instead only drags fights past the turn-11 enrage and
 // loses. Proactive single-target healing and MP economy fill the leftovers.
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryBraceChannel, tryRetaunt, tryPreventLethal, tryCleanse, tryGroupHeal, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
+  tryBraceChannel, tryRetaunt, tryPreventLethal, tryCleanse, tryGroupHeal, tryResurrect, tryBolt, tryPoison, tryHeal, tryRegenTank, tryRefresh,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).
@@ -365,9 +383,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Phase-B rule-changers (#22). The Taper's hand 3->2 starves this policy's
   // tactic engine, so it never takes one; the others are solid defensive picks.
   martyrsIcon: 6, duskChime: 6, aegisFont: 4, firstLightTaper: 0,
-  // DR1: the Mending Totem is worthless until the policy actually records and
-  // avoids scars (commit 6 raises this and adds the survival/infirmary logic).
-  mendingTotem: 0,
+  // DR1: with scars now a real, compounding cost, a free scar-heal every victory
+  // is a strong anti-spiral pick — valued alongside the top defensive relics.
+  mendingTotem: 8,
   // Curses are deliberate player trades; the fixed policy never buys one.
   pactOfSilence: 0, crackedHourglass: 0, rustyCrown: 0,
 };
@@ -381,6 +399,28 @@ export function chooseSpoil(run: Run): number {
     if (v > bestVal) { bestVal = v; best = i; }
   });
   return best;
+}
+
+// The most-injured member's slot, or -1 if the party is unscarred (DR1).
+function mostInjuredSlot(run: Run): number {
+  let slot = -1;
+  let most = 0;
+  for (let s = 0; s < run.party.length; s++) {
+    if (run.party[s].injuries > most) { most = run.party[s].injuries; slot = s; }
+  }
+  return slot;
+}
+
+// Infirmary (DR1): an unhealed scar is a permanent stat loss, so once wounded the
+// good player pays it down rather than hoarding gold. Clear the most-injured
+// member's scars while gold lasts (top of the ladder first).
+function shopInfirmaryNode(run: Run): void {
+  if (run.nodeContent?.type !== 'infirmary') return;
+  let guard = 0;
+  while (guard++ < 12) {
+    const slot = mostInjuredSlot(run);
+    if (slot < 0 || !run.clearInjuryForGold(slot as Slot)) break;
+  }
 }
 
 // Reliquary: buy the single best-value affordable relic (run-long payoff), and
@@ -413,6 +453,11 @@ function resolveEvent(run: Run): void {
         if (eligible.length) { run.shrineBlessCard(eligible[0].uid); return; }
         break;
       }
+      case 'healInjury': { // Field Hospital (DR1): a free scar heal — always take it if wounded
+        const slot = mostInjuredSlot(run);
+        if (slot >= 0) { run.healInjury(slot as Slot); return; }
+        break;
+      }
       default: break;
     }
   }
@@ -427,22 +472,28 @@ export function resolveNode(run: Run): void {
     case 'cardUpgrade': shopModifierNode(run); break;
     case 'event': resolveEvent(run); break;
     case 'reliquary': shopReliquary(run); break;
+    case 'infirmary': shopInfirmaryNode(run); break;
     default: break;
   }
 }
 
 // Score a branch by the permanent power its nodes offer, so the policy walks the
-// stronger path through each fork.
+// stronger path through each fork. The Infirmary is scored dynamically (below):
+// worthless when the party is whole, valuable once it is carrying scars.
 const NODE_DESIRABILITY: Record<string, number> = {
-  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, cardUpgrade: 4, cardShop: 3, event: 2, fight: 0,
+  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, cardUpgrade: 4, cardShop: 3, event: 2, infirmary: 0, fight: 0,
 };
 
 export function chooseBranch(run: Run): number {
   if (run.location.kind !== 'forkChoice') return 0;
   const fork = run.map[run.location.forkIndex];
+  // An unhealed scar is a permanent stat loss, so a wounded party values a detour
+  // to the Infirmary — the more (and deeper) the scars, the more it is worth.
+  const injuries = run.party.reduce((s, p) => s + p.injuries, 0);
+  const worth = (t: string): number => (t === 'infirmary' && injuries > 0 ? 5 + injuries : (NODE_DESIRABILITY[t] ?? 0));
   let best = 0, bestScore = -Infinity;
   fork.branches.forEach((b, i) => {
-    const score = b.nodes.reduce((s, n) => s + (NODE_DESIRABILITY[n.type] ?? 0), 0);
+    const score = b.nodes.reduce((s, n) => s + worth(n.type), 0);
     if (score > bestScore) { bestScore = score; best = i; }
   });
   return best;

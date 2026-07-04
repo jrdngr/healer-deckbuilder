@@ -144,6 +144,31 @@
 //     three-boss retune, which #18 does not own. Poison stays 5x5; the policy
 //     stick stays poison-blind vs the Devourer on purpose (fixed measuring
 //     stick) — a Consume-aware policy line is future work alongside any retune.
+//   after DR1 (injuries/scars: a death now leaves a persistent, escalating stat
+//     scar, cleared for gold at an Infirmary node / free at a Field Hospital event
+//     / by the Mending Totem relic):  full-run 30.8 % ±2.9 at N=1000; Story 97.2%.
+//     F0 100 | F1 100 | F2 A1boss 88.3 | F3 99.7 | F4 98.9 | F5 A2boss 70.6 | F6 96.9 | F7 97.1 | F8 A3boss 53.3
+//     Deaths per WON fight (the DR1 sacrifice signal): F2 0.92 | F5 1.65 | F8 0.97;
+//     ~1.0 residual scar/run, ~38g/run spent healing. The system reproduces the
+//     DR1 finding exactly (the fixed policy sacrifices ~1 member/boss), and as
+//     first added it CRATERED the run to 12.4% (scars compound across fights: F2
+//     unchanged since act 1 has no prior scars, but F5 70->61 and F8 56->33). What
+//     landed it back in band: (a) scar magnitudes softened to -2 HP / -1 dmg / -1
+//     ability (cumulative-by-tier); (b) the Infirmary cheapened to 20g at weight 24
+//     and the Mending Totem valued as a top defensive pick, so a wounded party pays
+//     its scars down instead of hoarding; (c) a tryResurrect tactic — the old stick
+//     never revived, but a dead DPS is lost output and the scar is already paid, so
+//     reviving to win is strictly good play the stick was missing (it alone lifted
+//     16.8->23.1% and is a legit measuring-stick improvement, not a paper-over);
+//     (d) the smarter stick re-anchored the act-2/3 boss HP — Hexweaver 146->158
+//     (tryResurrect had pushed it to 81%, above its 65-75% band) and Devourer
+//     198->182 (the scar handicap dropped it to ~35%; 172 read 65%, 182 reads 53%).
+//     The Gatewarden is untouched (act 1 is scar-free, so F2 holds at 88%). NOTE
+//     for the maintainer: the boss-HP re-anchor shifts the #22 per-relic gate
+//     baseline (those were measured at Devourer 198 / Hexweaver 146); re-run that
+//     battery before leaning on its deltas. The injury system is 100%-avoidable
+//     (a member that never dies never scars), self-capping at 3, and recoverable —
+//     the intended shape: it punishes the sacrifice line without ending the run.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now
@@ -166,12 +191,15 @@ import { playFight, resolveNode, chooseBranch, chooseSpoil } from './policy';
 export interface FightOutcome {
   fightIndex: number;
   win: boolean;
-  turns: number; // enemy turns elapsed when the fight ended
+  turns: number;   // enemy turns elapsed when the fight ended
+  deaths: number;  // members that died this fight (DR1) — scars accrue on a win
 }
 export interface RunOutcome {
   seed: number;
   status: RunStatus;
   fights: FightOutcome[];
+  injuriesAtEnd: number;  // total unhealed scars across the party when the run ended (DR1)
+  goldSpentHealing: number; // gold paid at Infirmary nodes over the run (DR1)
 }
 
 // Deterministic per-fight seed derived from the run seed + fight index, so the
@@ -188,6 +216,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
   setup?.(run);
   run.beginRun();
   const fights: FightOutcome[] = [];
+  let goldSpentHealing = 0;
   let guard = 0;
   while (run.status === 'playing' && guard < 1000) {
     guard++;
@@ -198,19 +227,30 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         playFight(game);
         run.markRelicsSpent(game.spentRelicIds()); // once-per-RUN relics (#22)
         const win = game.status === 'win';
-        fights.push({ fightIndex: fi, win, turns: game.turn });
-        if (win) run.winFight();
-        else run.loseFight();
+        const died = game.diedThisFightSlots();
+        fights.push({ fightIndex: fi, win, turns: game.turn, deaths: died.length });
+        if (win) {
+          run.recordInjuries(died); // scars accrue before winFight (mirrors the driver)
+          run.winFight();
+        } else run.loseFight();
         break;
       }
       case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
-      case 'node': resolveNode(run); run.completeNode(); break;
+      case 'node': {
+        const wasInfirmary = run.nodeContent?.type === 'infirmary';
+        const before = run.gold;
+        resolveNode(run);
+        if (wasInfirmary) goldSpentHealing += before - run.gold;
+        run.completeNode();
+        break;
+      }
       case 'start': run.beginRun(); break;
       default: run.status = 'lost'; break; // unreachable safety net
     }
   }
-  return { seed, status: run.status, fights };
+  const injuriesAtEnd = run.party.reduce((s, p) => s + p.injuries, 0);
+  return { seed, status: run.status, fights, injuriesAtEnd, goldSpentHealing };
 }
 
 // ---- aggregation ----------------------------------------------------------
@@ -222,6 +262,10 @@ export interface SimReport {
   fullRun: Proportion;
   perFight: Proportion[]; // indexed by fight
   meanTurns: number[];    // mean enemy-turns per fight (won or lost)
+  // DR1 injury telemetry.
+  deathsPerWin: number[]; // mean member deaths per WON fight, indexed by fight
+  meanInjuries: number;   // mean unhealed scars per run at run end
+  meanGoldHealing: number; // mean gold spent at Infirmary nodes per run
 }
 
 // 95% confidence half-width for a binomial proportion (normal approximation).
@@ -240,13 +284,18 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): Si
   const fightWins = new Array(FIGHT_COUNT).fill(0);
   const fightAttempts = new Array(FIGHT_COUNT).fill(0);
   const fightTurnsTotal = new Array(FIGHT_COUNT).fill(0);
+  const fightDeathsOnWin = new Array(FIGHT_COUNT).fill(0); // DR1: deaths summed over WON fights
+  let injuriesTotal = 0;
+  let goldHealingTotal = 0;
   for (let i = 0; i < n; i++) {
     const outcome = runSingleRun(firstSeed + i, setup);
     if (outcome.status === 'won') fullWins++;
+    injuriesTotal += outcome.injuriesAtEnd;
+    goldHealingTotal += outcome.goldSpentHealing;
     for (const f of outcome.fights) {
       fightAttempts[f.fightIndex]++;
       fightTurnsTotal[f.fightIndex] += f.turns;
-      if (f.win) fightWins[f.fightIndex]++;
+      if (f.win) { fightWins[f.fightIndex]++; fightDeathsOnWin[f.fightIndex] += f.deaths; }
     }
   }
   return {
@@ -254,6 +303,9 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): Si
     fullRun: proportion(fullWins, n),
     perFight: fightWins.map((w, i) => proportion(w, fightAttempts[i])),
     meanTurns: fightTurnsTotal.map((t, i) => (fightAttempts[i] ? t / fightAttempts[i] : 0)),
+    deathsPerWin: fightDeathsOnWin.map((d, i) => (fightWins[i] ? d / fightWins[i] : 0)),
+    meanInjuries: injuriesTotal / n,
+    meanGoldHealing: goldHealingTotal / n,
   };
 }
 
@@ -275,6 +327,12 @@ export function formatReport(r: SimReport): string {
   });
   lines.push('');
   lines.push(`Full-run winrate: ${pct(r.fullRun.rate)}% ±${pct(r.fullRun.ci95)} (${r.fullRun.wins}/${r.fullRun.n})`);
+  // DR1 injury telemetry: deaths per won fight (the sacrifice signal DR1 named),
+  // plus how many scars a run carries to the end and what it paid to heal.
+  lines.push('');
+  lines.push('DR1 — deaths per won fight:');
+  lines.push('  ' + r.deathsPerWin.map((d, i) => `F${i} ${d.toFixed(2)}`).join('  '));
+  lines.push(`Mean unhealed scars at run end: ${r.meanInjuries.toFixed(2)}  ·  mean gold spent healing: ${r.meanGoldHealing.toFixed(1)}`);
   return lines.join('\n');
 }
 
