@@ -250,6 +250,13 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const died = g._killMember(g.mage);
     return !died && g.mage.alive && g.mage.hp === 1;
   },
+  mendingTotem: () => {
+    const run = new Run(5); run.addRelic('mendingTotem');
+    run.party[0].injuries = 2;
+    run.location = { kind: 'fight', fightIndex: 0 };
+    run.winFight(); // the victory sheds one scar off the most-injured member
+    return run.party[0].injuries === 1;
+  },
   pactOfSilence: () => {
     const g = probeGame(['pactOfSilence']); g.start();
     return g.canSkip() === false; // the Pact forbids Rest

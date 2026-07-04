@@ -365,6 +365,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Phase-B rule-changers (#22). The Taper's hand 3->2 starves this policy's
   // tactic engine, so it never takes one; the others are solid defensive picks.
   martyrsIcon: 6, duskChime: 6, aegisFont: 4, firstLightTaper: 0,
+  // DR1: the Mending Totem is worthless until the policy actually records and
+  // avoids scars (commit 6 raises this and adds the survival/infirmary logic).
+  mendingTotem: 0,
   // Curses are deliberate player trades; the fixed policy never buys one.
   pactOfSilence: 0, crackedHourglass: 0, rustyCrown: 0,
 };

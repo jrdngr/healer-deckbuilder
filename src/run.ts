@@ -297,6 +297,10 @@ export class Run {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
     this.fightsWon += 1;
+    // Mending Totem (DR1) mends after the victory — including any scar this fight
+    // just recorded (the driver records injuries before winFight), so it can undo
+    // a fresh wound as well as an old one.
+    this._mendMostInjured();
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
     // The Rusty Crown (#22) pays its bonus on every win it made harder; Story
     // (#23) pads the purse so newer players can actually buy their way forward.
@@ -348,6 +352,19 @@ export class Run {
       const p = this.party[s];
       if (p) p.injuries = Math.min(MAX_INJURIES, p.injuries + 1);
     }
+  }
+
+  // Mending Totem (DR1): the most-injured member sheds one scar (ties break to the
+  // lowest slot). Inert without the relic, so the whole injury system stays a no-op
+  // for runs that don't own it.
+  _mendMostInjured(): void {
+    if (!this.hasRelic('mendingTotem')) return;
+    let best = -1;
+    let most = 0;
+    for (let s = 0; s < this.party.length; s++) {
+      if (this.party[s].injuries > most) { most = this.party[s].injuries; best = s; }
+    }
+    if (best >= 0) this.party[best].injuries -= 1;
   }
 
   // Infirmary (DR1): pay the node's flat price to clear one scar off a member,

@@ -875,6 +875,23 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
   eq('one scar closed, no gold spent', fh.party[0].injuries, 1);
   eq('the free tend costs nothing', fh.gold, 0);
   check('tending an unharmed member does nothing', !fh.healInjury(1 as Slot));
+
+  // Mending Totem relic: after a victory, the most-injured member sheds one scar.
+  const totem = new Run(14);
+  totem.addRelic('mendingTotem');
+  totem.party[0].injuries = 1;
+  totem.party[2].injuries = 3; // the most injured
+  totem.location = { kind: 'fight', fightIndex: 0 };
+  totem.winFight();
+  eq('the Totem mends the most-injured member', totem.party[2].injuries, 2);
+  eq('the Totem leaves the less-injured alone', totem.party[0].injuries, 1);
+
+  // Inert without the relic: a plain victory mends nothing.
+  const noTotem = new Run(15);
+  noTotem.party[1].injuries = 2;
+  noTotem.location = { kind: 'fight', fightIndex: 0 };
+  noTotem.winFight();
+  eq('without the Totem, victory mends nothing', noTotem.party[1].injuries, 2);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

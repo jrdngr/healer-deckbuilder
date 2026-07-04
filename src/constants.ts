@@ -1101,6 +1101,7 @@ export type RelicId =
   | 'firstLightTaper'// first card each turn costs 0 (cost <=2, non-engine); draw 1 fewer
   | 'duskChime'      // once/fight, a 6+ telegraph is delayed one turn
   | 'martyrsIcon'    // once/fight, a member death becomes survival at 1 HP
+  | 'mendingTotem'   // after each victory, the most-injured member sheds one scar (DR1)
   // --- phase B (#22): curses (bought only, never in spoils, never forced) ---
   | 'pactOfSilence'  // you can no longer Rest; +1 passive MP each turn
   | 'crackedHourglass'// enrage on turn 8; Poison & Bolt +2 power
@@ -1169,6 +1170,8 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Once per RUN, an attack totalling ${DUSK_CHIME_MIN}+ damage is delayed one turn.` },
   martyrsIcon: { id: 'martyrsIcon', name: 'Martyr\'s Icon', rarity: 'rare', icon: '🕊',
     desc: 'Once per RUN, a member death becomes survival at 1 HP.' },
+  mendingTotem: { id: 'mendingTotem', name: 'Mending Totem', rarity: 'rare', icon: '🪬',
+    desc: 'After each victory, your most-injured member sheds one lasting injury.' },
   // --- phase B (#22): curses -------------------------------------------------
   pactOfSilence: { id: 'pactOfSilence', name: 'Pact of Silence', rarity: 'rare', icon: '🤐', curse: true,
     desc: `CURSE — you can no longer Rest; gain +${PACT_PASSIVE_MP} MP at the start of each turn.` },
