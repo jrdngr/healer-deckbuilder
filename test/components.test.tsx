@@ -21,6 +21,7 @@ import { Actions } from '../src/components/Actions';
 import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
+import { MapScreen } from '../src/components/MapScreen';
 import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
@@ -228,6 +229,31 @@ async function render(el: React.ReactElement): Promise<string> {
   const text = await render(<InfirmaryScreen run={infRun} act={infAct} onDone={() => {}} />);
   check('Infirmary flags the incapacitated member', text.includes('☠ Incapacitated'), text);
   check('Infirmary says healing restores them', text.includes('restores them to the field'), text);
+}
+
+// --- MapScreen: choosing a path is gated behind the leaving transition ----------
+{
+  const mapRun = new Run(21);
+  mapRun.location = { kind: 'forkChoice', forkIndex: 0 };
+  let chosen: number | null = null;
+  await render(<MapScreen run={mapRun} onChoose={(b) => { chosen = b; }} />);
+  check('map draws both trails', rootEl.querySelectorAll('.map-path').length === 2);
+  check('map places both branches’ nodes', rootEl.querySelectorAll('.map-node').length >= 5,
+    String(rootEl.querySelectorAll('.map-node').length)); // 2×2 branch nodes + next-fight
+  check('map shows the party token', rootEl.querySelector('.map-token') !== null);
+  const takes = rootEl.querySelectorAll('.map-take');
+  check('two take-path buttons', takes.length === 2);
+  await act(async () => {
+    (takes[1] as HTMLElement).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  });
+  check('choose does NOT fire synchronously (token travels first)', chosen === null);
+  check('the canvas enters the leaving state',
+    rootEl.querySelector('.map-canvas')?.className.includes('chosen-1') === true);
+  check('further clicks are ignored while leaving',
+    (takes[0] as HTMLButtonElement).disabled && (takes[1] as HTMLButtonElement).disabled);
+  await new Promise((r) => setTimeout(r, 900));
+  await act(async () => {});
+  check('choose fires after the travel delay with the picked branch', chosen === 1, String(chosen));
 }
 
 await act(async () => { root.unmount(); });

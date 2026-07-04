@@ -690,6 +690,11 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   .atk-line, .hidden-line, .atk-badge { animation: none; }
   .log li { animation: none; }
   .overlay-card { animation: fade-in 320ms ease-out backwards; }
+  /* Map: trails and nodes appear fully drawn; the token doesn't travel
+     (MapScreen also shortens the leave delay when reduced motion is on). */
+  .map-path { animation: none; stroke-dashoffset: 0; }
+  .map-canvas .map-node, .map-canvas .map-take, .map-token { animation: none; }
+  .map-node .map-node-icon { animation: none !important; }
 }
 @keyframes fx-fade-out { to { opacity: 0; } }
 @keyframes fx-banner-reduced {
@@ -712,26 +717,115 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .upgrade-pip.lingering { background: var(--regen); }
 .upgrade-pip.retain { background: var(--gold); }
 
-/* ---- Map (fork choice) --------------------------------------------------- */
-.map-screen { text-align: center; }
+/* ---- Map (fork choice) ----------------------------------------------------
+   The fork is drawn as two real trails diverging from the party's position and
+   reconverging on the next fight. Trails draw themselves on entry, nodes pop in
+   along them, hovering a branch lights its whole trail, and choosing sends the
+   party token traveling down the picked path before the run advances. */
+.map-screen { text-align: center; animation: fade-in 300ms ease-out; }
 .map-title { margin: 8px 0 4px; }
-.map-sub { color: var(--muted); margin: 0 0 18px; font-size: 13px; }
-.map-forks { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.map-branch {
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 12px; padding: 16px;
-  display: flex; flex-direction: column; gap: 12px;
+.map-sub { color: var(--muted); margin: 0 0 6px; font-size: 13px; }
+.map-canvas { position: relative; height: min(560px, 66vh); margin-top: 10px; }
+.map-paths { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.map-path {
+  fill: none; stroke: #3a4150; stroke-width: 3; stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1; stroke-dashoffset: 1;
+  animation: path-draw 650ms ease-out forwards;
+  transition: stroke .18s, opacity .2s;
 }
-.map-nodes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.map-path-1 { animation-delay: 110ms; }
+@keyframes path-draw { to { stroke-dashoffset: 0; } }
+/* Hover / chosen: the branch's whole trail lights; the other one recedes. */
+.map-canvas.hover-0 .map-path-0, .map-canvas.chosen-0 .map-path-0,
+.map-canvas.hover-1 .map-path-1, .map-canvas.chosen-1 .map-path-1 {
+  stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(110,168,254,.6));
+}
+.map-canvas.hover-0 .map-path-1, .map-canvas.chosen-0 .map-path-1,
+.map-canvas.hover-1 .map-path-0, .map-canvas.chosen-1 .map-path-0 { opacity: .35; }
+.map-canvas.hover-0 .branch-1, .map-canvas.hover-1 .branch-0 { opacity: .55; }
+.map-canvas.leaving .map-branch-group:not(.chosen) { opacity: .18; }
+.map-branch-group { transition: opacity .25s; }
+
+/* The party's token. On choose it travels the picked trail's waypoints. */
+.map-token {
+  position: absolute; left: 50%; top: 6%; transform: translate(-50%, -50%);
+  font-size: 22px; color: var(--accent); z-index: 2;
+  text-shadow: 0 0 10px rgba(110,168,254,.8), 0 0 3px #fff;
+  animation: node-in 320ms cubic-bezier(.3,1.3,.5,1) backwards;
+}
+.map-token.travel-0 { animation: token-travel-0 760ms ease-in-out forwards; }
+.map-token.travel-1 { animation: token-travel-1 760ms ease-in-out forwards; }
+@keyframes token-travel-0 {
+  0%   { left: 50%; top: 6%; }
+  35%  { left: 25%; top: 32%; }
+  68%  { left: 25%; top: 58%; }
+  100% { left: 50%; top: 88%; }
+}
+@keyframes token-travel-1 {
+  0%   { left: 50%; top: 6%; }
+  35%  { left: 75%; top: 32%; }
+  68%  { left: 75%; top: 58%; }
+  100% { left: 50%; top: 88%; }
+}
+
+/* Node tiles: positioned on the trail, popped in along it, color-coded by type. */
 .map-node {
   background: var(--panel-2); border: 1px solid #333a47; border-radius: 9px; padding: 12px;
   display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto;
   column-gap: 10px; align-items: center; text-align: left;
 }
+.map-canvas .map-node {
+  position: absolute; transform: translate(-50%, -50%);
+  width: min(230px, 38vw); z-index: 1;
+  animation: node-in 340ms cubic-bezier(.3,1.3,.5,1) backwards;
+  animation-delay: var(--d, 0ms);
+  transition: opacity .25s, border-color .15s, box-shadow .2s;
+}
+@keyframes node-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.78); } }
+.map-branch-group:hover .map-node { border-color: #4a5468; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
 .map-node-icon { grid-row: 1 / span 2; font-size: 22px; text-align: center; }
 .map-node-label { font-weight: 700; font-size: 14px; }
 .map-node-desc { font-size: 11px; color: var(--muted); }
-.map-take { align-self: stretch; }
+
+/* Type identity: color says what a node is from across the map. */
+.map-node.type-fight        { border-left: 4px solid var(--danger); }
+.map-node.type-cardShop     { border-left: 4px solid var(--gold); }
+.map-node.type-cardUpgrade  { border-left: 4px solid var(--gold); }
+.map-node.type-reliquary    { border-left: 4px solid var(--gold); }
+.map-node.type-event        { border-left: 4px solid var(--unknown); }
+.map-node.type-healerUpgrade{ border-left: 4px solid var(--hp); }
+.map-node.type-infirmary    { border-left: 4px solid var(--hp); }
+.map-node.type-partyUpgrade { border-left: 4px solid var(--defense); }
+/* Per-type idle life on the icons — small and slow, a flicker of identity. */
+.map-node.type-fight .map-node-icon { animation: icon-pulse 2.6s ease-in-out infinite; }
+.map-node.type-cardShop .map-node-icon,
+.map-node.type-cardUpgrade .map-node-icon,
+.map-node.type-reliquary .map-node-icon { animation: icon-glint 3.4s ease-in-out infinite; }
+.map-node.type-event .map-node-icon { animation: icon-flicker 3s ease-in-out infinite; }
+.map-node.type-healerUpgrade .map-node-icon,
+.map-node.type-infirmary .map-node-icon { animation: icon-breathe 3.2s ease-in-out infinite; }
+@keyframes icon-pulse   { 50% { transform: scale(1.14); } }
+@keyframes icon-glint   { 6%, 12% { filter: brightness(1.9); } 9% { filter: brightness(1.2); } }
+@keyframes icon-flicker { 42% { opacity: 1; } 45% { opacity: .5; } 48% { opacity: 1; } 51% { opacity: .7; } 54% { opacity: 1; } }
+@keyframes icon-breathe { 50% { transform: scale(1.08); filter: drop-shadow(0 0 5px rgba(90,209,122,.7)); } }
+
+/* The shared next-fight preview at the trails' reconvergence. */
+.map-next-fight { border-left: 4px solid var(--danger); width: min(250px, 42vw); }
+.map-next-fight.boss { border-color: var(--danger); box-shadow: 0 0 14px rgba(232,93,93,.35); }
+.map-next-fight.boss .map-node-icon { animation: icon-pulse 1.8s ease-in-out infinite; }
+
+.map-canvas .map-take {
+  position: absolute; transform: translate(-50%, -50%); width: min(200px, 34vw);
+  animation: node-in 340ms cubic-bezier(.3,1.3,.5,1) backwards;
+  animation-delay: var(--d, 0ms);
+}
 .start-branch { max-width: 320px; margin: 0 auto; }
+/* StartScreen still composes .map-branch panels. */
+.map-branch {
+  background: var(--panel); border: 1px solid #3a4150; border-radius: 12px; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
 
 /* ---- Node + run-over cards ----------------------------------------------- */
 .node-screen, .runover-screen { display: grid; place-items: center; min-height: 50vh; }
