@@ -116,6 +116,10 @@ section.enemy {
 .badge.taunt { background: var(--taunt); color: #3a2c06; }
 .badge.injury { background: #b4442f; color: #fbe6df; }
 .member .charge { font-size: 12px; font-weight: 600; color: var(--gold); }
+/* Berserker rage tiers (#28): calm/enraged/berserk escalate warm. */
+.member .charge.rage-0 { color: var(--muted); }
+.member .charge.rage-1 { color: var(--gold); }
+.member .charge.rage-2 { color: var(--danger); }
 /* DR1: the map-side "who's wounded" readout and the Infirmary member rows. */
 .map-sub.party-injuries { color: #e0917f; font-weight: 600; }
 .infirmary-member { display: flex; flex-direction: column; gap: 6px; align-items: center; }

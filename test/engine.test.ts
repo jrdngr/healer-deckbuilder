@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
-import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW } from '../src/constants';
+import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -2477,6 +2477,69 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('Crescendo is engine-tagged', isEngineAbility('crescendo'));
   check('Dark Bargain is engine-tagged', isEngineAbility('darkBargain'));
   check('Poison is not engine-tagged', !isEngineAbility('poison'));
+}
+
+// --- party roster wave 2: Berserker + Grave Augur (#28) ---------------------
+{
+  // Berserker damage bands: 2 / 4 / 6 as HP falls past the fight-relative thresholds.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['berserker', 'tank', 'mage']);
+  const g = new Game(1, cfg); g.start();
+  const b = g.members[0];
+  eq('Berserker seated in slot 0', b.id, 'berserker');
+  b.hp = 16; eq('Berserker calm damage is base 2', g.memberDamage(b), 2);
+  b.hp = 8;  eq('Berserker +2 in band 1 (HP ≤ 8)', g.memberDamage(b), 4);
+  b.hp = 4;  eq('Berserker +4 in band 2 (HP ≤ 4)', g.memberDamage(b), 6);
+  b.hp = 5;  eq('Berserker still band 1 at HP 5', g.memberDamage(b), 4);
+}
+{
+  // Bands are fight-relative: a higher attackBonus raises the thresholds.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['berserker', 'tank', 'mage']);
+  cfg.enemy = { ...cfg.enemy, attackBonus: 1 };
+  const g = new Game(2, cfg); g.start();
+  const b = g.members[0];
+  eq('thresholds shift with attackBonus', JSON.stringify(g.berserkerThresholds()), JSON.stringify([9, 5]));
+  b.hp = 9; eq('Berserker rages one HP higher on a +1 fight', g.memberDamage(b), 4);
+  b.hp = 5; eq('Berserker berserk one HP higher on a +1 fight', g.memberDamage(b), 6);
+}
+{
+  // Rampage: 2× current (banded) damage + abilityPower, strikes, then loses 2 HP
+  // (clamped — never lethal).
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['berserker', 'tank', 'mage']);
+  const g = new Game(3, cfg); g.start();
+  const b = g.members[0];
+  b.hp = 8; b.abilityPower = 1; // band 1 -> current damage 4
+  const ehp = g.enemy.hp;
+  g._fireAbility(b);
+  eq('Rampage hits for 2×current + abilityPower', ehp - g.enemy.hp, 2 * 4 + 1);
+  eq('Rampage self-damages 2 HP', b.hp, 8 - RAMPAGE_SELF_DMG);
+
+  // Rampage never kills the Berserker: at 1 HP the self-damage clamps to 0.
+  b.hp = 1; const ehp2 = g.enemy.hp;
+  g._fireAbility(b);
+  check('Rampage clamps — Berserker survives at 1 HP', b.alive && b.hp === 1);
+  check('Rampage still struck', g.enemy.hp < ehp2);
+}
+{
+  // Grave Chill shaves damage off the standing telegraph, and the preview follows.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['ranger', 'tank', 'graveAugur']);
+  const g = new Game(4, cfg); g.start();
+  const augur = g.members[2];
+  eq('Grave Augur seated in slot 2', augur.id, 'graveAugur');
+  // Force a known telegraph to chill.
+  g.telegraph = { type: 'single', hidden: false, damage: 7, targets: [1], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
+  g._fireAbility(augur);
+  eq('Grave Chill reduces telegraph damage by the reduction', g.telegraph.damage, 7 - GRAVE_CHILL_REDUCTION);
+  const preview = g.attackTargets().find((s) => s.slot === 1);
+  eq('the preview reflects the chilled damage', preview?.damage, 7 - GRAVE_CHILL_REDUCTION);
+
+  // abilityPower scales the shave; damage floors at 0.
+  augur.abilityPower = 2; g.telegraph.damage = 3;
+  g._fireAbility(augur);
+  eq('Grave Chill floors telegraph damage at 0', g.telegraph.damage, 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -390,6 +390,15 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'graveChill': {
+        // The Grave Augur saps the standing telegraph — a chill float on the caster.
+        push({ at: t, fx: [
+          { type: 'float', at: ev.slot, text: `Chill −${ev.amount}`, color: C.shield },
+        ] });
+        t += 320;
+        break;
+      }
+
       case 'wound': {
         // Hex settles over the whole party — a curse pulse on each member.
         push({ at: t, shake: 5, fx: [

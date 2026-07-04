@@ -13,6 +13,7 @@ import {
   MEMBER_DEFS, MEMBER_POOL, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,
   TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
+  BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
@@ -155,6 +156,7 @@ export type GameEvent =
   | { kind: 'poisonApplied'; slot: Slot; amount: number; poison: number }
   | { kind: 'taunt'; slot: Slot; turns: number }
   | { kind: 'bolt'; slot: Slot; amount: number; enemyHp: number }
+  | { kind: 'graveChill'; slot: Slot; amount: number } // Grave Chill weakens the telegraph (#28)
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -329,8 +331,22 @@ export class Game {
     if (m.ability === 'crescendo') {
       const crescendo = Math.min(SKALD_DMG_CAP, SKALD_DMG_PER_CARD * this.cardsPlayedThisPhase);
       base = Math.max(0, crescendo + m.damage);
+    } else if (m.ability === 'rampage') {
+      // The Berserker (#28) hits harder the lower his HP — healing him is friendly
+      // fire. The bands are fight-relative (thresholds rise with the enemy's
+      // attackBonus) so the tension holds across the difficulty curve.
+      const [b1, b2] = this.berserkerThresholds();
+      if (m.hp <= b1) base += BERSERKER_BAND_BONUS;
+      if (m.hp <= b2) base += BERSERKER_BAND_BONUS;
     }
     return base + this.hymnBonus + banner;
+  }
+
+  // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
+  // the MemberCard can show the live rage bands. Independent of any specific member.
+  berserkerThresholds(): [number, number] {
+    const ab = this.config.enemy.attackBonus;
+    return [BERSERKER_BAND1_HP + ab, BERSERKER_BAND2_HP + ab];
   }
 
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
@@ -1494,6 +1510,33 @@ export class Game {
         }
         this._log(`${m.name} plays a Crescendo — draws ${drawn}.`, 'status');
         this._emit({ kind: 'draw', count: drawn });
+        break;
+      }
+      case 'rampage': {
+        // The Berserker (#28) strikes for 2× his CURRENT (banded) damage + abilityPower,
+        // then loses RAMPAGE_SELF_DMG HP — which can drop him into a hotter band. The
+        // self-damage clamps to leave 1 HP (a nuke, not a suicide button).
+        const dmg = 2 * this.memberDamage(m) + m.abilityPower;
+        const killed = this._damageEnemy(dmg, `${m.name} (Rampage)`);
+        this._emit({ kind: 'partyAttack', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
+        if (killed) this._emit({ kind: 'defeatEnemy' });
+        this._bloodPay(m, RAMPAGE_SELF_DMG);
+        break;
+      }
+      case 'graveChill': {
+        // The Grave Augur (#28) shaves GRAVE_CHILL_REDUCTION (+abilityPower) damage per
+        // target off the standing telegraph (floor 0) — the taunt-less redirection
+        // substitute. Modifies the telegraph in place, so attackTargets() previews it.
+        const t = this.telegraph;
+        const reduce = Math.max(0, GRAVE_CHILL_REDUCTION + m.abilityPower);
+        if (t && !t.cast && t.damage > 0) {
+          const before = t.damage;
+          t.damage = Math.max(0, t.damage - reduce);
+          this._log(`${m.name} chills the ${this.telegraphIntent() ?? 'attack'}: ${before} → ${t.damage} per target.`, 'status');
+          this._emit({ kind: 'graveChill', slot: m.slot, amount: before - t.damage });
+        } else {
+          this._log(`${m.name} reaches for the telegraph, but there is nothing to chill.`, 'status');
+        }
         break;
       }
       default:

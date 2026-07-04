@@ -10,10 +10,12 @@ export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep'
 export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur';
 // 'darkBargain' (Warlock) trades his HP for the healer's MP; 'crescendo' (Skald)
-// draws cards and feeds his cards-played strike. Both are fired via the Ability card.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo';
+// draws cards and feeds his cards-played strike; 'rampage' (Berserker) doubles his
+// current strike at an HP cost; 'graveChill' (Augur) weakens the standing telegraph.
+// All are fired via the Ability card.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo' | 'rampage' | 'graveChill';
 export type CardId =
   | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -96,6 +98,11 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
   skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
+  // Roster wave 2 (#28). Berserker: strongest at LOW HP — healing him is friendly
+  // fire. Grave Augur: shrinks the standing telegraph (the taunt-less draft's
+  // redirection substitute).
+  berserker: { slot: 0, id: 'berserker', name: 'Berserker', maxHP: 16, damage: 2, ability: 'rampage' },
+  graveAugur: { slot: 2, id: 'graveAugur', name: 'Grave Augur', maxHP: 10, damage: 4, ability: 'graveChill' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -116,7 +123,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur'];
 
 export const ENEMY_MAX_HP = 100;
 
@@ -507,6 +514,12 @@ export const BARGAIN_MP = 3;         // Dark Bargain: MP granted to the healer
 export const SKALD_DMG_PER_CARD = 2; // Skald strike: damage per card played this phase
 export const SKALD_DMG_CAP = 8;      // Skald strike: cap on the cards-played bonus
 export const CRESCENDO_DRAW = 2;     // Crescendo: cards drawn (and it counts as 1 card played)
+// Roster wave 2 abilities (#28).
+export const BERSERKER_BAND1_HP = 8; // Berserker: +BAND_BONUS damage while HP <= this + fight attackBonus
+export const BERSERKER_BAND2_HP = 4; // Berserker: a further +BAND_BONUS while HP <= this + fight attackBonus
+export const BERSERKER_BAND_BONUS = 2; // per-band damage bonus (net 2 / 4 / 6 across the bands)
+export const RAMPAGE_SELF_DMG = 2;   // Rampage: HP the Berserker loses after the doubled strike
+export const GRAVE_CHILL_REDUCTION = 2; // Grave Chill: per-target damage shaved off the standing telegraph
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
 

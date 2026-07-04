@@ -301,9 +301,39 @@ function tryCrescendo(game: Game): boolean {
   return true;
 }
 
+// Grave Chill timing (#28): the Augur's telegraph shave is the taunt-less draft's
+// mitigation. Spend it on a genuinely big standing blow (a heavy/sweep), not a chip
+// attack — one cast per pass, and the damage-floor stops it once the blow is blunted.
+function tryGraveChill(game: Game): boolean {
+  const augur = memberByAbility(game, 'graveChill');
+  if (!augur) return false;
+  const t = game.telegraph;
+  if (!t || t.cast || t.damage < 5) return false; // only worth blunting a real threat
+  const idx = handIndexOf(game, 'ability');
+  if (!affordable(game, idx)) return false;
+  game.playCard(idx, augur.slot);
+  return true;
+}
+
+// Berserker band-riding (#28): Rampage doubles his CURRENT strike, so it is worth
+// most in a rage band (low HP). Fire it for a kill, or when he is in a band and we
+// keep a small MP reserve for answers/heals. The self-damage clamps (never lethal).
+function tryRampage(game: Game): boolean {
+  const b = memberByAbility(game, 'rampage');
+  if (!b) return false;
+  const idx = handIndexOf(game, 'ability');
+  if (!affordable(game, idx)) return false;
+  const dmg = 2 * game.memberDamage(b) + b.abilityPower;
+  if (dmg >= game.enemy.hp) { game.playCard(idx, b.slot); return true; } // the kill ends it now
+  if (channelThreatUnanswered(game)) return false;
+  const [band1] = game.berserkerThresholds();
+  if (b.hp <= band1 && game.mp >= 4) { game.playCard(idx, b.slot); return true; }
+  return false;
+}
+
 const TACTICS: Array<(game: Game) => boolean> = [
-  tryBraceChannel, tryRetaunt, tryPreventLethal, tryCleanse, tryGroupHeal, tryResurrect,
-  tryBolt, tryPoison, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh,
+  tryBraceChannel, tryRetaunt, tryPreventLethal, tryGraveChill, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBolt, tryPoison, tryRampage, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).

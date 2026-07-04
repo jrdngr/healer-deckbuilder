@@ -92,14 +92,14 @@ async function render(el: React.ReactElement): Promise<string> {
   const game = new Game(2, cfg).start();
   const injured = game.members[0];
   const text = await render(
-    <MemberCard member={injured} displayHp={injured.hp} displayDead={false} mageCharge={0}
+    <MemberCard member={injured} displayHp={injured.hp} displayDead={false} mageCharge={0} liveDamage={injured.damage} berserkerBands={null}
       targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
   );
   check('MemberCard shows the injury badge with the scar count', text.includes('Injured 2'), text);
 
   const whole = game.members[1]; // tank, unscarred
   const wholeText = await render(
-    <MemberCard member={whole} displayHp={whole.hp} displayDead={false} mageCharge={0}
+    <MemberCard member={whole} displayHp={whole.hp} displayDead={false} mageCharge={0} liveDamage={whole.damage} berserkerBands={null}
       targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
   );
   check('an unscarred member shows no injury badge', !wholeText.includes('Injured'), wholeText);

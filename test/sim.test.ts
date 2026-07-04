@@ -195,6 +195,22 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   g.endTurn();
   check('the Warlock survives an opening turn (Soul Tithe chips, does not kill)', w.alive && w.hp < hp0);
 }
+{
+  // Roster wave 2 (#28): the policy pilots a Berserker/Grave-Augur composition too.
+  let wins = 0, terminated = 0;
+  const N = 60;
+  for (let s = 1; s <= N; s++) {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['berserker', 'graveAugur', 'mage']);
+    cfg.enemy = { ...cfg.enemy, maxHP: 75 };
+    const g = new Game(s, cfg);
+    playFight(g);
+    if (g.status !== 'playing') terminated++;
+    if (g.status === 'win') wins++;
+  }
+  check('the policy always resolves a Berserker/Augur fight (no stall)', terminated === N, `${terminated}/${N}`);
+  check('the Berserker/Augur party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
+}
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }
 else console.log(`sim.test: ${passed} passed`);

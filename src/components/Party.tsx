@@ -33,6 +33,8 @@ export function Party({ game, view, animating, isValidTarget, onMemberClick }: P
             displayHp={view.memberHp[m.slot]}
             displayDead={view.memberDead[m.slot]}
             mageCharge={game.mageCharge}
+            liveDamage={game.memberDamage(m)}
+            berserkerBands={m.ability === 'rampage' ? game.berserkerThresholds() : null}
             targetedByEnemy={targetedByEnemy}
             validTarget={isValidTarget(m.slot)}
             onClick={() => onMemberClick(m.slot)}
