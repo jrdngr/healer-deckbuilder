@@ -29,9 +29,12 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–31 and 33–37 — the demo (01–24), the experiments, the full post-demo party subsystem,
-and the 2026-07-04 playtest batch.** Only #32 (the standing post-demo backlog index) is open, and it
-is a holding file, not a buildable issue. **2026-07-04 playtest batch (#33–#37):** **#33** flipped
+**Done: 01–37 — the demo (01–24), the experiments, the full post-demo party subsystem, and the
+2026-07-04 playtest batch. No numbered issue is open.** #32 (the standing backlog holding file) was
+**closed as a tracker row** on 2026-07-04 — it was never buildable; its deferred ideas live on inside
+the file and each is promoted to its own numbered issue when picked up. What remains is not tracked
+issues but standing *design* questions and human gates — see [Remaining open design questions](#remaining-open-design-questions).
+**2026-07-04 playtest batch (#33–#37):** **#33** flipped
 the injury default to `incapacitate` (a 4th "Shattered" scar takes the member out until healed;
 winrate-neutral — Standard 32.1% / Story 96.4%) with the MemberCard / Infirmary / Resurrect-hint UI;
 **#34** re-lined the sim policy for the five new abilities (Dark Bargain front-load, Crescendo
@@ -75,6 +78,30 @@ gated to dev builds. **The automated ship gate is green** (suite + Standard 32.7
 at N=1000 + clean build). **➤ What remains is human: playtests #2 and #3 (maintainer, manual) —
 the final ship call.**
 
+## Remaining open design questions
+
+With #01–#37 landed and #32 closed, **nothing is open in the numbered tracker.** What is still open is
+*design*, not implementation — decisions that want a human, not more code:
+
+- **Human ship gates (the actual blockers).** Playtest **#2** (post-Devourer / full-run band — ready)
+  and **#3** (final ship call) are maintainer-manual. Plus the #33 feel-check: one deliberately-spent
+  (4-death → Incapacitated) member, to confirm the new default *feels* right. These gate shipping.
+- **DR2 — "race or die" reads as "die on schedule."** On bosses the enrage now fires ~89% (Hexweaver)
+  / ~98% (Devourer) of fights, so the countdown promises a race the HP no longer allows. Legibility
+  call, **low urgency**: either reframe the boss "enrage" as an announced phase, or restore pre-enrage
+  race headroom. Not a bug — the tuning is sound; the *promise* is stale.
+- **DR3 — Brutal is a cliff, not a difficulty.** 0% full-run, Gatewarden alone ~0.3%. **By design**
+  (dev-only, ungated) — but if Brutal ever ships visibly it needs the standing "tuned Brutal" cut,
+  not the current placeholder multipliers.
+- **#34 follow-up — a per-identity burst LINE in the sim policy.** The comp floor is a burst-DPS gap
+  vs the trio-tuned Devourer, under-measured because the fixed policy has no Warlock/Skald/Berserker
+  damage plan. A real per-identity line would raise the stick's ceiling for those comps and let the
+  member-balance question be judged fairly (currently deferred to human calibration).
+- **#32 backlog (closed as a row, ideas still standing).** Telegraph lists · multi-enemy fights /
+  adds · meta-progression revisit · overheal-as-ammo card (**reconcile with Aegis Font first**) ·
+  hidden-info expansion (normals only, never bosses) · the "Wanderer" mid-run swap node. Promote any
+  to a numbered issue when scheduled.
+
 ## Issues (implementation order)
 
 | # | Status | Issue | Phase | Depends | Addresses |
@@ -110,7 +137,7 @@ the final ship call.**
 | 29 | ✅ Done | [Party W3 — Beast Warden + pet subsystem](./issues/29-party-w3-beast-warden.md) | post-demo | 28 | §3.4 |
 | 30 | ✅ Done | [Party W4 — full draft + weight-surfacing UI](./issues/30-party-w4-draft-ui.md) | post-demo | 29 | §3.4 |
 | 31 | ✅ Done | [Party W5 — per-composition balance pass](./issues/31-party-w5-balance-pass.md) | post-demo | 30 | §3.4 |
-| 32 | 📥 Backlog | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
+| 32 | ✅ Closed | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
 | 33 | ✅ Done | [Injuries past the cap: adopt a harder scar mode](./issues/33-injury-mode-harder-scars.md) | post-demo | DR1 | playtest 2026-07-04 |
 | 34 | ✅ Done | [Composition re-baseline after the identity fix](./issues/34-comp-rebaseline-after-identity-fix.md) | post-demo | 31 | playtest 2026-07-04 |
 | 35 | ✅ Done | [Relic power re-tune under player-first ordering](./issues/35-relic-retune-player-first.md) | post-demo | 26 | playtest 2026-07-04 |

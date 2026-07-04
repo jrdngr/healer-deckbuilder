@@ -3,6 +3,9 @@
 - **Roadmap phase:** post-demo   **Size:** L (umbrella)
 - **Depends on:** demo complete (#24)   **Blocks:** none
 - **Addresses:** review §4 "Post-demo" + standing cuts
+- **Status:** ✅ Closed as a tracker row (2026-07-04). This was never a buildable issue — it is a
+  reference list. Closing it just means the numbered backlog is empty; the deferred ideas below
+  still stand and each is promoted to its own numbered issue when picked up (nothing is lost).
 
 ## Why
 A holding file for accepted-but-deferred ideas so they aren't lost. Each becomes its own issue when
