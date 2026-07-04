@@ -144,9 +144,71 @@ section.enemy {
 .member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }
 .member.valid-target:hover { background: var(--panel-2); }
 
+/* ---- Persistent status auras --------------------------------------------
+   Statuses read from across the screen as light on the card itself; the badge
+   pills keep the exact numbers. Aura layers are absolutely-positioned children
+   (pointer-transparent) whose animations touch only opacity/transform, so they
+   can run all fight without paint churn. */
+.aura { position: absolute; inset: 0; border-radius: 10px; pointer-events: none; }
+.aura-rim { border: 2px solid; animation: aura-pulse 2.4s ease-in-out infinite; }
+.aura-rim.shield { border-color: var(--shield); box-shadow: inset 0 0 18px rgba(127,208,255,.35), 0 0 10px rgba(127,208,255,.3); }
+.aura-rim.ward   { border-color: var(--regen); box-shadow: inset 0 0 18px rgba(127,230,164,.3), 0 0 10px rgba(127,230,164,.25); }
+.aura-rim.brace  { border-color: var(--defense); box-shadow: inset 0 0 14px rgba(174,185,204,.28); }
+.aura-taunt {
+  box-shadow: 0 0 0 3px var(--taunt), 0 0 16px rgba(242,193,78,.45);
+  animation: aura-pulse-strong 1.6s ease-in-out infinite;
+}
+/* Standing Defense: a steady steel footing along the bottom edge (static). */
+.aura-defense {
+  background: linear-gradient(to top, rgba(174,185,204,.22), transparent 32%);
+}
+@keyframes aura-pulse { 50% { opacity: .45; } }
+@keyframes aura-pulse-strong { 50% { opacity: .55; transform: scale(1.008); } }
+/* Regen: motes drift up the card in a slow loop. */
+.aura-motes span {
+  position: absolute; bottom: 18%; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--regen); box-shadow: 0 0 8px 1px var(--regen); opacity: 0;
+  animation: mote-rise 2.8s linear infinite;
+}
+.aura-motes span:nth-child(1) { left: 22%; animation-delay: 0s; }
+.aura-motes span:nth-child(2) { left: 52%; animation-delay: .9s; }
+.aura-motes span:nth-child(3) { left: 76%; animation-delay: 1.8s; }
+@keyframes mote-rise {
+  0%   { transform: translateY(0) scale(.8); opacity: 0; }
+  15%  { opacity: .85; }
+  70%  { opacity: .5; }
+  100% { transform: translateY(-92px) scale(.4); opacity: 0; }
+}
+
+/* ---- Ambient life ---------------------------------------------------------
+   The board never sits frozen: the enemy and the party breathe, and a member
+   in danger has a heartbeat that quickens as HP drops. One-shot reactions and
+   the dead state override these (their rules come later in the sheet). */
+section.enemy { animation: breathe 4.6s ease-in-out infinite; }
+.member { animation: breathe 5.2s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.008); } }
+.member.hp-low { animation: heartbeat 1.5s ease-in-out infinite; }
+.member.hp-crit { animation: heartbeat .8s ease-in-out infinite; }
+@keyframes heartbeat {
+  0%, 100% { border-color: #2c3340; transform: none; }
+  18% { border-color: var(--danger); transform: scale(1.012); }
+  36% { border-color: #6b3038; transform: none; }
+  50% { border-color: var(--danger); transform: scale(1.006); }
+  70% { border-color: #2c3340; }
+}
+.member.dead, .member.incapacitated { animation: none; }
+
+/* Status pills pop in when gained. */
+.badge { animation: badge-in 300ms cubic-bezier(.3,1.5,.5,1) backwards; }
+@keyframes badge-in {
+  from { opacity: 0; transform: scale(.6) translateY(4px); }
+}
+
 /* One-shot member reactions, driven by the animation timeline's react channel
    (MemberCard re-applies the class with a reflow so repeats restart). These
-   move the card itself — the FX layer draws over it, reactions make it flinch. */
+   move the card itself — the FX layer draws over it, reactions make it flinch.
+   Declared after the ambient rules so a reaction takes over the card's
+   animation slot while it plays, then breathing/heartbeat resume. */
 .member.react-hit { animation: member-hit 360ms cubic-bezier(.3,.6,.3,1); }
 @keyframes member-hit {
   0%   { transform: none; filter: none; }
@@ -595,6 +657,13 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   .hand .card, .card.denied { animation: none; }
   .card:not(.unaffordable):not(.ineligible) .cost { animation: none; }
   .fx-card-ghost { animation: fx-fade-out var(--dur, 420ms) ease-out forwards; }
+  /* Ambient motion goes still; auras stay visible at a fixed strength so the
+     status information survives without the pulse. */
+  section.enemy, .member, .member.hp-low, .member.hp-crit { animation: none; }
+  .member.hp-low, .member.hp-crit { border-color: var(--danger); }
+  .aura-rim, .aura-taunt { animation: none; opacity: .7; }
+  .aura-motes span { animation: none; opacity: .6; transform: translateY(-30px); }
+  .badge { animation: none; }
 }
 @keyframes fx-fade-out { to { opacity: 0; } }
 @keyframes fx-banner-reduced {

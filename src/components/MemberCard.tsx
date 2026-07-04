@@ -72,9 +72,21 @@ export function MemberCard({
   // an in-fight death. Only relevant while it starts dead (a normal mid-fight death
   // shows the plain DEAD overlay).
   const incapacitated = m.incapacitated && displayDead;
+  // Low-HP heartbeat: the card's border pulses red under 30% HP and quickens
+  // under 15% — a state-driven ambient cue, not tied to any animation sequence.
+  const hpFrac = m.maxHP > 0 ? displayHp / m.maxHP : 0;
+  const heartbeat = !displayDead && hpFrac > 0 && hpFrac < 0.3
+    ? (hpFrac < 0.15 ? 'hp-crit' : 'hp-low') : null;
   const cls = ['member', displayDead && 'dead', incapacitated && 'incapacitated',
+    heartbeat,
     targetedByEnemy && 'targeted-by-enemy', validTarget && 'valid-target']
     .filter(Boolean).join(' ');
+  // Persistent status auras (visible from across the screen; the pills keep the
+  // exact numbers). Suppressed while the card shows as dead.
+  const rim = displayDead ? null : m.shield ? 'shield' : m.ward > 0 ? 'ward' : m.brace ? 'brace' : null;
+  const showTaunt = !displayDead && m.taunt > 0;
+  const showMotes = !displayDead && m.regen > 0;
+  const showDefense = !displayDead && m.defense > 0;
 
   return (
     <div
@@ -90,6 +102,14 @@ export function MemberCard({
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
       }}
     >
+      {rim && <div className={`aura aura-rim ${rim}`} aria-hidden />}
+      {showTaunt && <div className="aura aura-taunt" aria-hidden />}
+      {showDefense && <div className="aura aura-defense" aria-hidden />}
+      {showMotes && (
+        <div className="aura aura-motes" aria-hidden>
+          <span /><span /><span />
+        </div>
+      )}
       {incapacitated && (
         <div className="incap-overlay" title="A 4th scar took this member out of the run. Heal a scar at an Infirmary (or Field Hospital / Mending Totem) to restore them.">
           <span className="incap-title">☠ Incapacitated</span>
