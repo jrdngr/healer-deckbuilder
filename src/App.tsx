@@ -67,6 +67,7 @@ export function App() {
         onWin={() => act((r) => r.winFight())}
         onLose={() => act((r) => r.loseFight())}
         onSpent={(ids) => act((r) => r.markRelicsSpent(ids))}
+        onInjuries={(slots) => act((r) => r.recordInjuries(slots))}
         onController={setGameCtrl}
       />
     );

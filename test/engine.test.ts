@@ -363,6 +363,33 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('no surcharge when redirect is pointless', g.mp, mpBefore - CARDS.ability.cost);
 }
 
+// --- DR1 death-tracking: diedThisFight persists through Resurrect; a Martyr's
+//     Icon save vetoes the death and leaves no scar ----------------------------
+{
+  const g = new Game(41);
+  g.start();
+  const ranger = g.members[SLOT.LEFT];
+  eq('no scar before any death', g.diedThisFightSlots().length, 0);
+  g._killMember(ranger);
+  check('a killed member is flagged died-this-fight', g.diedThisFightSlots().includes(SLOT.LEFT));
+
+  // Resurrect brings them back but does NOT clear the flag — death always scars.
+  g.mp = 10;
+  const res = g.playCard(giveCard(g, 'resurrect'), SLOT.LEFT);
+  check('resurrect played', res.ok, res.reason);
+  check('ranger alive again after Resurrect', ranger.alive);
+  check('the death still counts for a scar after Resurrect', g.diedThisFightSlots().includes(SLOT.LEFT));
+
+  // A Martyr's Icon save vetoes the death itself, so no scar is recorded.
+  const cfg = defaultBattleConfig();
+  cfg.relics = ['martyrsIcon'];
+  const gm = new Game(42, cfg);
+  gm.start();
+  const saved = gm._killMember(gm.members[SLOT.CENTER]);
+  check('Martyr veto keeps the member alive at 1 HP', !saved && gm.members[SLOT.CENTER].alive);
+  check('a Martyr save leaves NO scar', !gm.diedThisFightSlots().includes(SLOT.CENTER));
+}
+
 // --- resurrect to 50% max hp, statuses cleared -----------------------------
 {
   const g = new Game(9);

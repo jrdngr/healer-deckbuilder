@@ -61,6 +61,9 @@ export interface Member {
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
   drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
+  diedThisFight: boolean; // DR1: went to 0 HP at any point this fight (a later Resurrect
+                          // does not clear it — death always scars; a Martyr's Icon save
+                          // vetoes the death, so it never sets this).
 }
 
 export interface Enemy {
@@ -228,6 +231,7 @@ export class Game {
         charge: 0,     // per-member Charge
         drumPrimed: false, // no War Drum beat pending
         ward: 0,       // no Aegis Ward standing
+        diedThisFight: false, // no death yet this fight
       };
     });
 
@@ -593,6 +597,8 @@ export class Game {
     } else {
       m.alive = false;
       m.hp = 0;
+      m.diedThisFight = true; // DR1: the death is what scars — recorded here, at the
+                              // true-kill branch, so a Martyr save (above) never sets it.
     }
     m.shield = false;
     m.shieldTurns = 0;
@@ -1510,6 +1516,12 @@ export class Game {
     if (this.chimeUsed && this.hasRelic('duskChime')) out.push('duskChime');
     if (this.martyrUsed && this.hasRelic('martyrsIcon')) out.push('martyrsIcon');
     return out;
+  }
+
+  // Slots of members that DIED this fight (DR1), even if later Resurrected. The
+  // run layer reads this after a win to record persistent injuries.
+  diedThisFightSlots(): Slot[] {
+    return this.members.filter((m) => m.diedThisFight).map((m) => m.slot);
   }
 
   // ---- dev / cheats --------------------------------------------------------

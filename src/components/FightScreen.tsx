@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useGame } from '../useGame';
 import type { GameController } from '../useGame';
 import type { Run } from '../run';
-import type { RelicId } from '../constants';
+import type { RelicId, Slot } from '../constants';
 import { BattleScreen } from './BattleScreen';
 
 interface FightScreenProps {
@@ -10,6 +10,8 @@ interface FightScreenProps {
   onWin: () => void;
   onLose: () => void;
   onSpent: (ids: RelicId[]) => void;
+  // Slots of members that died this fight (DR1) — recorded as persistent scars.
+  onInjuries: (slots: Slot[]) => void;
   // Publishes this fight's controller up to App so the dev panel can reach the
   // live engine; receives null when the fight unmounts.
   onController?: (ctrl: GameController | null) => void;
@@ -25,7 +27,7 @@ function fightSeed(run: Run): number {
 // One fight within the run. Mounted fresh per fight (keyed by fight index), so its
 // useGame builds a fresh battle from this fight's config. On end, resolves the
 // fight into the run.
-export function FightScreen({ run, onWin, onLose, onSpent, onController }: FightScreenProps) {
+export function FightScreen({ run, onWin, onLose, onSpent, onInjuries, onController }: FightScreenProps) {
   // Capture config and seed once on mount (this component is remounted per fight).
   const config = useRef(run.toBattleConfig()).current;
   const seed = useRef(fightSeed(run)).current;
@@ -40,8 +42,12 @@ export function FightScreen({ run, onWin, onLose, onSpent, onController }: Fight
   const onBattleEnd = () => {
     // Report once-per-RUN relic uses (#22) before the run resolves the outcome.
     onSpent(ctrl.game.spentRelicIds());
-    if (ctrl.game.status === 'win') onWin();
-    else onLose();
+    if (ctrl.game.status === 'win') {
+      // Record scars (DR1) BEFORE winFight, so a post-victory scar-clearing relic
+      // (Mending Totem) sees this fight's injuries.
+      onInjuries(ctrl.game.diedThisFightSlots());
+      onWin();
+    } else onLose();
   };
 
   return (
