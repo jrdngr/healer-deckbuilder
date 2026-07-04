@@ -29,9 +29,20 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–31 — the demo (01–24) plus the experiments and the full post-demo party subsystem.**
-Only #32 (the standing post-demo backlog index) is open, and it is a holding file, not a buildable
-issue. Post-demo highlights: **#25** hand-4/carryover measured and REVERTED (behind an inert flag);
+**Done: 01–31 and 33–37 — the demo (01–24), the experiments, the full post-demo party subsystem,
+and the 2026-07-04 playtest batch.** Only #32 (the standing post-demo backlog index) is open, and it
+is a holding file, not a buildable issue. **2026-07-04 playtest batch (#33–#37):** **#33** flipped
+the injury default to `incapacitate` (a 4th "Shattered" scar takes the member out until healed;
+winrate-neutral — Standard 32.1% / Story 96.4%) with the MemberCard / Infirmary / Resurrect-hint UI;
+**#34** re-lined the sim policy for the five new abilities (Dark Bargain front-load, Crescendo
+shaping, Berserker band-riding, taunt-less Provoke) and, on the authoritative N=300 sweep, judged the
+0% floor a burst-DPS gap vs the trio-tuned Devourer (not a safe stick-driven re-tune — deferred to
+human calibration); **#35** re-tuned the two out-of-band phase-B relics into the ≤+9pp band (Taper
+partial −2 discount +8.8pp, Aegis WARD_MAX 2→1 +7.2pp, Chime threshold 13→10 +5.9pp; Pact priced as
+a hard trap) with the battery promoted to `sim/relic-exp.ts`, full-run steady at 31.5%; **#36** a
+`memberDefAt` resolver so every run-layer screen shows drafted names; **#37** the UI polish batch
+(draft ability flavor, aria-pressed, "End Turn" at 0-yield, seed input attrs, favicon, Turn-N chip).
+Post-demo highlights: **#25** hand-4/carryover measured and REVERTED (behind an inert flag);
 **#26** player-first turn ordering (bosses re-anchored on HP to 155/184/208, full-run 32.1%);
 **#27–#29** five new members via a data-driven roster — Warlock (Dark Bargain / Soul Tithe), Skald
 (Crescendo), Berserker (rage bands / Rampage), Grave Augur (Grave Chill), Beast Warden (a Boar pet
@@ -134,6 +145,12 @@ Three maintainer playtests are called out in the roadmap: **#1** after the Gatew
 **#3** the final ship gate ([24](./issues/24-hardening-ux.md)).
 
 ## Playtest 2026-07-04 (balance round)
+
+**Closeout:** all five findings issues (#33–#37) landed. #33 shipped `incapacitate` as the default
+injury mode + UI; #35 re-tuned the drifted relics into band (battery now `sim/relic-exp.ts`); #36/#37
+fixed the drafted-name display and the UI polish batch; #34 re-lined the sim policy and judged the
+comp floor a burst-DPS gap (member balance deferred to human calibration). The one remaining human
+gate from the round is the maintainer feel-check on a deliberately-spent (4-death) member (#33).
 
 A maintainer-requested playtest of the post-demo build, focused on the injury system. Everything
 measured is recorded in issues [33](./issues/33-injury-mode-harder-scars.md) /
