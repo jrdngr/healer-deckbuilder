@@ -100,6 +100,9 @@ the final ship call.**
 | 30 | ✅ Done | [Party W4 — full draft + weight-surfacing UI](./issues/30-party-w4-draft-ui.md) | post-demo | 29 | §3.4 |
 | 31 | ✅ Done | [Party W5 — per-composition balance pass](./issues/31-party-w5-balance-pass.md) | post-demo | 30 | §3.4 |
 | 32 | 📥 Backlog | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
+| 33 | ⬜ Todo | [Injuries past the cap: adopt a harder scar mode](./issues/33-injury-mode-harder-scars.md) | post-demo | DR1 | playtest 2026-07-04 |
+| 34 | ⬜ Todo | [Composition re-baseline after the identity fix](./issues/34-comp-rebaseline-after-identity-fix.md) | post-demo | 31 | playtest 2026-07-04 |
+| 35 | ⬜ Todo | [Relic power re-tune under player-first ordering](./issues/35-relic-retune-player-first.md) | post-demo | 26 | playtest 2026-07-04 |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses
@@ -127,6 +130,28 @@ size, which Taper's draw penalty depends on). #26–#32 are post-demo.
 Three maintainer playtests are called out in the roadmap: **#1** after the Gatewarden ([12](./issues/12-boss-gatewarden.md)) — landed,
 **#2** after the Devourer / full-run band ([14](./issues/14-boss-devourer.md)) — **➤ ready now** (issue 14 landed; full-run ~32%),
 **#3** the final ship gate ([24](./issues/24-hardening-ux.md)).
+
+## Playtest 2026-07-04 (balance round)
+
+A maintainer-requested playtest of the post-demo build, focused on the injury system. Everything
+measured is recorded in issues [33](./issues/33-injury-mode-harder-scars.md) /
+[34](./issues/34-comp-rebaseline-after-identity-fix.md) /
+[35](./issues/35-relic-retune-player-first.md); the headline items:
+
+- **BUG (fixed):** `Run.toBattleConfig()` dropped drafted identity — every drafted fight since #27
+  ran with classic-trio abilities on drafted stats. Fixed + regression-tested; **#31's sweep
+  findings are superseded** (correction note in the issue) and the **Warlock 7→5 nerf is
+  reverted** (it was calibrated against the phantom).
+- **Injury cap experiments (the round's headline question):** two harder modes are implemented and
+  tested behind `INJURY_RULES.mode` ('escalate', 'incapacitate') with a committed harness
+  (`sim/injury-exp.ts`). Result: the honest line is *identical* under all modes (32.1% everywhere);
+  the degenerate never-heal line is already −13.8pp and past-cap "free" deaths are just 0.16/run.
+  Adopting a harder mode is winrate-free — a legibility call. **Recommendation: `incapacitate`**
+  (issue 33 has the flip + UI work).
+- **Relic battery re-run** (twice-flagged stale): firstLightTaper drifted to **+10.8pp** (strongest
+  relic measured) and pactOfSilence to **−23.5pp** standalone under player-first ordering → issue 35.
+- Trio baseline holds (N=1000: F2 85.9 / F5 71.5 / F8 53.6 / full 32.1%); Story 96.6%; Brutal's
+  DR3 cliff deepened (F2 0.3%) — still dev-only by design.
 
 ## Design review — flagged from the sim playtest (2026-07-03)
 

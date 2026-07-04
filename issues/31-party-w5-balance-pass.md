@@ -1,5 +1,16 @@
 # Issue 31 — Party W5: per-composition balance pass
 
+> **⚠ CORRECTION (2026-07-04 playtest):** the sweep this issue's findings were built on was
+> measuring a bug — `Run.toBattleConfig()` dropped the drafted `member` field, so every "drafted"
+> comp fought with **classic-trio abilities** on drafted stats (a "Warlock" was a poison-firing
+> 7-damage pseudo-Ranger). The bug is fixed (regression-tested), the **Warlock 7→5 nerf is
+> REVERTED** (with real abilities Warlock comps read 2.5–3% full-run even at 7 — no ceiling), and
+> the real-ability sweep shows the trio (~22% at N=100) as the *ceiling* with most drafted comps
+> flooring at 0% under the fixed policy. See
+> [34-comp-rebaseline-after-identity-fix.md](./34-comp-rebaseline-after-identity-fix.md) for the
+> re-baseline work. The Provoke card, the striker requirement, and the sweep harness itself remain
+> valid and shipped.
+
 - **Roadmap phase:** post-demo (party wave 5)   **Size:** M
 - **Depends on:** #30   **Blocks:** none
 - **Addresses:** review §3.4 (per-comp balance)

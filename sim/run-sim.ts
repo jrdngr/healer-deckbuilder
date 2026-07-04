@@ -128,6 +128,18 @@
 //     MEMBER, not the (comp-agnostic) boss HP, so the trio baseline is untouched.
 //     The low-DPS/no-tank floor is a fixed-stick limitation (a per-comp policy is
 //     future work); the generator's striker requirement + Provoke are the remedies.
+//   after the 2026-07-04 playtest (identity fix + Warlock revert + injury modes):
+//     full-run 32.1% at N=1000 (F2 85.9 / F5 71.5 / F8 53.6 — in-band); Story 96.6%.
+//     toBattleConfig had been DROPPING drafted identity since #27 — every drafted
+//     fight ran trio abilities on drafted stats, so #31's sweep was measuring a
+//     phantom. Fix + regression test landed; the Warlock 7->5 nerf is REVERTED
+//     (real-ability warlock comps read 2.5-3% even at 7 — no ceiling; see issue 34
+//     for the re-baseline). Injury modes ('escalate'/'incapacitate') landed behind
+//     INJURY_RULES with sim/injury-exp.ts: all modes identical on the honest line
+//     (the trio pins are mode-independent); see issue 33. The #22 per-relic battery
+//     was re-run (stale after two re-anchors): Taper +10.8pp / Font +10.0 / Icon
+//     +8.2 / Chime +4.8 / Pact -23.5 / Hourglass -5.2 / Crown -1.7 vs a 31.2%
+//     baseline — re-tune tracked in issue 35.
 //   after #23 (difficulty presets + local stats):  Standard unchanged (it IS
 //     the tuned curve — the preset is the identity, and the N=200 pins pass
 //     bit-identical). Story (HP x0.8, attack -1 floor 0, enrage +2, +25g/win)
