@@ -15,7 +15,7 @@ import type { GameEvent } from './engine';
 import type { BattleConfig } from './constants';
 import { buildTimeline, FX_DURATION } from './animations';
 import { getAnimSpeed } from './settings';
-import type { Timeline, DisplayPatch, FxInstance, FxSpec } from './animations';
+import type { Timeline, DisplayPatch, FxInstance, FxSpec, MemberReact, MemberReactKind } from './animations';
 
 // Staged display values overlaid on the engine while an animation plays. Only the
 // things that should move in step with effects live here; everything else (MP,
@@ -26,10 +26,18 @@ export interface BattleView {
   memberDead: boolean[]; // length 3
 }
 
+// The latest reaction per party slot. `seq` increments on every trigger so the
+// consumer can restart the CSS animation even when the same reaction repeats.
+export interface MemberReactState {
+  kind: MemberReactKind;
+  seq: number;
+}
+
 export interface GameController {
   game: Game;
   view: BattleView;
   fx: FxInstance[];
+  reacts: (MemberReactState | null)[]; // length 3, indexed by slot
   animating: boolean;
   shakeTick: number;
   /** Start a fresh fight. Returns the seed actually used (random when omitted). */
@@ -88,6 +96,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const [, force] = useReducer((x: number) => x + 1, 0);
   const [view, setView] = useState<BattleView>(() => preStartView(ref.current!));
   const [fx, setFx] = useState<FxInstance[]>([]);
+  const [reacts, setReacts] = useState<(MemberReactState | null)[]>([null, null, null]);
   const [animating, setAnimating] = useState(false);
   const [shakeTick, setShakeTick] = useState(0);
 
@@ -95,6 +104,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const animatingRef = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fxId = useRef(0);
+  const reactSeq = useRef(0);
   // Guards the one-shot opening animation against React StrictMode's double mount.
   const openingDone = useRef(false);
 
@@ -138,6 +148,17 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     schedule(() => setFx((cur) => cur.filter((f) => f.id !== id)), FX_DURATION[spec.type] + 40);
   }, [schedule]);
 
+  // Trigger member-card reactions (flash / recoil / lunge / collapse). Each gets
+  // a fresh sequence number so repeating the same reaction still restarts its
+  // CSS animation in MemberCard.
+  const triggerReacts = useCallback((rs: MemberReact[]) => {
+    setReacts((cur) => {
+      const next = [...cur];
+      for (const r of rs) next[r.slot] = { kind: r.kind, seq: ++reactSeq.current };
+      return next;
+    });
+  }, []);
+
   // Staged, blocking playback for end-of-turn sequences (party + enemy phases).
   // The view is held at its pre-action values and patched forward step by step so
   // bars move with each effect; input stays locked until the sequence finishes.
@@ -147,6 +168,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
       schedule(() => {
         if (entry.patch) applyPatch(entry.patch);
         if (entry.shake) setShakeTick((x) => x + 1);
+        if (entry.react) triggerReacts(entry.react);
         if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
       }, entry.at);
     }
@@ -159,7 +181,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
       setAnimating(false);
       onDone?.();
     }, timeline.paceEnd + 100);
-  }, [schedule, applyPatch, spawnFx]);
+  }, [schedule, applyPatch, spawnFx, triggerReacts]);
 
   // Live, non-blocking playback for the player's own card plays. The result is
   // already reflected on the bars; we just layer the effects and shakes on top
@@ -169,10 +191,11 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     for (const entry of timeline.entries) {
       schedule(() => {
         if (entry.shake) setShakeTick((x) => x + 1);
+        if (entry.react) triggerReacts(entry.react);
         if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
       }, entry.at);
     }
-  }, [schedule, spawnFx]);
+  }, [schedule, spawnFx, triggerReacts]);
 
   // Run an engine mutation, then animate the events it produced. `staged` actions
   // (end turn / rest) lock input and step the view through the enemy/party phase;
@@ -233,6 +256,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     ref.current = g;
     animatingRef.current = false;
     setFx([]);
+    setReacts([null, null, null]);
     setShakeTick(0);
     setView(preStartView(g)); // full health; the opening attack patches it down
     force();
@@ -270,6 +294,6 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   // React throws "Maximum update depth exceeded".
   const controllerRef = useRef<GameController>({} as GameController);
   return Object.assign(controllerRef.current, {
-    game: ref.current, view, fx, animating, shakeTick, newGame, playCard, skipTurn, endTurn, devAction,
+    game: ref.current, view, fx, reacts, animating, shakeTick, newGame, playCard, skipTurn, endTurn, devAction,
   });
 }

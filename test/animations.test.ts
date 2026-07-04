@@ -1,5 +1,5 @@
 // Tests for the pure animation timeline builder. Run via: npm test.
-import { buildTimeline, FX_DURATION } from '../src/animations';
+import { buildTimeline, FX_DURATION, HITSTOP } from '../src/animations';
 import type { GameEvent } from '../src/engine';
 
 let passed = 0;
@@ -101,6 +101,116 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   eq('no entries', tl.entries.length, 0);
   eq('zero total', tl.total, 0);
   eq('zero paceEnd', tl.paceEnd, 0);
+}
+
+// --- every FX type has a positive duration -----------------------------------
+{
+  for (const [type, ms] of Object.entries(FX_DURATION)) {
+    check(`FX_DURATION.${type} > 0`, ms > 0, `${ms}`);
+  }
+}
+
+// --- hitstop: a kill stops the world for a beat ------------------------------
+{
+  const hit: GameEvent[] = [
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
+  ];
+  const kill: GameEvent[] = [
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 0, result: 'hit', killed: true, hidden: false },
+  ];
+  const tlHit = buildTimeline(hit);
+  const tlKill = buildTimeline(kill);
+  // Kill pacing = hitstop + a longer settle (520 vs 360): 160 + HITSTOP apart.
+  eq('kill pacing exceeds a plain hit by the hitstop + settle',
+    tlKill.paceEnd - tlHit.paceEnd, HITSTOP + 160);
+  // The blow lands at impact; the damage number waits out the stop.
+  const burstAt = tlKill.entries.find((e) => e.fx?.some((f) => f.type === 'burst'))!.at;
+  const floatAt = tlKill.entries.find((e) => e.fx?.some((f) => f.type === 'float'))!.at;
+  eq('damage float is delayed by the hitstop', floatAt - burstAt, HITSTOP);
+  // Bolt gets the same treatment.
+  const tlBolt = buildTimeline([{ kind: 'bolt', slot: 2, amount: 7, enemyHp: 93 }]);
+  const boltImpact = tlBolt.entries.find((e) => e.patch?.enemyHp === 93)!.at;
+  const boltFloat = tlBolt.entries.find((e) => e.fx?.some((f) => f.type === 'float'))!.at;
+  eq('bolt float is delayed by the hitstop', boltFloat - boltImpact, HITSTOP);
+}
+
+// --- member reactions ride the timeline --------------------------------------
+{
+  const events: GameEvent[] = [
+    { kind: 'partyAttack', slot: 0, amount: 3, enemyHp: 97 },
+    { kind: 'enemyAttack', slot: 1, amount: 4, hp: 8, result: 'hit', killed: false, hidden: false },
+    { kind: 'enemyAttack', slot: 2, amount: 9, hp: 0, result: 'hit', killed: true, hidden: false },
+    { kind: 'enemyAttack', slot: 0, amount: 4, hp: 12, result: 'shield', killed: false, hidden: false },
+    { kind: 'heal', slot: 1, amount: 3, hp: 11 },
+  ];
+  const tl = buildTimeline(events);
+  const reactsOf = (kind: string) =>
+    tl.entries.filter((e) => e.react?.some((r) => r.kind === kind));
+  check('party attack lunges at launch',
+    reactsOf('lunge').length === 1 && reactsOf('lunge')[0].at === 0);
+  check('a hit recoils the target', reactsOf('hit').some((e) => e.react![0].slot === 1));
+  check('a kill collapses the target', reactsOf('death').some((e) => e.react![0].slot === 2));
+  check('a block braces the target', reactsOf('block').some((e) => e.react![0].slot === 0));
+  check('a heal pulses the target', reactsOf('heal').some((e) => e.react![0].slot === 1));
+  // The lethal reaction lands at impact (with the blow), not at launch.
+  const death = reactsOf('death')[0];
+  const deathBurst = tl.entries.find((e) => e.at === death.at && e.fx?.some((f) => f.type === 'burst'));
+  check('death reaction lands with the impact burst', deathBurst != null);
+}
+
+// --- blanket invariants across every event kind -------------------------------
+{
+  const samples: GameEvent[][] = [
+    [{ kind: 'enrage' }],
+    [{ kind: 'poisonTick', amount: 3, enemyHp: 90 }],
+    [{ kind: 'regenTick', slot: 0, amount: 2, hp: 9 }],
+    [{ kind: 'refreshTick', amount: 2, mp: 5 }],
+    [{ kind: 'wound', turns: 2 }],
+    [{ kind: 'siphon', amount: 3, mp: 2 }],
+    [{ kind: 'consume', heal: 6, enemyHp: 80 }],
+    [{ kind: 'phaseChange', beat: 'IT MOLTS' }],
+    [{ kind: 'enemyAttack', slot: 0, amount: 5, hp: 5, result: 'hit', killed: false, hidden: true }],
+    [{ kind: 'partyAttack', slot: 1, amount: 2, enemyHp: 88 }],
+    [{ kind: 'heal', slot: 2, amount: 4, hp: 10 }],
+    [{ kind: 'regenApplied', slot: 0, stack: 2 }],
+    [{ kind: 'shieldApplied', slot: 1 }],
+    [{ kind: 'defenseApplied', slot: 0, amount: 1 }],
+    [{ kind: 'braceApplied', slot: 2 }],
+    [{ kind: 'resurrect', slot: 1, hp: 4 }],
+    [{ kind: 'refreshPrimed', stack: 2 }],
+    [{ kind: 'draw', count: 2 }],
+    [{ kind: 'surge' }],
+    [{ kind: 'wardApplied', slot: 0, amount: 3 }],
+    [{ kind: 'chime' }],
+    [{ kind: 'martyrSave', slot: 1 }],
+    [{ kind: 'hymn', bonus: 2 }],
+    [{ kind: 'bloodPay', slot: 0, amount: 2, hp: 7 }],
+    [{ kind: 'cleanse', slot: 1 }],
+    [{ kind: 'rest', amount: 3, mp: 6 }],
+    [{ kind: 'poisonApplied', slot: 0, amount: 2, poison: 4 }],
+    [{ kind: 'taunt', slot: 1, turns: 2 }],
+    [{ kind: 'bolt', slot: 2, amount: 7, enemyHp: 70 }],
+    [{ kind: 'graveChill', slot: 0, amount: 2 }],
+    [{ kind: 'boarSummon', slot: 1, hp: 10, turns: 2 }],
+    [{ kind: 'boarHit', slot: 1, amount: 5, boarHp: 5, killed: false }],
+    [{ kind: 'boarExpire', slot: 1 }],
+    [{ kind: 'defeatEnemy' }],
+    [{ kind: 'wipe' }],
+  ];
+  for (const events of samples) {
+    const kind = events[0].kind;
+    const tl = buildTimeline(events);
+    const ats = tl.entries.map((e) => e.at);
+    check(`${kind}: entries start at t>=0`, ats.every((a) => a >= 0));
+    check(`${kind}: entries are ordered`, ats.every((a, i) => i === 0 || a >= ats[i - 1]));
+    check(`${kind}: paceEnd <= total`, tl.paceEnd <= tl.total);
+    const patchAts = tl.entries.filter((e) => e.patch).map((e) => e.at);
+    check(`${kind}: patches land by paceEnd`, patchAts.every((a) => a <= tl.paceEnd));
+    // total must cover every effect's fade-out.
+    const covered = tl.entries.every((e) =>
+      (e.fx ?? []).every((f) => e.at + FX_DURATION[f.type] <= tl.total));
+    check(`${kind}: total covers all fades`, covered);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

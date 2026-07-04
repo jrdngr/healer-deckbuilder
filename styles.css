@@ -261,7 +261,8 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .fx-layer { position: absolute; inset: 0; pointer-events: none; z-index: 8; overflow: visible; }
 .fx { position: absolute; pointer-events: none; will-change: transform, opacity; }
 
-/* Projectile — a glowing comet flung from one anchor to another. */
+/* Projectile — a glowing comet flung from one anchor to another. --pscale sizes
+   the comet (heavy slams read big, dart volleys read small). */
 .fx-proj {
   width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
   background: radial-gradient(circle at 50% 50%, #fff 10%, currentColor 55%, transparent 72%);
@@ -269,10 +270,34 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   animation: fx-proj var(--dur, 280ms) cubic-bezier(.45,.05,.55,1) forwards;
 }
 @keyframes fx-proj {
-  0%   { transform: translate(0, 0) scale(.6); opacity: 0; }
+  0%   { transform: translate(0, 0) scale(calc(.6 * var(--pscale, 1))); opacity: 0; }
   14%  { opacity: 1; }
   85%  { opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)) scale(1.1); opacity: .85; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(calc(1.1 * var(--pscale, 1))); opacity: .85; }
+}
+/* Trail variant — a streak dragging behind the comet, rotated along its flight. */
+.fx-proj.trail::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 46px; height: 5px;
+  border-radius: 3px; transform-origin: left center;
+  transform: rotate(calc(var(--ang) + 180deg)) translateY(-50%);
+  background: linear-gradient(90deg, currentColor, transparent);
+  opacity: .8;
+}
+/* Arc variant — the outer div flies the straight line while the inner div rises
+   and falls, tracing a parabola. The visual comet sits on the inner div. */
+.fx-proj-arc { width: 0; height: 0; animation: fx-arc-x var(--dur, 280ms) linear forwards; }
+@keyframes fx-arc-x { to { transform: translate(var(--dx), var(--dy)); } }
+.fx-proj-arc-inner { animation: fx-arc-y var(--dur, 280ms) forwards; }
+@keyframes fx-arc-y {
+  0%   { transform: translateY(0); animation-timing-function: ease-out; }
+  50%  { transform: translateY(-54px); animation-timing-function: ease-in; }
+  100% { transform: translateY(0); }
+}
+.fx-proj-visual {
+  width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #fff 10%, currentColor 55%, transparent 72%);
+  box-shadow: 0 0 14px 4px currentColor, 0 0 4px 1px #fff;
+  transform: scale(var(--pscale, 1));
 }
 
 /* Beam — a lightning flash drawn along its length (rotated inline by FxLayer). */
@@ -290,13 +315,18 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   100% { opacity: 0; filter: brightness(1); }
 }
 
-/* Burst — a ring of particles flying outward from a point. */
+/* Burst — particles flung from a point. The mode class picks the motion feel:
+   radial explodes (impacts), rise drifts up softly (heal motes), fall crumbles
+   downward (debuffs). All share the same translate-to-offset keyframe; the
+   offsets themselves are generated per mode by FxLayer. */
 .fx-burst { width: 0; height: 0; }
 .fx-particle {
   position: absolute; left: 0; top: 0; width: 7px; height: 7px; margin: -3.5px;
   border-radius: 50%; background: currentColor; box-shadow: 0 0 8px 1px currentColor;
-  animation: fx-particle 650ms cubic-bezier(.2,.6,.3,1) forwards;
+  animation: fx-particle var(--dur, 650ms) cubic-bezier(.2,.6,.3,1) forwards;
 }
+.fx-particle.rise { animation-timing-function: cubic-bezier(.2,.5,.6,1); width: 6px; height: 6px; }
+.fx-particle.fall { animation-timing-function: cubic-bezier(.45,.05,.85,.5); border-radius: 2px; }
 @keyframes fx-particle {
   0%   { transform: translate(0, 0) scale(1); opacity: 1; }
   70%  { opacity: .9; }
@@ -307,7 +337,7 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .fx-float {
   font-weight: 800; font-size: 18px; color: currentColor; white-space: nowrap;
   text-shadow: 0 2px 4px #000, 0 0 8px currentColor;
-  animation: fx-float 850ms ease-out forwards;
+  animation: fx-float var(--dur, 850ms) ease-out forwards;
 }
 .fx-float.big { font-size: 27px; }
 @keyframes fx-float {
@@ -321,7 +351,7 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .fx-ring {
   width: 26px; height: 26px; margin: -13px; border-radius: 50%;
   border: 3px solid currentColor; box-shadow: 0 0 12px currentColor, inset 0 0 8px currentColor;
-  animation: fx-ring 520ms ease-out forwards;
+  animation: fx-ring var(--dur, 520ms) ease-out forwards;
 }
 @keyframes fx-ring {
   0%   { transform: scale(.3); opacity: .9; }
@@ -334,7 +364,7 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   border: 2px solid currentColor;
   background: radial-gradient(circle, color-mix(in srgb, currentColor 38%, transparent), transparent 70%);
   box-shadow: 0 0 18px currentColor, inset 0 0 16px currentColor;
-  animation: fx-shield 720ms ease-out forwards;
+  animation: fx-shield var(--dur, 720ms) ease-out forwards;
 }
 @keyframes fx-shield {
   0%   { transform: scale(.5); opacity: 0; }
@@ -349,7 +379,7 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   border-radius: 30px; filter: blur(2px);
   background: linear-gradient(to top, currentColor, transparent);
   box-shadow: 0 0 30px currentColor;
-  animation: fx-pillar 760ms ease-out forwards;
+  animation: fx-pillar var(--dur, 760ms) ease-out forwards;
 }
 @keyframes fx-pillar {
   0%   { transform: scaleY(.1); opacity: 0; }
@@ -361,12 +391,68 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .fx-glow {
   width: 150px; height: 150px; margin: -75px; border-radius: 50%;
   background: radial-gradient(circle, color-mix(in srgb, currentColor 52%, transparent), transparent 65%);
-  animation: fx-glow 620ms ease-out forwards;
+  animation: fx-glow var(--dur, 620ms) ease-out forwards;
 }
 @keyframes fx-glow {
   0%   { transform: scale(.5); opacity: 0; }
   30%  { transform: scale(1); opacity: .85; }
   100% { transform: scale(1.12); opacity: 0; }
+}
+
+/* Slash — a blade streak sweeping across the anchor at --angle. */
+.fx-slash {
+  width: 130px; height: 9px; margin: -4.5px 0 0 -65px; border-radius: 6px;
+  background: linear-gradient(90deg, transparent, #fff 42%, currentColor 62%, transparent);
+  box-shadow: 0 0 16px 3px currentColor;
+  animation: fx-slash var(--dur, 340ms) cubic-bezier(.2,.7,.3,1) forwards;
+}
+@keyframes fx-slash {
+  0%   { transform: rotate(var(--angle, -28deg)) translateX(-70px) scaleX(.4); opacity: 0; }
+  16%  { opacity: 1; }
+  60%  { transform: rotate(var(--angle, -28deg)) translateX(38px) scaleX(1.15); opacity: 1; }
+  100% { transform: rotate(var(--angle, -28deg)) translateX(84px) scaleX(.5); opacity: 0; }
+}
+
+/* Banner — a full-width text band sweeping through the middle of the board
+   (phase changes, enemy phase, enrage). Anchorless; FxLayer pins it near the
+   vertical center. */
+.fx-banner {
+  padding: 10px 0; text-align: center;
+  font-size: 30px; font-weight: 800; letter-spacing: 6px; color: currentColor;
+  text-shadow: 0 2px 6px #000, 0 0 18px currentColor;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, currentColor 16%, rgba(8, 10, 14, .82)) 18% 82%, transparent);
+  animation: fx-banner var(--dur, 1200ms) ease-in-out forwards;
+}
+@keyframes fx-banner {
+  0%   { opacity: 0; transform: scaleX(.65); }
+  12%  { opacity: 1; transform: scaleX(1); }
+  78%  { opacity: 1; }
+  100% { opacity: 0; transform: scaleX(1.05); }
+}
+
+/* Vignette — a full-board wash: 'tint' hugs the edges (warm heals, dread),
+   'flash' pops from the center and dies fast (big impacts). */
+.fx-vignette {
+  position: absolute; inset: 0; margin: 0;
+  background: radial-gradient(ellipse at center, transparent 42%,
+    color-mix(in srgb, currentColor 55%, transparent) 100%);
+  animation: fx-vignette var(--dur, 700ms) ease-out forwards;
+}
+.fx-vignette.flash {
+  background: radial-gradient(ellipse at center,
+    color-mix(in srgb, currentColor 45%, transparent), transparent 78%);
+  animation: fx-vignette-flash var(--dur, 700ms) ease-out forwards;
+}
+@keyframes fx-vignette {
+  0%   { opacity: 0; }
+  22%  { opacity: .9; }
+  100% { opacity: 0; }
+}
+@keyframes fx-vignette-flash {
+  0%   { opacity: .95; }
+  30%  { opacity: 0; }
+  100% { opacity: 0; }
 }
 
 /* Screen shake — punched on the whole board on each shake beat. */
@@ -383,6 +469,15 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 
 @media (prefers-reduced-motion: reduce) {
   .shake { animation: none; }
+  /* Full-board washes are the strongest movers — drop them entirely. */
+  .fx-vignette, .fx-vignette.flash { animation: none; opacity: 0; }
+  .fx-banner { animation: fx-banner-reduced var(--dur, 1200ms) ease-out forwards; }
+}
+@keyframes fx-banner-reduced {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ---- Run HUD (topbar) ---------------------------------------------------- */
