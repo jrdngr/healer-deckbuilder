@@ -51,7 +51,7 @@ const EXERCISE_DECK: CardId[] = [
   'regen', 'regen', 'lifebloom', 'overgrowth', 'cultivate', 'bloom',
   'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'refresh', 'cleanse',
   'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
-  'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace',
+  'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
 ];
 
 // A generous healer + a high-HP, low-threat enemy, so a fight lasts long enough

@@ -118,6 +118,16 @@
 //     absorbed by Hexweaver 142->146 and Devourer 190->198. The N=200 pinned
 //     sample reads 35.5% (seeds 1-200 run hot); the in-test band check now
 //     carries the sample CI, with N=1000 as the authoritative gate.
+//   after #31 (per-composition pass + Provoke card):  full-run 32.1% at N=1000
+//     (F2 85.9 / F5 71.5 / F8 53.6 — all in-band). Provoke ("Taunt-lite") joined
+//     CARD_POOL (23->24); the trio doesn't buy it, so this is pure roll drift and
+//     the bands held (31.7 -> 32.1%). The composition SWEEP (runCompositionSweep,
+//     `npm run sim -- sweep <N>`) drove the one real balance action: at Warlock 7
+//     every Warlock comp cleared 86-93% (10 comps >85% at F8). Warlock 7->5 caps
+//     it — 0 comps >85% at F8, full-run range 0-75%. The ceiling lever was the
+//     MEMBER, not the (comp-agnostic) boss HP, so the trio baseline is untouched.
+//     The low-DPS/no-tank floor is a fixed-stick limitation (a per-comp policy is
+//     future work); the generator's striker requirement + Provoke are the remedies.
 //   after #23 (difficulty presets + local stats):  Standard unchanged (it IS
 //     the tuned curve — the preset is the identity, and the N=200 pins pass
 //     bit-identical). Story (HP x0.8, attack -1 floor 0, enrage +2, +25g/win)
@@ -199,7 +209,8 @@
 import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
-import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
+import { FIGHT_COUNT, isActBoss, actOfFight, DRAFT_POOL, MEMBER_POOL, partyFromMembers } from '../src/constants';
+import type { MemberId } from '../src/constants';
 import { playFight, resolveNode, chooseBranch, chooseSpoil } from './policy';
 
 export interface FightOutcome {
@@ -350,12 +361,74 @@ export function formatReport(r: SimReport): string {
   return lines.join('\n');
 }
 
+// ---- composition sweep (#31) ----------------------------------------------
+// The draft yields 8-choose-3 = 56 compositions. The sweep runs each through the
+// harness with the classic-trio's SAME per-fight curve (ENEMY_ATTACK_BONUS stays
+// composition-agnostic — no per-comp boss tuning), so the boss-HP bands must
+// absorb the whole power range on their own.
+
+// All 56 compositions (order-independent member triples) from the draft pool.
+export function allCompositions(): MemberId[][] {
+  const p = DRAFT_POOL;
+  const out: MemberId[][] = [];
+  for (let i = 0; i < p.length; i++)
+    for (let j = i + 1; j < p.length; j++)
+      for (let k = j + 1; k < p.length; k++) out.push([p[i], p[j], p[k]]);
+  return out;
+}
+
+// Seat a composition sensibly for the sweep: the tankiest member takes center
+// (slot 1, the most-targeted slot), the other two flank. A fixed, comp-agnostic
+// heuristic so the sweep measures the comp, not a placement policy.
+export function seatComposition(ids: MemberId[]): MemberId[] {
+  const byHp = [...ids].sort((a, b) => MEMBER_POOL[b].maxHP - MEMBER_POOL[a].maxHP);
+  return [byHp[1], byHp[0], byHp[2]];
+}
+
+export interface CompReport {
+  comp: MemberId[];
+  hasTaunt: boolean;
+  full: Proportion;
+  bosses: Proportion[]; // [F2, F5, F8]
+}
+
+// Run the whole 56-comp sweep at n runs each; returns per-comp full-run + boss
+// winrates. Deterministic in firstSeed. Heavy — call with a modest n.
+export function runCompositionSweep(n: number, firstSeed = 1): CompReport[] {
+  return allCompositions().map((comp) => {
+    const seated = seatComposition(comp);
+    const r = runSim(n, firstSeed, (run) => { run.party = partyFromMembers(seated); });
+    return {
+      comp,
+      hasTaunt: comp.includes('tank'),
+      full: r.fullRun,
+      bosses: [r.perFight[2], r.perFight[5], r.perFight[8]],
+    };
+  });
+}
+
 // ---- CLI ------------------------------------------------------------------
 
 // Executed only when run directly (npm run sim), never on import.
 const invokedDirectly = process.argv[1] && /run-sim\.ts$/.test(process.argv[1]);
 if (invokedDirectly) {
-  const n = Number(process.argv[2] ?? 1000);
-  const firstSeed = Number(process.argv[3] ?? 1);
-  console.log(formatReport(runSim(n, firstSeed)));
+  const mode = process.argv[2];
+  if (mode === 'sweep') {
+    const n = Number(process.argv[3] ?? 100);
+    const reps = runCompositionSweep(n, Number(process.argv[4] ?? 1));
+    const pf = (p: Proportion) => `${pct(p.rate).padStart(5)}%`;
+    reps.sort((a, b) => b.full.rate - a.full.rate);
+    for (const r of reps) {
+      console.log(`${r.comp.join('/').padEnd(38)} full ${pf(r.full)}  F2 ${pf(r.bosses[0])} F5 ${pf(r.bosses[1])} F8 ${pf(r.bosses[2])}${r.hasTaunt ? '' : '  [taunt-less]'}`);
+    }
+    const tauntless = reps.filter((r) => !r.hasTaunt);
+    const f8 = reps.map((r) => r.bosses[2].rate);
+    console.log(`\nComps: ${reps.length}  ·  full-run range ${pct(Math.min(...reps.map((r) => r.full.rate)))}–${pct(Math.max(...reps.map((r) => r.full.rate)))}%`);
+    console.log(`F8 (final boss) range ${pct(Math.min(...f8))}–${pct(Math.max(...f8))}%  ·  ceiling comps >85% at F8: ${f8.filter((x) => x > 0.85).length}`);
+    console.log(`Taunt-less comps: ${tauntless.length}  ·  min full-run ${pct(Math.min(...tauntless.map((r) => r.full.rate)))}%  ·  min F8 ${pct(Math.min(...tauntless.map((r) => r.bosses[2].rate)))}%`);
+  } else {
+    const n = Number(process.argv[2] ?? 1000);
+    const firstSeed = Number(process.argv[3] ?? 1);
+    console.log(formatReport(runSim(n, firstSeed)));
+  }
 }

@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
-import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS } from '../src/constants';
+import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -2406,7 +2406,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('drafted Warlock seated in slot 0', w.id, 'warlock');
   eq('Warlock name from the pool', w.name, 'Hexen Warlock');
   eq('Warlock ability is Dark Bargain', w.ability, 'darkBargain');
-  eq('Warlock has the highest damage', w.damage, 7);
+  eq('Warlock damage (nerfed to 5 in #31)', w.damage, 5);
 
   // Dark Bargain: -HP (growing per cast) for +MP.
   g.mp = 10; w.hp = 15;
@@ -2620,6 +2620,25 @@ function wardenGame(seed: number) {
   g.telegraph = { type: 'heavy', hidden: false, damage: 99, targets: [0], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
   g._resolveAttack();
   check('the lone Warden survives behind the Boar', w.alive && g.status === 'playing');
+}
+
+// --- Provoke / Taunt-lite card (#31) ----------------------------------------
+{
+  // Provoke makes ANY member the enemy's aim (not just the Tank) with a light Defense.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['ranger', 'mage', 'graveAugur']); // taunt-less draft
+  const g = new Game(1, cfg); g.start();
+  g.mp = 10;
+  const augur = g.members[2];
+  g.playCard(giveCard(g, 'provoke'), 2);
+  eq('Provoke grants Taunt to a non-Tank member', augur.taunt, TAUNT_LITE_TURNS);
+  eq('Provoke bundles a light Defense', augur.defenseAmount, TAUNT_LITE_DEFENSE);
+  eq('the provoked member holds the party Taunt', g.tauntingMember()?.slot, 2);
+  // Future telegraphs aim at the provoked member (auto-aim via _pickPrimary).
+  const tg = g._generateTelegraph(g.turn + 1);
+  check('the enemy aims a single at the provoked member', tg.type !== 'single' || tg.targets.includes(2));
+  // Provoke is a real, purchasable card in the pool.
+  check('Provoke is in the shop pool', CARD_POOL.includes('provoke'));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

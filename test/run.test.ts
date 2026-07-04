@@ -13,6 +13,7 @@ import {
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
   DRAFT_PICKS, DRAFT_POOL, rollDraft, draftOfferViable, partyMeetsDraftConstraints, CLASSIC_TRIO,
+  CONVENTIONAL_STRIKERS,
 } from '../src/constants';
 import { shuffle } from '../src/rng';
 import { emptyStats, recordRunEnd } from '../src/stats';
@@ -958,6 +959,20 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
     !partyMeetsDraftConstraints(['tank', 'berserker', 'berserker']));
   // Two self-reliant members + one healable fails the healable floor.
   check('too few healable members fails the bar', !partyMeetsDraftConstraints(['warlock', 'berserker', 'mage']));
+  // #31 striker requirement: a comp with no conventional striker fails even when the
+  // damage sum and healable count pass (the #31 sweep showed these floor out).
+  check('a striker-less party fails the bar', !partyMeetsDraftConstraints(['tank', 'berserker', 'graveAugur']));
+  check('every certified-viable offer contains a striker (500 seeds)', (() => {
+    for (let seed = 1; seed <= 500; seed++) {
+      const pairs = rollDraft(shuffle([...DRAFT_POOL], makeRng(seed)));
+      // At least one assemblable party is viable AND every viable one has a striker.
+      const combos = pairs.reduce<string[][]>((acc, pr) => acc.flatMap((pre) => pr.map((id) => [...pre, id])), [[]]);
+      const viable = combos.filter((c) => partyMeetsDraftConstraints(c as never));
+      if (viable.length === 0) return false;
+      if (!viable.every((c) => c.some((id) => CONVENTIONAL_STRIKERS.has(id as never)))) return false;
+    }
+    return true;
+  })());
 
   // beginDraft is deterministic in the run seed (same offer on the same seed).
   const a = new Run(77); a.beginDraft();

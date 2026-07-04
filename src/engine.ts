@@ -18,6 +18,7 @@ import {
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
+  TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN,
@@ -1453,6 +1454,18 @@ export class Game {
         m.shieldTurns = 0;
         this._log(`${m.name} Braces: the next hit deals ${BRACE_AMOUNT} less (fades in ${BRACE_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'braceApplied', slot: m.slot });
+        break;
+      }
+      case 'provoke': {
+        // Taunt-lite (#31): make any member the enemy's aim, with a light bundled
+        // Defense. Like the Tank's Taunt, future telegraphs auto-aim at them (via
+        // _pickPrimary); the standing blow is not redirected for free.
+        const m = this.members[target as number];
+        m.taunt = TAUNT_LITE_TURNS;
+        m.defense = TAUNT_LITE_TURNS;
+        m.defenseAmount = Math.max(m.defense > 0 ? m.defenseAmount : 0, TAUNT_LITE_DEFENSE);
+        this._log(`${m.name} Provokes — the enemy turns to them (Defense ${TAUNT_LITE_DEFENSE}) for ${TAUNT_LITE_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_LITE_TURNS });
         break;
       }
       case 'cleanse': {

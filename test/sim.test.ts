@@ -6,7 +6,8 @@
 // policy change is caught). The absolute numbers here are the harness's living
 // baseline, not a balance target — see the BASELINE note in sim/run-sim.ts.
 
-import { runSingleRun, runSim } from '../sim/run-sim';
+import { runSingleRun, runSim, allCompositions, seatComposition, runCompositionSweep } from '../sim/run-sim';
+import { MEMBER_POOL } from '../src/constants';
 import { Game } from '../src/engine';
 import { playFight } from '../sim/policy';
 import { HEXWEAVER_DEF, SLOT, defaultBattleConfig, makeDeckCard, resolveCard, partyFromMembers } from '../src/constants';
@@ -52,12 +53,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for #26 (player-first ordering). The party now acts before the enemy's
-  // opening blow — a systemic +~30pp buff — so all three bosses were re-anchored on
-  // HP: Gatewarden 130->155, Hexweaver 158->184, Devourer 182->208. N=1000 reads
-  // full-run 31.7%, bosses 87.2 / 70.2 / 52.7% (all dead-center in-band); Story reads
-  // high (a cruise). This is the N=200 sample (seeds 1-200).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 175, 175, 174, 118, 117, 116, 53]));
+  // Re-pinned for #31 (per-composition pass). The Provoke card joined CARD_POOL (23
+  // -> 24 ids), reshuffling shop offers — the classic trio doesn't buy it (it has the
+  // Tank), so this is pure roll drift and the bands hold. N=1000 reads full-run 32.1%,
+  // bosses 85.9 / 71.5 / 53.6% (all in-band). The Warlock 7->5 nerf does not touch the
+  // trio (no Warlock). This is the N=200 sample (seeds 1-200).
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 172, 172, 170, 116, 116, 114, 55]));
   // Full-run lands in the 25-35% band. The authoritative gate runs at N=1000
   // (ISSUES.md ground rules; see the run-sim baseline note) — this N=200 sample
   // asserts statistical consistency with the band, not the band itself, so
@@ -226,6 +227,27 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   }
   check('the policy always resolves a Beast Warden fight (no stall)', terminated === N, `${terminated}/${N}`);
   check('the Beast Warden party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
+}
+
+// --- per-composition sweep harness (#31) ------------------------------------
+{
+  eq('there are 56 compositions (8-choose-3)', allCompositions().length, 56);
+  // seatComposition puts the tankiest member in the (most-targeted) center slot.
+  const seated = seatComposition(['mage', 'tank', 'skald']); // maxHP 9 / 18 / 10
+  eq('the tankiest member is seated in center', seated[1], 'tank');
+
+  // The #31 ceiling nerf is pinned: at Warlock 7 every Warlock comp cleared the
+  // sweep >85%; 5 caps the ceiling (0 comps clear F8 >85% at N=100 — see the issue).
+  eq('Warlock damage nerfed to tame the ceiling', MEMBER_POOL.warlock.damage, 5);
+
+  // A tiny sweep runs over all 56 comps without stalling and returns finite rates.
+  const reps = runCompositionSweep(4, 1);
+  eq('the sweep reports every composition', reps.length, 56);
+  check('every comp reports a finite full-run rate',
+    reps.every((r) => r.full.rate >= 0 && r.full.rate <= 1 && r.bosses.length === 3));
+  // There is a real power spread across comps (not everything is a cakewalk) — the
+  // authoritative ceiling/floor bands are the manual N=100 sweep in the issue file.
+  check('the sweep shows a real spread (not every comp clears)', reps.some((r) => r.full.rate < 1));
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

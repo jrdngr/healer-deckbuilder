@@ -23,7 +23,7 @@ export type CardId =
   | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration'
   | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
   | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
-  | 'phalanx' | 'brace';
+  | 'phalanx' | 'brace' | 'provoke';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -93,9 +93,11 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // Post-demo roster wave 1 (#27). `slot` here is a nominal home slot only — a
   // drafted member takes whatever slot it is assigned; the engine uses the map
   // index for placement and reads only id/name/ability/stats from the pool.
-  // Warlock: highest damage in the game, but Soul Tithe burns him each turn and
-  // Dark Bargain trades HP for MP — an HP-bottleneck DPS.
-  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 15, damage: 7, ability: 'darkBargain' },
+  // Warlock: a high-damage DPS, but Soul Tithe burns him each turn and Dark Bargain
+  // trades HP for MP — an HP-bottleneck DPS. (#31 nerf: 7 -> 5 damage. At 7, every
+  // Warlock comp cleared the sweep at 86-93% — a +34pp ceiling outlier the
+  // comp-agnostic boss HP couldn't absorb without wrecking the trio baseline.)
+  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 15, damage: 5, ability: 'darkBargain' },
   // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
   skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
@@ -139,7 +141,7 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // Conservative damage rating per member (the review's numbers), used only by the
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
-  ranger: 4, tank: 2, mage: 5, warlock: 7, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
+  ranger: 4, tank: 2, mage: 5, warlock: 5, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
@@ -154,12 +156,20 @@ export const DRAFT_MIN_DAMAGE = 8;        // a viable party's conservative damag
 export const DRAFT_STRONG_DAMAGE = 4;     // "one member >= 4" — a real damage threat
 export const DRAFT_MIN_HEALABLE = 2;      // a viable party needs >= 2 conventionally-healable members
 
+// The members that deal reliable, self-sufficient damage (the #31 sweep showed a
+// comp with NO conventional striker floors out — the Skald/Warden/Berserker need
+// support the fixed policy can't always give). A viable draft needs at least one.
+export const CONVENTIONAL_STRIKERS: Set<MemberId> = new Set<MemberId>(['ranger', 'mage', 'warlock']);
+
 // Does this exact party (a member per slot) clear the draft's viability bar?
+// Tightened by #31: also require a conventional striker, so a certified-viable
+// offer can actually kill the bosses (not just pass a paper damage sum).
 export function partyMeetsDraftConstraints(ids: MemberId[]): boolean {
   const total = ids.reduce((s, id) => s + DRAFT_RATING[id], 0);
   const hasStrong = ids.some((id) => DRAFT_RATING[id] >= DRAFT_STRONG_DAMAGE);
+  const hasStriker = ids.some((id) => CONVENTIONAL_STRIKERS.has(id));
   const healable = ids.filter((id) => CONVENTIONALLY_HEALABLE.has(id)).length;
-  return total >= DRAFT_MIN_DAMAGE && hasStrong && healable >= DRAFT_MIN_HEALABLE;
+  return total >= DRAFT_MIN_DAMAGE && hasStrong && hasStriker && healable >= DRAFT_MIN_HEALABLE;
 }
 
 // Every party the player could assemble from an offer (one option per pair).
@@ -594,6 +604,11 @@ export const BOAR_TURNS = 4;        // Call Boar: enemy turns the Boar stands be
 export const BOAR_STRIKE_BONUS = 4; // the Boar lends the Warden this much strike while it stands (1 -> 5)
 export const DEFENSE_TURNS = 4;  // enemy turns Defense lasts (granted alongside Taunt)
 export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fading unused
+// Provoke / "Taunt-lite" (#31): a purchasable card so a taunt-less draft can make
+// ANY member the enemy's aim, without forcing the Tank into every party. Lighter
+// than the Tank's ability (fewer turns, same +1 Defense) so the Tank stays best.
+export const TAUNT_LITE_TURNS = 2;   // enemy turns the provoked member holds Taunt
+export const TAUNT_LITE_DEFENSE = 1; // bundled Defense strength while provoked
 
 // Card set phase A (#15) magnitudes.
 export const CULTIVATE_STRENGTH = 1;  // Regen strength Cultivate adds in place
@@ -689,6 +704,10 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Defense 2 for 2 enemy turns. Cannot target a defended or taunting member.' },
   brace: { id: 'brace', name: 'Brace', cost: 1, target: 'single', noDefense: true,
     desc: 'The next attack on the target deals 2 less. Replaces a Shield (and vice versa).' },
+  // Taunt-lite (#31): make any member the enemy's aim — the taunt-less draft's
+  // redirection tool, so the Tank isn't mandatory in every party.
+  provoke: { id: 'provoke', name: 'Provoke', cost: 1, target: 'single',
+    desc: 'The target Taunts (enemy aims at them) and braces (Defense 1) for 2 enemy turns.' },
 };
 
 // The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
@@ -1030,6 +1049,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   bloodTithe: 'uncommon',
   martyrsGift: 'uncommon',
   phalanx: 'uncommon',
+  provoke: 'uncommon',
   resurrect: 'rare',
   fontOfMana: 'rare',
   barrier: 'rare',

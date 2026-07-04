@@ -87,7 +87,7 @@ the final ship call.**
 | 28 | ✅ Done | [Party W2 — Berserker + Grave Augur](./issues/28-party-w2-berserker-augur.md) | post-demo | 27 | §3.4 |
 | 29 | ✅ Done | [Party W3 — Beast Warden + pet subsystem](./issues/29-party-w3-beast-warden.md) | post-demo | 28 | §3.4 |
 | 30 | ✅ Done | [Party W4 — full draft + weight-surfacing UI](./issues/30-party-w4-draft-ui.md) | post-demo | 29 | §3.4 |
-| 31 | ⬜ Todo | [Party W5 — per-composition balance pass](./issues/31-party-w5-balance-pass.md) | post-demo | 30 | §3.4 |
+| 31 | ✅ Done | [Party W5 — per-composition balance pass](./issues/31-party-w5-balance-pass.md) | post-demo | 30 | §3.4 |
 | 32 | ⬜ Todo | [Post-demo backlog](./issues/32-post-demo-backlog.md) | post-demo | 24 | §4 post-demo |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
