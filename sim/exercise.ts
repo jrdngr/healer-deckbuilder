@@ -24,7 +24,7 @@ import type { Telegraph } from '../src/engine';
 import { Run } from '../src/run';
 import {
   CARDS, RELIC_IDS, RELICS, SLOT, RARITY_PRICE, GROUNDING_ROD_REDUCTION,
-  POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE,
+  POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, MAX_INJURIES,
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig,
 } from '../src/constants';
 import type {
@@ -36,6 +36,7 @@ export interface Coverage {
   abilitiesFired: Set<AbilityId>;
   relicsFired: Set<RelicId>;
   cursesFired: Set<RelicId>;
+  dr1Fired: Set<string>; // DR1 injury avenues driven end-to-end (infirmary / event / totem)
   crashes: Array<{ where: string; error: string }>;
 }
 
@@ -274,12 +275,42 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
   },
 };
 
+// DR1 injury avenues, driven through the run layer end to end. The sim already
+// exercises these across full runs; this pins each deterministically so a run-layer
+// regression (a node that stops clearing, an event that stops healing) is caught in
+// the same sweep as the cards/relics.
+const DR1_PROBES: Record<string, () => boolean> = {
+  recordInjuries: () => {
+    const run = new Run(101);
+    run.recordInjuries([0 as Slot, 0 as Slot, 0 as Slot, 0 as Slot]); // caps at MAX_INJURIES
+    return run.party[0].injuries === MAX_INJURIES;
+  },
+  infirmary: () => {
+    const run = new Run(102);
+    run.party[1].injuries = 2; run.gold = 999;
+    run._enterNode('infirmary');
+    return run.clearInjuryForGold(1 as Slot) && run.party[1].injuries === 1;
+  },
+  fieldHospital: () => {
+    const run = new Run(103);
+    run.party[2].injuries = 1;
+    return run.healInjury(2 as Slot) && run.party[2].injuries === 0;
+  },
+  mendingTotem: () => {
+    const run = new Run(104); run.addRelic('mendingTotem');
+    run.party[0].injuries = 2;
+    run.location = { kind: 'fight', fightIndex: 0 };
+    run.winFight();
+    return run.party[0].injuries === 1;
+  },
+};
+
 // ---------------------------------------------------------------------------
 
 export function exerciseAll(): Coverage {
   const cov: Coverage = {
     cardsPlayed: new Set(), abilitiesFired: new Set(),
-    relicsFired: new Set(), cursesFired: new Set(), crashes: [],
+    relicsFired: new Set(), cursesFired: new Set(), dr1Fired: new Set(), crashes: [],
   };
 
   // Card exerciser: a plain punching-bag fight covers most cards; a Hexweaver
@@ -302,6 +333,12 @@ export function exerciseAll(): Coverage {
       cov.crashes.push({ where: `probe:${id}`, error: String(err) });
     }
   }
+
+  // DR1 injury-avenue drive-throughs.
+  for (const [name, probe] of Object.entries(DR1_PROBES)) {
+    try { if (probe()) cov.dr1Fired.add(name); }
+    catch (err) { cov.crashes.push({ where: `dr1:${name}`, error: String(err) }); }
+  }
   return cov;
 }
 
@@ -318,5 +355,6 @@ if (process.argv[1] && process.argv[1].endsWith('exercise.ts')) {
   console.log(`abilities:     ${cov.abilitiesFired.size}/3${missAbil.length ? `  MISSING: ${missAbil.join(', ')}` : '  (all)'}`);
   console.log(`relics fired:  ${cov.relicsFired.size}/${RELIC_IDS.length}${missRelics.length ? `  MISSING: ${missRelics.join(', ')}` : '  (all)'}`);
   console.log(`curses fired:  ${cov.cursesFired.size}/${curses.length}  (${[...cov.cursesFired].join(', ') || 'none'})`);
+  console.log(`DR1 avenues:   ${cov.dr1Fired.size}/${Object.keys(DR1_PROBES).length}  (${[...cov.dr1Fired].join(', ') || 'none'})`);
   console.log(`crashes:       ${cov.crashes.length}${cov.crashes.length ? '\n  ' + cov.crashes.map((c) => `${c.where}: ${c.error}`).join('\n  ') : ''}`);
 }

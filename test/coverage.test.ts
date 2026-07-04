@@ -44,6 +44,12 @@ const curses = RELIC_IDS.filter((r) => RELICS[r].curse);
 const missingCurses = curses.filter((r) => !cov.cursesFired.has(r));
 check('every curse is exercised', missingCurses.length === 0, `never fired: ${missingCurses.join(', ')}`);
 
+// DR1 injury avenues all drive end-to-end (record a scar, clear it at the
+// Infirmary, heal it at a Field Hospital, shed it with the Mending Totem).
+const dr1 = ['recordInjuries', 'infirmary', 'fieldHospital', 'mendingTotem'];
+const missingDr1 = dr1.filter((a) => !cov.dr1Fired.has(a));
+check('every DR1 injury avenue is exercised', missingDr1.length === 0, `never fired: ${missingDr1.join(', ')}`);
+
 // Determinism: the sweep is a pure function of the engine/run layer, so two
 // runs agree exactly (a coverage regression can't hide behind flakiness).
 const cov2 = exerciseAll();
