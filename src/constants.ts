@@ -7,23 +7,28 @@ export type Slot = 0 | 1 | 2;
 // 'cast' is a non-geometry telegraph: a scripted, no-damage effect (the Hexweaver's
 // Hex/Siphon, the Devourer's Consume) whose resolution runs game logic, not a hit.
 export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep' | 'cast';
-export type CardTarget = 'single' | 'ability' | 'dead' | 'all' | 'none';
+export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
 export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden';
 // 'darkBargain' (Warlock) trades his HP for the healer's MP; 'crescendo' (Skald)
 // draws cards and feeds his cards-played strike; 'rampage' (Berserker) doubles his
 // current strike at an HP cost; 'graveChill' (Augur) weakens the standing telegraph;
-// 'callBoar' (Beast Warden) summons a pet that soaks whole hits. All fire via the
-// Ability card.
+// 'callBoar' (Beast Warden) summons a pet that soaks whole hits. Each fires via that
+// member's own ability card (#44), inserted into the deck when they are deployed.
 export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar';
 export type CardId =
-  | 'ability' | 'lowHeal' | 'highHeal' | 'aoeHeal'
+  | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
   | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration'
   | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
   | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
-  | 'phalanx' | 'brace' | 'provoke';
+  | 'phalanx' | 'brace' | 'provoke'
+  // Per-member ability cards (#44): one bound card per member, inserted into the
+  // battle deck when that member is deployed and firing their ability. The healer
+  // enables the member's move — the player no longer picks which member acts.
+  | 'imbuePoison' | 'bolster' | 'unleash' | 'darkPact'
+  | 'conduct' | 'incite' | 'hush' | 'beckon';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -72,6 +77,10 @@ export interface CardDef {
   // ineligible for them, and later economy modifiers (Taper, #22) gate on the
   // same tag. Keep this the single source of the tag.
   engine?: boolean;
+  // Per-member ability card (#44): when set, playing this card fires the bound
+  // ability on the deployed living member who carries it (no member pick). The
+  // card is unplayable while that member is dead/absent.
+  ability?: AbilityId;
 }
 
 export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 } as const;
@@ -649,10 +658,28 @@ export const HAND_SIZE = 3;
 
 // Card definitions. `target` drives the UI's targeting flow.
 //   'single' -> one living member, 'all' -> no pick, 'dead' -> one dead member,
-//   'none'   -> no pick, 'ability' -> one living member (fires their ability).
+//   'none'   -> no pick. Per-member ability cards (#44) are 'none' + an `ability`
+//   binding: they auto-resolve on the deployed member who carries that ability.
 export const CARDS: Record<CardId, CardDef> = {
-  ability: { id: 'ability', name: 'Ability', cost: 2, target: 'ability',
-    desc: 'Fire a chosen living member\'s ability.' },
+  // --- per-member ability cards (#44): the healer enables the member's move ----
+  // One is inserted into the battle deck for each deployed member; cost mirrors the
+  // old generic Ability card (2 MP). Unplayable while the bound member is down.
+  imbuePoison: { id: 'imbuePoison', name: 'Imbue Venom', cost: 2, target: 'none', ability: 'poison',
+    desc: 'Lace the Ranger\'s arrows — Poison the enemy.' },
+  bolster: { id: 'bolster', name: 'Bolster', cost: 2, target: 'none', ability: 'taunt',
+    desc: 'Steel the Tank — they Taunt the enemy and brace.' },
+  unleash: { id: 'unleash', name: 'Unleash', cost: 2, target: 'none', ability: 'bolt',
+    desc: 'Unleash the Mage\'s stored Charge as a Lightning Bolt.' },
+  darkPact: { id: 'darkPact', name: 'Dark Pact', cost: 2, target: 'none', ability: 'darkBargain',
+    desc: 'Channel the Warlock\'s Dark Bargain — his HP for your MP.' },
+  conduct: { id: 'conduct', name: 'Conduct', cost: 2, target: 'none', ability: 'crescendo',
+    desc: 'Cue the Skald\'s Crescendo — draw cards.' },
+  incite: { id: 'incite', name: 'Incite', cost: 2, target: 'none', ability: 'rampage',
+    desc: 'Incite the Berserker — a doubled strike at an HP cost.' },
+  hush: { id: 'hush', name: 'Hush', cost: 2, target: 'none', ability: 'graveChill',
+    desc: 'Channel the Augur\'s Grave Chill — weaken the enemy\'s telegraph.' },
+  beckon: { id: 'beckon', name: 'Beckon', cost: 2, target: 'none', ability: 'callBoar',
+    desc: 'Beckon the Beast Warden\'s Boar to soak hits at her side.' },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -711,17 +738,36 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'The target Taunts (enemy aims at them) and braces (Defense 1) for 2 enemy turns.' },
 };
 
-// The fixed 15-card starting deck (Quick Heal dropped 3 -> 2 with its buff, flaw #6).
+// The fixed 12-card core starting deck. The three generic Ability cards are gone
+// (#44): each deployed member now inserts their OWN bound ability card at fight
+// lock-in (see abilityCardsForParty), so a full trio still fights with 12 + 3 = 15.
 export const DECK_LIST: CardId[] = [
   'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
   'aoeHeal', 'aoeHeal',
   'regen', 'regen',
   'refresh', 'refresh',
-  'ability', 'ability', 'ability',
   'shield',
   'resurrect',
 ];
+
+// The bound ability card for each ability (#44). Each member contributes exactly
+// this card to the battle deck while deployed.
+export const ABILITY_CARD: Record<AbilityId, CardId> = {
+  poison: 'imbuePoison',
+  taunt: 'bolster',
+  bolt: 'unleash',
+  darkBargain: 'darkPact',
+  crescendo: 'conduct',
+  rampage: 'incite',
+  graveChill: 'hush',
+  callBoar: 'beckon',
+};
+
+// The set of per-member ability card ids — excluded from the shop pool and Retain
+// (they are inserted per-fight, never bought, upgraded, or removed from the run deck).
+export const ABILITY_CARD_IDS: ReadonlySet<CardId> = new Set(Object.values(ABILITY_CARD));
+export const isAbilityCard = (id: CardId): boolean => ABILITY_CARD_IDS.has(id);
 
 // ---------------------------------------------------------------------------
 // Run / battle configuration
@@ -912,15 +958,32 @@ export function defaultParty(): PartyMemberConfig[] {
   return MEMBER_DEFS.map((d) => ({ maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0 }));
 }
 
-// The original 15-card deck as concrete instances (uid = position).
+// The 12-card core deck as concrete instances (uid = position). Member ability
+// cards are added on top per-fight (abilityCardsForParty), not stored here.
 export function defaultDeck(): DeckCard[] {
   return DECK_LIST.map((id, i) => makeDeckCard(id, i));
 }
 
+// The per-fight ability cards for a battle party (#44): one bound card per seated
+// member, resolved to that member's ability (drafted id, else the slot's classic
+// trio default — mirroring the engine's Member construction). Empty slots add none.
+// Given negative uids so they never collide with the persistent run deck, and left
+// out of that deck entirely, so they vanish when the fight ends.
+export function abilityCardsForParty(party: PartyMemberConfig[]): DeckCard[] {
+  const cards: DeckCard[] = [];
+  party.forEach((p, slot) => {
+    if (p.empty) return;
+    const ability = (p.member ? MEMBER_POOL[p.member] : MEMBER_DEFS[slot]).ability;
+    cards.push(makeDeckCard(ABILITY_CARD[ability], -(cards.length + 1)));
+  });
+  return cards;
+}
+
 export function defaultBattleConfig(): BattleConfig {
+  const party = defaultParty();
   return {
-    deck: defaultDeck(),
-    party: defaultParty(),
+    deck: [...defaultDeck(), ...abilityCardsForParty(party)],
+    party,
     healer: { ...DEFAULT_HEALER },
     enemy: { ...DEFAULT_ENEMY },
   };
@@ -944,6 +1007,7 @@ export interface ResolvedCard {
   selfDamage?: number; // Blood cost the target pays (never bumped by modifiers)
   noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
   noTaunt: boolean;   // Phalanx targeting gate: not the taunting member
+  ability?: AbilityId; // per-member ability card (#44): fires the bound member's move
   regenTurns: number;
   refreshTurns: number;
   retain: boolean;
@@ -982,10 +1046,11 @@ export const isEngineCard = (id: CardId): boolean => CARDS[id].engine === true;
 export const isEngineAbility = (ability: AbilityId): boolean =>
   ability === 'darkBargain' || ability === 'crescendo';
 
-// Retain may not lock in the always-on Ability card, any engine card (that would
-// make the MP-economy loop deterministic), or a 0-cost card (free perpetual value).
+// Retain may not lock in a per-member ability card (#44: those are inserted per
+// fight, never part of the persistent deck), any engine card (that would make the
+// MP-economy loop deterministic), or a 0-cost card (free perpetual value).
 const retainEligible = (id: CardId): boolean =>
-  id !== 'ability' && !isEngineCard(id) && CARDS[id].cost > 0;
+  !isAbilityCard(id) && !isEngineCard(id) && CARDS[id].cost > 0;
 
 // Efficient may not touch a 0-cost card (nothing to shave; the #02 floor already
 // blocks reaching 0) or a draw-engine card (a discounted Inspiration compounds
@@ -1106,9 +1171,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // small roster — far less party DPS/bodies than the old fixed trio. HP drops across
 // the board; act 1 especially. Sim-tuned against the campaign policy.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  14, 20, 44,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#41: guaranteed recruit)
-  70, 88, 120,    // Act 2: duo/trio normals + Hexweaver
-  102, 108, 130,  // Act 3: small-roster normals + Devourer
+  14, 20, 66,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#41 recruit; #44 leaner deck)
+  70, 88, 150,    // Act 2: duo/trio normals + Hexweaver (#44 re-anchor)
+  102, 108, 156,  // Act 3: small-roster normals + Devourer (#44 re-anchor)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
@@ -1141,7 +1206,6 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   aoeHeal: 'uncommon',
   shield: 'uncommon',
   refresh: 'uncommon',
-  ability: 'uncommon',
   overgrowth: 'uncommon',
   bloom: 'uncommon',
   inspiration: 'uncommon',
@@ -1155,11 +1219,17 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   fontOfMana: 'rare',
   barrier: 'rare',
   grimHarvest: 'rare',
+  // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
+  // rarity is required by the Record type but inert for these.
+  imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', darkPact: 'uncommon',
+  conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
-// buffed 1-MP heal-2 it is a starter card, not a shop purchase.
-export const CARD_POOL: CardId[] = (Object.keys(CARDS) as CardId[]).filter((id) => id !== 'lowHeal');
+// buffed 1-MP heal-2 it is a starter card, not a shop purchase. Per-member ability
+// cards (#44) are inserted per-fight, never bought — excluded here.
+export const CARD_POOL: CardId[] = (Object.keys(CARDS) as CardId[])
+  .filter((id) => id !== 'lowHeal' && !isAbilityCard(id));
 
 // Party member stat upgrades.
 export type PartyStat = 'maxHP' | 'damage' | 'ability';
@@ -1510,6 +1580,7 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     selfDamage: base.selfDamage,
     noDefense: base.noDefense === true,
     noTaunt: base.noTaunt === true,
+    ability: base.ability,
     regenTurns: REGEN_TURNS + lingering * MOD_LINGERING_TURNS,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
     retain,

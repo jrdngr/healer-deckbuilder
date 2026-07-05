@@ -25,10 +25,10 @@ import { Run } from '../src/run';
 import {
   CARDS, RELIC_IDS, RELICS, SLOT, RARITY_PRICE, GROUNDING_ROD_REDUCTION,
   POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, injuryRecordCap,
-  DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig,
+  DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
 } from '../src/constants';
 import type {
-  CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot,
+  CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
 } from '../src/constants';
 
 export interface Coverage {
@@ -43,11 +43,11 @@ export interface Coverage {
 const ALL_CARDS = Object.keys(CARDS) as CardId[];
 const ALL_ABILITIES: AbilityId[] = ['poison', 'taunt', 'bolt'];
 
-// A deck with at least one of every card, plus a few enablers: extra Ability
-// cards to fire all three abilities, and Regen sources so Cultivate/Bloom (which
-// require an active Regen on their target) always have fodder.
+// A deck with at least one of every core card, plus a few enablers: the classic
+// trio's bound ability cards (#44) to fire Poison/Taunt/Bolt, and Regen sources so
+// Cultivate/Bloom (which require an active Regen on their target) always have fodder.
 const EXERCISE_DECK: CardId[] = [
-  'ability', 'ability', 'ability',
+  'imbuePoison', 'bolster', 'unleash',
   'regen', 'regen', 'lifebloom', 'overgrowth', 'cultivate', 'bloom',
   'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'refresh', 'cleanse',
   'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
@@ -80,34 +80,29 @@ function legalPlay(game: Game, handIndex: number): { target: number | null } | n
   return null;
 }
 
+// Record a successful play in the coverage set — including which ability fired
+// (#44: ability cards are bound, so the card id carries the ability).
+function recordPlay(dc: DeckCard, cov: Coverage): void {
+  cov.cardsPlayed.add(dc.id);
+  const ability = CARDS[dc.id].ability;
+  if (ability) cov.abilitiesFired.add(ability);
+}
+
 // Make one play this phase, biased to a card we have not yet exercised. Returns
 // false when nothing playable remains (the turn should end).
 function exerciseOnePlay(game: Game, cov: Coverage): boolean {
-  // Pass 1 — a not-yet-played card, or an Ability aimed at an unfired ability.
+  // Pass 1 — a not-yet-played card (ability cards self-resolve on their bound member).
   for (let i = 0; i < game.hand.length; i++) {
     const dc = game.hand[i];
-    if (dc.id === 'ability') {
-      const m = game.members.find((x) => x.alive && !cov.abilitiesFired.has(x.ability) && game.canPlay(i, x.slot) === null);
-      if (m && game.playCard(i, m.slot).ok) {
-        cov.abilitiesFired.add(m.ability); cov.cardsPlayed.add('ability'); return true;
-      }
-    } else if (!cov.cardsPlayed.has(dc.id)) {
-      const p = legalPlay(game, i);
-      if (p && game.playCard(i, p.target).ok) { cov.cardsPlayed.add(dc.id); return true; }
-    }
+    if (cov.cardsPlayed.has(dc.id)) continue;
+    const p = legalPlay(game, i);
+    if (p && game.playCard(i, p.target).ok) { recordPlay(dc, cov); return true; }
   }
   // Pass 2 — any legal play, to keep drawing so the rest of the deck comes around.
   for (let i = 0; i < game.hand.length; i++) {
     const dc = game.hand[i];
     const p = legalPlay(game, i);
-    if (p && game.playCard(i, p.target).ok) {
-      cov.cardsPlayed.add(dc.id);
-      if (dc.id === 'ability' && typeof p.target === 'number') {
-        const m = game.members[p.target];
-        if (m) cov.abilitiesFired.add(m.ability);
-      }
-      return true;
-    }
+    if (p && game.playCard(i, p.target).ok) { recordPlay(dc, cov); return true; }
   }
   return false;
 }
@@ -197,7 +192,7 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
   },
   warDrum: () => {
     const g = probeGame(['warDrum']); g.start();
-    g.playCard(give(g, 'ability'), SLOT.CENTER); // Taunt primes the drum
+    g.playCard(give(g, 'bolster')); // Taunt primes the drum
     g.endTurn(); // the party phase resolves the doubled auto
     return g.log.some((e) => e.text.includes('War Drum'));
   },
@@ -214,8 +209,8 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
   },
   echoLocket: () => {
     const g = probeGame(['echoLocket']); g.start();
-    const i = give(g, 'ability'); const uid = g.hand[i].uid;
-    g.playCard(i, SLOT.LEFT); // Poison — the Locket returns it
+    const i = give(g, 'imbuePoison'); const uid = g.hand[i].uid;
+    g.playCard(i); // Poison — the Locket returns it
     return g.hand.some((c) => c.uid === uid);
   },
   stormglass: () => {
@@ -329,7 +324,7 @@ export function exerciseAll(): Coverage {
 // does not also run the report.
 if (process.argv[1] && process.argv[1].endsWith('exercise.ts')) {
   const cov = exerciseAll();
-  const missCards = ALL_CARDS.filter((c) => !cov.cardsPlayed.has(c));
+  const missCards = ALL_CARDS.filter((c) => !isAbilityCard(c) && !cov.cardsPlayed.has(c));
   const missAbil = ALL_ABILITIES.filter((a) => !cov.abilitiesFired.has(a));
   const missRelics = RELIC_IDS.filter((r) => !cov.relicsFired.has(r));
   const curses = RELIC_IDS.filter((r) => RELICS[r].curse);

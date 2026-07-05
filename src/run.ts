@@ -8,7 +8,7 @@
 
 import {
   ENEMY_HP_BY_FIGHT, ENEMY_ATTACK_BONUS, ENEMY_ENRAGE_TURN_BY_FIGHT, isActBoss, actOfFight,
-  ENEMY_MAX_HP, ENRAGE_TURN, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard,
+  ENEMY_MAX_HP, ENRAGE_TURN, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard, abilityCardsForParty,
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
@@ -405,31 +405,36 @@ export class Run {
   // Build the config for the fight at the current location, straight from the tuned
   // per-act curve (there is a single mode — no difficulty modifiers).
   toBattleConfig(): BattleConfig {
+    // The engine fights with a length-3 party, one entry per battle slot. Each
+    // slot maps through `deployment` to a roster member; an unseated slot (null)
+    // becomes an empty slot the engine builds as absent (dead/untargetable).
+    // Injuries (DR1) bite here for seated members: the fight gets reduced base
+    // stats, so every downstream engine site (HP construction, healing clamp,
+    // Vanguard full-HP check, ability strength) sees the scarred numbers with
+    // no further plumbing. maxHP floored at 1 and damage at 0; abilityPower may
+    // go negative (a Broken member), floored where each ability resolves.
+    // NOTE: any new PartyMemberConfig field must be threaded here explicitly —
+    // this literal silently drops fields otherwise (the drafted-identity bug).
+    const party = this.deployment.map((ri): PartyMemberConfig => {
+      const p = ri == null ? undefined : this.roster[ri];
+      if (!p) return { maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true };
+      return {
+        maxHP: Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries)),
+        damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
+        abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
+        injuries: p.injuries,
+        member: p.member, // drafted identity (#27) — dropping this reverts to trio abilities
+        // 'incapacitate' injury mode: enters the fight dead and unresurrectable.
+        incapacitated: injuryIncapacitates(p.injuries),
+      };
+    });
     return {
-      deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
-      // The engine fights with a length-3 party, one entry per battle slot. Each
-      // slot maps through `deployment` to a roster member; an unseated slot (null)
-      // becomes an empty slot the engine builds as absent (dead/untargetable).
-      // Injuries (DR1) bite here for seated members: the fight gets reduced base
-      // stats, so every downstream engine site (HP construction, healing clamp,
-      // Vanguard full-HP check, ability strength) sees the scarred numbers with
-      // no further plumbing. maxHP floored at 1 and damage at 0; abilityPower may
-      // go negative (a Broken member), floored where each ability resolves.
-      // NOTE: any new PartyMemberConfig field must be threaded here explicitly —
-      // this literal silently drops fields otherwise (the drafted-identity bug).
-      party: this.deployment.map((ri): PartyMemberConfig => {
-        const p = ri == null ? undefined : this.roster[ri];
-        if (!p) return { maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true };
-        return {
-          maxHP: Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries)),
-          damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
-          abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
-          injuries: p.injuries,
-          member: p.member, // drafted identity (#27) — dropping this reverts to trio abilities
-          // 'incapacitate' injury mode: enters the fight dead and unresurrectable.
-          incapacitated: injuryIncapacitates(p.injuries),
-        };
-      }),
+      // #44: each deployed member inserts their bound ability card into the battle
+      // deck for this fight only. abilityCardsForParty gives them negative uids and
+      // never touches the persistent run deck, so they vanish when the fight ends —
+      // and a smaller deployment fields fewer ability cards (a real small-party cost).
+      deck: [...this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })), ...abilityCardsForParty(party)],
+      party,
       healer: { ...this.healer },
       relics: [...this.relics],
       spentRelics: [...this.spentRelics],

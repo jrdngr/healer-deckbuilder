@@ -16,7 +16,7 @@ import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, TITHE_AMOUNT,
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
-  DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL,
+  DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
 
@@ -30,6 +30,11 @@ const REFRESH_TURN_GATE = 6; // only prime Refresh in the early game, when the p
 
 function handIndexOf(game: Game, id: CardId): number {
   return game.hand.findIndex((c) => c.id === id);
+}
+// The hand index of a member's bound ability card (#44). Ability cards are 'none'
+// target — played with no slot pick (the engine resolves the bound member).
+function abilityCardIndex(game: Game, ability: AbilityId): number {
+  return handIndexOf(game, ABILITY_CARD[ability]);
 }
 function cardCost(game: Game, idx: number): number {
   return game.effectiveCost(resolveCard(game.hand[idx])); // 0 while a Surge is pending
@@ -77,9 +82,9 @@ function tryRetaunt(game: Game): boolean {
   if (!tank.alive || tank.taunt > 1) return false;
   const anyoneHurt = game.livingMembers().some((m) => m.hp < m.maxHP * 0.5);
   if (!game.config.enemy.boss && !anyoneHurt) return false;
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'taunt');
   if (!affordable(game, idx)) return false;
-  game.playCard(idx, SLOT.CENTER);
+  game.playCard(idx);
   return true;
 }
 
@@ -94,8 +99,8 @@ function tryBraceChannel(game: Game): boolean {
   if (!t || !t.channel) return false;
   const tank = game.tank;
   if (tank.alive && tank.taunt <= (t.turnsUntilResolve ?? 1)) {
-    const idx = handIndexOf(game, 'ability');
-    if (affordable(game, idx)) { game.playCard(idx, SLOT.CENTER); return true; }
+    const idx = abilityCardIndex(game, 'taunt');
+    if (affordable(game, idx)) { game.playCard(idx); return true; }
   }
   const incoming = incomingDamage(game);
   for (const m of saveOrder(game)) {
@@ -196,13 +201,13 @@ function tryBolt(game: Game): boolean {
   // RIGHT, so the trio's line is unchanged.
   const mage = memberByAbility(game, 'bolt');
   if (!mage) return false;
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'bolt');
   if (!affordable(game, idx)) return false;
   const dmg = BOLT_BASE + mage.abilityPower + BOLT_CHARGE_MULT * mage.charge;
-  if (dmg >= game.enemy.hp) { game.playCard(idx, mage.slot); return true; } // the kill ends it now
+  if (dmg >= game.enemy.hp) { game.playCard(idx); return true; } // the kill ends it now
   if (channelThreatUnanswered(game)) return false;
   if (mage.charge >= Math.min(BOLT_CHARGE_GATE, CHARGE_MAX)) {
-    game.playCard(idx, mage.slot);
+    game.playCard(idx);
     return true;
   }
   return false;
@@ -216,9 +221,9 @@ function tryPoison(game: Game): boolean {
   const ranger = memberByAbility(game, 'poison');
   if (!ranger) return false;
   if (channelThreatUnanswered(game)) return false;
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'poison');
   if (!affordable(game, idx)) return false;
-  game.playCard(idx, ranger.slot);
+  game.playCard(idx);
   return true;
 }
 
@@ -325,7 +330,7 @@ function tryDarkBargain(game: Game): boolean {
   if (!w) return false;
   if (channelThreatUnanswered(game)) return false;
   if (game.mp + BARGAIN_MP > game.maxMana) return false; // no room to bank the MP
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'darkBargain');
   if (!affordable(game, idx)) return false;
   const cost = BARGAIN_HP_BASE + BARGAIN_HP_GROWTH * w.bargainCasts;
   // Front-load only: cap the casts, and keep him well clear of the danger zone
@@ -333,7 +338,7 @@ function tryDarkBargain(game: Game): boolean {
   // strands the party's biggest striker one blow from death.
   if (w.bargainCasts >= 2) return false;
   if (w.hp - cost < cost + TITHE_AMOUNT + 4) return false;
-  game.playCard(idx, w.slot);
+  game.playCard(idx);
   return true;
 }
 
@@ -348,10 +353,10 @@ function tryCrescendo(game: Game): boolean {
   const s = memberByAbility(game, 'crescendo');
   if (!s) return false;
   if (channelThreatUnanswered(game)) return false;
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'crescendo');
   if (!affordable(game, idx)) return false;
   if (game.mp - cardCost(game, idx) < 1) return false; // never strand ourselves at 0 MP
-  game.playCard(idx, s.slot);
+  game.playCard(idx);
   return true;
 }
 
@@ -363,9 +368,9 @@ function tryGraveChill(game: Game): boolean {
   if (!augur) return false;
   const t = game.telegraph;
   if (!t || t.cast || t.damage < 5) return false; // only worth blunting a real threat
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'graveChill');
   if (!affordable(game, idx)) return false;
-  game.playCard(idx, augur.slot);
+  game.playCard(idx);
   return true;
 }
 
@@ -375,13 +380,13 @@ function tryGraveChill(game: Game): boolean {
 function tryRampage(game: Game): boolean {
   const b = memberByAbility(game, 'rampage');
   if (!b) return false;
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'rampage');
   if (!affordable(game, idx)) return false;
   const dmg = 2 * game.memberDamage(b) + b.abilityPower;
-  if (dmg >= game.enemy.hp) { game.playCard(idx, b.slot); return true; } // the kill ends it now
+  if (dmg >= game.enemy.hp) { game.playCard(idx); return true; } // the kill ends it now
   if (channelThreatUnanswered(game)) return false;
   const [band1] = game.berserkerThresholds();
-  if (b.hp <= band1 && game.mp >= 4) { game.playCard(idx, b.slot); return true; }
+  if (b.hp <= band1 && game.mp >= 4) { game.playCard(idx); return true; }
   return false;
 }
 
@@ -392,9 +397,9 @@ function tryCallBoar(game: Game): boolean {
   const warden = memberByAbility(game, 'callBoar');
   if (!warden || warden.boarHp > 0) return false;
   if (channelThreatUnanswered(game)) return false; // answer a channel first
-  const idx = handIndexOf(game, 'ability');
+  const idx = abilityCardIndex(game, 'callBoar');
   if (!affordable(game, idx)) return false;
-  game.playCard(idx, warden.slot);
+  game.playCard(idx);
   return true;
 }
 
@@ -466,15 +471,17 @@ export function playFight(game: Game, turnCap = 40): void {
 // survivability (the levers the balance pass found mattered).
 // ---------------------------------------------------------------------------
 
-// Buy-value of each card the shops can sell (higher = buy first). Ability cards
-// feed the Taunt/Bolt/Poison line; Refresh feeds the MP economy.
+// Buy-value of each card the shops can sell (higher = buy first). Refresh feeds
+// the MP economy. Per-member ability cards (#44) are never shopped (0, inert).
 const CARD_BUY_VALUE: Record<CardId, number> = {
-  ability: 9, fontOfMana: 8, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2,
+  fontOfMana: 8, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2,
   // Phase-A/B cards (#15/#16) the fight policy has no tactic for yet stay below
   // the buy threshold — a card the policy never plays is dead deck weight.
   overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
   lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
   phalanx: 2, brace: 2, provoke: 2,
+  // Ability cards (#44) — inserted per-fight, never bought.
+  imbuePoison: 0, bolster: 0, unleash: 0, darkPact: 0, conduct: 0, incite: 0, hush: 0, beckon: 0,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 
@@ -553,13 +560,13 @@ function shopPartyNode(run: Run): void {
 function shopModifierNode(run: Run): void {
   if (run.nodeContent?.type !== 'cardUpgrade') return;
   const offers = run.nodeContent.offers;
-  // Apply the first affordable modifier to an ability card if possible (efficient
-  // makes Taunt/Bolt cheaper), else any card that can take it.
+  // Apply the first affordable modifier to any card that can take it. (#44: ability
+  // cards live only in the battle deck now, so there is no persistent ability card
+  // to preferentially upgrade — the general fallback is all that remains.)
   for (let i = 0; i < offers.length; i++) {
     if (offers[i].price > run.gold) continue;
     const mod = offers[i].modifier;
-    const target = run.deck.find((c) => c.id === 'ability' && c.upgrades.length < 2 && run.eligibleModifiersFor(c).includes(mod))
-      ?? run.deck.find((c) => run.eligibleModifiersFor(c).includes(mod));
+    const target = run.deck.find((c) => run.eligibleModifiersFor(c).includes(mod));
     if (target && run.buyModifierOffer(i, target.uid)) return;
   }
 }

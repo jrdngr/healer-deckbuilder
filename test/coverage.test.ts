@@ -8,7 +8,7 @@
 // relic starts throwing under real play, this fails.
 
 import { exerciseAll } from '../sim/exercise';
-import { CARDS, RELIC_IDS, RELICS } from '../src/constants';
+import { CARDS, RELIC_IDS, RELICS, isAbilityCard } from '../src/constants';
 import type { CardId, AbilityId } from '../src/constants';
 
 let passed = 0;
@@ -24,13 +24,15 @@ const cov = exerciseAll();
 check('no crashes across the mechanic sweep', cov.crashes.length === 0,
   cov.crashes.map((c) => `${c.where}: ${c.error}`).join(' | '));
 
-// Every card is played through the engine at least once.
-const allCards = Object.keys(CARDS) as CardId[];
+// Every core card is played through the engine at least once. Per-member ability
+// cards (#44) are inserted per-fight and covered via their bound abilities below
+// (the trio's Poison/Taunt/Bolt), so they are not required in the core-card sweep.
+const allCards = (Object.keys(CARDS) as CardId[]).filter((c) => !isAbilityCard(c));
 const missingCards = allCards.filter((c) => !cov.cardsPlayed.has(c));
 check('every card is exercised in a live fight', missingCards.length === 0,
   `never played: ${missingCards.join(', ')}`);
 
-// All three abilities fire (Poison / Taunt / Bolt behind the Ability card).
+// All three abilities fire (Poison / Taunt / Bolt via their bound ability cards).
 const abilities: AbilityId[] = ['poison', 'taunt', 'bolt'];
 const missingAbil = abilities.filter((a) => !cov.abilitiesFired.has(a));
 check('every ability is fired', missingAbil.length === 0, `never fired: ${missingAbil.join(', ')}`);

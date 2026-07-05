@@ -6,12 +6,15 @@ import type { CardId, ResolvedCard } from '../constants';
 // Visual family of each card, for the edge tint: heals green, protective wards
 // gold, mana economy blue, aggressive power plays red-purple. Presentation only.
 const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
-  ability: 'power', lowHeal: 'heal', highHeal: 'heal', aoeHeal: 'heal',
+  lowHeal: 'heal', highHeal: 'heal', aoeHeal: 'heal',
   regen: 'heal', shield: 'ward', resurrect: 'heal', refresh: 'mana', cleanse: 'heal',
   overgrowth: 'heal', cultivate: 'heal', bloom: 'heal', fontOfMana: 'mana', inspiration: 'mana',
   lifebloom: 'heal', surge: 'mana', battleHymn: 'power', barrier: 'ward',
   bloodTithe: 'mana', martyrsGift: 'heal', grimHarvest: 'power',
   phalanx: 'ward', brace: 'ward', provoke: 'ward',
+  // Per-member ability cards (#44): the healer enabling an aggressive move — power.
+  imbuePoison: 'power', bolster: 'ward', unleash: 'power', darkPact: 'mana',
+  conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward',
 };
 
 interface CardProps {

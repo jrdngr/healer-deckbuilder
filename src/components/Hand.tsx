@@ -25,7 +25,6 @@ function promptFor(card: ResolvedCard, game: Game): string {
     }
   }
   const kind = card.target === 'dead' ? 'a dead member'
-    : card.target === 'ability' ? 'a living member (fires their ability)'
     : 'a living member';
   return `Select ${kind} for ${card.name} — or Cancel`;
 }

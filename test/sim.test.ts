@@ -10,8 +10,16 @@ import { runSingleRun, runSim } from '../sim/run-sim';
 import { MEMBER_POOL } from '../src/constants';
 import { Game } from '../src/engine';
 import { playFight } from '../sim/policy';
-import { HEXWEAVER_DEF, SLOT, defaultBattleConfig, makeDeckCard, resolveCard, partyFromMembers } from '../src/constants';
-import type { CardId } from '../src/constants';
+import { HEXWEAVER_DEF, SLOT, defaultBattleConfig, makeDeckCard, resolveCard, partyFromMembers, abilityCardsForParty, isAbilityCard } from '../src/constants';
+import type { CardId, BattleConfig, MemberId } from '../src/constants';
+
+// #44: swap a config's party AND re-inject the bound ability cards to match it
+// (defaultBattleConfig injected the classic trio's; a party override must rebuild
+// them or the new members have no ability cards to play).
+function setParty(cfg: BattleConfig, ids: MemberId[]): void {
+  cfg.party = partyFromMembers(ids);
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+}
 
 let passed = 0;
 let failed = 0;
@@ -63,10 +71,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // #40 (graveyard): permadead members are now buried instead of returning as fresh
   // copies, so the sim can no longer re-draft the Warlock trap it just killed.
   // #41 (guaranteed act-1 recruit): forks 0/1 always offer a Recruit, so the
-  // Gatewarden is now fought as a duo far more often — its HP was re-anchored
-  // 38 -> 44 to keep it a wall (F2 ~60% conditional at N=200, full-run ~24% at
-  // N=1000), and the bigger act-1 roster lifts the whole downstream curve.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 183, 110, 110, 104, 75, 73, 72, 46]));
+  // Gatewarden is now fought as a duo far more often.
+  // #44 (abilities as per-member cards): each deployed member inserts their own
+  // bound ability card, so small parties field a LEANER, heal-denser deck (the old
+  // redundant generic Ability cards are gone) and the buyer no longer loads up on
+  // offense — the whole curve got easier, so the enemy walls were re-anchored up
+  // (Gatewarden 44->66, Hexweaver 120->150, Devourer 130->156). N=200 runs hot;
+  // full-run ~26% at N=1000, bosses ~60/80/58% conditional.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 121, 121, 120, 96, 94, 92, 53]));
   // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
@@ -119,7 +131,9 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // the difference measured is decision-making, not draw.
   function hexBattle(seed: number): Game {
     const cfg = defaultBattleConfig();
-    const ids: CardId[] = ['ability', 'ability', 'ability', 'highHeal', 'highHeal', 'lowHeal', 'lowHeal',
+    // #44: the trio's bound ability cards (Imbue Venom / Bolster / Unleash) stand in
+    // for the old three generic Ability cards.
+    const ids: CardId[] = ['imbuePoison', 'bolster', 'unleash', 'highHeal', 'highHeal', 'lowHeal', 'lowHeal',
       'aoeHeal', 'shield', 'shield', 'cleanse', 'cleanse', 'regen', 'refresh'];
     cfg.deck = ids.map((id, i) => makeDeckCard(id, i));
     cfg.enemy = { maxHP: 135, boss: true, attackBonus: 0, def: HEXWEAVER_DEF, enrageTurn: 11 };
@@ -136,11 +150,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
       while (game.phase === 'player') {
         let acted = false;
         const tank = game.tank;
-        const ab = handIdx(game, 'ability');
-        if (tank.alive && tank.taunt <= 1 && afford(game, ab)) { game.playCard(ab, SLOT.CENTER); acted = true; continue; }
+        // #44: each ability is its own bound card, played with no target.
+        const abTaunt = handIdx(game, 'bolster');
+        if (tank.alive && tank.taunt <= 1 && afford(game, abTaunt)) { game.playCard(abTaunt); acted = true; continue; }
         // offense: bolt when charged, else keep poison ticking
-        if (game.mage.alive && game.mageCharge >= 4 && afford(game, ab)) { game.playCard(ab, SLOT.RIGHT); acted = true; continue; }
-        if (game.ranger.alive && game.enemy.poisonTurns === 0 && afford(game, ab)) { game.playCard(ab, SLOT.LEFT); acted = true; continue; }
+        const abBolt = handIdx(game, 'unleash');
+        if (game.mage.alive && game.mageCharge >= 4 && afford(game, abBolt)) { game.playCard(abBolt); acted = true; continue; }
+        const abPoison = handIdx(game, 'imbuePoison');
+        if (game.ranger.alive && game.enemy.poisonTurns === 0 && afford(game, abPoison)) { game.playCard(abPoison); acted = true; continue; }
         // defense: only ever the tank
         if (tank.alive && tank.hp < tank.maxHP * 0.6) {
           for (const id of ['highHeal', 'lowHeal', 'aoeHeal'] as CardId[]) {
@@ -244,7 +261,7 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   let maxCasts = 0;
   for (let s = 1; s <= 40; s++) {
     const cfg = defaultBattleConfig();
-    cfg.party = partyFromMembers(['warlock', 'mage', 'graveAugur']); // taunt-less, warlock present
+    setParty(cfg, ['warlock', 'mage', 'graveAugur']); // taunt-less, warlock present (#44: rebuild ability cards)
     cfg.enemy = { ...cfg.enemy, maxHP: 200 }; // a wall, so MP gets spent and turns pass
     const g = new Game(s, cfg);
     playFight(g, 12);

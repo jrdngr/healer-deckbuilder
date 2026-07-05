@@ -12,7 +12,7 @@ import {
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
-  DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE,
+  DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE, isAbilityCard,
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
@@ -298,11 +298,40 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   const run = new Run(6);
   const cfg = run.toBattleConfig();
-  eq('config deck length tracks run deck', cfg.deck.length, run.deck.length);
+  // #44: the battle deck is the run deck PLUS one bound ability card per deployed
+  // member (the default trio deploys 3), so it runs 3 longer than the run deck.
+  const deployed = run.deployment.filter((d) => d !== null).length;
+  eq('battle deck = run deck + one ability card per deployed member',
+    cfg.deck.length, run.deck.length + deployed);
   eq('non-boss fight is not flagged as the boss', cfg.enemy.boss, false);
   // Config deep-copies the deck (mutating config must not touch the run deck).
   cfg.deck[0].upgrades.push('retain');
   eq('config deck is a copy', run.deck[0].upgrades.length, 0);
+}
+
+// --- #44: toBattleConfig injects one bound ability card per deployed member ----
+{
+  const run = new Run(6);
+  run.roster = partyFromMembers(['ranger', 'tank', 'mage']);
+  const coreLen = run.deck.length;
+
+  // Solo deployment injects exactly one ability card (the seated member's).
+  run.deployment = [null, 0, null];
+  const solo = run.toBattleConfig();
+  const soloAbil = solo.deck.filter((c) => isAbilityCard(c.id));
+  eq('a solo deployment injects one ability card', soloAbil.length, 1);
+  eq('the injected card is the ranger\'s Imbue Venom', soloAbil[0].id, 'imbuePoison');
+  eq('the persistent run deck is untouched (solo)', run.deck.length, coreLen);
+  check('injected ability cards are never in the run deck',
+    !run.deck.some((c) => isAbilityCard(c.id)));
+
+  // A full trio injects three — one bound card per member.
+  run.deployment = [0, 1, 2];
+  const trio = run.toBattleConfig();
+  const trioAbil = trio.deck.filter((c) => isAbilityCard(c.id)).map((c) => c.id).sort();
+  eq('a trio injects three ability cards', trioAbil.length, 3);
+  eq('the three cards are the trio\'s bound abilities',
+    JSON.stringify(trioAbil), JSON.stringify(['bolster', 'imbuePoison', 'unleash']));
 }
 
 // --- card shop --------------------------------------------------------------
@@ -491,13 +520,13 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // The Duplicator: a paid, unupgraded copy of a chosen card.
   const run = new Run(62);
   run.gold = DUPLICATE_PRICE;
-  const target = run.deck.find((c) => c.id === 'ability')!;
+  const target = run.deck.find((c) => c.id === 'highHeal')!;
   target.upgrades.push('efficient'); // the copy must NOT inherit this
   const before = run.deck.length;
   const copy = run.duplicateCard(target.uid);
   check('duplicator returns the copy', copy !== null);
   eq('deck grows by one', run.deck.length, before + 1);
-  eq('the copy shares the id', copy!.id, 'ability');
+  eq('the copy shares the id', copy!.id, 'highHeal');
   eq('the copy is unupgraded', copy!.upgrades.length, 0);
   check('the copy has a fresh uid', copy!.uid !== target.uid);
   eq('the commission is paid', run.gold, 0);
@@ -814,7 +843,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // The deck viewer's grouping matches engine-state counts and hides pile order.
   const mk = (id: CardId, uid: number, up: ModifierId[] = []) => ({ uid, id, upgrades: up });
-  const pile = [mk('highHeal', 1), mk('ability', 2), mk('highHeal', 3), mk('ability', 4, ['efficient']), mk('regen', 5)];
+  const pile = [mk('highHeal', 1), mk('shield', 2), mk('highHeal', 3), mk('shield', 4, ['efficient']), mk('regen', 5)];
   const groups = groupPile(pile);
   eq('viewer total matches the pile', groups.reduce((s, g) => s + g.count, 0), pile.length);
   check('same-name cards group', groups.some((g) => g.label === 'Heal' && g.count === 2));

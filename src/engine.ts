@@ -1217,9 +1217,13 @@ export class Game {
     if (dc == null) return 'no such card';
     const card = resolveCard(dc);
     if (this.mp < this.effectiveCost(card)) return 'not enough MP';
+    // Per-member ability cards (#44) auto-resolve on the bound member — no pick;
+    // they are unplayable while that member is dead or was never deployed.
+    if (card.ability != null && !this._abilityMember(card.ability)) {
+      return 'that member is unavailable';
+    }
     switch (card.target) {
-      case 'single':
-      case 'ability': {
+      case 'single': {
         const m = target == null ? undefined : this.members[target];
         if (!m || !m.alive) return 'target must be a living member';
         // Cultivate / Bloom (#15) operate on an existing Regen — dead without one.
@@ -1271,25 +1275,35 @@ export class Game {
 
     this._applyCard(card, target);
 
-    // Echo Locket (#21): once per fight, the first Poison or Bolt Ability cast
-    // returns the card to hand (its MP was paid; a replay pays again).
-    if (!this.echoUsed && this.hasRelic('echoLocket') && card.id === 'ability' && target != null) {
-      const ability = this.members[target]?.ability;
-      if (ability === 'poison' || ability === 'bolt') {
-        this.echoUsed = true;
-        const i = this.discardPile.lastIndexOf(dc);
-        if (i >= 0) {
-          this.discardPile.splice(i, 1);
-          this.hand.push(dc);
-          this._log('The Echo Locket hums — the Ability card returns to your hand.', 'status');
-          this._emit({ kind: 'draw', count: 1 });
-        }
+    // Echo Locket (#21): once per fight, the first Poison or Bolt ability card cast
+    // (#44: Imbue Venom / Unleash) returns to hand (its MP was paid; a replay pays again).
+    if (!this.echoUsed && this.hasRelic('echoLocket') && (card.ability === 'poison' || card.ability === 'bolt')) {
+      this.echoUsed = true;
+      const i = this.discardPile.lastIndexOf(dc);
+      if (i >= 0) {
+        this.discardPile.splice(i, 1);
+        this.hand.push(dc);
+        this._log('The Echo Locket hums — the ability card returns to your hand.', 'status');
+        this._emit({ kind: 'draw', count: 1 });
       }
     }
     return { ok: true };
   }
 
+  // The deployed living member carrying an ability (#44). Undefined if that member
+  // is dead or was never deployed — which makes their ability card unplayable.
+  _abilityMember(ability: AbilityId): Member | undefined {
+    return this.members.find((m) => m.alive && m.ability === ability);
+  }
+
   _applyCard(card: ResolvedCard, target: number | null): void {
+    // Per-member ability cards (#44): fire the bound member's ability. canPlay has
+    // already ensured a living carrier exists (devPlayCard tolerates its absence).
+    if (card.ability != null) {
+      const m = this._abilityMember(card.ability);
+      if (m) this._fireAbility(m);
+      return;
+    }
     switch (card.id) {
       case 'lowHeal':
       case 'highHeal': {
@@ -1509,10 +1523,6 @@ export class Game {
         this.woundTurns = 0;
         this._log(had ? 'Cleanse lifts the Hex — healing is restored.' : 'Cleanse finds no curse to lift.', 'status');
         this._emit({ kind: 'cleanse', slot: SLOT.CENTER });
-        break;
-      }
-      case 'ability': {
-        this._fireAbility(this.members[target as number]);
         break;
       }
       default:
@@ -1795,9 +1805,9 @@ export class Game {
     this.events = [];
     if (this.status !== 'playing' || this.phase !== 'player') return;
     const card = resolveCard(makeDeckCard(cardId, 0));
-    // single/ability cover the heal/regen/shield/ability cards (all targeted 'single'
-    // or 'ability'); 'dead' is resurrect; 'all'/'none' need no target.
-    const needsLiving = card.target === 'single' || card.target === 'ability';
+    // 'single' covers the heal/regen/shield cards; 'dead' is resurrect; 'all'/'none'
+    // need no target (per-member ability cards (#44) are 'none' and self-resolve).
+    const needsLiving = card.target === 'single';
     let t = target;
     if (t == null) {
       if (needsLiving) {

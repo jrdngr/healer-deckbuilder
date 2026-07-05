@@ -21,9 +21,21 @@ function giveCard(game: Game, cardId: CardId, upgrades: ModifierId[] = []): numb
   game.hand.push(makeDeckCard(cardId, testUid--, upgrades));
   return game.hand.length - 1;
 }
+// #44: the bound ability card for a default-trio slot (LEFT poison / CENTER taunt /
+// RIGHT bolt). Ability cards self-resolve on their member, so they are played with
+// no target: g.playCard(giveAbility(g, slot)).
+const SLOT_ABILITY_CARD: Record<number, CardId> = {
+  [SLOT.LEFT]: 'imbuePoison', [SLOT.CENTER]: 'bolster', [SLOT.RIGHT]: 'unleash',
+};
+function giveAbility(game: Game, slot: number): number {
+  return giveCard(game, SLOT_ABILITY_CARD[slot]);
+}
 
 // --- deck composition -------------------------------------------------------
-eq('deck has 15 cards', DECK_LIST.length, 15);
+// #44: the 3 generic Ability cards left the core deck — each deployed member now
+// inserts their own bound ability card at fight lock-in (see the toBattleConfig
+// injection test in run.test.ts), so the core deck is 12 and a full trio fights 15.
+eq('deck has 12 core cards', DECK_LIST.length, 12);
 {
   const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
@@ -32,7 +44,7 @@ eq('deck has 15 cards', DECK_LIST.length, 15);
   eq('2 Group Heal', counts.aoeHeal, 2);
   eq('2 Regen', counts.regen, 2);
   eq('2 Refresh', counts.refresh, 2);
-  eq('3 Ability', counts.ability, 3);
+  eq('no generic Ability cards in the core deck', counts.ability, undefined);
   eq('1 Shield', counts.shield, 1);
   eq('1 Resurrect', counts.resurrect, 1);
 }
@@ -183,7 +195,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
   const tank = g.members[SLOT.CENTER];
   g.mp = 10;
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
+  g.playCard(giveAbility(g, SLOT.CENTER)); // taunt
   eq('defense set on cast', tank.defense, 4);
   tank.hp = tank.maxHP;
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
@@ -202,7 +214,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
   const tank = g.members[SLOT.CENTER];
   g.mp = 10;
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt -> defense 4
+  g.playCard(giveAbility(g, SLOT.CENTER)); // taunt -> defense 4
   eq('defense starts at 4', tank.defense, 4);
   tank.hp = tank.maxHP; g.endTurn();
   eq('defense after 1 enemy turn', tank.defense, 3);
@@ -236,8 +248,8 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
   g.mageCharge = 4;
   g.enemy.hp = 100;
-  const idx = giveCard(g, 'ability');
-  const res = g.playCard(idx, SLOT.RIGHT); // mage
+  const idx = giveAbility(g, SLOT.RIGHT);
+  const res = g.playCard(idx); // mage
   check('bolt played', res.ok, res.reason);
   eq('bolt dealt base + mult×charge', g.enemy.hp, 100 - (BOLT_BASE + BOLT_CHARGE_MULT * 4));
   eq('charge reset after firing', g.mageCharge, 0);
@@ -248,6 +260,44 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const g = new Game(6);
   g.start(); // player phase 1: charge ticked once (mage alive) => 1
   eq('charge ticks to 1 at start', g.mageCharge, 1);
+}
+
+// --- #44: per-member ability cards are bound and self-resolve ----------------
+{
+  // An ability card fires its BOUND member's ability, whoever the player would
+  // have picked — bolster always taunts the tank, imbueVenom always poisons.
+  const g = new Game(11);
+  g.start();
+  g.mp = 10;
+  g.playCard(giveCard(g, 'bolster')); // no target given
+  eq('bolster fired the tank\'s Taunt with no member pick', g.members[SLOT.CENTER].taunt > 0, true);
+  g.playCard(giveCard(g, 'imbuePoison'));
+  eq('imbueVenom fired the ranger\'s Poison', g.enemy.poisonTurns > 0, true);
+}
+{
+  // A bound ability card is unplayable while its member is dead/absent (mirrors
+  // the old "must target a living member" gate), and playable again once alive.
+  const g = new Game(12);
+  g.start();
+  g.mp = 10;
+  g.members[SLOT.CENTER].alive = false; // tank down
+  g.members[SLOT.CENTER].hp = 0;
+  const idx = giveCard(g, 'bolster');
+  check('bolster is unplayable while the tank is dead', g.canPlay(idx, null) !== null);
+  eq('playing a card with a dead bound member is refused', g.playCard(idx, null).ok, false);
+  // A card whose member was never deployed is likewise unplayable: the default
+  // trio has no Warlock, so darkPact finds no carrier.
+  const pact = giveCard(g, 'darkPact');
+  check('darkPact is unplayable with no Warlock deployed', g.canPlay(pact, null) !== null);
+}
+{
+  // Every ability card is a no-target card (#44), so the UI plays it immediately
+  // with no member-pick prompt (BattleScreen fast-paths target 'none'/'all').
+  for (const id of Object.keys(CARDS) as CardId[]) {
+    const card = CARDS[id];
+    if (card.ability == null) continue;
+    eq(`${id} is a no-target ability card`, card.target, 'none');
+  }
 }
 
 // --- shield absorbs next instance, does not stack --------------------------
@@ -326,8 +376,8 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
   g.tauntRetargetMode = 'future';
   const before = JSON.stringify(g.telegraph!.targets);
-  const idx = giveCard(g, 'ability');
-  g.playCard(idx, SLOT.CENTER); // taunt
+  const idx = giveAbility(g, SLOT.CENTER);
+  g.playCard(idx); // taunt
   eq('taunt set to 4', g.members[SLOT.CENTER].taunt, 4);
   eq('standing telegraph is NOT redirected for free (future mode)',
     JSON.stringify(g.telegraph!.targets), before);
@@ -345,11 +395,11 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn };
   check('standing single-target blow is redirectable', g._standingTelegraphRedirectable());
   const mpBefore = g.mp;
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
+  g.playCard(giveAbility(g, SLOT.CENTER)); // taunt
   eq('standing blow redirected onto the tank',
     JSON.stringify(g.telegraph!.targets), JSON.stringify([SLOT.CENTER]));
   eq('surcharge is +1 MP on top of the Ability cost',
-    g.mp, mpBefore - CARDS.ability.cost - TAUNT_RETARGET_SURCHARGE);
+    g.mp, mpBefore - CARDS.bolster.cost - TAUNT_RETARGET_SURCHARGE);
 }
 
 // --- taunt (surcharge mode): no surcharge on a blow that can't be redirected -
@@ -360,8 +410,8 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.telegraph = { type: 'sweep', hidden: false, damage: 4, targets: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], enraged: false, forTurn: g.turn };
   check('a sweep is not redirectable (hits everyone anyway)', g._standingTelegraphRedirectable() === false);
   const mpBefore = g.mp;
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt
-  eq('no surcharge when redirect is pointless', g.mp, mpBefore - CARDS.ability.cost);
+  g.playCard(giveAbility(g, SLOT.CENTER)); // taunt
+  eq('no surcharge when redirect is pointless', g.mp, mpBefore - CARDS.bolster.cost);
 }
 
 // --- DR1 death-tracking: diedThisFight persists through Resurrect; a Martyr's
@@ -641,17 +691,17 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
 
   g.mp = 10; g.events = [];
-  g.playCard(giveCard(g, 'ability'), SLOT.LEFT); // poison: max(1, 5−10)
+  g.playCard(giveAbility(g, SLOT.LEFT)); // poison: max(1, 5−10)
   const pois = g.events.find((e) => e.kind === 'poisonApplied') as any;
   eq('Broken poison strength floored at 1', pois.amount, 1);
 
   g.mp = 10; g.mageCharge = 0; g.enemy.hp = 100; g.events = [];
-  g.playCard(giveCard(g, 'ability'), SLOT.RIGHT); // bolt base: max(1, 5−10), +0 charge
+  g.playCard(giveAbility(g, SLOT.RIGHT)); // bolt base: max(1, 5−10), +0 charge
   const bolt = g.events.find((e) => e.kind === 'bolt') as any;
   eq('Broken bolt base floored at 1', bolt.amount, 1);
 
   g.mp = 10; g.events = [];
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // taunt: defense max(0, 1−10)
+  g.playCard(giveAbility(g, SLOT.CENTER)); // taunt: defense max(0, 1−10)
   eq('Broken taunt Defense floored at 0', g.members[SLOT.CENTER].defenseAmount, 0);
 }
 
@@ -660,24 +710,24 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const g = new Game(23);
   g.start();
   g.mageCharge = 2; g.enemy.hp = 100; g.mp = 10;
-  let idx = giveCard(g, 'ability');
+  let idx = giveAbility(g, SLOT.RIGHT);
   g.events = [];
-  g.playCard(idx, SLOT.RIGHT); // bolt: 5 + 2×2 = 9
+  g.playCard(idx); // bolt: 5 + 2×2 = 9
   const bolt = g.events.find((e) => e.kind === 'bolt') as any;
   check('bolt event emitted', !!bolt);
   eq('bolt event amount', bolt.amount, BOLT_BASE + BOLT_CHARGE_MULT * 2);
   eq('bolt event enemyHp', bolt.enemyHp, 100 - (BOLT_BASE + BOLT_CHARGE_MULT * 2));
 
-  idx = giveCard(g, 'ability');
+  idx = giveAbility(g, SLOT.LEFT);
   g.events = [];
-  g.playCard(idx, SLOT.LEFT); // poison arrow
+  g.playCard(idx); // poison arrow
   const pois = g.events.find((e) => e.kind === 'poisonApplied') as any;
   check('poison event emitted', !!pois);
   eq('poison event amount', pois.amount, POISON_BASE);
 
-  idx = giveCard(g, 'ability');
+  idx = giveAbility(g, SLOT.CENTER);
   g.events = [];
-  g.playCard(idx, SLOT.CENTER); // taunt
+  g.playCard(idx); // taunt
   check('taunt event emitted', g.events.some((e) => e.kind === 'taunt'));
 
   g.mp = 10;
@@ -818,7 +868,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   cfg.party = cfg.party.map((p) => ({ ...p, abilityPower: 2 }));
   const g = new Game(4, cfg);
   g.start();
-  g.playCard(giveCard(g, 'ability'), SLOT.LEFT);
+  g.playCard(giveAbility(g, SLOT.LEFT));
   eq('poison strength includes abilityPower', g.enemy.poison, POISON_BASE + 2);
 }
 {
@@ -829,7 +879,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.start();
   const before = g.enemy.hp;
   const charge = g.mageCharge;
-  g.playCard(giveCard(g, 'ability'), SLOT.RIGHT);
+  g.playCard(giveAbility(g, SLOT.RIGHT));
   eq('bolt damage includes abilityPower', before - g.enemy.hp,
     BOLT_BASE + 3 + BOLT_CHARGE_MULT * charge);
 }
@@ -891,7 +941,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // Retain gating (issue 03): refuses the always-on Ability card and engine cards.
   check('retain eligible on shield', MODIFIERS.retain.eligible('shield'));
   check('retain eligible on lowHeal', MODIFIERS.retain.eligible('lowHeal'));
-  check('retain refuses the Ability card', !MODIFIERS.retain.eligible('ability'));
+  check('retain refuses a per-member ability card', !MODIFIERS.retain.eligible('bolster'));
   check('retain refuses the engine card Refresh', !MODIFIERS.retain.eligible('refresh'));
   check('Refresh is engine-tagged', isEngineCard('refresh'));
   check('Quick Heal is not engine-tagged', !isEngineCard('lowHeal'));
@@ -1025,7 +1075,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   g.mage.charge = 3;
   g.ranger.charge = 2;
   g.mp = 10;
-  g.playCard(giveCard(g, 'ability'), SLOT.RIGHT); // mage bolt
+  g.playCard(giveAbility(g, SLOT.RIGHT)); // mage bolt
   eq('bolt cleared the caster charge', g.mage.charge, 0);
   eq("bolt left another member's charge alone", g.ranger.charge, 2);
 }
@@ -1034,7 +1084,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const g = new Game(43);
   g.start();
   g.mp = 10;
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // tank taunt
+  g.playCard(giveAbility(g, SLOT.CENTER)); // tank taunt
   eq('taunt landed on the caster', g.tank.taunt, TAUNT_TURNS);
   eq('caster also braced with Defense', g.tank.defense, DEFENSE_TURNS);
   eq('tauntingMember() is the caster', g.tauntingMember(), g.tank);
@@ -1865,7 +1915,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const g = new Game(93); g.start();
   const tank = g.tank;
   g.playCard(giveCard(g, 'phalanx'), SLOT.CENTER); // Defense 2 on the (untaunting) tank
-  g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // Taunt would grant only 1
+  g.playCard(giveAbility(g, SLOT.CENTER)); // Taunt would grant only 1
   eq('Taunt keeps the stronger standing Defense', tank.defenseAmount, PHALANX_DEFENSE);
   eq('Taunt still refreshes the Defense duration', tank.defense, DEFENSE_TURNS);
 }
@@ -2111,7 +2161,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   {
     const g = relicGame(304, ['warDrum']);
     g.start();
-    g.playCard(giveCard(g, 'ability'), SLOT.CENTER); // Taunt
+    g.playCard(giveAbility(g, SLOT.CENTER)); // Taunt
     check('the Drum primes the caster', g.tank.drumPrimed);
     const expected = g.livingMembers().reduce((s, m) => s + g.memberDamage(m), 0) + g.memberDamage(g.tank);
     const ehp = g.enemy.hp;
@@ -2152,22 +2202,22 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   {
     const g = relicGame(307, ['echoLocket']);
     g.start();
-    const idx = giveCard(g, 'ability');
+    const idx = giveAbility(g, SLOT.LEFT);
     const uid = g.hand[idx].uid;
-    g.playCard(idx, SLOT.LEFT); // Poison — the Locket fires
+    g.playCard(idx); // Poison — the Locket fires
     check('the Ability card returns to hand', g.hand.some((c) => c.uid === uid));
     check('the return is spent for the fight', g.echoUsed);
-    const idx2 = giveCard(g, 'ability');
+    const idx2 = giveAbility(g, SLOT.LEFT);
     const uid2 = g.hand[idx2].uid;
     g.mp = 10;
-    g.playCard(idx2, SLOT.LEFT);
+    g.playCard(idx2);
     check('a second cast stays discarded', !g.hand.some((c) => c.uid === uid2));
     // Taunt is neither Poison nor Bolt: it never triggers the Locket.
     const g2 = relicGame(308, ['echoLocket']);
     g2.start();
-    const i3 = giveCard(g2, 'ability');
+    const i3 = giveAbility(g2, SLOT.CENTER);
     const uid3 = g2.hand[i3].uid;
-    g2.playCard(i3, SLOT.CENTER);
+    g2.playCard(i3);
     check('Taunt does not trigger the Locket', !g2.echoUsed && !g2.hand.some((c) => c.uid === uid3));
   }
 
@@ -2479,9 +2529,9 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.drawPile = [makeDeckCard('lowHeal', -900), makeDeckCard('lowHeal', -901), makeDeckCard('lowHeal', -902)];
   const handBefore = g.hand.length;
   g.mp = 10;
-  const idx = giveCard(g, 'ability');
+  const idx = giveCard(g, 'conduct'); // the Skald's bound ability card (#44)
   const played0 = g.cardsPlayedThisPhase;
-  g.playCard(idx, 2); // fire the Skald's Crescendo
+  g.playCard(idx); // fire the Skald's Crescendo
   eq('Crescendo drew CRESCENDO_DRAW cards', g.hand.length, handBefore + CRESCENDO_DRAW);
   eq('Crescendo counts as one card played', g.cardsPlayedThisPhase, played0 + 1);
   check('Crescendo is engine-tagged', isEngineAbility('crescendo'));
