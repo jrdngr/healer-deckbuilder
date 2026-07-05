@@ -1,6 +1,6 @@
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
-import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, DRAFT_RATING, CONVENTIONALLY_HEALABLE } from '../constants';
+import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, CONVENTIONALLY_HEALABLE } from '../constants';
 import type { MemberId } from '../constants';
 
 // One member offer button — shared by the pick-one draft and the Recruit node. The
@@ -14,7 +14,7 @@ export function MemberOfferButton({ id, onClick }: { id: MemberId; onClick: () =
     <button className="draft-member" onClick={onClick} title={flavor}>
       <span className="draft-member-name">{d.name}</span>
       <span className="draft-member-stats">
-        HP {d.maxHP} · DMG {d.damage} · rated {DRAFT_RATING[id]}{healable ? '' : ' · self-reliant'}
+        HP {d.maxHP} · DMG {d.damage}{healable ? '' : ' · self-reliant'}
       </span>
       <span className="draft-member-ability">{flavor}</span>
     </button>
@@ -38,9 +38,9 @@ export function DraftScreen({ run, act }: DraftScreenProps) {
     <main className="shop-screen draft-screen">
       <header className="shop-head">
         <div>
-          <h2>{isStart ? 'Recruit your first hero' : 'A new hero joins your roster'}</h2>
+          <h2>{isStart ? 'Choose your starting hero' : 'A new hero joins your roster'}</h2>
           <p>{isStart
-            ? 'Your first battle is a solo — choose who fights it. More heroes join after each boss.'
+            ? 'Pick one of the three classes to open your run. Your first battle is a solo; more heroes join after each boss.'
             : 'Pick one hero to add to your roster.'}</p>
         </div>
       </header>

@@ -122,8 +122,11 @@ async function render(el: React.ReactElement): Promise<string> {
   const text = await render(<DraftScreen run={run} act={noop} />);
   const options = (run.nodeContent as { options: MemberId[] }).options;
   check('the start draft offers the configured number of heroes', options.length === DRAFT_OFFER_SIZE, String(options.length));
-  check('draft prompts to recruit the first hero', text.includes('Recruit your first hero'), text);
+  check('draft prompts to choose the starting hero', text.includes('Choose your starting hero'), text);
+  check('start draft owns the fixed class pick (no fake-shuffle framing)', text.includes('three classes'), text);
   for (const id of options) check(`draft shows ${id}'s name`, text.includes(MEMBER_POOL[id].name), id);
+  // #43: the generator's damage rating must not leak to the player as a recommendation.
+  check('offer button hides the DRAFT_RATING "rated N" string', !text.includes('rated '), text);
 }
 
 // --- Run-layer screens show ROSTER names, not the classic trio (#36) ------------
