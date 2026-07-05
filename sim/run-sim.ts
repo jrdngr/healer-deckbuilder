@@ -269,8 +269,7 @@ export interface RunOutcome {
   seed: number;
   status: RunStatus;
   fights: FightOutcome[];
-  injuriesAtEnd: number;  // total unhealed scars across the party when the run ended (DR1)
-  goldSpentHealing: number; // gold paid at Infirmary nodes over the run (DR1)
+  injuriesAtEnd: number;  // total unhealed scars across the roster when the run ended (DR1)
 }
 
 // Deterministic per-fight seed derived from the run seed + fight index, so the
@@ -287,7 +286,6 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
   setup?.(run);
   run.beginRun();
   const fights: FightOutcome[] = [];
-  let goldSpentHealing = 0;
   let guard = 0;
   while (run.status === 'playing' && guard < 1000) {
     guard++;
@@ -310,10 +308,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
       case 'branch': advanceBranch(run); break;
       case 'node': {
-        const wasInfirmary = run.nodeContent?.type === 'infirmary';
-        const before = run.gold;
         resolveNode(run);
-        if (wasInfirmary) goldSpentHealing += before - run.gold;
         run.completeNode();
         break;
       }
@@ -332,8 +327,8 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
       default: run.status = 'lost'; break; // unreachable safety net
     }
   }
-  const injuriesAtEnd = run.party.reduce((s, p) => s + p.injuries, 0);
-  return { seed, status: run.status, fights, injuriesAtEnd, goldSpentHealing };
+  const injuriesAtEnd = run.roster.reduce((s, p) => s + p.injuries, 0);
+  return { seed, status: run.status, fights, injuriesAtEnd };
 }
 
 // ---- aggregation ----------------------------------------------------------
@@ -348,7 +343,6 @@ export interface SimReport {
   // DR1 injury telemetry.
   deathsPerWin: number[]; // mean member deaths per WON fight, indexed by fight
   meanInjuries: number;   // mean unhealed scars per run at run end
-  meanGoldHealing: number; // mean gold spent at Infirmary nodes per run
 }
 
 // 95% confidence half-width for a binomial proportion (normal approximation).
@@ -369,12 +363,10 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): Si
   const fightTurnsTotal = new Array(FIGHT_COUNT).fill(0);
   const fightDeathsOnWin = new Array(FIGHT_COUNT).fill(0); // DR1: deaths summed over WON fights
   let injuriesTotal = 0;
-  let goldHealingTotal = 0;
   for (let i = 0; i < n; i++) {
     const outcome = runSingleRun(firstSeed + i, setup);
     if (outcome.status === 'won') fullWins++;
     injuriesTotal += outcome.injuriesAtEnd;
-    goldHealingTotal += outcome.goldSpentHealing;
     for (const f of outcome.fights) {
       fightAttempts[f.fightIndex]++;
       fightTurnsTotal[f.fightIndex] += f.turns;
@@ -388,7 +380,6 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): Si
     meanTurns: fightTurnsTotal.map((t, i) => (fightAttempts[i] ? t / fightAttempts[i] : 0)),
     deathsPerWin: fightDeathsOnWin.map((d, i) => (fightWins[i] ? d / fightWins[i] : 0)),
     meanInjuries: injuriesTotal / n,
-    meanGoldHealing: goldHealingTotal / n,
   };
 }
 
@@ -415,7 +406,7 @@ export function formatReport(r: SimReport): string {
   lines.push('');
   lines.push('DR1 — deaths per won fight:');
   lines.push('  ' + r.deathsPerWin.map((d, i) => `F${i} ${d.toFixed(2)}`).join('  '));
-  lines.push(`Mean unhealed scars at run end: ${r.meanInjuries.toFixed(2)}  ·  mean gold spent healing: ${r.meanGoldHealing.toFixed(1)}`);
+  lines.push(`Mean unhealed scars at run end: ${r.meanInjuries.toFixed(2)}`);
   return lines.join('\n');
 }
 

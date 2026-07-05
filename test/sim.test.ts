@@ -62,15 +62,15 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // below are PROVISIONAL regression gates on the observed numbers until a
   // balance pass (or a re-ratified target) restores deliberate bands.
   //
-  // Re-pinned again for the roster/deployment rework in progress (2026-07): the
-  // sim still quick-plays the trio and deploys it every fight, but the new Recruit
-  // node type perturbs map generation and the post-boss member draft consumes rng,
-  // shifting the whole downstream stream. Salaries then raised GOLD_PER_FIGHT 40->80
-  // (trio net stays 40) and made party upgrades raise a member's fee, nudging the
-  // gold economy a point or two more. Numbers move slightly; the CI bands below
-  // still hold. These will be re-measured once the deploy policy (C7) and the act-1
-  // + salary rebalance (C8) land.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 152, 152, 151, 72, 69, 67, 27]));
+  // Re-pinned again for the roster/deployment rework in progress (2026-07). The sim
+  // quick-plays the trio and deploys it every fight; changes so far: the Recruit node
+  // type and the retired Infirmary reshaped the node-weight table (map gen shifts the
+  // whole downstream stream), the post-boss draft consumes rng, salaries raised
+  // GOLD_PER_FIGHT 40->80, and the 'death' injury mode now REMOVES a member at the 4th
+  // scar — after which the naive sim fields an arbitrary post-boss pick, so the late
+  // game (F8) softens. The CI bands below still hold. These numbers get re-measured
+  // once the deploy/draft policy (C7) and the act-1 + salary rebalance (C8) land.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 150, 149, 148, 74, 73, 72, 18]));
   // Provisional full-run gate around the observed 13.5% (was: the designed
   // 25-35% band). CI-consistency, not a hard threshold, so subsample noise
   // can't fail a healthy build while a real drift still trips it.
@@ -103,10 +103,11 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   check('the bosses still cost member deaths (the DR1 signal)',
     r.deathsPerWin[2] > 0.3 && r.deathsPerWin[5] > 0.3 && r.deathsPerWin[8] > 0.3,
     `F2 ${r.deathsPerWin[2].toFixed(2)} F5 ${r.deathsPerWin[5].toFixed(2)} F8 ${r.deathsPerWin[8].toFixed(2)}`);
-  // Scars are recoverable: the good player carries only a small residual to run end.
-  check('residual scars per run stay bounded', r.meanInjuries >= 0 && r.meanInjuries < 3,
+  // Injuries are permanent now (2026-07): a member removed at the 4th death takes its
+  // scars with it, and the Field Hospital sheds the odd one, so the residual per run
+  // stays bounded rather than spiralling.
+  check('residual scars per run stay bounded', r.meanInjuries >= 0 && r.meanInjuries < 4,
     `${r.meanInjuries.toFixed(2)}`);
-  check('the policy spends gold healing scars', r.meanGoldHealing > 0, `${r.meanGoldHealing.toFixed(1)}`);
 }
 
 // --- issue 13: turtling loses to adapting against the Hexweaver --------------

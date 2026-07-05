@@ -20,8 +20,8 @@ import {
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS, DIFFICULTIES,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
-  MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty, INFIRMARY_PRICE,
-  injuryRecordCap, injuryIncapacitates,
+  MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
+  injuryRecordCap, injuryIncapacitates, injuryKills,
   partyFromMembers, DRAFT_POOL, CLASSIC_TRIO,
   STARTER_MEMBERS, DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
 } from './constants';
@@ -65,7 +65,6 @@ export type NodeContent =
   | { type: 'event'; event: EventDef; done: boolean } // done: resolved once — revisits find it spent
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
-  | { type: 'infirmary'; price: number }                              // clear scars for gold (DR1)
   | { type: 'draft'; options: MemberId[] }                            // pick-one member draft (2026-07)
   | { type: 'recruit'; options: MemberId[]; done: boolean };          // Recruit node: add one member, once
 
@@ -152,10 +151,11 @@ export class Run {
     this.currentEnemyDef = null;
   }
 
-  // TEMPORARY compat shim (removed once the deploy screen + roster pickers land):
-  // the roster IS the party while every fight deploys the whole trio. UI and tests
-  // that still read/write `run.party` proxy the roster until they migrate to
-  // `roster`/`deployment` explicitly.
+  // `party` is a read/write alias for the roster — the run-layer screens that show
+  // or target "the party" (Training Hall, events, the map's injured list) operate on
+  // the whole roster, so this keeps their call sites legible. The BATTLE party (the
+  // length-3 view the engine fights) is a separate thing, built from `deployment` in
+  // toBattleConfig — never confuse `run.party` (roster) with `BattleConfig.party`.
   get party(): PartyMemberConfig[] { return this.roster; }
   set party(v: PartyMemberConfig[]) { this.roster = v; }
 
@@ -274,6 +274,9 @@ export class Run {
   // and where. Seeds a default seating (the first three roster members) the screen
   // can adjust, then waits for confirmDeployment.
   _enterDeploy(fightIndex: number): void {
+    // Permanent death can empty the roster between boss drafts — with no one left to
+    // field, the run is lost.
+    if (this.roster.length === 0) { this.status = 'lost'; return; }
     this.deployment = this._defaultDeployment();
     this.location = { kind: 'deploy', fightIndex };
     this.nodeContent = null;
@@ -445,10 +448,6 @@ export class Run {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
     this.fightsWon += 1;
-    // Mending Totem (DR1) mends after the victory — including any scar this fight
-    // just recorded (the driver records injuries before winFight), so it can undo
-    // a fresh wound as well as an old one.
-    this._mendMostInjured();
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
     // The Rusty Crown (#22) pays its bonus on every win it made harder; Story
     // (#23) pads the purse so newer players can actually buy their way forward.
@@ -512,39 +511,22 @@ export class Run {
   // member that fought there, and scar it. An empty slot (no member deployed) has no
   // roster index and is skipped.
   recordInjuries(slots: Slot[]): void {
+    const killed = new Set<number>();
     for (const s of slots) {
       const ri = this.deployment[s];
       if (ri == null) continue;
       const p = this.roster[ri];
-      if (p) p.injuries = Math.min(injuryRecordCap(), p.injuries + 1);
+      if (!p) continue;
+      p.injuries = Math.min(injuryRecordCap(), p.injuries + 1);
+      if (injuryKills(p.injuries)) killed.add(ri);
     }
-  }
-
-  // Mending Totem (DR1): the most-injured member sheds one scar (ties break to the
-  // lowest slot). Inert without the relic, so the whole injury system stays a no-op
-  // for runs that don't own it.
-  _mendMostInjured(): void {
-    if (!this.hasRelic('mendingTotem')) return;
-    let best = -1;
-    let most = 0;
-    for (let s = 0; s < this.party.length; s++) {
-      if (this.party[s].injuries > most) { most = this.party[s].injuries; best = s; }
+    // Permanent death (2026-07 'death' mode): remove killed members from the roster,
+    // highest index first so a splice never shifts one still to remove. The
+    // deployment is rebuilt at the next deploy step; clear it to drop stale indices.
+    if (killed.size > 0) {
+      for (const ri of [...killed].sort((a, b) => b - a)) this.roster.splice(ri, 1);
+      this.deployment = [null, null, null];
     }
-    if (best >= 0) this.party[best].injuries -= 1;
-  }
-
-  // Infirmary (DR1): pay the node's flat price to clear one scar off a member,
-  // top of the ladder first (decrementing the count sheds the most-recent tier's
-  // penalty). Fails without charging if the node isn't an Infirmary, the member
-  // is unscarred, or the gold is short.
-  clearInjuryForGold(slot: Slot): boolean {
-    if (this.nodeContent?.type !== 'infirmary') return false;
-    const p = this.party[slot];
-    if (!p || p.injuries <= 0) return false;
-    if (this.gold < this.nodeContent.price) return false;
-    this.gold -= this.nodeContent.price;
-    p.injuries -= 1;
-    return true;
   }
 
   // End-of-run score (#24, flaw #21): progress is worth the most, relics a
@@ -568,16 +550,9 @@ export class Run {
     this.branchContent = this.map[forkIndex].branches[branch].nodes.map(() => null);
   }
 
-  // A member carries at least one unhealed scar.
-  hasInjuredMember(): boolean {
-    return this.party.some((p) => p.injuries > 0);
-  }
-
-  // Whether a node of this type can be visited right now. The Infirmary only opens
-  // to a wounded party; the Recruit node is hidden once the roster holds everyone
-  // (nothing left to offer). All other node types are always available.
+  // Whether a node of this type can be visited right now. The Recruit node is hidden
+  // once the roster holds everyone (nothing left to offer); all others are always open.
   nodeAvailable(type: NodeType): boolean {
-    if (type === 'infirmary') return this.hasInjuredMember();
     if (type === 'recruit') return this.availableMembers().length > 0;
     return true;
   }
@@ -629,7 +604,6 @@ export class Run {
       case 'event': return { type: 'event', event: this.rollEvent(), done: false };
       case 'recruit': return { type: 'recruit', options: this._rollMemberOffer(this.availableMembers(), RECRUIT_OFFER_SIZE), done: false };
       case 'reliquary': return { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
-      case 'infirmary': return { type: 'infirmary', price: this.discountedPrice(INFIRMARY_PRICE) };
       default: return null;
     }
   }

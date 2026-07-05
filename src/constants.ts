@@ -848,20 +848,24 @@ export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken', 'Shatter
 // issue. Mutable at runtime on purpose — sim scripts and a future settings
 // toggle flip it without touching the module graph.
 // ---------------------------------------------------------------------------
-export type InjuryMode = 'cap' | 'escalate' | 'incapacitate';
-// Default 'incapacitate' (#33): the 2026-07-04 playtest measured all three modes
-// winrate-identical on the honest line (32.1%), so the choice is legibility, not
-// balance — and 'incapacitate' is the legible one (a 4th death visibly takes the
-// member off the field until a scar is healed), biting exactly the sacrifice line
-// the 'cap' rule let go free. Still mutable at runtime for sim experiments.
-export const INJURY_RULES: { mode: InjuryMode } = { mode: 'incapacitate' };
-export const INCAPACITATE_AT = MAX_INJURIES + 1; // the scar count that incapacitates ('incapacitate' mode)
+//   'death'        — the shipped rule (2026-07): the 4th death PERMANENTLY kills the
+//                    member — they are removed from the roster for good. Injuries are
+//                    permanent (no Infirmary); the Field Hospital event can still shed
+//                    a scar before the 4th, so a wounded hero can be pulled back.
+export type InjuryMode = 'cap' | 'escalate' | 'incapacitate' | 'death';
+// Default 'death' (2026-07 roster rework): the 4th death removes the member from the
+// roster permanently — the sharpest legible cost, and the reason to bench a
+// three-scar hero. Still mutable at runtime for sim experiments.
+export const INJURY_RULES: { mode: InjuryMode } = { mode: 'death' };
+export const INCAPACITATE_AT = MAX_INJURIES + 1; // the scar count that removes/incapacitates the member
+export const DEATH_AT = INCAPACITATE_AT;         // (alias) the scar count that permanently kills under 'death'
 
 // Scar count a run may record for one member under the active mode.
 export function injuryRecordCap(): number {
   switch (INJURY_RULES.mode) {
     case 'cap': return MAX_INJURIES;
     case 'incapacitate': return INCAPACITATE_AT;
+    case 'death': return DEATH_AT;
     case 'escalate': return Number.MAX_SAFE_INTEGER;
   }
 }
@@ -870,6 +874,11 @@ export function injuryRecordCap(): number {
 // unresurrectable) under the active mode.
 export const injuryIncapacitates = (injuries: number): boolean =>
   INJURY_RULES.mode === 'incapacitate' && injuries >= INCAPACITATE_AT;
+
+// Whether this scar count PERMANENTLY kills the member (removed from the roster)
+// under the active mode ('death'). The run layer splices them out.
+export const injuryKills = (injuries: number): boolean =>
+  INJURY_RULES.mode === 'death' && injuries >= DEATH_AT;
 
 // Total penalty of each kind for a member carrying `injuries` scars.
 // 'escalate' extends the 3-tier cycle indefinitely: tier i (1-indexed) grants the
@@ -1065,26 +1074,21 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
 export type NodeType =
   | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade'
   | 'recruit'   // add a member to the roster (2026-07) — a weighted node; hidden when the roster is full
-  | 'infirmary' // clear death-scars for gold (DR1) — a weighted node
   | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
-// The non-fight node types that fill the branches between fights.
+// The non-fight node types that fill the branches between fights. (The Infirmary
+// was retired with the 2026-07 injury rework: injuries are permanent now.)
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'recruit', 'infirmary', 'reliquary',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'recruit', 'reliquary',
 ];
 
 // Weights for placing non-fight node types on the map. The Recruit node (2026-07)
-// grows the roster past the pick-one drafts; like the Infirmary it is a real roll
-// (you must find one), and it is hidden once the roster already holds every member.
+// grows the roster past the pick-one drafts; it is a real roll (you must find one)
+// and is hidden once the roster already holds every member.
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
-  ['recruit', 20], ['infirmary', 24],
+  ['recruit', 20],
 ];
-
-// Infirmary (DR1): flat gold to clear one scar (top of the ladder first). Kept
-// below CARD_REMOVAL_PRICE so a wounded party can realistically pay its scars
-// down rather than hoard — the scar economy is meant to be recoverable. Sim-tuned.
-export const INFIRMARY_PRICE = 20;
 
 // A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks
 // between them. Act bosses sit at fights 2, 5, 8 (the last fight of each act); the
@@ -1388,7 +1392,6 @@ export type RelicId =
   | 'firstLightTaper'// first card each turn costs 0 (cost <=2, non-engine); draw 1 fewer
   | 'duskChime'      // once/fight, a 6+ telegraph is delayed one turn
   | 'martyrsIcon'    // once/fight, a member death becomes survival at 1 HP
-  | 'mendingTotem'   // after each victory, the most-injured member sheds one scar (DR1)
   // --- phase B (#22): curses (bought only, never in spoils, never forced) ---
   | 'pactOfSilence'  // you can no longer Rest; +1 passive MP each turn
   | 'crackedHourglass'// enrage on turn 8; Poison & Bolt +2 power
@@ -1475,8 +1478,7 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Once per RUN, an attack totalling ${DUSK_CHIME_MIN}+ damage is delayed one turn.` },
   martyrsIcon: { id: 'martyrsIcon', name: 'Martyr\'s Icon', rarity: 'rare', icon: '🕊',
     desc: 'Once per RUN, a member death becomes survival at 1 HP.' },
-  mendingTotem: { id: 'mendingTotem', name: 'Mending Totem', rarity: 'rare', icon: '🪬',
-    desc: 'After each victory, your most-injured member sheds one lasting injury.' },
+  // (Mending Totem retired with the 2026-07 injury rework — injuries are permanent.)
   // --- phase B (#22): curses -------------------------------------------------
   pactOfSilence: { id: 'pactOfSilence', name: 'Pact of Silence', rarity: 'rare', icon: '🤐', curse: true,
     desc: `CURSE — you can no longer Rest; gain +${PACT_PASSIVE_MP} MP at the start of each turn.` },

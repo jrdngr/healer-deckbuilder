@@ -44,9 +44,10 @@ const curses = RELIC_IDS.filter((r) => RELICS[r].curse);
 const missingCurses = curses.filter((r) => !cov.cursesFired.has(r));
 check('every curse is exercised', missingCurses.length === 0, `never fired: ${missingCurses.join(', ')}`);
 
-// DR1 injury avenues all drive end-to-end (record a scar, clear it at the
-// Infirmary, heal it at a Field Hospital, shed it with the Mending Totem).
-const dr1 = ['recordInjuries', 'infirmary', 'fieldHospital', 'mendingTotem'];
+// Injury avenues all drive end-to-end (record a scar / permanent death at the 4th,
+// heal one free at a Field Hospital). The Infirmary and Mending Totem were retired
+// with the 2026-07 injury rework — injuries are permanent.
+const dr1 = ['recordInjuries', 'fieldHospital'];
 const missingDr1 = dr1.filter((a) => !cov.dr1Fired.has(a));
 check('every DR1 injury avenue is exercised', missingDr1.length === 0, `never fired: ${missingDr1.join(', ')}`);
 

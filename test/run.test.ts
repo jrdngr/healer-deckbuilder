@@ -11,7 +11,7 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
-  DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
+  DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
   DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE,
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, injuryRecordCap, injuryIncapacitates,
@@ -168,30 +168,21 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('the branch cache is dropped at the fight boundary', run.branchContent.length, 0);
 }
 
-// --- branch hub: the Infirmary only opens to a wounded party ------------------
+// --- branch hub: a full-roster Recruit node is hidden ------------------------
 {
   const run = new Run(32);
   run.beginRun(); deployAll(run);
   run.winFight();
-  run.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
+  run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
   run.chooseBranch(0);
 
-  check('unscarred party: the infirmary is closed', !run.nodeAvailable('infirmary'));
+  // With members still to offer, the Recruit node is open.
+  check('a recruit stop is open while members remain', run.nodeAvailable('recruit'));
+  // Once the roster holds everyone, it hides.
+  run.roster = partyFromMembers(DRAFT_POOL);
+  check('a full-roster recruit stop is hidden', !run.nodeAvailable('recruit'));
   run.enterNode(0);
-  check('entering a closed infirmary is refused', run.location.kind === 'branch');
-
-  run.party[0].injuries = 2;
-  check('a scarred party opens the infirmary', run.nodeAvailable('infirmary'));
-  run.enterNode(0);
-  check('the infirmary opens once someone is hurt',
-    run.location.kind === 'node' && run.nodeContent?.type === 'infirmary');
-
-  // Heal every scar at the counter; on leaving, the door closes again.
-  run.gold = INFIRMARY_PRICE * 2;
-  check('scar 1 treated', run.clearInjuryForGold(0 as Slot));
-  check('scar 2 treated', run.clearInjuryForGold(0 as Slot));
-  run.completeNode();
-  check('a fully-healed party closes the infirmary again', !run.nodeAvailable('infirmary'));
+  check('entering a hidden recruit stop is refused', run.location.kind === 'branch');
   check('every other stop stays open', run.nodeAvailable('event') && run.nodeAvailable('cardShop'));
 }
 
@@ -920,7 +911,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 // --- injuries / scars (DR1): accrual, caps, stat penalties, save round-trip ----
 {
   // This block exercises the graded-scar model and its 3-scar cap; pin it to 'cap'
-  // mode (the module default is now 'incapacitate', #33) and restore it at the end.
+  // mode (the module default is now 'death', 2026-07) and restore it at the end.
   INJURY_RULES.mode = 'cap';
   const run = new Run(7);
   eq('party starts unscarred', run.party.every((p) => p.injuries === 0), true);
@@ -962,7 +953,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('injuries round-trip through a snapshot', restored.party[2].injuries, MAX_INJURIES);
   eq('snapshot with injuries is byte-stable',
     JSON.stringify(restored.toJSON()), JSON.stringify(base.toJSON()));
-  INJURY_RULES.mode = 'incapacitate'; // restore the module default
+  INJURY_RULES.mode = 'death'; // restore the module default
 }
 
 // --- deployment: the battle party is a length-3 view of the roster --------------
@@ -1055,70 +1046,35 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('gold never goes negative after salary', broke.gold >= 0);
 }
 
-// --- Infirmary node (DR1): clear scars for gold, top of the ladder first --------
+// --- Field Hospital heals free; Infirmary + Mending Totem are retired -----------
 {
-  // The Infirmary is a real weighted node (unlike the injected Reliquary).
-  check('infirmary is a placeable node type', NODE_TYPE_WEIGHTS.some(([t]) => t === 'infirmary'));
-
-  const run = new Run(11);
-  run.nodeContent = run._rollNodeContent('infirmary');
-  eq('infirmary content rolls', run.nodeContent?.type, 'infirmary');
-  if (run.nodeContent?.type === 'infirmary') eq('infirmary price is the flat rate', run.nodeContent.price, INFIRMARY_PRICE);
-
-  // A member with all three scars, and enough gold for two clears.
-  run.party[0].injuries = MAX_INJURIES;
-  run.gold = INFIRMARY_PRICE * 2;
-
-  check('treating clears one scar (top of the ladder)', run.clearInjuryForGold(0 as Slot));
-  eq('one scar healed', run.party[0].injuries, MAX_INJURIES - 1);
-  eq('the flat price was charged', run.gold, INFIRMARY_PRICE);
-
-  check('a second treatment works while gold lasts', run.clearInjuryForGold(0 as Slot));
-  eq('scars keep coming off, one per payment', run.party[0].injuries, MAX_INJURIES - 2);
-  eq('purse is spent to zero', run.gold, 0);
-
-  check('an empty purse treats nothing', !run.clearInjuryForGold(0 as Slot));
-  eq('the refused treatment left the scar', run.party[0].injuries, MAX_INJURIES - 2);
-
-  // Unscarred members and non-infirmary nodes are refused without charge.
-  run.gold = INFIRMARY_PRICE;
-  check('an unharmed member is refused', !run.clearInjuryForGold(1 as Slot));
-  eq('no gold lost refusing the unharmed', run.gold, INFIRMARY_PRICE);
-  run.nodeContent = { type: 'cardShop', offers: [] };
-  check('clearing off an infirmary is refused', !run.clearInjuryForGold(0 as Slot));
-
-  // Haggler's Charm discounts the infirmary price like any other.
-  const haggled = new Run(12);
-  haggled.addRelic('hagglersCharm');
-  haggled.nodeContent = haggled._rollNodeContent('infirmary');
-  if (haggled.nodeContent?.type === 'infirmary') {
-    eq('Haggler discounts the infirmary', haggled.nodeContent.price, INFIRMARY_PRICE - HAGGLER_DISCOUNT);
-  }
-
   // Field Hospital event: heal one scar free (top of the ladder), no-op if unharmed.
   const fh = new Run(13);
-  fh.party[0].injuries = 2;
+  fh.roster[0].injuries = 2;
   check('the Field Hospital tends a scar for free', fh.healInjury(0 as Slot));
-  eq('one scar closed, no gold spent', fh.party[0].injuries, 1);
+  eq('one scar closed, no gold spent', fh.roster[0].injuries, 1);
   eq('the free tend costs nothing', fh.gold, 0);
   check('tending an unharmed member does nothing', !fh.healInjury(1 as Slot));
 
-  // Mending Totem relic: after a victory, the most-injured member sheds one scar.
-  const totem = new Run(14);
-  totem.addRelic('mendingTotem');
-  totem.party[0].injuries = 1;
-  totem.party[2].injuries = 3; // the most injured
-  totem.location = { kind: 'fight', fightIndex: 0 };
-  totem.winFight();
-  eq('the Totem mends the most-injured member', totem.party[2].injuries, 2);
-  eq('the Totem leaves the less-injured alone', totem.party[0].injuries, 1);
+  // The scar-for-gold Infirmary node and the Mending Totem relic are gone (2026-07).
+  check('infirmary is no longer a placeable node type', !NODE_TYPE_WEIGHTS.some(([t]) => (t as string) === 'infirmary'));
+  check('Mending Totem is no longer a relic', !RELIC_IDS.includes('mendingTotem' as never));
+}
 
-  // Inert without the relic: a plain victory mends nothing.
-  const noTotem = new Run(15);
-  noTotem.party[1].injuries = 2;
-  noTotem.location = { kind: 'fight', fightIndex: 0 };
-  noTotem.winFight();
-  eq('without the Totem, victory mends nothing', noTotem.party[1].injuries, 2);
+// --- injuries are permanent; the 4th death removes the member from the roster ----
+{
+  const run = new Run(16);
+  run.beginRun(); // trio roster, deployment [0,1,2]
+  run.recordInjuries([0 as Slot]); // 1: Cracked
+  run.recordInjuries([0 as Slot]); // 2: Weakened
+  run.recordInjuries([0 as Slot]); // 3: Broken
+  eq('three deaths leave three scars', run.roster[0].injuries, 3);
+  const survivor = run.roster[1].member; // roster index 1 (tank) outlives the cull
+  const before = run.roster.length;
+  run.recordInjuries([0 as Slot]); // 4th death -> permanent removal
+  eq('the 4th death removes the member from the roster', run.roster.length, before - 1);
+  check('the removed member is gone for good', !run.roster.some((p) => p.member === 'ranger'));
+  eq('the survivors keep their identities', run.roster[0].member, survivor);
 }
 
 // --- pick-one member draft (2026-07): start + post-boss ---------------------
@@ -1211,10 +1167,17 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('recruit is available with members left to offer', new Run(52).nodeAvailable('recruit'));
 }
 
-// --- injury-mode experiments (2026-07-04 playtest) ---------------------------
+// --- injury-mode experiments (2026-07-04 playtest; 'death' added 2026-07) --------
 {
-  // The shipped default is 'incapacitate' (#33): the 4th scar takes the member out.
-  eq('default injury mode is incapacitate', INJURY_RULES.mode, 'incapacitate');
+  // The shipped default is 'death' (2026-07): the 4th death removes the member.
+  eq('default injury mode is death', INJURY_RULES.mode, 'death');
+  eq('death mode records up to the death threshold', injuryRecordCap(), INCAPACITATE_AT);
+  const dead = new Run(33);
+  dead.beginRun(); // deployment [0,1,2]
+  const n0 = dead.roster.length;
+  for (let i = 0; i < 4; i++) dead.recordInjuries([1 as Slot]); // 4 deaths on roster member 1
+  eq('death: the 4th death removes the member from the roster', dead.roster.length, n0 - 1);
+  check('death never incapacitates (removal, not a dead slot)', !injuryIncapacitates(INCAPACITATE_AT));
 
   // 'cap' (the old default): scars stop at MAX_INJURIES, further deaths are free.
   INJURY_RULES.mode = 'cap';
@@ -1248,7 +1211,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // Healing one scar restores them (recoverable, like the rest of DR1).
   inc.healInjury(2 as Slot);
   check('healing a scar un-incapacitates', inc.toBattleConfig().party[2].incapacitated === false);
-  INJURY_RULES.mode = 'incapacitate'; // restore the module default for every later test
+  INJURY_RULES.mode = 'death'; // restore the module default for every later test
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -6,7 +6,6 @@ import { PartyUpgradeShopScreen } from './PartyUpgradeShopScreen';
 import { HealerUpgradeShopScreen } from './HealerUpgradeShopScreen';
 import { EventScreen } from './EventScreen';
 import { ReliquaryScreen } from './ReliquaryScreen';
-import { InfirmaryScreen } from './InfirmaryScreen';
 import { RecruitScreen } from './RecruitScreen';
 
 interface NodeScreenProps {
@@ -35,8 +34,6 @@ export function NodeScreen({ run, act, onDone }: NodeScreenProps) {
       return <RecruitScreen run={run} act={act} onDone={onDone} />;
     case 'reliquary':
       return <ReliquaryScreen run={run} act={act} onDone={onDone} />;
-    case 'infirmary':
-      return <InfirmaryScreen run={run} act={act} onDone={onDone} />;
     default:
       return null;
   }

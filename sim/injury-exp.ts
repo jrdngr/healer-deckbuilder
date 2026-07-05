@@ -84,16 +84,15 @@ function runMode(mode: InjuryMode, n: number, firstSeed = 1, healScars = true): 
         case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
         case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
         case 'branch': advanceBranch(run); break;
-        case 'node': {
-          const wasInfirmary = run.nodeContent?.type === 'infirmary';
-          if (wasInfirmary && !healScars) { run.completeNode(); break; } // the degenerate line walks past
-          const before = run.gold;
-          resolveNode(run);
-          if (wasInfirmary) r.goldHealing += before - run.gold;
-          run.completeNode();
+        case 'node': { resolveNode(run); run.completeNode(); break; }
+        case 'start': run.beginRun(); break;
+        case 'deploy': run.confirmDeployment(run.deployment); break;
+        case 'draft': {
+          const c = run.nodeContent;
+          if (c?.type === 'draft' && c.options.length) run.chooseDraftMember(c.options[0]);
+          else run.status = 'lost';
           break;
         }
-        case 'start': run.beginRun(); break;
         default: run.status = 'lost'; break;
       }
     }

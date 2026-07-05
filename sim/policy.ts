@@ -567,9 +567,6 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Phase-B rule-changers (#22). The Taper's hand 3->2 starves this policy's
   // tactic engine, so it never takes one; the others are solid defensive picks.
   martyrsIcon: 6, duskChime: 6, aegisFont: 4, firstLightTaper: 0,
-  // DR1: with scars now a real, compounding cost, a free scar-heal every victory
-  // is a strong anti-spiral pick — valued alongside the top defensive relics.
-  mendingTotem: 8,
   // Curses are deliberate player trades; the fixed policy never buys one.
   pactOfSilence: 0, crackedHourglass: 0, rustyCrown: 0,
 };
@@ -595,17 +592,6 @@ function mostInjuredSlot(run: Run): number {
   return slot;
 }
 
-// Infirmary (DR1): an unhealed scar is a permanent stat loss, so once wounded the
-// good player pays it down rather than hoarding gold. Clear the most-injured
-// member's scars while gold lasts (top of the ladder first).
-function shopInfirmaryNode(run: Run): void {
-  if (run.nodeContent?.type !== 'infirmary') return;
-  let guard = 0;
-  while (guard++ < 12) {
-    const slot = mostInjuredSlot(run);
-    if (slot < 0 || !run.clearInjuryForGold(slot as Slot)) break;
-  }
-}
 
 // Reliquary: buy the single best-value affordable relic (run-long payoff), and
 // skip the card-removal service (the policy's deck stays lean by buying little).
@@ -656,22 +642,21 @@ export function resolveNode(run: Run): void {
     case 'cardUpgrade': shopModifierNode(run); break;
     case 'event': resolveEvent(run); break;
     case 'reliquary': shopReliquary(run); break;
-    case 'infirmary': shopInfirmaryNode(run); break;
+    // Recruit nodes are handled by the run-sim loop's draft/recruit policy, not here.
     default: break;
   }
 }
 
 // Score a branch by the permanent power its nodes offer, so the policy walks the
-// stronger path through each fork. The Infirmary is scored dynamically (below):
-// worthless when the party is whole, valuable once it is carrying scars.
+// stronger path through each fork.
 const NODE_DESIRABILITY: Record<string, number> = {
-  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, cardUpgrade: 4, cardShop: 3, event: 2, infirmary: 0, fight: 0,
+  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, recruit: 4, cardUpgrade: 4, cardShop: 3, event: 2, fight: 0,
 };
 
 // Walk the chosen branch's hub one step per driver tick: enter the first
-// unvisited stop that's open (the Infirmary hides from an unscarred party),
-// or head to the next fight once every stop has been seen. The policy never
-// revisits — cached content means a second look buys nothing.
+// unvisited stop that's open (a full-roster Recruit node hides), or head to the
+// next fight once every stop has been seen. The policy never revisits — cached
+// content means a second look buys nothing.
 export function advanceBranch(run: Run): void {
   if (run.location.kind !== 'branch') return;
   const { forkIndex, branch } = run.location;
@@ -685,10 +670,7 @@ export function advanceBranch(run: Run): void {
 export function chooseBranch(run: Run): number {
   if (run.location.kind !== 'forkChoice') return 0;
   const fork = run.map[run.location.forkIndex];
-  // An unhealed scar is a permanent stat loss, so a wounded party values a detour
-  // to the Infirmary — the more (and deeper) the scars, the more it is worth.
-  const injuries = run.party.reduce((s, p) => s + p.injuries, 0);
-  const worth = (t: string): number => (t === 'infirmary' && injuries > 0 ? 5 + injuries : (NODE_DESIRABILITY[t] ?? 0));
+  const worth = (t: string): number => NODE_DESIRABILITY[t] ?? 0;
   let best = 0, bestScore = -Infinity;
   fork.branches.forEach((b, i) => {
     const score = b.nodes.reduce((s, n) => s + worth(n.type), 0);

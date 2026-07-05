@@ -16,7 +16,6 @@ import { ManaBar } from '../src/components/ManaBar';
 import { StartScreen } from '../src/components/StartScreen';
 import { DraftScreen } from '../src/components/DraftScreen';
 import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen';
-import { InfirmaryScreen } from '../src/components/InfirmaryScreen';
 import { Actions } from '../src/components/Actions';
 import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
@@ -24,7 +23,7 @@ import { MemberCard } from '../src/components/MemberCard';
 import { MapScreen } from '../src/components/MapScreen';
 import { BranchScreen } from '../src/components/BranchScreen';
 import { EventScreen } from '../src/components/EventScreen';
-import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE } from '../src/constants';
+import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE, DRAFT_POOL } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 
@@ -127,29 +126,17 @@ async function render(el: React.ReactElement): Promise<string> {
   for (const id of options) check(`draft shows ${id}'s name`, text.includes(MEMBER_POOL[id].name), id);
 }
 
-// --- Run-layer screens show DRAFTED names, not the classic trio (#36) ----------
+// --- Run-layer screens show ROSTER names, not the classic trio (#36) ------------
 {
-  // A drafted party where every slot differs from the classic Ranger/Tank/Mage.
-  const drafted = partyFromMembers(['mage', 'skald', 'graveAugur']);
-
+  // A roster where every member differs from the classic Ranger/Tank/Mage.
   const hallRun = new Run(7);
-  hallRun.party = drafted;
+  hallRun.roster = partyFromMembers(['mage', 'skald', 'graveAugur']);
   hallRun.nodeContent = { type: 'partyUpgrade', offers: [] };
   const hallAct = <T,>(fn: (r: Run) => T): T => fn(hallRun);
   const hallText = await render(<PartyUpgradeShopScreen run={hallRun} act={hallAct} onDone={() => {}} />);
-  check('Training Hall shows drafted names', hallText.includes('Skald') && hallText.includes('Grave Augur'), hallText);
-  check('Training Hall does not show classic-trio names for a drafted party',
+  check('Training Hall shows roster names', hallText.includes('Skald') && hallText.includes('Grave Augur'), hallText);
+  check('Training Hall does not show classic-trio names for a non-trio roster',
     !hallText.includes('Ranger') && !hallText.includes('Tank'), hallText);
-
-  const infRun = new Run(8);
-  infRun.party = partyFromMembers(['mage', 'skald', 'graveAugur']);
-  infRun.party[1] = { ...infRun.party[1], injuries: 1 }; // scar the Skald
-  infRun.nodeContent = { type: 'infirmary', price: 10 };
-  const infAct = <T,>(fn: (r: Run) => T): T => fn(infRun);
-  const infText = await render(<InfirmaryScreen run={infRun} act={infAct} onDone={() => {}} />);
-  check('Infirmary shows drafted names', infText.includes('Skald') && infText.includes('Grave Augur'), infText);
-  check('Infirmary does not mislabel the drafted party as the classic trio',
-    !infText.includes('Ranger') && !infText.includes('Tank'), infText);
 }
 
 // --- Draft cards show ability FLAVOR, not the raw id (#37 item 1) ---------------
@@ -222,16 +209,6 @@ async function render(el: React.ReactElement): Promise<string> {
   check('Resurrect prompt points at the Infirmary', text.includes('Infirmary'), text);
 }
 
-// --- Infirmary explains that healing restores an incapacitated member (#33) ------
-{
-  const infRun = new Run(13);
-  infRun.party[0] = { ...infRun.party[0], injuries: INCAPACITATE_AT };
-  infRun.nodeContent = { type: 'infirmary', price: 10 };
-  const infAct = <T,>(fn: (r: Run) => T): T => fn(infRun);
-  const text = await render(<InfirmaryScreen run={infRun} act={infAct} onDone={() => {}} />);
-  check('Infirmary flags the incapacitated member', text.includes('☠ Incapacitated'), text);
-  check('Infirmary says healing restores them', text.includes('restores them to the field'), text);
-}
 
 // --- MapScreen: choosing a path is gated behind the leaving transition ----------
 {
@@ -262,17 +239,17 @@ async function render(el: React.ReactElement): Promise<string> {
   check('choose fires after the travel delay with the picked branch', chosen === 1, String(chosen));
 }
 
-// --- MapScreen hides an Infirmary node while the party is unscarred -------------
+// --- MapScreen hides a Recruit node once the roster is full ---------------------
 {
-  const infMap = new Run(24);
-  infMap.location = { kind: 'forkChoice', forkIndex: 0 };
-  infMap.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
-  infMap.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
-  let text = await render(<MapScreen run={infMap} onChoose={() => {}} />);
-  check('an unscarred party sees no Infirmary on the map', !text.includes('Infirmary'), text);
-  infMap.party[0] = { ...infMap.party[0], injuries: 1 };
-  text = await render(<MapScreen run={infMap} onChoose={() => {}} />);
-  check('a scarred party sees the Infirmary on the map', text.includes('Infirmary'), text);
+  const recMap = new Run(24);
+  recMap.location = { kind: 'forkChoice', forkIndex: 0 };
+  recMap.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  recMap.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
+  let text = await render(<MapScreen run={recMap} onChoose={() => {}} />);
+  check('a roster with room sees the Recruiter on the map', text.includes('Recruiter'), text);
+  recMap.roster = partyFromMembers(DRAFT_POOL);
+  text = await render(<MapScreen run={recMap} onChoose={() => {}} />);
+  check('a full roster sees no Recruiter on the map', !text.includes('Recruiter'), text);
 }
 
 // --- BranchScreen: the hub lists open stops and leads to the fight --------------
@@ -281,14 +258,15 @@ async function render(el: React.ReactElement): Promise<string> {
   hubRun.beginRun();
   hubRun.confirmDeployment(hubRun.deployment); // pass the pre-fight deploy step
   hubRun.winFight();
-  hubRun.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
+  hubRun.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  hubRun.roster = partyFromMembers(DRAFT_POOL); // full roster: the recruit stop hides
   hubRun.chooseBranch(0);
   let entered: number | null = null;
   let fought = false;
   let text = await render(
     <BranchScreen run={hubRun} onEnter={(i) => { entered = i; }} onFight={() => { fought = true; }} />,
   );
-  check('hub hides the closed infirmary', !text.includes('Infirmary'), text);
+  check('hub hides the full-roster recruit stop', !text.includes('Recruiter'), text);
   check('hub shows the open stop', text.includes('Event'), text);
   check('hub offers the way to the fight', text.includes('Onward to the fight'), text);
 
@@ -296,11 +274,11 @@ async function render(el: React.ReactElement): Promise<string> {
   await act(async () => { stop.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
   check('clicking the only visible stop enters the event (node 1)', entered === 1, String(entered));
 
-  hubRun.party[0] = { ...hubRun.party[0], injuries: 1 };
+  hubRun.roster = partyFromMembers(['ranger', 'tank']); // room again: the recruit stop re-opens
   text = await render(
     <BranchScreen run={hubRun} onEnter={() => {}} onFight={() => { fought = true; }} />,
   );
-  check('a scarred party sees the infirmary stop', text.includes('Infirmary'), text);
+  check('a roster with room shows the recruit stop', text.includes('Recruiter'), text);
 
   const go = rootEl.querySelector('.branch-fight') as HTMLElement;
   await act(async () => { go.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });

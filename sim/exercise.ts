@@ -36,7 +36,7 @@ export interface Coverage {
   abilitiesFired: Set<AbilityId>;
   relicsFired: Set<RelicId>;
   cursesFired: Set<RelicId>;
-  dr1Fired: Set<string>; // DR1 injury avenues driven end-to-end (infirmary / event / totem)
+  dr1Fired: Set<string>; // injury avenues driven end-to-end (permanent death / Field Hospital)
   crashes: Array<{ where: string; error: string }>;
 }
 
@@ -251,13 +251,6 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const died = g._killMember(g.mage);
     return !died && g.mage.alive && g.mage.hp === 1;
   },
-  mendingTotem: () => {
-    const run = new Run(5); run.addRelic('mendingTotem');
-    run.party[0].injuries = 2;
-    run.location = { kind: 'fight', fightIndex: 0 };
-    run.winFight(); // the victory sheds one scar off the most-injured member
-    return run.party[0].injuries === 1;
-  },
   pactOfSilence: () => {
     const g = probeGame(['pactOfSilence']); g.start();
     return g.canSkip() === false; // the Pact forbids Rest
@@ -282,28 +275,16 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
 const DR1_PROBES: Record<string, () => boolean> = {
   recordInjuries: () => {
     const run = new Run(101);
-    // Five deaths; the record cap is mode-dependent (3 under 'cap', 4 under the
-    // shipped 'incapacitate' default). Assert it stops at whatever the mode allows.
-    run.recordInjuries([0, 0, 0, 0, 0].map((s) => s as Slot));
-    return run.party[0].injuries === injuryRecordCap();
-  },
-  infirmary: () => {
-    const run = new Run(102);
-    run.party[1].injuries = 2; run.gold = 999;
-    run.nodeContent = run._rollNodeContent('infirmary');
-    return run.clearInjuryForGold(1 as Slot) && run.party[1].injuries === 1;
+    // Under the shipped 'death' mode the 4th death permanently removes the deployed
+    // member from the roster (deployment[0] -> roster[0]).
+    const before = run.roster.length;
+    run.recordInjuries([0, 0, 0, 0].map((s) => s as Slot));
+    return run.roster.length === before - 1;
   },
   fieldHospital: () => {
     const run = new Run(103);
-    run.party[2].injuries = 1;
-    return run.healInjury(2 as Slot) && run.party[2].injuries === 0;
-  },
-  mendingTotem: () => {
-    const run = new Run(104); run.addRelic('mendingTotem');
-    run.party[0].injuries = 2;
-    run.location = { kind: 'fight', fightIndex: 0 };
-    run.winFight();
-    return run.party[0].injuries === 1;
+    run.roster[2].injuries = 1;
+    return run.healInjury(2 as Slot) && run.roster[2].injuries === 0;
   },
 };
 
