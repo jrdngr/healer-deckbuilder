@@ -30,7 +30,12 @@ truth for where the project stands; a stale Status column costs the next session
 ## Progress
 
 **Done: 01–38 — the demo (01–24), the experiments, the full post-demo party subsystem, the
-2026-07-04 playtest batch, and the #34 sim-policy follow-up (#38). No numbered issue is open.**
+2026-07-04 playtest batch, and the #34 sim-policy follow-up (#38).
+Open: 39–43, filed from the 2026-07-05 roster-campaign playtest (see
+[Playtest 2026-07-05](#playtest-2026-07-05-roster-campaign-round)): the Warlock is a trap
+pick/permadeath magnet (#39), permadead members return to the pool as fresh copies (#40), act-1
+recruit luck decides the Gatewarden (#41), the deploy-fewer/salary decision space is degenerate
+(#42), and the draft UI endorses the trap via `rated N` (#43).**
 #32 (the standing backlog holding file) was
 **closed as a tracker row** on 2026-07-04 — it was never buildable; its deferred ideas live on inside
 the file and each is promoted to its own numbered issue when picked up. What remains is not tracked
@@ -81,8 +86,15 @@ the final ship call.**
 
 ## Remaining open design questions
 
-With #01–#37 landed and #32 closed, **nothing is open in the numbered tracker.** What is still open is
-*design*, not implementation — decisions that want a human, not more code:
+**#39–#43 are open in the numbered tracker** (2026-07-05 roster-campaign playtest — see that
+section). Beyond those, what is still open is *design*, not implementation — decisions that want a
+human, not more code:
+
+- **Campaign re-baseline (new, blocks band judgments).** The old 25–35% Standard band was tuned for
+  the fixed trio; under the campaign the honest number is draft-line-dependent (21.8% trap line /
+  54.4% ranger / 66.2% warlock-banned — playtest 2026-07-05). Once #39 (Warlock) and #41 (act-1
+  variance) land, re-pin `npm run sim` and decide what the band even means when the player's draft
+  line moves the number by 40+pp. Until then every sim gate is a provisional pin, not a band check.
 
 - **Human ship gates (the actual blockers).** Playtest **#2** (post-Devourer / full-run band — ready)
   and **#3** (final ship call) are maintainer-manual. Plus the #33 feel-check: one deliberately-spent
@@ -148,6 +160,11 @@ With #01–#37 landed and #32 closed, **nothing is open in the numbered tracker.
 | 36 | ✅ Done | [Drafted names in run-layer screens](./issues/36-drafted-names-in-run-screens.md) | post-demo | 27 | UI playtest 2026-07-04 |
 | 37 | ✅ Done | [UI polish batch](./issues/37-ui-polish-batch-2026-07-04.md) | post-demo | — | UI playtest 2026-07-04 |
 | 38 | ✅ Done | [Sim policy: per-identity damage lines](./issues/38-sim-policy-per-identity-damage-lines.md) | post-demo | 34 | #34 follow-up |
+| 39 | 📋 Open | [Warlock: trap starter, permadeath magnet](./issues/39-warlock-roster-campaign-trap.md) | campaign | — | playtest 2026-07-05 |
+| 40 | 📋 Open | [Permadeath returns the member to the pool](./issues/40-permadeath-pool-return.md) | campaign | — | playtest 2026-07-05 |
+| 41 | 📋 Open | [Act-1 recruit luck decides the Gatewarden](./issues/41-act1-recruit-luck-variance.md) | campaign | — | playtest 2026-07-05 |
+| 42 | 📋 Open | [Deploy-fewer / salary decision space is degenerate](./issues/42-deploy-fewer-salary-decision-space.md) | campaign | — | playtest 2026-07-05 |
+| 43 | 📋 Open | [Draft UI surfaces DRAFT_RATING as a recommendation](./issues/43-draft-rating-legibility.md) | campaign | — | playtest 2026-07-05 |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses
@@ -175,6 +192,47 @@ size, which Taper's draw penalty depends on). #26–#32 are post-demo.
 Three maintainer playtests are called out in the roadmap: **#1** after the Gatewarden ([12](./issues/12-boss-gatewarden.md)) — landed,
 **#2** after the Devourer / full-run band ([14](./issues/14-boss-devourer.md)) — **➤ ready now** (issue 14 landed; full-run ~32%),
 **#3** the final ship gate ([24](./issues/24-hardening-ux.md)).
+
+## Playtest 2026-07-05 (roster-campaign round)
+
+A full playtest of the 2026-07 roster campaign (roster/deploy model, pick-one drafts + Recruit
+nodes, member salaries, permanent injuries with 4th-death removal, single mode). Method: the suite
+(green) + `npm run sim` N=1000 + an instrumented campaign harness (9,000 runs across deploy-size,
+per-starter, and warlock-ban lines, with permadeath/wipe/salary/roster telemetry) + direct
+edge-case probes of `recordInjuries`/`availableMembers`. Findings filed as issues
+[39](./issues/39-warlock-roster-campaign-trap.md)–[43](./issues/43-draft-rating-legibility.md);
+headlines:
+
+- **The stock baseline is the trap line.** `npm run sim` reads **21.8%** full-run — but the greedy
+  policy always drafts the Warlock (rating 7). Forced starters read: **ranger 54.4% / mage 48.7% /
+  warlock 21.8%**, and banning the Warlock from every draft/recruit lifts ranger-start to
+  **66.2%** (+11.8pp). The 25–35% band is broken in *both* directions depending on draft line —
+  re-baselining is blocked on #39/#41 landing (see the open design questions).
+- **The Warlock is the finding (#39).** Solo Gatewarden 3.1% (vs 72–78% for ranger/mage); a
+  net-negative recruit; and **the entire permadeath system in practice** — 300–386 Warlock
+  permadeaths per 1000 runs vs ≤2 for the other seven members combined (Soul Tithe converts his
+  identity into scars).
+- **Permadeath has a reset button (#40).** `availableMembers()` doesn't track the dead, so a
+  permakilled member reappears in the next offer at full stats, zero scars — a 3-scar hero is worth
+  more dead than alive. Verified by probe. Roster wipes: **0 in 9,000 runs** (the wipe-loss path
+  never fires); multi-death splicing and the driver's scar ordering are correct.
+- **Fielding fewer members is never right (#42).** Deploy-2: 0.3% full-run; deploy-1: 0.0%;
+  salary never gates anything (paid from winnings; the 0-gold waiver never fired). The advertised
+  "field fewer, keep more gold" decision doesn't exist — the one real deploy decision found is
+  benching 3-scar members (permadeaths 0.30 → 0.00 for ~2pp full-run), which the salary framing
+  hides. Also flagged: shrine/mercenary/altar "blessings" permanently raise the member's wage.
+- **Act-1 recruit luck decides the Gatewarden (#41).** F2 by roster size (ranger): solo 72.4% /
+  duo 96.9% / trio 100%, with ~⅓–⅖ of runs arriving solo on a pure map roll. Options filed:
+  guarantee an act-1 Recruit (Reliquary-style injection), a fixed post-F1 ally beat, or a solo
+  Gatewarden tune. Acts 2/3 are healthy (F5/F8 vary <10pp across roster sizes 3–6).
+- **The draft UI endorses the trap (#43).** Offers print `rated {DRAFT_RATING}` — a generator-side
+  damage rating — so the measured-worst pick shows the best number (`rated 7`). Also: the start
+  draft's "roll" is a fixed 3-class choice (`STARTER_MEMBERS` size == offer size).
+- Verified-good in the same round: deploy validation can't wedge the run; empty-slot battle parties
+  behave (absent members untargetable, solo `allDead` → loss); an emptied roster can still be
+  rescued by a Recruit node before the deploy-step loss fires; drafted identity threads through
+  `toBattleConfig`; the UI's win path records scars before `winFight` (matching the sim); all
+  run-layer screens iterate the full roster (members past slot 3 reachable).
 
 ## Playtest 2026-07-04 (balance round)
 
