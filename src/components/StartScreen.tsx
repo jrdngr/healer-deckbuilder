@@ -1,34 +1,27 @@
-import { FIGHT_COUNT, ACT_COUNT, DIFFICULTIES, DIFFICULTY_IDS, actOfFight } from '../constants';
-import type { Difficulty } from '../constants';
+import { FIGHT_COUNT, ACT_COUNT, actOfFight } from '../constants';
 import { NODE_META } from './nodeMeta';
-import { devUnlocked } from '../settings';
 import { loadStats } from '../stats';
 
 interface StartScreenProps {
   onBegin: () => void;
-  onDraft: () => void;
   hasSave: boolean;
   /** Fight index the save is at or headed toward (null when no save). */
   savedFightIndex: number | null;
   onContinue: () => void;
-  difficulty: Difficulty;
-  onDifficulty: (d: Difficulty) => void;
 }
 
-// The opening map: the run starts here, and the player manually enters the first
-// (easiest) fight. If a saved run exists, offer to resume it.
-export function StartScreen({
-  onBegin, onDraft, hasSave, savedFightIndex, onContinue, difficulty, onDifficulty,
-}: StartScreenProps) {
+// The opening screen. There is one way to play (2026-07): begin the run by drafting
+// your first hero. If a saved run exists, offer to resume it.
+export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: StartScreenProps) {
   const stats = loadStats();
-  const presets = DIFFICULTY_IDS.filter((d) => !DIFFICULTIES[d].devOnly || devUnlocked);
   const fight = NODE_META.fight;
   return (
     <main className="map-screen">
       <h2 className="map-title">Your run begins</h2>
       <p className="map-sub">
         {ACT_COUNT} acts and {FIGHT_COUNT} fights stand between you and the final boss — three act
-        bosses along the way, each act tougher than the last. Keep your party alive.
+        bosses along the way, each act tougher than the last. Draft your first hero, then build
+        and field your roster all the way through.
       </p>
       {hasSave && (
         <div className="map-branch start-branch">
@@ -47,35 +40,16 @@ export function StartScreen({
       <div className="map-branch start-branch">
         <div className="map-node">
           <span className="map-node-icon" aria-hidden>{fight.icon}</span>
-          <span className="map-node-label">Fight 1 / {FIGHT_COUNT}</span>
-          <span className="map-node-desc">The first foe — the weakest of the run.</span>
+          <span className="map-node-label">Draft your first hero</span>
+          <span className="map-node-desc">The opening battle is a solo — choose who fights it. More heroes join after each boss.</span>
         </div>
-        <div className="difficulty-row" role="radiogroup" aria-label="Difficulty">
-          {presets.map((d) => (
-            <button
-              key={d}
-              role="radio"
-              aria-checked={difficulty === d}
-              className={`difficulty-pick${difficulty === d ? ' selected' : ''}`}
-              title={DIFFICULTIES[d].desc}
-              onClick={() => onDifficulty(d)}
-            >
-              {DIFFICULTIES[d].name}
-            </button>
-          ))}
-        </div>
-        <p className="map-node-desc">{DIFFICULTIES[difficulty].desc}</p>
         <button className={hasSave ? 'map-take' : 'primary map-take'} onClick={onBegin}>
-          {hasSave ? 'Start a new run instead' : 'Enter the first fight'}
-        </button>
-        <button className="map-take" onClick={onDraft} title="Pick your party from the roster">
-          Draft your party
+          {hasSave ? 'Start a new run instead' : 'Begin your journey'}
         </button>
       </div>
       {stats.bestAct > 0 && (
         <p className="map-sub stats-line">
-          Wins — Story {stats.wins.story} · Standard {stats.wins.standard}
-          {devUnlocked ? ` · Brutal ${stats.wins.brutal}` : ''} — best act reached: {stats.bestAct} / {ACT_COUNT}
+          Wins {stats.wins} / {stats.runs} — best act reached: {stats.bestAct} / {ACT_COUNT}
         </p>
       )}
     </main>

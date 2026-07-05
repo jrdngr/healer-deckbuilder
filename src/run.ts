@@ -17,7 +17,7 @@ import {
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
-  RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS, DIFFICULTIES,
+  RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
@@ -27,7 +27,7 @@ import {
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
-  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId, Difficulty,
+  NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId,
   CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer, RelicOffer,
 } from './constants';
 import { makeRng, weightedPick, shuffle } from './rng';
@@ -73,13 +73,13 @@ export type NodeContent =
 // v3: difficulty, #23; v4: fightsWon, #24; v5: per-member injuries + infirmary
 // node content, DR1; v6: drafted member identity + draft location/content, #27;
 // v7: branch hub location + per-branch cached node content;
-// v8: collectible roster + per-fight deployment, replacing the fixed 3-member party.)
-export const RUN_SAVE_VERSION = 8;
+// v8: collectible roster + per-fight deployment, replacing the fixed 3-member party;
+// v9: single mode — difficulty removed (the roster campaign is the only way to play).)
+export const RUN_SAVE_VERSION = 9;
 
 export interface RunSnapshot {
   version: number;
   seed: number;
-  difficulty: Difficulty;
   rngState: number;
   nextUid: number;
   gold: number;
@@ -100,7 +100,6 @@ export interface RunSnapshot {
 
 export class Run {
   seed: number;
-  difficulty: Difficulty;
   rng: Rng;
   gold: number;
   deck: DeckCard[];
@@ -127,9 +126,8 @@ export class Run {
   currentEnemyDef: EnemyDef | null; // enemy rolled for the current fight (stable for the visit)
   private nextUid: number;
 
-  constructor(seed: number = Date.now(), difficulty: Difficulty = 'standard') {
+  constructor(seed: number = Date.now()) {
     this.seed = seed >>> 0;
-    this.difficulty = difficulty;
     this.rng = makeRng(this.seed);
     this.gold = 0;
     this.deck = defaultDeck();
@@ -169,7 +167,6 @@ export class Run {
     return {
       version: RUN_SAVE_VERSION,
       seed: this.seed,
-      difficulty: this.difficulty,
       rngState: this.rng.getState(),
       nextUid: this.nextUid,
       gold: this.gold,
@@ -192,7 +189,7 @@ export class Run {
   // Rebuild a Run from a snapshot, restoring the exact RNG position so the resumed
   // run continues the identical deterministic stream.
   static fromJSON(snap: RunSnapshot): Run {
-    const run = new Run(snap.seed, snap.difficulty ?? 'standard');
+    const run = new Run(snap.seed);
     run.rng.setState(snap.rngState); // continue the saved stream, not a fresh one
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
@@ -215,12 +212,6 @@ export class Run {
       : snap.nodeContent;
     run.currentEnemyDef = snap.currentEnemyDef;
     return run;
-  }
-
-  // Quick-play (no draft): keep the default trio roster and go straight to deploy.
-  beginRun(): void {
-    if (this.location.kind !== 'start') return;
-    this._enterDeploy(0);
   }
 
   // Member ids not yet in the roster (the pool a draft/recruit can still offer).
@@ -388,10 +379,9 @@ export class Run {
     return ENEMY_HP_BY_FIGHT[this.fightIndex] ?? ENEMY_MAX_HP;
   }
 
-  // Build the config for the fight at the current location. The difficulty
-  // preset (#23) applies as modifiers over the tuned per-act curve.
+  // Build the config for the fight at the current location, straight from the tuned
+  // per-act curve (there is a single mode — no difficulty modifiers).
   toBattleConfig(): BattleConfig {
-    const d = DIFFICULTIES[this.difficulty];
     return {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
       // The engine fights with a length-3 party, one entry per battle slot. Each
@@ -421,11 +411,11 @@ export class Run {
       relics: [...this.relics],
       spentRelics: [...this.spentRelics],
       enemy: {
-        maxHP: Math.round(this.enemyMaxHP() * d.hpMult),
+        maxHP: this.enemyMaxHP(),
         boss: this.isBossFight,
-        attackBonus: Math.max(0, (ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0) + d.attackDelta),
+        attackBonus: ENEMY_ATTACK_BONUS[this.fightIndex] ?? 0,
         def: this.currentEnemyDef ?? (this.isBossFight ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF),
-        enrageTurn: (ENEMY_ENRAGE_TURN_BY_FIGHT[this.fightIndex] ?? ENRAGE_TURN) + d.enrageDelta,
+        enrageTurn: ENEMY_ENRAGE_TURN_BY_FIGHT[this.fightIndex] ?? ENRAGE_TURN,
       },
     };
   }
@@ -449,11 +439,8 @@ export class Run {
     const fi = this.location.fightIndex;
     this.fightsWon += 1;
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
-    // The Rusty Crown (#22) pays its bonus on every win it made harder; Story
-    // (#23) pads the purse so newer players can actually buy their way forward.
-    const reward = GOLD_PER_FIGHT
-      + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
-      + DIFFICULTIES[this.difficulty].goldBonus;
+    // The Rusty Crown (#22) pays its bonus on every win it made harder.
+    const reward = GOLD_PER_FIGHT + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
     // Pay each DEPLOYED member their salary out of the winnings (2026-07); benched
     // members are free, so fielding fewer keeps more gold. Gold never goes negative.
     this.gold = Math.max(0, this.gold + reward - this.deployedSalary());

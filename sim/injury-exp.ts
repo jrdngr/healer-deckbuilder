@@ -16,7 +16,7 @@ import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import { INJURY_RULES, MAX_INJURIES } from '../src/constants';
 import type { InjuryMode } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
 
 // Mirrors run-sim's per-fight sub-seed so results line up with the main harness.
 const fightSeed = (runSeed: number, fightIndex: number): number =>
@@ -52,7 +52,7 @@ function runMode(mode: InjuryMode, n: number, firstSeed = 1, healScars = true): 
   for (let i = 0; i < n; i++) {
     const seed = firstSeed + i;
     const run = new Run(seed);
-    run.beginRun();
+    run.beginDraft();
     let guard = 0;
     let cappedThisRun = false;
     const incapSeen = new Set<number>();
@@ -85,14 +85,9 @@ function runMode(mode: InjuryMode, n: number, firstSeed = 1, healScars = true): 
         case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
         case 'branch': advanceBranch(run); break;
         case 'node': { resolveNode(run); run.completeNode(); break; }
-        case 'start': run.beginRun(); break;
-        case 'deploy': run.confirmDeployment(run.deployment); break;
-        case 'draft': {
-          const c = run.nodeContent;
-          if (c?.type === 'draft' && c.options.length) run.chooseDraftMember(c.options[0]);
-          else run.status = 'lost';
-          break;
-        }
+        case 'start': run.beginDraft(); break;
+        case 'deploy': deployBest(run); break;
+        case 'draft': draftPick(run); break;
         default: run.status = 'lost'; break;
       }
     }

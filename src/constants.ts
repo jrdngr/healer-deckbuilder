@@ -527,44 +527,9 @@ export const ENCOUNTER_TABLE: Array<Array<[string, number]>> = [
   [],                                                                      // fight 8 (A3 boss)
 ];
 
-// ---------------------------------------------------------------------------
-// Difficulty presets (issue 23, Q8). Modifiers over the tuned per-act curve —
-// Standard IS the tuned demo; Story widens the audience (gate: >=60% full-run
-// at N=1000); Brutal is untuned, dev-flag-only, and carries NO gate. There is
-// deliberately NO meta-progression (it fights the seed-determinism contract).
-// ---------------------------------------------------------------------------
-export type Difficulty = 'story' | 'standard' | 'brutal';
-
-export interface DifficultyDef {
-  id: Difficulty;
-  name: string;
-  desc: string;
-  hpMult: number;      // enemy max HP multiplier (rounded)
-  attackDelta: number; // added to the per-fight attack bonus (floored at 0)
-  enrageDelta: number; // added to the per-fight enrage turn
-  goldBonus: number;   // extra gold per (non-final) fight win
-  devOnly?: boolean;   // hidden unless the dev flag is set (Brutal)
-}
-
-export const DIFFICULTIES: Record<Difficulty, DifficultyDef> = {
-  story: {
-    id: 'story', name: 'Story',
-    desc: 'Softer foes, later enrage, richer purses. See the whole run.',
-    hpMult: 0.8, attackDelta: -1, enrageDelta: 2, goldBonus: 25,
-  },
-  standard: {
-    id: 'standard', name: 'Standard',
-    desc: 'The tuned run. Winnable end to end with good play — most attempts are not.',
-    hpMult: 1, attackDelta: 0, enrageDelta: 0, goldBonus: 0,
-  },
-  brutal: {
-    id: 'brutal', name: 'Brutal',
-    desc: 'Untuned and unfair. For science.',
-    hpMult: 1.2, attackDelta: 1, enrageDelta: -1, goldBonus: 0, devOnly: true,
-  },
-};
-
-export const DIFFICULTY_IDS: Difficulty[] = ['story', 'standard', 'brutal'];
+// There is a single, tuned mode (2026-07): the roster campaign is the one and only
+// way to play. No difficulty presets, no quick-play — the per-act curve below IS the
+// game. (Deliberately no meta-progression either; it fights seed determinism.)
 
 export const ENRAGE_TURN = 11; // first enraged enemy turn (turn 11 onward)
 export const ENRAGE_MULT = 1.25;

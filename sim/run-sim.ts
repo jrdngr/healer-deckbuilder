@@ -263,8 +263,7 @@
 import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
-import { FIGHT_COUNT, isActBoss, actOfFight, DRAFT_POOL, MEMBER_POOL, partyFromMembers } from '../src/constants';
-import type { MemberId } from '../src/constants';
+import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
 import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
 
 export interface FightOutcome {
@@ -289,14 +288,12 @@ function fightSeed(runSeed: number, fightIndex: number): number {
 // Play one full run end to end with the policy. Fully deterministic in `seed`.
 // `setup` (optional) mutates the fresh Run before it begins — the balance-gate
 // hook for forcing a relic/curse into every run (#22's per-relic gates).
-// `campaign` (default) plays the real roster campaign: draft a solo starter, build
-// the roster (post-boss drafts + Recruit nodes), and deploy the best three each
-// fight. Pass campaign=false for quick-play (a pre-seeded roster deployed as-is) —
-// used by the fixed-composition sweep.
-export function runSingleRun(seed: number, setup?: (run: Run) => void, campaign = true): RunOutcome {
+// Play one full run of the roster campaign: draft a solo starter, build the roster
+// (post-boss drafts + Recruit nodes), and deploy the best three each fight.
+export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutcome {
   const run = new Run(seed);
   setup?.(run);
-  if (campaign) run.beginDraft(); else run.beginRun();
+  run.beginDraft();
   const fights: FightOutcome[] = [];
   let guard = 0;
   while (run.status === 'playing' && guard < 1000) {
@@ -324,19 +321,9 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void, campaign 
         run.completeNode();
         break;
       }
-      case 'start': if (campaign) run.beginDraft(); else run.beginRun(); break;
-      // Pre-fight deploy (2026-07): the campaign fields its best three; quick-play
-      // deploys the pre-seeded roster as-is.
-      case 'deploy': if (campaign) deployBest(run); else run.confirmDeployment(run.deployment); break;
-      // Member draft (start + post-boss): the campaign picks the strongest offer
-      // (striker-first); quick-play takes the first (it never really drafts).
-      case 'draft': {
-        if (campaign) { draftPick(run); break; }
-        const c = run.nodeContent;
-        if (c?.type === 'draft' && c.options.length) run.chooseDraftMember(c.options[0]);
-        else run.status = 'lost';
-        break;
-      }
+      case 'start': run.beginDraft(); break;
+      case 'deploy': deployBest(run); break;             // field the best three
+      case 'draft': draftPick(run); break;               // strongest offer, striker-first
       default: run.status = 'lost'; break; // unreachable safety net
     }
   }
@@ -369,7 +356,7 @@ function proportion(wins: number, n: number): Proportion {
   return { wins, n, rate, ci95: ci95(rate, n) };
 }
 
-export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, campaign = true): SimReport {
+export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): SimReport {
   let fullWins = 0;
   const fightWins = new Array(FIGHT_COUNT).fill(0);
   const fightAttempts = new Array(FIGHT_COUNT).fill(0);
@@ -377,7 +364,7 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, cam
   const fightDeathsOnWin = new Array(FIGHT_COUNT).fill(0); // DR1: deaths summed over WON fights
   let injuriesTotal = 0;
   for (let i = 0; i < n; i++) {
-    const outcome = runSingleRun(firstSeed + i, setup, campaign);
+    const outcome = runSingleRun(firstSeed + i, setup);
     if (outcome.status === 'won') fullWins++;
     injuriesTotal += outcome.injuriesAtEnd;
     for (const f of outcome.fights) {
@@ -423,75 +410,12 @@ export function formatReport(r: SimReport): string {
   return lines.join('\n');
 }
 
-// ---- composition sweep (#31) ----------------------------------------------
-// The draft yields 8-choose-3 = 56 compositions. The sweep runs each through the
-// harness with the classic-trio's SAME per-fight curve (ENEMY_ATTACK_BONUS stays
-// composition-agnostic — no per-comp boss tuning), so the boss-HP bands must
-// absorb the whole power range on their own.
-
-// All 56 compositions (order-independent member triples) from the draft pool.
-export function allCompositions(): MemberId[][] {
-  const p = DRAFT_POOL;
-  const out: MemberId[][] = [];
-  for (let i = 0; i < p.length; i++)
-    for (let j = i + 1; j < p.length; j++)
-      for (let k = j + 1; k < p.length; k++) out.push([p[i], p[j], p[k]]);
-  return out;
-}
-
-// Seat a composition sensibly for the sweep: the tankiest member takes center
-// (slot 1, the most-targeted slot), the other two flank. A fixed, comp-agnostic
-// heuristic so the sweep measures the comp, not a placement policy.
-export function seatComposition(ids: MemberId[]): MemberId[] {
-  const byHp = [...ids].sort((a, b) => MEMBER_POOL[b].maxHP - MEMBER_POOL[a].maxHP);
-  return [byHp[1], byHp[0], byHp[2]];
-}
-
-export interface CompReport {
-  comp: MemberId[];
-  hasTaunt: boolean;
-  full: Proportion;
-  bosses: Proportion[]; // [F2, F5, F8]
-}
-
-// Run the whole 56-comp sweep at n runs each; returns per-comp full-run + boss
-// winrates. Deterministic in firstSeed. Heavy — call with a modest n.
-export function runCompositionSweep(n: number, firstSeed = 1): CompReport[] {
-  return allCompositions().map((comp) => {
-    const seated = seatComposition(comp);
-    // Quick-play the fixed composition (pre-seed the roster, deploy it as-is).
-    const r = runSim(n, firstSeed, (run) => { run.party = partyFromMembers(seated); }, false);
-    return {
-      comp,
-      hasTaunt: comp.includes('tank'),
-      full: r.fullRun,
-      bosses: [r.perFight[2], r.perFight[5], r.perFight[8]],
-    };
-  });
-}
-
 // ---- CLI ------------------------------------------------------------------
 
 // Executed only when run directly (npm run sim), never on import.
 const invokedDirectly = process.argv[1] && /run-sim\.ts$/.test(process.argv[1]);
 if (invokedDirectly) {
-  const mode = process.argv[2];
-  if (mode === 'sweep') {
-    const n = Number(process.argv[3] ?? 100);
-    const reps = runCompositionSweep(n, Number(process.argv[4] ?? 1));
-    const pf = (p: Proportion) => `${pct(p.rate).padStart(5)}%`;
-    reps.sort((a, b) => b.full.rate - a.full.rate);
-    for (const r of reps) {
-      console.log(`${r.comp.join('/').padEnd(38)} full ${pf(r.full)}  F2 ${pf(r.bosses[0])} F5 ${pf(r.bosses[1])} F8 ${pf(r.bosses[2])}${r.hasTaunt ? '' : '  [taunt-less]'}`);
-    }
-    const tauntless = reps.filter((r) => !r.hasTaunt);
-    const f8 = reps.map((r) => r.bosses[2].rate);
-    console.log(`\nComps: ${reps.length}  ·  full-run range ${pct(Math.min(...reps.map((r) => r.full.rate)))}–${pct(Math.max(...reps.map((r) => r.full.rate)))}%`);
-    console.log(`F8 (final boss) range ${pct(Math.min(...f8))}–${pct(Math.max(...f8))}%  ·  ceiling comps >85% at F8: ${f8.filter((x) => x > 0.85).length}`);
-    console.log(`Taunt-less comps: ${tauntless.length}  ·  min full-run ${pct(Math.min(...tauntless.map((r) => r.full.rate)))}%  ·  min F8 ${pct(Math.min(...tauntless.map((r) => r.bosses[2].rate)))}%`);
-  } else {
-    const n = Number(process.argv[2] ?? 1000);
-    const firstSeed = Number(process.argv[3] ?? 1);
-    console.log(formatReport(runSim(n, firstSeed)));
-  }
+  const n = Number(process.argv[2] ?? 1000);
+  const firstSeed = Number(process.argv[3] ?? 1);
+  console.log(formatReport(runSim(n, firstSeed)));
 }

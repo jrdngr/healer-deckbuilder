@@ -6,7 +6,7 @@
 // policy change is caught). The absolute numbers here are the harness's living
 // baseline, not a balance target — see the BASELINE note in sim/run-sim.ts.
 
-import { runSingleRun, runSim, allCompositions, seatComposition, runCompositionSweep } from '../sim/run-sim';
+import { runSingleRun, runSim } from '../sim/run-sim';
 import { MEMBER_POOL } from '../src/constants';
 import { Game } from '../src/engine';
 import { playFight } from '../sim/policy';
@@ -287,28 +287,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   check('Provoke never sinks onto the tithe-drained Warlock (#38)', !everProvokedWarlock);
 }
 
-// --- per-composition sweep harness (#31) ------------------------------------
+// --- Warlock damage is the spec value (2026-07-04 playtest) -----------------
 {
-  eq('there are 56 compositions (8-choose-3)', allCompositions().length, 56);
-  // seatComposition puts the tankiest member in the (most-targeted) center slot.
-  const seated = seatComposition(['mage', 'tank', 'skald']); // maxHP 9 / 18 / 10
-  eq('the tankiest member is seated in center', seated[1], 'tank');
-
-  // The Warlock is back at the spec's 7 (2026-07-04 playtest): #31's 7->5 nerf was
-  // calibrated against the toBattleConfig identity bug — "warlock" comps were
-  // fighting as poison-firing trio members with warlock stats. With REAL abilities,
-  // warlock comps read 2.5-3% full-run even at 7 (no ceiling; the fixed policy can
-  // barely pilot Dark Bargain), so the nerf had no justification left.
+  // The Warlock is back at the spec's 7: #31's 7->5 nerf was calibrated against the
+  // toBattleConfig identity bug — "warlock" comps were fighting as poison-firing trio
+  // members with warlock stats. With REAL abilities there was no ceiling to nerf.
   eq('Warlock damage restored to the spec value', MEMBER_POOL.warlock.damage, 7);
-
-  // A tiny sweep runs over all 56 comps without stalling and returns finite rates.
-  const reps = runCompositionSweep(4, 1);
-  eq('the sweep reports every composition', reps.length, 56);
-  check('every comp reports a finite full-run rate',
-    reps.every((r) => r.full.rate >= 0 && r.full.rate <= 1 && r.bosses.length === 3));
-  // There is a real power spread across comps (not everything is a cakewalk) — the
-  // authoritative ceiling/floor bands are the manual N=100 sweep in the issue file.
-  check('the sweep shows a real spread (not every comp clears)', reps.some((r) => r.full.rate < 1));
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

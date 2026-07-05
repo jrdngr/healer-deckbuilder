@@ -55,16 +55,16 @@ async function render(el: React.ReactElement): Promise<string> {
 {
   const noop = () => {};
   let text = await render(
-    <StartScreen onBegin={noop} onDraft={noop} hasSave={true} savedFightIndex={4} onContinue={noop} difficulty="standard" onDifficulty={noop} />,
+    <StartScreen onBegin={noop} hasSave={true} savedFightIndex={4} onContinue={noop} />,
   );
   check('resume card shows the saved act', text.includes('Act 2 / 3'), text);
   check('resume card shows the saved fight', text.includes('Fight 5 / 9'), text);
   check('continue button present', text.includes('Continue your saved run'));
 
   text = await render(
-    <StartScreen onBegin={noop} onDraft={noop} hasSave={false} savedFightIndex={null} onContinue={noop} difficulty="standard" onDifficulty={noop} />,
+    <StartScreen onBegin={noop} hasSave={false} savedFightIndex={null} onContinue={noop} />,
   );
-  check('fresh run still describes the first fight', text.includes('Fight 1 / 9'), text);
+  check('fresh run invites the first-hero draft', text.includes('Draft your first hero'), text);
   check('no continue button without a save', !text.includes('Continue your saved run'));
 }
 
@@ -255,7 +255,7 @@ async function render(el: React.ReactElement): Promise<string> {
 // --- BranchScreen: the hub lists open stops and leads to the fight --------------
 {
   const hubRun = new Run(22);
-  hubRun.beginRun();
+  hubRun._enterDeploy(0); // default trio -> deploy step
   hubRun.confirmDeployment(hubRun.deployment); // pass the pre-fight deploy step
   hubRun.winFight();
   hubRun.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];

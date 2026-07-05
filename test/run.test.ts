@@ -11,7 +11,7 @@ import {
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
-  DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
+  MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
   DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE,
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, injuryRecordCap, injuryIncapacitates,
@@ -39,6 +39,14 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 // that care about deployment set it explicitly via confirmDeployment.
 const deployAll = (run: Run): void => {
   if (run.location.kind === 'deploy') run.confirmDeployment(run.deployment);
+};
+
+// Enter fight 0 with the constructor's default trio roster — a test convenience that
+// replaces the removed quick-play (the real game always drafts). Used by progression
+// tests that just need a run standing at a fight with a known party.
+const startRun = (run: Run): void => {
+  run._enterDeploy(0);
+  run.confirmDeployment(run.deployment);
 };
 
 const crossBranch = (run: Run, branch = 0): void => {
@@ -95,16 +103,16 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('starts with 0 gold', run.gold, 0);
   eq('starts with default deck size', run.deck.length, defaultDeck().length);
   eq('default healer maxMana', run.healer.maxMana, DEFAULT_HEALER.maxMana);
-  // beginRun enters the first fight.
-  run.beginRun(); deployAll(run);
-  eq('beginRun -> fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
+  // startRun (default trio) enters the first fight.
+  startRun(run);
+  eq('startRun -> fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
   eq('not boss at fight 0', run.isBossFight, false);
 }
 
 // --- progression through the run --------------------------------------------
 {
   const run = new Run(3);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   // Win fight 0 -> fork 0, gold awarded.
   run.winFight();
   eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
@@ -130,7 +138,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 // --- branch hub: revisits keep state, events resolve once ---------------------
 {
   const run = new Run(31);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   run.winFight();
   run.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
   run.chooseBranch(0);
@@ -171,7 +179,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 // --- branch hub: a full-roster Recruit node is hidden ------------------------
 {
   const run = new Run(32);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   run.winFight();
   run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
   run.chooseBranch(0);
@@ -189,7 +197,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 // --- branch hub: a mid-branch save/resume keeps the cached stops ---------------
 {
   const run = new Run(33);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   run.winFight();
   run.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
   run.chooseBranch(1);
@@ -216,7 +224,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // Drive through all 9 fights: three acts, an act boss at the end of each
   // (fights 2, 5, 8), only the final fight wins the run.
   const run = new Run(4);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   const bossFights: number[] = [];
   let gold = 0;
   for (let f = 0; f < FIGHT_COUNT; f++) {
@@ -249,7 +257,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // Enemy HP / enrage turn follow the per-act curve.
   const run = new Run(77);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   const seen: number[] = [];
   const enrage: number[] = [];
   for (let f = 0; f < FIGHT_COUNT; f++) {
@@ -611,7 +619,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // Entering a fight rolls and caches the enemy def (stable across toBattleConfig).
   const run = new Run(3);
-  run.beginRun(); deployAll(run); // enters fight 0
+  startRun(run); // enters fight 0
   const def = run.currentEnemyDef;
   check('fight 0 has a rolled enemy def', def !== null && def!.boss === false);
   eq('battle config carries the same def', run.toBattleConfig().enemy.def, def);
@@ -621,7 +629,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // Spoils fire after the act-1 boss: 3 free, distinct offers with a rare guaranteed.
   const run = new Run(80);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   for (let f = 0; f < 2; f++) {
     run.winFight();
     crossBranch(run);
@@ -771,47 +779,21 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // The Rusty Crown pays its bonus on fight wins.
   const run = new Run(92);
   run.addRelic('rustyCrown');
-  run.beginRun(); deployAll(run);
+  startRun(run);
   run.winFight();
   eq('the Crown pays extra gold per win', run.gold, NET_GOLD + RUSTY_CROWN_GOLD);
 }
 
-// --- difficulty presets + local stats (issue 23) ------------------------------
+// --- local stats: total runs/wins + best act (single mode, 2026-07) -----------
 {
-  // Story softens the tuned curve: HP x0.8, attack -1 (floor 0), enrage +2,
-  // gold +25/fight. Standard IS the curve. Brutal is dev-only and untuned.
-  const std = new Run(95);
-  const story = new Run(95, 'story');
-  std.beginRun(); deployAll(std); story.beginRun(); deployAll(story);
-  const stdCfg = std.toBattleConfig();
-  const storyCfg = story.toBattleConfig();
-  eq('Story scales enemy HP by 0.8', storyCfg.enemy.maxHP, Math.round(stdCfg.enemy.maxHP * 0.8));
-  eq('Story floors the attack bonus at 0', storyCfg.enemy.attackBonus, 0);
-  eq('Story delays enrage by 2', storyCfg.enemy.enrageTurn, (stdCfg.enemy.enrageTurn ?? 0) + 2);
-  story.winFight();
-  eq('Story pads the purse', story.gold, NET_GOLD + DIFFICULTIES.story.goldBonus);
-  std.winFight();
-  eq('Standard gold is unchanged (net)', std.gold, NET_GOLD);
-  check('Standard is the identity preset',
-    DIFFICULTIES.standard.hpMult === 1 && DIFFICULTIES.standard.attackDelta === 0
-    && DIFFICULTIES.standard.enrageDelta === 0 && DIFFICULTIES.standard.goldBonus === 0);
-  check('Brutal hides behind the dev flag', DIFFICULTIES.brutal.devOnly === true);
-  eq('a run defaults to Standard', new Run(1).difficulty, 'standard');
-  // Difficulty survives the snapshot roundtrip.
-  const restored = Run.fromJSON(JSON.parse(JSON.stringify(story.toJSON())));
-  eq('difficulty round-trips through a save', restored.difficulty, 'story');
-}
-{
-  // Local stats fold runs per difficulty and track the best act (pure logic).
   let s = emptyStats();
-  s = recordRunEnd(s, 'standard', false, 1);
-  s = recordRunEnd(s, 'standard', true, 3);
-  s = recordRunEnd(s, 'story', true, 3);
-  eq('runs counted per difficulty', s.runs.standard, 2);
-  eq('wins counted per difficulty', s.wins.standard, 1);
-  eq('story wins counted', s.wins.story, 1);
+  s = recordRunEnd(s, false, 1);
+  s = recordRunEnd(s, true, 3);
+  s = recordRunEnd(s, true, 3);
+  eq('runs counted', s.runs, 3);
+  eq('wins counted', s.wins, 2);
   eq('best act sticks at the maximum', s.bestAct, 3);
-  const s2 = recordRunEnd(s, 'standard', false, 2);
+  const s2 = recordRunEnd(s, false, 2);
   eq('a worse run never lowers the best act', s2.bestAct, 3);
 }
 
@@ -830,7 +812,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // The end-of-run score rewards progress and penalizes hoarded gold (flaw #21).
   const run = new Run(96);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   run.winFight(); // 1 fight, +40g
   run.addRelic('lantern');
   const s = run.runScore();
@@ -853,7 +835,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('peeking never consumes the rng stream', run.rng.getState(), before);
   check('the preview names a real enemy', ENEMY_DEF_BY_ID[a] !== undefined);
   // Entering the fight later meets exactly the previewed foe.
-  run.beginRun(); deployAll(run);
+  startRun(run);
   eq('fight 0 matches its preview', run.currentEnemyDef!.id, new Run(97).peekEncounter(0).id);
 }
 
@@ -871,7 +853,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // Snapshot round-trips through JSON and the resumed run continues the stream.
   const run = new Run(5);
-  run.beginRun(); deployAll(run);
+  startRun(run);
   run.winFight();
   run.chooseBranch(0);
   const snap = JSON.parse(JSON.stringify(run.toJSON())); // survive real serialization
@@ -883,12 +865,12 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // A save+resume at a boundary produces the same run as never interrupting.
   const finish = (r: Run): void => crossBranch(r);
   const uninterrupted = new Run(9);
-  uninterrupted.beginRun(); deployAll(uninterrupted);
+  startRun(uninterrupted);
   uninterrupted.winFight();
   finish(uninterrupted);
 
   const resumed = new Run(9);
-  resumed.beginRun(); deployAll(resumed);
+  startRun(resumed);
   resumed.winFight();
   const restored = Run.fromJSON(JSON.parse(JSON.stringify(resumed.toJSON())));
   finish(restored);
@@ -985,8 +967,8 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 // --- deploy step: choose & seat members; injuries map through the deployment -----
 {
   const run = new Run(60);
-  run.beginRun(); // trio roster, lands on the deploy step
-  eq('beginRun opens the deploy step', run.location.kind, 'deploy');
+  run._enterDeploy(0); // trio roster, lands on the deploy step (no auto-confirm)
+  eq('entering the fight opens the deploy step', run.location.kind, 'deploy');
 
   // Malformed deployments are refused (the run stays on deploy).
   run.confirmDeployment([null, null, null]);      // nobody deployed
@@ -1024,7 +1006,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 
   // deployedSalary sums only the fielded members; a solo deploy pays one salary.
   const run = new Run(70);
-  run.beginRun();
+  run._enterDeploy(0); // land on deploy without auto-confirming the default
   run.confirmDeployment([null, 1, null]); // field only the tank (roster index 1)
   eq('deployedSalary sums only the fielded members', run.deployedSalary(), MEMBER_BASE_SALARY['tank']);
   const before = run.gold;
@@ -1039,7 +1021,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 
   // Salary can eat into gold but never drives it negative.
   const broke = new Run(73);
-  broke.beginRun();
+  startRun(broke);
   broke.confirmDeployment([0, 1, 2]);
   broke.gold = 0;
   broke.winFight();
@@ -1064,7 +1046,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 // --- injuries are permanent; the 4th death removes the member from the roster ----
 {
   const run = new Run(16);
-  run.beginRun(); // trio roster, deployment [0,1,2]
+  startRun(run); // trio roster, deployment [0,1,2]
   run.recordInjuries([0 as Slot]); // 1: Cracked
   run.recordInjuries([0 as Slot]); // 2: Weakened
   run.recordInjuries([0 as Slot]); // 3: Broken
@@ -1173,7 +1155,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('default injury mode is death', INJURY_RULES.mode, 'death');
   eq('death mode records up to the death threshold', injuryRecordCap(), INCAPACITATE_AT);
   const dead = new Run(33);
-  dead.beginRun(); // deployment [0,1,2]
+  startRun(dead); // deployment [0,1,2]
   const n0 = dead.roster.length;
   for (let i = 0; i < 4; i++) dead.recordInjuries([1 as Slot]); // 4 deaths on roster member 1
   eq('death: the 4th death removes the member from the roster', dead.roster.length, n0 - 1);

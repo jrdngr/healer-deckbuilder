@@ -20,7 +20,7 @@
 import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RelicId } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
 
 // Mirrors run-sim's per-fight sub-seed so results line up with the main harness.
 const fightSeed = (runSeed: number, fightIndex: number): number =>
@@ -37,7 +37,7 @@ export function runRelicLine(relic: RelicId | null, n: number, firstSeed = 1): R
   for (let i = 0; i < n; i++) {
     const seed = firstSeed + i;
     const run = new Run(seed);
-    run.beginRun();
+    run.beginDraft();
     let guard = 0;
     while (run.status === 'playing' && guard < 1000) {
       guard++;
@@ -58,7 +58,9 @@ export function runRelicLine(relic: RelicId | null, n: number, firstSeed = 1): R
         case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
         case 'branch': advanceBranch(run); break;
         case 'node': resolveNode(run); run.completeNode(); break;
-        case 'start': run.beginRun(); break;
+        case 'start': run.beginDraft(); break;
+        case 'deploy': deployBest(run); break;
+        case 'draft': draftPick(run); break;
         default: run.status = 'lost'; break;
       }
     }

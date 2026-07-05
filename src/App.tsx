@@ -3,7 +3,6 @@ import { useRun } from './useRun';
 import type { Run } from './run';
 import type { GameController } from './useGame';
 import { FIGHTS_PER_ACT, ACT_COUNT, isActBoss, actOfFight } from './constants';
-import type { Difficulty } from './constants';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
 import { DraftScreen } from './components/DraftScreen';
@@ -40,11 +39,10 @@ function progressLabel(run: Run): string {
 export function App() {
   const { run, act, newRun, hasSave, savedFightIndex, continueRun } = useRun();
   const [seedField, setSeedField] = useState<string>(String(run.seed));
-  const [difficulty, setDifficulty] = useState<Difficulty>('standard');
   // The active fight's controller, published by FightScreen; null outside of a fight.
   const [gameCtrl, setGameCtrl] = useState<GameController | null>(null);
 
-  const startNewRun = (seed?: number) => setSeedField(String(newRun(seed, difficulty)));
+  const startNewRun = (seed?: number) => setSeedField(String(newRun(seed)));
   const onContinue = () => { const s = continueRun(); if (s != null) setSeedField(String(s)); };
   const onNewRun = () => {
     const v = parseInt(seedField, 10);
@@ -57,13 +55,10 @@ export function App() {
   } else if (run.location.kind === 'start') {
     screen = (
       <StartScreen
-        onBegin={() => act((r) => { r.difficulty = difficulty; r.beginRun(); })}
-        onDraft={() => act((r) => { r.difficulty = difficulty; r.beginDraft(); })}
+        onBegin={() => act((r) => r.beginDraft())}
         hasSave={hasSave}
         savedFightIndex={savedFightIndex}
         onContinue={onContinue}
-        difficulty={difficulty}
-        onDifficulty={setDifficulty}
       />
     );
   } else if (run.location.kind === 'draft') {
