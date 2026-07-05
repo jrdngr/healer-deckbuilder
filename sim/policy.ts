@@ -16,8 +16,9 @@ import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, TITHE_AMOUNT,
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
+  DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL,
 } from '../src/constants';
-import type { CardId, Slot, RelicId, AbilityId } from '../src/constants';
+import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
 
 // ---------------------------------------------------------------------------
 // Fight policy
@@ -535,12 +536,18 @@ function shopPartyNode(run: Run): void {
     const v = value(o.def.stat, o.def.amount);
     if (v > bestVal) { bestVal = v; best = i; }
   });
-  if (best < 0) return;
-  // Put damage / HP on the tank (the always-alive taunt sink); ability on the
-  // ranger (Poison scales more consistently than Bolt for a grind line).
+  if (best < 0 || run.roster.length === 0) return;
+  // Target a member that actually exists in the (possibly small) roster: ability on a
+  // striker (Poison/Bolt scale), damage/HP on the sturdiest body; else the first member.
   const def = offers[best].def;
-  const slot: Slot = def.stat === 'ability' ? SLOT.LEFT : SLOT.CENTER;
-  run.buyPartyOffer(best, slot);
+  let target = 0;
+  if (def.stat === 'ability') {
+    const s = run.roster.findIndex((p) => p.member && CONVENTIONAL_STRIKERS.has(p.member));
+    if (s >= 0) target = s;
+  } else {
+    for (let i = 1; i < run.roster.length; i++) if (run.roster[i].maxHP > run.roster[target].maxHP) target = i;
+  }
+  run.buyPartyOffer(best, target as Slot);
 }
 
 function shopModifierNode(run: Run): void {
@@ -617,7 +624,7 @@ function resolveEvent(run: Run): void {
         const pick = ids.reduce((a, b) => (CARD_BUY_VALUE[b] > CARD_BUY_VALUE[a] ? b : a), ids[0]);
         run.addCard(pick); return;
       }
-      case 'shrineParty': run.shrineBlessMember(SLOT.CENTER); return; // buff the tank
+      case 'shrineParty': run.shrineBlessMember(Math.min(SLOT.CENTER, run.roster.length - 1) as Slot); return;
       case 'shrineCard': {
         const eligible = run.shrineEligibleCards();
         if (eligible.length) { run.shrineBlessCard(eligible[0].uid); return; }
@@ -634,6 +641,65 @@ function resolveEvent(run: Run): void {
   // Nothing worthwhile (or only a card-removal we don't need) — move on.
 }
 
+// ---- roster / draft / deploy policy (2026-07 campaign) ---------------------
+
+// A roster member's value to the good player: its draft rating, docked for scars.
+function memberValue(p: { member?: MemberId; injuries: number }): number {
+  return (p.member ? DRAFT_RATING[p.member] : 0) - p.injuries;
+}
+
+// Draft pick: take the strongest offered member, but prioritise a striker while the
+// roster still lacks one (a comp with no poison/bolt loses the F8 race — #38).
+export function draftPick(run: Run): void {
+  if (run.location.kind !== 'draft' || run.nodeContent?.type !== 'draft') return;
+  const opts = run.nodeContent.options;
+  if (opts.length === 0) return;
+  const needStriker = !run.roster.some((p) => p.member && CONVENTIONAL_STRIKERS.has(p.member));
+  let best = opts[0], bestScore = -Infinity;
+  for (const id of opts) {
+    const score = (DRAFT_RATING[id] ?? 0) + (needStriker && CONVENTIONAL_STRIKERS.has(id) ? 10 : 0);
+    if (score > bestScore) { bestScore = score; best = id; }
+  }
+  run.chooseDraftMember(best);
+}
+
+// Recruit node: the good player grows the roster (bodies + replacements after a
+// permanent death), taking the strongest offered member up to a sensible cap.
+export function recruitPick(run: Run): void {
+  if (run.nodeContent?.type !== 'recruit' || run.nodeContent.done) return;
+  const opts = run.nodeContent.options;
+  if (opts.length === 0 || run.roster.length >= 6) return;
+  let best = opts[0], bestScore = -Infinity;
+  for (const id of opts) {
+    const score = DRAFT_RATING[id] ?? 0;
+    if (score > bestScore) { bestScore = score; best = id; }
+  }
+  run.recruitMember(best);
+}
+
+// Deploy: field the best (up to) three roster members by value, seating a taunt
+// member (else the highest-HP body) in the center where the enemy aims most.
+export function deployBest(run: Run): void {
+  if (run.location.kind !== 'deploy') return;
+  const ranked = run.roster
+    .map((p, ri) => ({ ri, p }))
+    .sort((a, b) => memberValue(b.p) - memberValue(a.p));
+  const top = ranked.slice(0, 3);
+  if (top.length === 0) { run.confirmDeployment(run.deployment); return; }
+  // Anchor: a taunt member if we have one, else the highest-HP body.
+  let anchor = top.findIndex((t) => t.p.member && MEMBER_POOL[t.p.member].ability === 'taunt');
+  if (anchor < 0) {
+    anchor = 0;
+    for (let i = 1; i < top.length; i++) if (top[i].p.maxHP > top[anchor].p.maxHP) anchor = i;
+  }
+  const deploy: (number | null)[] = [null, null, null];
+  deploy[SLOT.CENTER] = top[anchor].ri;
+  const rest = top.filter((_, i) => i !== anchor).map((t) => t.ri);
+  if (rest[0] != null) deploy[SLOT.LEFT] = rest[0];
+  if (rest[1] != null) deploy[SLOT.RIGHT] = rest[1];
+  run.confirmDeployment(deploy);
+}
+
 export function resolveNode(run: Run): void {
   switch (run.nodeContent?.type) {
     case 'cardShop': shopCardNode(run); break;
@@ -642,7 +708,7 @@ export function resolveNode(run: Run): void {
     case 'cardUpgrade': shopModifierNode(run); break;
     case 'event': resolveEvent(run); break;
     case 'reliquary': shopReliquary(run); break;
-    // Recruit nodes are handled by the run-sim loop's draft/recruit policy, not here.
+    case 'recruit': recruitPick(run); break;
     default: break;
   }
 }

@@ -11,6 +11,14 @@
 // ---------------------------------------------------------------------------
 // BASELINE
 //
+// CURRENT (2026-07 roster campaign): the sim plays the real campaign — draft a solo
+// starter, build the roster (post-boss drafts + Recruit nodes), deploy the best three
+// each fight. Enemy HP re-anchored down for the under-strength party (act 1 is fought
+// SOLO/duo). N=200: full-run ~22%; per-fight ~98/94/61/100/94/76/92/95/65%. Normals
+// clear cleanly; the act bosses are the walls, sharpest at the under-strength
+// Gatewarden. The 56-comp sweep now runs in quick-play mode (runSim(..., false)).
+// Everything below is pre-campaign history (fixed-trio measurements).
+//
 // Historical reference (memory/balance-pass-2026-06, the June good-AI pass):
 //   per-fight ~100 / 100 / 83 / 67 / 60 %   full-run ~35 %   (N ~ 1500)
 // That number came from a hand-tuned throwaway AI (sim_tmp.ts, since deleted).
@@ -257,7 +265,7 @@ import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
 import { FIGHT_COUNT, isActBoss, actOfFight, DRAFT_POOL, MEMBER_POOL, partyFromMembers } from '../src/constants';
 import type { MemberId } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
 
 export interface FightOutcome {
   fightIndex: number;
@@ -281,10 +289,14 @@ function fightSeed(runSeed: number, fightIndex: number): number {
 // Play one full run end to end with the policy. Fully deterministic in `seed`.
 // `setup` (optional) mutates the fresh Run before it begins — the balance-gate
 // hook for forcing a relic/curse into every run (#22's per-relic gates).
-export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutcome {
+// `campaign` (default) plays the real roster campaign: draft a solo starter, build
+// the roster (post-boss drafts + Recruit nodes), and deploy the best three each
+// fight. Pass campaign=false for quick-play (a pre-seeded roster deployed as-is) —
+// used by the fixed-composition sweep.
+export function runSingleRun(seed: number, setup?: (run: Run) => void, campaign = true): RunOutcome {
   const run = new Run(seed);
   setup?.(run);
-  run.beginRun();
+  if (campaign) run.beginDraft(); else run.beginRun();
   const fights: FightOutcome[] = [];
   let guard = 0;
   while (run.status === 'playing' && guard < 1000) {
@@ -312,13 +324,14 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         run.completeNode();
         break;
       }
-      case 'start': run.beginRun(); break;
-      // Pre-fight deploy (2026-07): field the default seating (the first three roster
-      // members). A smarter deploy policy — bench a fragile/expensive member — is C7.
-      case 'deploy': run.confirmDeployment(run.deployment); break;
-      // Post-boss member draft (2026-07): take the first offered member. (A smarter
-      // roster/deploy policy — pick the strongest, bench to save salary — is C7.)
+      case 'start': if (campaign) run.beginDraft(); else run.beginRun(); break;
+      // Pre-fight deploy (2026-07): the campaign fields its best three; quick-play
+      // deploys the pre-seeded roster as-is.
+      case 'deploy': if (campaign) deployBest(run); else run.confirmDeployment(run.deployment); break;
+      // Member draft (start + post-boss): the campaign picks the strongest offer
+      // (striker-first); quick-play takes the first (it never really drafts).
       case 'draft': {
+        if (campaign) { draftPick(run); break; }
         const c = run.nodeContent;
         if (c?.type === 'draft' && c.options.length) run.chooseDraftMember(c.options[0]);
         else run.status = 'lost';
@@ -356,7 +369,7 @@ function proportion(wins: number, n: number): Proportion {
   return { wins, n, rate, ci95: ci95(rate, n) };
 }
 
-export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): SimReport {
+export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, campaign = true): SimReport {
   let fullWins = 0;
   const fightWins = new Array(FIGHT_COUNT).fill(0);
   const fightAttempts = new Array(FIGHT_COUNT).fill(0);
@@ -364,7 +377,7 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): Si
   const fightDeathsOnWin = new Array(FIGHT_COUNT).fill(0); // DR1: deaths summed over WON fights
   let injuriesTotal = 0;
   for (let i = 0; i < n; i++) {
-    const outcome = runSingleRun(firstSeed + i, setup);
+    const outcome = runSingleRun(firstSeed + i, setup, campaign);
     if (outcome.status === 'won') fullWins++;
     injuriesTotal += outcome.injuriesAtEnd;
     for (const f of outcome.fights) {
@@ -446,7 +459,8 @@ export interface CompReport {
 export function runCompositionSweep(n: number, firstSeed = 1): CompReport[] {
   return allCompositions().map((comp) => {
     const seated = seatComposition(comp);
-    const r = runSim(n, firstSeed, (run) => { run.party = partyFromMembers(seated); });
+    // Quick-play the fixed composition (pre-seed the roster, deploy it as-is).
+    const r = runSim(n, firstSeed, (run) => { run.party = partyFromMembers(seated); }, false);
     return {
       comp,
       hasTaunt: comp.includes('tank'),

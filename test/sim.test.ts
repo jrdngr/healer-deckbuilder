@@ -44,52 +44,41 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
 // Locked from the current engine + policy over seeds 1..200. If a change here is
 // intentional, update these numbers together with a note on what moved.
 //
-// NOTE (issue 14): with all three real bosses in place (Gatewarden / Hexweaver /
-// Devourer) and the Act-3 normals brought under the enrage cliff, the full run is
-// beatable end to end — full-run lands in the designed 25-35% band. Boss winrates
-// sit near ~85 / ~70 / ~55%.
+// NOTE (2026-07 roster campaign): the sim plays the real campaign now — a solo
+// starter drafted, the roster built over the run, the best three deployed each
+// fight. Enemy HP was re-anchored down for the under-strength party. Full-run lands
+// ~22% at N=200; normals clear cleanly and the act bosses are the walls (~61/76/65%).
 {
   const r = runSim(200, 1);
   eq('N=200 sample size', r.fullRun.n, 200);
   eq('N=200 fight count', r.perFight.length, 9);
   const perFightWins = r.perFight.map((p) => p.wins);
-  // Re-pinned for the decaying-Rest nerf (SKIP_REGEN_DECAYED 2 -> 1: a one-card
-  // turn now Rests for +1 MP, not +2). The MP economy tightens across the board
-  // and every fight past act 1 pays for it: N=200 full-run drops 27.5% -> 13.5%,
-  // bosses to ~78 / ~52 / ~35%. The branch-hub rework that landed alongside is
-  // sim-neutral (verified: bands pass with the old constant). NOTE: the former
-  // DESIGN bands (25-35% full-run, ~85/70/55 bosses) no longer hold — the pins
-  // below are PROVISIONAL regression gates on the observed numbers until a
-  // balance pass (or a re-ratified target) restores deliberate bands.
-  //
-  // Re-pinned again for the roster/deployment rework in progress (2026-07). The sim
-  // quick-plays the trio and deploys it every fight; changes so far: the Recruit node
-  // type and the retired Infirmary reshaped the node-weight table (map gen shifts the
-  // whole downstream stream), the post-boss draft consumes rng, salaries raised
-  // GOLD_PER_FIGHT 40->80, and the 'death' injury mode now REMOVES a member at the 4th
-  // scar — after which the naive sim fields an arbitrary post-boss pick, so the late
-  // game (F8) softens. The CI bands below still hold. These numbers get re-measured
-  // once the deploy/draft policy (C7) and the act-1 + salary rebalance (C8) land.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 150, 149, 148, 74, 73, 72, 18]));
-  // Provisional full-run gate around the observed 13.5% (was: the designed
-  // 25-35% band). CI-consistency, not a hard threshold, so subsample noise
-  // can't fail a healthy build while a real drift still trips it.
-  check('full-run consistent with the provisional 10-18% band',
-    r.fullRun.rate - r.fullRun.ci95 <= 0.18 && r.fullRun.rate + r.fullRun.ci95 >= 0.10,
+  // Re-pinned for the 2026-07 ROSTER CAMPAIGN. The sim now plays the real campaign:
+  // draft a solo starter, build the roster (post-boss drafts + Recruit nodes), and
+  // deploy the best three each fight — so act 1 is fought SOLO/duo and the whole
+  // enemy-HP curve was re-anchored down for the under-strength party (ENEMY_HP_BY_FIGHT).
+  // Shape: normals clear cleanly (~90-100%); the act bosses are the walls, sharpest
+  // at the act-1 Gatewarden you meet under-strength. N=200: full-run ~22%, bosses
+  // ~61 / 76 / 65%. Provisional regression pins on the observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 183, 111, 111, 104, 79, 73, 69, 45]));
+  // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
+  // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
+  // build while a real drift still trips it.
+  check('full-run consistent with the ~22% campaign band',
+    r.fullRun.rate - r.fullRun.ci95 <= 0.30 && r.fullRun.rate + r.fullRun.ci95 >= 0.15,
     `${(r.fullRun.rate * 100).toFixed(1)}% ±${(r.fullRun.ci95 * 100).toFixed(1)}`);
-  // Early normals clear >= 95% (F0, F1, F3, F4 have clean sample sizes).
-  for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 95%`, r.perFight[fi].rate >= 0.95);
-  // Act-3 normals (F6, F7) also clear >= 90% now that they're under the enrage cliff.
-  for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
-  // Provisional boss gates on the post-nerf observations (N=200: Gatewarden 77.5%,
-  // Hexweaver 52.3%, Devourer 34.6%). Same CI-consistency structure as before.
+  // Normals clear cleanly even under-strength: act-1/2 normals >= 88%, act-3 >= 85%.
+  for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 88%`, r.perFight[fi].rate >= 0.88);
+  for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 85%`, r.perFight[fi].rate >= 0.85);
+  // Provisional boss gates on the campaign observations (N=200: Gatewarden ~61%,
+  // Hexweaver ~76%, Devourer ~65%) — CI-consistent bands.
   const bandConsistent = (p: { rate: number; ci95: number }, lo: number, hi: number): boolean =>
     p.rate + p.ci95 >= lo && p.rate - p.ci95 <= hi;
-  check('Act-1 boss (Gatewarden) consistent with the provisional >= 74%', r.perFight[2].rate + r.perFight[2].ci95 >= 0.74,
+  check('Act-1 boss (Gatewarden) consistent with ~50-72% (the under-strength wall)', bandConsistent(r.perFight[2], 0.50, 0.72),
     `${(r.perFight[2].rate * 100).toFixed(1)}% ±${(r.perFight[2].ci95 * 100).toFixed(1)}`);
-  check('Act-2 boss (Hexweaver) consistent with the provisional 45-60%', bandConsistent(r.perFight[5], 0.45, 0.60),
+  check('Act-2 boss (Hexweaver) consistent with ~66-86%', bandConsistent(r.perFight[5], 0.66, 0.86),
     `${(r.perFight[5].rate * 100).toFixed(1)}% ±${(r.perFight[5].ci95 * 100).toFixed(1)}`);
-  check('Act-3 boss (Devourer) consistent with the provisional 27-43%', bandConsistent(r.perFight[8], 0.27, 0.43),
+  check('Act-3 boss (Devourer) consistent with ~52-78%', bandConsistent(r.perFight[8], 0.52, 0.78),
     `${(r.perFight[8].rate * 100).toFixed(1)}% ±${(r.perFight[8].ci95 * 100).toFixed(1)}`);
 }
 

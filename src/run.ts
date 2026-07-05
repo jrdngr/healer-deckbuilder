@@ -811,6 +811,7 @@ export class Run {
 
   applyPartyUpgrade(slot: Slot, def: PartyUpgradeDef): void {
     const p = this.party[slot];
+    if (!p) return; // out-of-range roster index (a small roster can't be upgraded there)
     if (def.stat === 'maxHP') p.maxHP += def.amount;
     else if (def.stat === 'damage') p.damage += def.amount;
     else p.abilityPower += def.amount;
@@ -990,7 +991,8 @@ export class Run {
   // Blood Altar: a permanent max-HP-for-damage trade on a chosen member. A
   // member at/below the floor may not sacrifice (the altar takes, never kills).
   canSacrifice(slot: Slot): boolean {
-    return this.party[slot].maxHP > BLOOD_ALTAR_MIN_HP;
+    const p = this.party[slot];
+    return !!p && p.maxHP > BLOOD_ALTAR_MIN_HP;
   }
 
   bloodAltarSacrifice(slot: Slot): { hpLoss: number; damageGain: number } | null {
