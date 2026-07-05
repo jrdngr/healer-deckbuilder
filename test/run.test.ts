@@ -944,6 +944,32 @@ const crossBranch = (run: Run, branch = 0): void => {
   INJURY_RULES.mode = 'incapacitate'; // restore the module default
 }
 
+// --- deployment: the battle party is a length-3 view of the roster --------------
+{
+  const run = new Run(3);
+  eq('deployment defaults to the first three roster slots',
+    JSON.stringify(run.deployment), JSON.stringify([0, 1, 2]));
+  const full = run.toBattleConfig().party;
+  eq('a full deployment fields 3 members', full.filter((p) => !p.empty).length, 3);
+
+  // Seat only the center slot: the other two battle slots become empty.
+  run.deployment = [null, 0, null];
+  const solo = run.toBattleConfig().party;
+  eq('battle party stays length 3', solo.length, 3);
+  check('unseated slots are empty', solo[0].empty === true && solo[2].empty === true);
+  check('the seated slot carries the roster member stats',
+    solo[1].empty !== true && solo[1].maxHP === run.roster[0].maxHP && solo[1].damage === run.roster[0].damage);
+
+  // deployment (and the empty view) survive save/resume.
+  run.deployment = [2, null, 1];
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  eq('deployment round-trips through a snapshot',
+    JSON.stringify(restored.deployment), JSON.stringify([2, null, 1]));
+  const rcfg = restored.toBattleConfig().party;
+  check('a restored unseated slot rebuilds empty', rcfg[1].empty === true);
+  eq('a restored seated slot maps to the right roster member', rcfg[0].maxHP, run.roster[2].maxHP);
+}
+
 // --- Infirmary node (DR1): clear scars for gold, top of the ladder first --------
 {
   // The Infirmary is a real weighted node (unlike the injected Reliquary).

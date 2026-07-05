@@ -67,8 +67,9 @@ export type NodeContent =
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
 // v3: difficulty, #23; v4: fightsWon, #24; v5: per-member injuries + infirmary
 // node content, DR1; v6: drafted member identity + draft location/content, #27;
-// v7: branch hub location + per-branch cached node content.)
-export const RUN_SAVE_VERSION = 7;
+// v7: branch hub location + per-branch cached node content;
+// v8: collectible roster + per-fight deployment, replacing the fixed 3-member party.)
+export const RUN_SAVE_VERSION = 8;
 
 export interface RunSnapshot {
   version: number;
@@ -78,7 +79,8 @@ export interface RunSnapshot {
   nextUid: number;
   gold: number;
   deck: DeckCard[];
-  party: PartyMemberConfig[];
+  roster: PartyMemberConfig[];
+  deployment: (number | null)[];
   healer: HealerConfig;
   relics: RelicId[];
   spentRelics: RelicId[];
@@ -97,7 +99,14 @@ export class Run {
   rng: Rng;
   gold: number;
   deck: DeckCard[];
-  party: PartyMemberConfig[];
+  // The collected members (the roster). Unique by `member` id; grows as the player
+  // drafts/recruits, shrinks on permanent death. The BATTLE party the engine fights
+  // with is a separate length-3 view built from `deployment` in toBattleConfig.
+  roster: PartyMemberConfig[];
+  // Which roster member is seated in each battle slot for the upcoming fight (index
+  // into `roster`, or null for an empty slot). Chosen on the deploy screen; defaults
+  // to the first three roster members until a deploy step sets it.
+  deployment: (number | null)[]; // length 3
   healer: HealerConfig;
   relics: RelicId[];      // run-long passives (#21), in acquisition order
   spentRelics: RelicId[]; // once-per-RUN relics already consumed (#22)
@@ -119,7 +128,8 @@ export class Run {
     this.rng = makeRng(this.seed);
     this.gold = 0;
     this.deck = defaultDeck();
-    this.party = defaultParty();
+    this.roster = defaultParty();
+    this.deployment = [0, 1, 2];
     this.healer = { ...DEFAULT_HEALER };
     this.relics = [];
     this.spentRelics = [];
@@ -132,6 +142,13 @@ export class Run {
     this.branchContent = [];
     this.currentEnemyDef = null;
   }
+
+  // TEMPORARY compat shim (removed once the deploy screen + roster pickers land):
+  // the roster IS the party while every fight deploys the whole trio. UI and tests
+  // that still read/write `run.party` proxy the roster until they migrate to
+  // `roster`/`deployment` explicitly.
+  get party(): PartyMemberConfig[] { return this.roster; }
+  set party(v: PartyMemberConfig[]) { this.roster = v; }
 
   // ---- save / resume (boundary-only, issue 11) -----------------------------
   // The run layer is pure and seed-deterministic, so a snapshot is just its
@@ -148,7 +165,8 @@ export class Run {
       nextUid: this.nextUid,
       gold: this.gold,
       deck: this.deck,
-      party: this.party,
+      roster: this.roster,
+      deployment: this.deployment,
       healer: this.healer,
       relics: this.relics,
       spentRelics: this.spentRelics,
@@ -170,7 +188,8 @@ export class Run {
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
-    run.party = snap.party.map((p) => ({ ...p, injuries: p.injuries ?? 0 }));
+    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0 }));
+    run.deployment = [...(snap.deployment ?? [0, 1, 2])];
     run.healer = { ...snap.healer };
     run.relics = [...snap.relics];
     run.spentRelics = [...(snap.spentRelics ?? [])];
@@ -310,21 +329,29 @@ export class Run {
     const d = DIFFICULTIES[this.difficulty];
     return {
       deck: this.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] })),
-      // Injuries (DR1) bite here: the fight gets a member with reduced base
+      // The engine fights with a length-3 party, one entry per battle slot. Each
+      // slot maps through `deployment` to a roster member; an unseated slot (null)
+      // becomes an empty slot the engine builds as absent (dead/untargetable).
+      // Injuries (DR1) bite here for seated members: the fight gets reduced base
       // stats, so every downstream engine site (HP construction, healing clamp,
       // Vanguard full-HP check, ability strength) sees the scarred numbers with
       // no further plumbing. maxHP floored at 1 and damage at 0; abilityPower may
       // go negative (a Broken member), floored where each ability resolves.
-      party: this.party.map((p) => ({
-        maxHP: Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries)),
-        damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
-        abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
-        injuries: p.injuries,
-        member: p.member, // drafted identity (#27) — dropping this reverts the fight to trio abilities
-        // 'incapacitate' injury mode: the member enters the fight dead and cannot
-        // be Resurrected (healing the scar at an Infirmary restores them).
-        incapacitated: injuryIncapacitates(p.injuries),
-      })),
+      // NOTE: any new PartyMemberConfig field must be threaded here explicitly —
+      // this literal silently drops fields otherwise (the drafted-identity bug).
+      party: this.deployment.map((ri): PartyMemberConfig => {
+        const p = ri == null ? undefined : this.roster[ri];
+        if (!p) return { maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true };
+        return {
+          maxHP: Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries)),
+          damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
+          abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
+          injuries: p.injuries,
+          member: p.member, // drafted identity (#27) — dropping this reverts to trio abilities
+          // 'incapacitate' injury mode: enters the fight dead and unresurrectable.
+          incapacitated: injuryIncapacitates(p.injuries),
+        };
+      }),
       healer: { ...this.healer },
       relics: [...this.relics],
       spentRelics: [...this.spentRelics],
