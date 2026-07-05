@@ -14,7 +14,7 @@ import {
   MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
   DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE,
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
-  INJURY_RULES, INCAPACITATE_AT, injuryRecordCap, injuryIncapacitates,
+  INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../src/constants';
 import type { RunLocation } from '../src/run';
@@ -936,6 +936,43 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('snapshot with injuries is byte-stable',
     JSON.stringify(restored.toJSON()), JSON.stringify(base.toJSON()));
   INJURY_RULES.mode = 'death'; // restore the module default
+}
+
+// --- graveyard: permadeath buries the member, never re-offered (#40) ------------
+{
+  const run = new Run(11);
+  run.roster = partyFromMembers(['warlock', 'mage', 'ranger']);
+  run.deployment = [0, 1, 2];
+  eq('graveyard starts empty', run.graveyard.length, 0);
+  check('a member not in the roster is offerable', run.availableMembers().includes('tank'));
+
+  // Drive the Warlock to the 4th-death cliff: 3 scars, then one more death.
+  run.roster[0].injuries = DEATH_AT - 1;
+  run.recordInjuries([0 as Slot]); // 4th death → permadeath
+  check('the permadead member is removed from the roster',
+    !run.roster.some((p) => p.member === 'warlock'));
+  check('the permadead member is recorded in the graveyard', run.graveyard.includes('warlock'));
+  check('deployment is cleared after a permadeath',
+    run.deployment.every((d) => d === null));
+
+  // The buried member must never return through any offer path (all key on availableMembers).
+  check('a buried member is not in availableMembers', !run.availableMembers().includes('warlock'));
+  const offer = run._rollMemberOffer(run.availableMembers(), 8);
+  check('a buried member never appears in a rolled offer', !offer.includes('warlock'));
+
+  // Graveyard survives save/resume and stays byte-stable.
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  eq('graveyard round-trips through a snapshot',
+    JSON.stringify(restored.graveyard), JSON.stringify(run.graveyard));
+  eq('snapshot with a graveyard is byte-stable',
+    JSON.stringify(restored.toJSON()), JSON.stringify(run.toJSON()));
+
+  // A fully-buried pool hides the Recruit node (nodeAvailable keys on availableMembers).
+  const buried = new Run(12);
+  buried.roster = partyFromMembers(['ranger']);
+  buried.graveyard = DRAFT_POOL.filter((id) => id !== 'ranger');
+  eq('every non-roster member is buried', buried.availableMembers().length, 0);
+  check('a fully-buried pool hides the Recruit stop', !buried.nodeAvailable('recruit'));
 }
 
 // --- deployment: the battle party is a length-3 view of the roster --------------

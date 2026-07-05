@@ -74,8 +74,9 @@ export type NodeContent =
 // node content, DR1; v6: drafted member identity + draft location/content, #27;
 // v7: branch hub location + per-branch cached node content;
 // v8: collectible roster + per-fight deployment, replacing the fixed 3-member party;
-// v9: single mode — difficulty removed (the roster campaign is the only way to play).)
-export const RUN_SAVE_VERSION = 9;
+// v9: single mode — difficulty removed (the roster campaign is the only way to play);
+// v10: graveyard of permanently-dead members (#40), excluded from future offers.)
+export const RUN_SAVE_VERSION = 10;
 
 export interface RunSnapshot {
   version: number;
@@ -86,6 +87,7 @@ export interface RunSnapshot {
   deck: DeckCard[];
   roster: PartyMemberConfig[];
   deployment: (number | null)[];
+  graveyard: MemberId[];
   healer: HealerConfig;
   relics: RelicId[];
   spentRelics: RelicId[];
@@ -111,6 +113,9 @@ export class Run {
   // into `roster`, or null for an empty slot). Chosen on the deploy screen; defaults
   // to the first three roster members until a deploy step sets it.
   deployment: (number | null)[]; // length 3
+  // Permanently-dead member ids (4th-death removal, #40). Excluded from every
+  // draft/recruit offer so a killed hero never returns as a fresh scar-free copy.
+  graveyard: MemberId[];
   healer: HealerConfig;
   relics: RelicId[];      // run-long passives (#21), in acquisition order
   spentRelics: RelicId[]; // once-per-RUN relics already consumed (#22)
@@ -136,6 +141,7 @@ export class Run {
     // this and rebuilds the roster one member at a time.
     this.roster = partyFromMembers(CLASSIC_TRIO);
     this.deployment = [0, 1, 2];
+    this.graveyard = [];
     this.healer = { ...DEFAULT_HEALER };
     this.relics = [];
     this.spentRelics = [];
@@ -173,6 +179,7 @@ export class Run {
       deck: this.deck,
       roster: this.roster,
       deployment: this.deployment,
+      graveyard: this.graveyard,
       healer: this.healer,
       relics: this.relics,
       spentRelics: this.spentRelics,
@@ -196,6 +203,7 @@ export class Run {
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
     run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0 }));
     run.deployment = [...(snap.deployment ?? [0, 1, 2])];
+    run.graveyard = [...(snap.graveyard ?? [])];
     run.healer = { ...snap.healer };
     run.relics = [...snap.relics];
     run.spentRelics = [...(snap.spentRelics ?? [])];
@@ -217,7 +225,8 @@ export class Run {
   // Member ids not yet in the roster (the pool a draft/recruit can still offer).
   availableMembers(): MemberId[] {
     const have = new Set(this.roster.map((p) => p.member));
-    return DRAFT_POOL.filter((id) => !have.has(id));
+    const buried = new Set(this.graveyard);
+    return DRAFT_POOL.filter((id) => !have.has(id) && !buried.has(id));
   }
 
   // Roll a pick-one offer of up to `size` distinct members from `pool` (already the
@@ -511,7 +520,12 @@ export class Run {
     // highest index first so a splice never shifts one still to remove. The
     // deployment is rebuilt at the next deploy step; clear it to drop stale indices.
     if (killed.size > 0) {
-      for (const ri of [...killed].sort((a, b) => b - a)) this.roster.splice(ri, 1);
+      for (const ri of [...killed].sort((a, b) => b - a)) {
+        const [removed] = this.roster.splice(ri, 1);
+        // Bury the member so availableMembers() never re-offers them (#40): the
+        // 4th death is permanent, not a reset to a fresh copy.
+        if (removed?.member) this.graveyard.push(removed.member);
+      }
       this.deployment = [null, null, null];
     }
   }
