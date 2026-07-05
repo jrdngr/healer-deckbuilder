@@ -279,6 +279,7 @@ async function render(el: React.ReactElement): Promise<string> {
 {
   const hubRun = new Run(22);
   hubRun.beginRun();
+  hubRun.confirmDeployment(hubRun.deployment); // pass the pre-fight deploy step
   hubRun.winFight();
   hubRun.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
   hubRun.chooseBranch(0);

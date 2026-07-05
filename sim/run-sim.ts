@@ -318,6 +318,9 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         break;
       }
       case 'start': run.beginRun(); break;
+      // Pre-fight deploy (2026-07): field the default seating (the first three roster
+      // members). A smarter deploy policy — bench a fragile/expensive member — is C7.
+      case 'deploy': run.confirmDeployment(run.deployment); break;
       // Post-boss member draft (2026-07): take the first offered member. (A smarter
       // roster/deploy policy — pick the strongest, bench to save salary — is C7.)
       case 'draft': {

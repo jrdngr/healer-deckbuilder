@@ -922,6 +922,25 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
 .draft-pair { border-top: 1px solid #2a2f3a; padding-top: 10px; }
 .draft-pair-label { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
 
+/* ---- Deploy (pre-fight member selection, 2026-07) ------------------------ */
+.deploy-slots { display: flex; gap: 12px; margin: 14px 0; }
+.deploy-slot {
+  position: relative; flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: center;
+  background: var(--panel); border: 1px dashed #3a4150; border-radius: 10px; padding: 12px 14px;
+  color: var(--ink); cursor: pointer;
+}
+.deploy-slot.active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,193,78,.3); }
+.deploy-slot.filled { border-style: solid; border-color: var(--accent); }
+.deploy-slot-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.deploy-slot-name { font-weight: 700; }
+.deploy-slot-clear { position: absolute; top: 6px; right: 8px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.deploy-slot-clear:hover { color: #e0637a; }
+.deploy-roster { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* An empty deploy slot rendered in the battle party panel. */
+.member-empty { display: flex; align-items: center; justify-content: center; border: 1px dashed #3a4150; opacity: .5; }
+.member-empty-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
 /* ---- Events -------------------------------------------------------------- */
 .event-screen { display: grid; place-items: center; }
 .event-card {

@@ -34,10 +34,17 @@ const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id
 // Cross the current fork: take a branch, visit every open stop once (a closed
 // Infirmary is skipped — enterNode refuses it and completeNode then no-ops),
 // and head on to the next fight.
+// Pass through the pre-fight deploy step (2026-07) with the default seating. Tests
+// that care about deployment set it explicitly via confirmDeployment.
+const deployAll = (run: Run): void => {
+  if (run.location.kind === 'deploy') run.confirmDeployment(run.deployment);
+};
+
 const crossBranch = (run: Run, branch = 0): void => {
   run.chooseBranch(branch);
   for (let i = 0; i < NODES_PER_BRANCH; i++) { run.enterNode(i); run.completeNode(); }
   run.startNextFight();
+  deployAll(run);
 };
 
 // --- map shape & determinism ------------------------------------------------
@@ -83,7 +90,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   eq('starts with default deck size', run.deck.length, defaultDeck().length);
   eq('default healer maxMana', run.healer.maxMana, DEFAULT_HEALER.maxMana);
   // beginRun enters the first fight.
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   eq('beginRun -> fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
   eq('not boss at fight 0', run.isBossFight, false);
 }
@@ -91,7 +98,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 // --- progression through the run --------------------------------------------
 {
   const run = new Run(3);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   // Win fight 0 -> fork 0, gold awarded.
   run.winFight();
   eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
@@ -111,12 +118,13 @@ const crossBranch = (run: Run, branch = 0): void => {
   check('the other stop opens from the hub', run.location.kind === 'node' && run.location.index === 0);
   run.completeNode();
   run.startNextFight();
+  deployAll(run);
   check('the hub leads to fight 1', run.location.kind === 'fight' && run.location.fightIndex === 1);
 }
 // --- branch hub: revisits keep state, events resolve once ---------------------
 {
   const run = new Run(31);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   run.winFight();
   run.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
   run.chooseBranch(0);
@@ -149,6 +157,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 
   // Moving on reaches the fight and drops the branch cache.
   run.startNextFight();
+  deployAll(run);
   check('the hub leads to the next fight', run.location.kind === 'fight' && run.location.fightIndex === 1);
   eq('the branch cache is dropped at the fight boundary', run.branchContent.length, 0);
 }
@@ -156,7 +165,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 // --- branch hub: the Infirmary only opens to a wounded party ------------------
 {
   const run = new Run(32);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   run.winFight();
   run.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'event' }];
   run.chooseBranch(0);
@@ -183,7 +192,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 // --- branch hub: a mid-branch save/resume keeps the cached stops ---------------
 {
   const run = new Run(33);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   run.winFight();
   run.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
   run.chooseBranch(1);
@@ -210,7 +219,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   // Drive through all 9 fights: three acts, an act boss at the end of each
   // (fights 2, 5, 8), only the final fight wins the run.
   const run = new Run(4);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   const bossFights: number[] = [];
   let gold = 0;
   for (let f = 0; f < FIGHT_COUNT; f++) {
@@ -243,7 +252,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 {
   // Enemy HP / enrage turn follow the per-act curve.
   const run = new Run(77);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   const seen: number[] = [];
   const enrage: number[] = [];
   for (let f = 0; f < FIGHT_COUNT; f++) {
@@ -605,7 +614,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 {
   // Entering a fight rolls and caches the enemy def (stable across toBattleConfig).
   const run = new Run(3);
-  run.beginRun(); // enters fight 0
+  run.beginRun(); deployAll(run); // enters fight 0
   const def = run.currentEnemyDef;
   check('fight 0 has a rolled enemy def', def !== null && def!.boss === false);
   eq('battle config carries the same def', run.toBattleConfig().enemy.def, def);
@@ -615,7 +624,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 {
   // Spoils fire after the act-1 boss: 3 free, distinct offers with a rare guaranteed.
   const run = new Run(80);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   for (let f = 0; f < 2; f++) {
     run.winFight();
     crossBranch(run);
@@ -765,7 +774,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   // The Rusty Crown pays its bonus on fight wins.
   const run = new Run(92);
   run.addRelic('rustyCrown');
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   run.winFight();
   eq('the Crown pays extra gold per win', run.gold, GOLD_PER_FIGHT + RUSTY_CROWN_GOLD);
 }
@@ -776,7 +785,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   // gold +25/fight. Standard IS the curve. Brutal is dev-only and untuned.
   const std = new Run(95);
   const story = new Run(95, 'story');
-  std.beginRun(); story.beginRun();
+  std.beginRun(); deployAll(std); story.beginRun(); deployAll(story);
   const stdCfg = std.toBattleConfig();
   const storyCfg = story.toBattleConfig();
   eq('Story scales enemy HP by 0.8', storyCfg.enemy.maxHP, Math.round(stdCfg.enemy.maxHP * 0.8));
@@ -824,7 +833,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 {
   // The end-of-run score rewards progress and penalizes hoarded gold (flaw #21).
   const run = new Run(96);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   run.winFight(); // 1 fight, +40g
   run.addRelic('lantern');
   const s = run.runScore();
@@ -847,7 +856,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   eq('peeking never consumes the rng stream', run.rng.getState(), before);
   check('the preview names a real enemy', ENEMY_DEF_BY_ID[a] !== undefined);
   // Entering the fight later meets exactly the previewed foe.
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   eq('fight 0 matches its preview', run.currentEnemyDef!.id, new Run(97).peekEncounter(0).id);
 }
 
@@ -865,7 +874,7 @@ const crossBranch = (run: Run, branch = 0): void => {
 {
   // Snapshot round-trips through JSON and the resumed run continues the stream.
   const run = new Run(5);
-  run.beginRun();
+  run.beginRun(); deployAll(run);
   run.winFight();
   run.chooseBranch(0);
   const snap = JSON.parse(JSON.stringify(run.toJSON())); // survive real serialization
@@ -877,12 +886,12 @@ const crossBranch = (run: Run, branch = 0): void => {
   // A save+resume at a boundary produces the same run as never interrupting.
   const finish = (r: Run): void => crossBranch(r);
   const uninterrupted = new Run(9);
-  uninterrupted.beginRun();
+  uninterrupted.beginRun(); deployAll(uninterrupted);
   uninterrupted.winFight();
   finish(uninterrupted);
 
   const resumed = new Run(9);
-  resumed.beginRun();
+  resumed.beginRun(); deployAll(resumed);
   resumed.winFight();
   const restored = Run.fromJSON(JSON.parse(JSON.stringify(resumed.toJSON())));
   finish(restored);
@@ -976,6 +985,36 @@ const crossBranch = (run: Run, branch = 0): void => {
   eq('a restored seated slot maps to the right roster member', rcfg[0].maxHP, run.roster[2].maxHP);
 }
 
+// --- deploy step: choose & seat members; injuries map through the deployment -----
+{
+  const run = new Run(60);
+  run.beginRun(); // trio roster, lands on the deploy step
+  eq('beginRun opens the deploy step', run.location.kind, 'deploy');
+
+  // Malformed deployments are refused (the run stays on deploy).
+  run.confirmDeployment([null, null, null]);      // nobody deployed
+  eq('an empty deployment is refused', run.location.kind, 'deploy');
+  run.confirmDeployment([0, 0, null]);            // a roster member seated twice
+  eq('a duplicate deployment is refused', run.location.kind, 'deploy');
+  run.confirmDeployment([5, null, null]);         // out-of-range roster index
+  eq('an out-of-range deployment is refused', run.location.kind, 'deploy');
+
+  // Seat two members in a custom order: roster 2 at Left, roster 0 at Right, Center empty.
+  run.confirmDeployment([2, null, 0]);
+  eq('a valid deployment enters the fight', run.location.kind, 'fight');
+  const cfg = run.toBattleConfig().party;
+  eq('battle slot Left holds roster member 2', cfg[0].member, run.roster[2].member);
+  check('battle slot Center is empty', cfg[1].empty === true);
+  eq('battle slot Right holds roster member 0', cfg[2].member, run.roster[0].member);
+
+  // A death in a battle slot scars the roster member DEPLOYED there (via deployment),
+  // not the same-indexed roster member.
+  run.recordInjuries([0 as Slot]); // Left slot fell -> roster member 2
+  eq('the death scarred the deployed roster member', run.roster[2].injuries, 1);
+  eq('an undeployed roster member is unscarred', run.roster[1].injuries, 0);
+  eq('the other deployed member is unscarred', run.roster[0].injuries, 0);
+}
+
 // --- Infirmary node (DR1): clear scars for gold, top of the ladder first --------
 {
   // The Infirmary is a real weighted node (unlike the injected Reliquary).
@@ -1052,13 +1091,15 @@ const crossBranch = (run: Run, branch = 0): void => {
     && run.nodeContent.options.length === DRAFT_OFFER_SIZE
     && run.nodeContent.options.every((id) => STARTER_MEMBERS.includes(id)));
 
-  // Pick one: it joins the roster and the run heads into fight 0 (a forced solo).
+  // Pick one: it joins the roster and the run heads into the deploy step for fight 0.
   const first = (run.nodeContent as { options: MemberId[] }).options[0];
   run.chooseDraftMember(first);
-  eq('choosing a starter enters fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
+  eq('choosing a starter opens deploy for fight 0', run.location.kind === 'deploy' && run.location.fightIndex, 0);
   eq('the roster now holds one member', run.roster.length, 1);
   eq('the drafted member joined the roster', run.roster[0].member, first);
-  // Fight 0 deploys the lone member; the other two battle slots are empty.
+  // The lone member is deploy-seated by default; the other two battle slots are empty.
+  deployAll(run);
+  eq('deploying enters fight 0', run.location.kind, 'fight');
   eq('fight 0 fields exactly one member', run.toBattleConfig().party.filter((p) => !p.empty).length, 1);
 
   // A pick that was never offered (the tank is never a starter) is ignored.

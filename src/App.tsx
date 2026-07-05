@@ -7,6 +7,7 @@ import type { Difficulty } from './constants';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
 import { DraftScreen } from './components/DraftScreen';
+import { DeployScreen } from './components/DeployScreen';
 import { FightScreen } from './components/FightScreen';
 import { MapScreen } from './components/MapScreen';
 import { BranchScreen } from './components/BranchScreen';
@@ -67,6 +68,8 @@ export function App() {
     );
   } else if (run.location.kind === 'draft') {
     screen = <DraftScreen run={run} act={act} />;
+  } else if (run.location.kind === 'deploy') {
+    screen = <DeployScreen run={run} act={act} />;
   } else if (run.location.kind === 'fight') {
     // Keyed so each fight remounts with a fresh battle from its own config.
     screen = (

@@ -23,6 +23,16 @@ export function Party({ game, view, reacts, animating, isValidTarget, onMemberCl
         </div>
       )}
       {game.members.map((m) => {
+        // An empty deploy slot (no member fielded here) renders as a placeholder so
+        // slot indices stay aligned for the attack-line / fx overlays (which address
+        // .party children by slot), but shows no hero.
+        if (m.absent) {
+          return (
+            <div key={m.slot} className="member-card member-empty" aria-hidden="true">
+              <span className="member-empty-label">No hero</span>
+            </div>
+          );
+        }
         // Hide the "targeted" outline while a sequence plays or the fight is over;
         // it reflects the next turn's telegraph, which shouldn't glow mid-attack.
         const targetedByEnemy =

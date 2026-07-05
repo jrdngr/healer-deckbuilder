@@ -270,11 +270,27 @@ export class Run {
     return [0, 1, 2].map((i) => (i < this.roster.length ? i : null));
   }
 
-  // Open the pre-fight deploy step (C4 renders the screen; for now it seats a default
-  // and enters the fight so the flow is continuous).
+  // Open the pre-fight deploy step: the player chooses which roster members fight
+  // and where. Seeds a default seating (the first three roster members) the screen
+  // can adjust, then waits for confirmDeployment.
   _enterDeploy(fightIndex: number): void {
     this.deployment = this._defaultDeployment();
-    this._enterFight(fightIndex);
+    this.location = { kind: 'deploy', fightIndex };
+    this.nodeContent = null;
+  }
+
+  // Confirm the chosen deployment (which roster member sits in each battle slot) and
+  // start the fight. Validates length 3, at least one member, and valid distinct
+  // roster indices; a malformed deployment is ignored so the screen can't wedge the run.
+  confirmDeployment(deployment: (number | null)[]): void {
+    if (this.location.kind !== 'deploy') return;
+    if (deployment.length !== 3) return;
+    const seated = deployment.filter((ri): ri is number => ri != null);
+    if (seated.length === 0) return;
+    if (seated.some((ri) => ri < 0 || ri >= this.roster.length)) return;
+    if (new Set(seated).size !== seated.length) return;
+    this.deployment = [...deployment];
+    this._enterFight(this.location.fightIndex);
   }
 
   // Enter a fight: set the location and the enemy that occupies it.
@@ -477,9 +493,14 @@ export class Run {
   // Only wins reach this (a loss ends the run). The per-member cap depends on the
   // active injury mode (injuryRecordCap): MAX_INJURIES under 'cap', one past it
   // under 'incapacitate', uncapped under 'escalate'.
+  // `slots` are BATTLE slots (0/1/2); map each through the deployment to the roster
+  // member that fought there, and scar it. An empty slot (no member deployed) has no
+  // roster index and is skipped.
   recordInjuries(slots: Slot[]): void {
     for (const s of slots) {
-      const p = this.party[s];
+      const ri = this.deployment[s];
+      if (ri == null) continue;
+      const p = this.roster[ri];
       if (p) p.injuries = Math.min(injuryRecordCap(), p.injuries + 1);
     }
   }
