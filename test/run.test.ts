@@ -95,6 +95,19 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('map deterministic by seed', JSON.stringify(new Run(42).map), JSON.stringify(new Run(42).map));
   check('different seeds differ', JSON.stringify(new Run(1).map) !== JSON.stringify(new Run(2).map));
 }
+{
+  // #41: forks 0/1 (the two before the Gatewarden, F2) always offer at least one
+  // Recruit, so the act-1 roster growth is no longer a structural coin flip. Sweep
+  // many seeds; the guarantee holds every time and never breaks fork uniqueness.
+  let everyRunHasAct1Recruit = true;
+  for (let seed = 1; seed <= 300; seed++) {
+    const map = new Run(seed).map;
+    const has = [0, 1].some((fi) =>
+      map[fi].branches.some((br) => br.nodes.some((n) => n.type === 'recruit')));
+    if (!has) everyRunHasAct1Recruit = false;
+  }
+  check('every run offers a Recruit in an act-1 fork (0 or 1)', everyRunHasAct1Recruit);
+}
 
 // --- initial state ----------------------------------------------------------
 {

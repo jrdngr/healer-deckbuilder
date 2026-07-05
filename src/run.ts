@@ -331,6 +331,20 @@ export class Run {
       const idx = Math.floor(this.rng() * branch.nodes.length);
       branch.nodes[idx] = { type: 'reliquary' };
     }
+    // Guaranteed act-1 Recruit (#41): forks 0/1 are the two forks before the
+    // Gatewarden (F2). Whether a Recruit appeared there was structural RNG that
+    // swung the boss ~25pp (solo 72% -> duo 97%); guarantee one so the "whether"
+    // coin flip is gone and only the "which fork" choice remains (the fork
+    // preview lets the player route to it). Skip if a natural roll already placed
+    // one in forks 0/1, so we never duplicate a node type within a fork.
+    const act1HasRecruit = [0, 1].some((fi) =>
+      forks[fi].branches.some((br) => br.nodes.some((n) => n.type === 'recruit')));
+    if (!act1HasRecruit) {
+      const fork = forks[Math.floor(this.rng() * 2)]; // fork 0 or 1
+      const branch = fork.branches[Math.floor(this.rng() * fork.branches.length)];
+      const idx = Math.floor(this.rng() * branch.nodes.length);
+      branch.nodes[idx] = { type: 'recruit' };
+    }
     return forks;
   }
 

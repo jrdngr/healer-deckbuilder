@@ -61,9 +61,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // at the act-1 Gatewarden you meet under-strength. N=200: full-run ~22%, bosses
   // ~61 / 76 / 65%. Provisional regression pins on the observed numbers.
   // #40 (graveyard): permadead members are now buried instead of returning as fresh
-  // copies, so the sim can no longer re-draft the Warlock trap it just killed —
-  // late-fight winrates tick up (F6-8: 73/69/45 → 76/75/51).
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 183, 111, 111, 104, 79, 76, 75, 51]));
+  // copies, so the sim can no longer re-draft the Warlock trap it just killed.
+  // #41 (guaranteed act-1 recruit): forks 0/1 always offer a Recruit, so the
+  // Gatewarden is now fought as a duo far more often — its HP was re-anchored
+  // 38 -> 44 to keep it a wall (F2 ~60% conditional at N=200, full-run ~24% at
+  // N=1000), and the bigger act-1 roster lifts the whole downstream curve.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 183, 110, 110, 104, 75, 73, 72, 46]));
   // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

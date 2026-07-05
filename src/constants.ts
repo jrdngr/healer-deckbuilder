@@ -1106,7 +1106,7 @@ export const isActBoss = (fightIndex: number): boolean =>
 // small roster — far less party DPS/bodies than the old fixed trio. HP drops across
 // the board; act 1 especially. Sim-tuned against the campaign policy.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  14, 20, 38,     // Act 1: solo F0, ~solo F1, solo/duo Gatewarden
+  14, 20, 44,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#41: guaranteed recruit)
   70, 88, 120,    // Act 2: duo/trio normals + Hexweaver
   102, 108, 130,  // Act 3: small-roster normals + Devourer
 ];
