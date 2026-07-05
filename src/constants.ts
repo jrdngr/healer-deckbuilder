@@ -785,6 +785,11 @@ export interface PartyMemberConfig {
   // 'incapacitate' injury mode: the member enters the fight dead and cannot be
   // Resurrected (see INJURY_RULES). Absent/false everywhere else.
   incapacitated?: boolean;
+  // An unfilled deploy slot: no member is seated here for this fight. The engine
+  // builds it as an absent member (dead, untargetable, unstriking) so a 1- or
+  // 2-member deployment leaves the remaining battle slots inert. Only ever set on
+  // the length-3 battle party built in Run.toBattleConfig — never on a roster member.
+  empty?: boolean;
 }
 
 // ---------------------------------------------------------------------------

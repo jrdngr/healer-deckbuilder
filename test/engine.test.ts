@@ -2677,5 +2677,51 @@ function wardenGame(seed: number) {
   check('wipe check counts the incapacitated slot as dead', g._checkWipe());
 }
 
+// --- empty deploy slots (roster deployment of <3 members) -------------------
+{
+  // A solo deployment: the mage seated at CENTER, the other two slots empty.
+  const emptySlot = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
+  const cfg = defaultBattleConfig();
+  cfg.party = [emptySlot(), partyFromMembers(['mage'])[0], emptySlot()];
+  const g = new Game(1, cfg); g.start();
+
+  const left = g.members[0], mage = g.members[1], right = g.members[2];
+  check('an empty slot builds an absent member', left.absent && right.absent);
+  check('an absent member starts dead at 0 HP', !left.alive && left.hp === 0);
+  check('the seated member is alive', mage.alive && mage.id === 'mage');
+  eq('only the seated member is living', g.livingMembers().length, 1);
+  check('the party is not wiped with one member standing', !g.allDead() && !g._checkWipe());
+
+  // Targeting never lands on an empty slot: _pickPrimary reweights to living slots,
+  // so every pick and every telegraph line aims at the seated member.
+  let allPrimaryCenter = true;
+  for (let i = 0; i < 20; i++) if (g._pickPrimary('single') !== SLOT.CENTER) allPrimaryCenter = false;
+  check('the enemy never aims a single at an empty slot', allPrimaryCenter);
+  check('every telegraph line targets a living member', g.attackTargets().every((s) => g.members[s.slot].alive));
+
+  // An empty slot carries a trio-default id (slot 2 defaults to the mage's id), so
+  // memberById must resolve to the REAL, non-absent member.
+  eq('memberById skips the absent duplicate id', g.memberById('mage').slot, SLOT.CENTER);
+  check('memberById returns a non-absent member', !g.memberById('mage').absent);
+
+  // The fight runs to a conclusion with a single attacker — no stall/throw — and the
+  // wipe only fires once the seated member falls (the empty slots never blocked it).
+  let turns = 0;
+  while (g.status === 'playing' && turns < 40) { g.endTurn(); turns++; }
+  check('a solo deployment reaches a terminal state without stalling', g.status !== 'playing');
+}
+{
+  // A two-member deployment: ranger + tank, right slot empty. Drives a few turns.
+  const cfg = defaultBattleConfig();
+  cfg.party = [partyFromMembers(['ranger'])[0], partyFromMembers(['tank'])[0],
+    { maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true }];
+  const g = new Game(2, cfg); g.start();
+  eq('two members deployed, one slot empty', g.livingMembers().length, 2);
+  check('the empty right slot is absent', g.members[2].absent);
+  let threw = false;
+  try { for (let i = 0; i < 6 && g.status === 'playing'; i++) g.endTurn(); } catch { threw = true; }
+  check('a two-member deployment runs without throwing', !threw);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

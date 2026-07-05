@@ -76,6 +76,9 @@ export interface Member {
                     // stat penalty they cause is already baked into maxHP/damage/abilityPower.
   incapacitated: boolean; // 'incapacitate' injury mode: starts the fight dead and cannot be
                           // Resurrected (the run layer heals the scar to restore them).
+  absent: boolean; // an unfilled deploy slot (no member seated here): starts dead, is never
+                   // targeted and never strikes (excluded like any dead member via alive:false);
+                   // the battle UI renders it as an empty slot rather than a fallen hero.
 }
 
 export interface Enemy {
@@ -241,12 +244,19 @@ export class Game {
       // classic trio member that homes this slot. The engine seats it at the map
       // index, so any member can occupy any slot.
       const d = p.member ? MEMBER_POOL[p.member] : MEMBER_DEFS[slot];
+      // An empty deploy slot ('empty') has no member seated: it enters absent —
+      // dead, unstriking, untargetable — so a 1- or 2-member deployment leaves the
+      // remaining slots inert. Its trio-default identity below is never read while
+      // absent (memberById skips absent members).
+      const empty = p.empty === true;
+      const down = empty || (p.incapacitated ?? false);
       return {
         slot: slot as Slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
         ability: d.ability, abilityPower: p.abilityPower,
-        // An incapacitated member ('incapacitate' injury mode) starts the fight
-        // dead; diedThisFight stays false (no NEW scar for a fight they never stood in).
-        hp: p.incapacitated ? 0 : p.maxHP, alive: !p.incapacitated,
+        // An incapacitated member ('incapacitate' injury mode) or an empty slot starts
+        // the fight dead; diedThisFight stays false (no NEW scar for a fight they never
+        // stood in).
+        hp: down ? 0 : p.maxHP, alive: !down,
         shield: false, // pending shield (blocks the next damaging instance)
         shieldTurns: 0,
         brace: false,  // pending Brace (one-shot damage reduction)
@@ -266,6 +276,7 @@ export class Game {
         diedThisFight: false, // no death yet this fight
         injuries: p.injuries, // display-only; penalty already folded into the stats above
         incapacitated: p.incapacitated ?? false,
+        absent: empty,
       };
     });
 
@@ -327,7 +338,13 @@ export class Game {
   get mage(): Member { return this.memberById('mage'); }
   get ranger(): Member { return this.memberById('ranger'); }
 
-  memberById(id: MemberId): Member { return this.members.find((m) => m.id === id) ?? this.members[SLOT.CENTER]; }
+  // Prefer a real (non-absent) member with this id; an empty deploy slot carries a
+  // trio-default identity that must never be mistaken for the seated member.
+  memberById(id: MemberId): Member {
+    return this.members.find((m) => m.id === id && !m.absent)
+      ?? this.members.find((m) => m.id === id)
+      ?? this.members[SLOT.CENTER];
+  }
 
   // Charge is per-member now (any member can carry it); mageCharge proxies the
   // mage's charge so existing UI/sim/test call sites keep working for the trio.
