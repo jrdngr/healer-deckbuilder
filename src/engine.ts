@@ -11,7 +11,7 @@
 
 import {
   MEMBER_DEFS, MEMBER_POOL, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,
-  TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP,
+  HEX_TURNS, HEX_VULN_BY_SIZE, HEX_VULN_PER_POWER,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
@@ -66,7 +66,6 @@ export interface Member {
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
   drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
-  bargainCasts: number; // Warlock (#27): Dark Bargains cast this fight; grows the next cost
   boarHp: number;   // Beast Warden (#29): standing Boar's HP (0 = no Boar); it soaks whole hits
   boarTurns: number; // Beast Warden (#29): enemy turns the Boar has left before it returns to the wild
   diedThisFight: boolean; // DR1: went to 0 HP at any point this fight (a later Resurrect
@@ -86,6 +85,8 @@ export interface Enemy {
   maxHP: number;
   poison: number;      // Poison strength: damage dealt per turn while active
   poisonTurns: number; // enemy turns of Poison remaining
+  vulnerable: number;      // Vulnerability (Warlock's Hex, #39): party damage is x(1 + this)
+  vulnerableTurns: number; // enemy turns of Vulnerability remaining
   enraged: boolean;
 }
 
@@ -270,7 +271,6 @@ export class Game {
         charge: 0,     // per-member Charge
         drumPrimed: false, // no War Drum beat pending
         ward: 0,       // no Aegis Ward standing
-        bargainCasts: 0, // no Dark Bargains cast yet (#27)
         boarHp: 0,     // no Boar summoned yet (#29)
         boarTurns: 0,
         diedThisFight: false, // no death yet this fight
@@ -282,7 +282,7 @@ export class Game {
 
     this.enemy = {
       hp: config.enemy.maxHP, maxHP: config.enemy.maxHP,
-      poison: 0, poisonTurns: 0, enraged: false,
+      poison: 0, poisonTurns: 0, vulnerable: 0, vulnerableTurns: 0, enraged: false,
     };
 
     this.maxMana = config.healer.maxMana;
@@ -392,6 +392,19 @@ export class Game {
 
   livingMembers(): Member[] { return this.members.filter((m) => m.alive); }
   allDead(): boolean { return this.members.every((m) => !m.alive); }
+
+  // How many members were fielded for this fight (#39/#42): the seated slots, not
+  // the currently-living count — so it is a stable deploy-time size, the lever the
+  // Warlock's Hex and the small-party cards scale on. Empty deploy slots don't count.
+  fieldedPartySize(): number { return this.members.filter((m) => !m.absent).length; }
+
+  // Vulnerability (Warlock's Hex, #39): the amount of party damage the enemy takes
+  // after its Vulnerability debuff. Applied in _damageEnemy, so every party source
+  // (autos, Bolt, Rampage, Grim Harvest, Poison ticks) is amplified in one place.
+  vulnerableAmount(raw: number): number {
+    if (this.enemy.vulnerableTurns <= 0 || raw <= 0) return raw;
+    return raw + Math.floor(raw * this.enemy.vulnerable);
+  }
 
   // If the whole party is down, end the fight in a loss. Returns whether it did.
   _checkWipe(): boolean {
@@ -713,6 +726,8 @@ export class Game {
   // flourish until the killing strike landed a beat later.)
   _damageEnemy(amount: number, source: string): boolean {
     if (amount <= 0) return false;
+    // Vulnerability (Warlock's Hex, #39) amplifies every party source in one place.
+    amount = this.vulnerableAmount(amount);
     this.enemy.hp = Math.max(0, this.enemy.hp - amount);
     this._log(`${source} deals ${amount} to the enemy. (${this.enemy.hp}/${this.enemy.maxHP})`, 'enemy-dmg');
     if (this.enemy.hp <= 0 && this.status === 'playing') {
@@ -873,11 +888,20 @@ export class Game {
     if (this.enemy.poisonTurns > 0) {
       const dmg = this.enemy.poison;
       const killed = this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
-      this._emit({ kind: 'poisonTick', amount: dmg, enemyHp: this.enemy.hp });
+      this._emit({ kind: 'poisonTick', amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });
       this.enemy.poisonTurns -= 1;
       if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
       if (this.status === 'win') return; // poison can finish the enemy
+    }
+    // Vulnerability (Warlock's Hex, #39) counts down here, after Poison this turn is
+    // amplified — so a cast Hex amplifies HEX_TURNS full party phases before fading.
+    if (this.enemy.vulnerableTurns > 0) {
+      this.enemy.vulnerableTurns -= 1;
+      if (this.enemy.vulnerableTurns === 0) {
+        this.enemy.vulnerable = 0;
+        this._log('The Hex fades; the enemy is no longer Vulnerable.', 'status');
+      }
     }
     if (this.refreshTurns > 0) {
       // A single Refresh-slot cast restores at most its refreshCap MP over its
@@ -1481,7 +1505,7 @@ export class Game {
         const paid = this._bloodPay(m, card.selfDamage ?? 0);
         this._log(`Grim Harvest: ${m.name} pays ${paid} HP.`, 'status');
         const killed = this._damageEnemy(GRIM_HARVEST_DMG, 'Grim Harvest');
-        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: GRIM_HARVEST_DMG, enemyHp: this.enemy.hp });
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(GRIM_HARVEST_DMG), enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
@@ -1579,20 +1603,23 @@ export class Game {
         this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${m.charge}).`, 'status');
         m.charge = 0;
         const killed = this._damageEnemy(dmg, 'Lightning Bolt');
-        this._emit({ kind: 'bolt', slot: m.slot, amount: dmg, enemyHp: this.enemy.hp });
+        this._emit({ kind: 'bolt', slot: m.slot, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
-      case 'darkBargain': {
-        // The Warlock (#27) trades HP for the healer's MP; the cost GROWS each cast
-        // this fight (3, 6, 9, ...), so overcasting burns him out (it can kill him).
-        const cost = BARGAIN_HP_BASE + BARGAIN_HP_GROWTH * m.bargainCasts;
-        m.bargainCasts += 1;
-        const before = this.mp;
-        this.mp = Math.min(this.maxMana, this.mp + BARGAIN_MP);
-        this._log(`${m.name} strikes a Dark Bargain: -${cost} HP for +${this.mp - before} MP.`, 'status');
-        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
-        this._drainMember(m, cost); // paid last so the MP lands even on the lethal cast
+      case 'hex': {
+        // The Warlock (redesigned #39) curses the enemy with Vulnerability: the party
+        // deals (1 + vuln) damage to it for HEX_TURNS. The bonus is LARGER the fewer
+        // members are fielded (strongest solo), so a small party's low output is
+        // amplified enough to matter — and abilityPower (upgrades) sweetens it.
+        // No self-damage: the old Soul Tithe / Dark Bargain suicide is gone.
+        const size = this.fieldedPartySize();
+        const base = HEX_VULN_BY_SIZE[Math.min(size, HEX_VULN_BY_SIZE.length - 1)] ?? 0;
+        const vuln = Math.max(0, base + m.abilityPower * HEX_VULN_PER_POWER);
+        // Re-hexing refreshes the duration and keeps the stronger value (no stacking).
+        this.enemy.vulnerable = Math.max(this.enemy.vulnerable, vuln);
+        this.enemy.vulnerableTurns = HEX_TURNS;
+        this._log(`${m.name} hexes the enemy — +${Math.round(vuln * 100)}% damage taken for ${HEX_TURNS} turns.`, 'status');
         break;
       }
       case 'crescendo': {
@@ -1615,7 +1642,7 @@ export class Game {
         // self-damage clamps to leave 1 HP (a nuke, not a suicide button).
         const dmg = 2 * this.memberDamage(m) + m.abilityPower;
         const killed = this._damageEnemy(dmg, `${m.name} (Rampage)`);
-        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: dmg, enemyHp: this.enemy.hp });
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
         this._bloodPay(m, RAMPAGE_SELF_DMG);
         break;
@@ -1737,22 +1764,11 @@ export class Game {
         this._log(`The War Drum beats — ${m.name}'s strike doubles!`, 'status');
       }
       const killed = this._damageEnemy(dmg, `${m.name}`);
-      this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: dmg, enemyHp: this.enemy.hp });
+      this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
     this.hymnBonus = 0; // Battle Hymn only buffs the phase it was sung in
-    // Soul Tithe (#27): the Warlock burns TITHE_AMOUNT HP at the end of each party
-    // phase, after his strike — his signature burn-out cost, and it can kill him.
-    // Skipped once the enemy is dead (the fight is already won).
-    if (this.status === 'playing') {
-      for (const m of this.members) {
-        if (m.alive && m.ability === 'darkBargain') {
-          this._log(`Soul Tithe drains ${m.name} for ${TITHE_AMOUNT}.`, 'status');
-          this._drainMember(m, TITHE_AMOUNT);
-        }
-      }
-    }
   }
 
   // Once-per-RUN relics this fight consumed (#22) — the run layer records these

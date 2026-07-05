@@ -11,12 +11,14 @@ export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
 export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden';
-// 'darkBargain' (Warlock) trades his HP for the healer's MP; 'crescendo' (Skald)
-// draws cards and feeds his cards-played strike; 'rampage' (Berserker) doubles his
-// current strike at an HP cost; 'graveChill' (Augur) weakens the standing telegraph;
-// 'callBoar' (Beast Warden) summons a pet that soaks whole hits. Each fires via that
-// member's own ability card (#44), inserted into the deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'darkBargain' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar';
+// 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
+// damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
+// controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
+// 'rampage' (Berserker) doubles his current strike at an HP cost; 'graveChill'
+// (Augur) weakens the standing telegraph; 'callBoar' (Beast Warden) summons a pet
+// that soaks whole hits. Each fires via that member's own ability card (#44),
+// inserted into the deck when they are deployed.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar';
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -27,7 +29,7 @@ export type CardId =
   // Per-member ability cards (#44): one bound card per member, inserted into the
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
-  | 'imbuePoison' | 'bolster' | 'unleash' | 'darkPact'
+  | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
   | 'conduct' | 'incite' | 'hush' | 'beckon';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
@@ -102,13 +104,12 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // Post-demo roster wave 1 (#27). `slot` here is a nominal home slot only — a
   // drafted member takes whatever slot it is assigned; the engine uses the map
   // index for placement and reads only id/name/ability/stats from the pool.
-  // Warlock: highest damage in the game, but Soul Tithe burns him each turn and
-  // Dark Bargain trades HP for MP — an HP-bottleneck DPS. (History: #31 briefly
-  // nerfed 7 -> 5 off a sweep that was measuring a BUG — toBattleConfig dropped
-  // drafted identity, so "warlock" comps fought as poison-firing trio members with
-  // warlock stats. With real abilities, warlock comps read 2.5-3% full-run even at
-  // 7 — no ceiling — so the spec value is restored. See the 2026-07-04 playtest issue.)
-  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 15, damage: 7, ability: 'darkBargain' },
+  // Warlock (redesigned #39): a small-party CONTROLLER, not a striker. His Hex
+  // curses the enemy with Vulnerability (the party deals more damage), and the bonus
+  // is bigger the fewer members are fielded — strongest solo, where it amplifies his
+  // own low damage enough to carry act 1. No self-damage: the old Soul Tithe / Dark
+  // Bargain suicide (a permadeath magnet under the roster campaign) is gone.
+  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 14, damage: 3, ability: 'hex' },
   // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
   skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
@@ -152,7 +153,7 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // Conservative damage rating per member (the review's numbers), used only by the
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
-  ranger: 4, tank: 2, mage: 5, warlock: 7, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
+  ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
@@ -572,10 +573,13 @@ export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
 export const TAUNT_TURNS = 4;
 export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
 // Post-demo roster wave 1 abilities (#27).
-export const TITHE_AMOUNT = 2;       // Soul Tithe: HP the Warlock loses each party phase (can kill him)
-export const BARGAIN_HP_BASE = 3;    // Dark Bargain: base HP cost
-export const BARGAIN_HP_GROWTH = 3;  // Dark Bargain: extra HP cost per prior cast this fight
-export const BARGAIN_MP = 3;         // Dark Bargain: MP granted to the healer
+// Warlock Hex (#39): applies Vulnerability to the enemy — the party's damage to it
+// is multiplied by (1 + vuln) for HEX_TURNS. The bonus scales inversely with the
+// fielded party size (index by size 1/2/3), so it is strongest solo — where it
+// amplifies his own low damage enough to carry act 1 — and modest in a full party.
+export const HEX_TURNS = 3;
+export const HEX_VULN_BY_SIZE = [0, 1.0, 0.55, 0.35]; // [unused, solo, duo, trio+]
+export const HEX_VULN_PER_POWER = 0.05; // each point of abilityPower adds this much vuln
 export const SKALD_DMG_PER_CARD = 2; // Skald strike: damage per card played this phase
 export const SKALD_DMG_CAP = 8;      // Skald strike: cap on the cards-played bonus
 export const CRESCENDO_DRAW = 2;     // Crescendo: cards drawn (and it counts as 1 card played)
@@ -604,7 +608,7 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
   tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
   mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
-  warlock: `Dark Bargain — lose ${BARGAIN_HP_BASE}+${BARGAIN_HP_GROWTH}/cast HP for +${BARGAIN_MP} MP. Soul Tithe: −${TITHE_AMOUNT} HP each turn.`,
+  warlock: `Hex — curse the enemy with Vulnerability: the party deals +${Math.round(HEX_VULN_BY_SIZE[1] * 100)}% damage solo / +${Math.round(HEX_VULN_BY_SIZE[3] * 100)}% in a full party, for ${HEX_TURNS} turns.`,
   skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
   berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
   graveAugur: `Grave Chill — shave ${GRAVE_CHILL_REDUCTION} damage per target off the enemy's telegraphed attack.`,
@@ -670,8 +674,8 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Steel the Tank — they Taunt the enemy and brace.' },
   unleash: { id: 'unleash', name: 'Unleash', cost: 2, target: 'none', ability: 'bolt',
     desc: 'Unleash the Mage\'s stored Charge as a Lightning Bolt.' },
-  darkPact: { id: 'darkPact', name: 'Dark Pact', cost: 2, target: 'none', ability: 'darkBargain',
-    desc: 'Channel the Warlock\'s Dark Bargain — his HP for your MP.' },
+  hex: { id: 'hex', name: 'Hex', cost: 2, target: 'none', ability: 'hex',
+    desc: 'Curse the enemy through the Warlock — it takes more damage (more with fewer allies).' },
   conduct: { id: 'conduct', name: 'Conduct', cost: 2, target: 'none', ability: 'crescendo',
     desc: 'Cue the Skald\'s Crescendo — draw cards.' },
   incite: { id: 'incite', name: 'Incite', cost: 2, target: 'none', ability: 'rampage',
@@ -757,7 +761,7 @@ export const ABILITY_CARD: Record<AbilityId, CardId> = {
   poison: 'imbuePoison',
   taunt: 'bolster',
   bolt: 'unleash',
-  darkBargain: 'darkPact',
+  hex: 'hex',
   crescendo: 'conduct',
   rampage: 'incite',
   graveChill: 'hush',
@@ -1041,10 +1045,12 @@ const cardHasDuration = (id: CardId): boolean => {
 export const isEngineCard = (id: CardId): boolean => CARDS[id].engine === true;
 
 // A member ability counts as an "engine" effect when firing it generates MP or
-// draws cards (#27): Dark Bargain mints MP, Crescendo draws. Same spirit as the
-// engine-card tag (economy-fueling), surfaced for the Ability card that fires them.
+// draws cards (#27): Crescendo draws. Same spirit as the engine-card tag
+// (economy-fueling), surfaced for the ability card that fires it. (The Warlock's
+// old Dark Bargain minted MP and was engine-tagged; his redesigned Hex (#39) is a
+// pure debuff and no longer counts.)
 export const isEngineAbility = (ability: AbilityId): boolean =>
-  ability === 'darkBargain' || ability === 'crescendo';
+  ability === 'crescendo';
 
 // Retain may not lock in a per-member ability card (#44: those are inserted per
 // fight, never part of the persistent deck), any engine card (that would make the
@@ -1143,7 +1149,7 @@ export const GOLD_PER_FIGHT = 80;    // awarded for winning a (non-final) fight 
 // ---------------------------------------------------------------------------
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
   ranger: 14, tank: 10, mage: 16,          // classic trio: 14 + 10 + 16 = 40
-  warlock: 20, skald: 12, berserker: 10, graveAugur: 14, beastWarden: 12,
+  warlock: 11, skald: 12, berserker: 10, graveAugur: 14, beastWarden: 12,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -1171,9 +1177,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // small roster — far less party DPS/bodies than the old fixed trio. HP drops across
 // the board; act 1 especially. Sim-tuned against the campaign policy.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  14, 20, 66,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#41 recruit; #44 leaner deck)
-  70, 88, 150,    // Act 2: duo/trio normals + Hexweaver (#44 re-anchor)
-  102, 108, 156,  // Act 3: small-roster normals + Devourer (#44 re-anchor)
+  14, 20, 76,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#41 recruit; #39 Hex amps party)
+  70, 88, 182,    // Act 2: duo/trio normals + Hexweaver (#39 re-anchor)
+  102, 108, 190,  // Act 3: small-roster normals + Devourer (#39 re-anchor)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
@@ -1221,7 +1227,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   grimHarvest: 'rare',
   // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
   // rarity is required by the Record type but inert for these.
-  imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', darkPact: 'uncommon',
+  imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
   conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon',
 };
 

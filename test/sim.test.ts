@@ -7,6 +7,7 @@
 // baseline, not a balance target — see the BASELINE note in sim/run-sim.ts.
 
 import { runSingleRun, runSim } from '../sim/run-sim';
+import { aggregate } from '../sim/campaign-exp';
 import { MEMBER_POOL } from '../src/constants';
 import { Game } from '../src/engine';
 import { playFight } from '../sim/policy';
@@ -72,13 +73,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // copies, so the sim can no longer re-draft the Warlock trap it just killed.
   // #41 (guaranteed act-1 recruit): forks 0/1 always offer a Recruit, so the
   // Gatewarden is now fought as a duo far more often.
-  // #44 (abilities as per-member cards): each deployed member inserts their own
-  // bound ability card, so small parties field a LEANER, heal-denser deck (the old
-  // redundant generic Ability cards are gone) and the buyer no longer loads up on
-  // offense — the whole curve got easier, so the enemy walls were re-anchored up
-  // (Gatewarden 44->66, Hexweaver 120->150, Devourer 130->156). N=200 runs hot;
-  // full-run ~26% at N=1000, bosses ~60/80/58% conditional.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 121, 121, 120, 96, 94, 92, 53]));
+  // #44 (abilities as per-member cards): small parties field a LEANER, heal-denser
+  // deck and the buyer stopped loading up on offense — the curve got easier.
+  // #39 (Warlock -> Hex controller): his Vulnerability amplifies ALL party damage, a
+  // net party-power boost (he is a good pick now, not a trap), so the walls were
+  // re-anchored up again (Gatewarden ->76, Hexweaver ->182, Devourer ->190). N=200
+  // runs hot; full-run ~23% at N=1000, bosses ~62/75/44% conditional.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 198, 122, 122, 120, 90, 89, 87, 38]));
   // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
@@ -203,19 +204,17 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   check('the policy always resolves a drafted Warlock/Skald fight (no stall)', terminated === N, `${terminated}/${N}`);
   check('the drafted party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
 
-  // The Warlock's burn-out is real: against a wall he can be spent, but the policy's
-  // safety cushion means he doesn't suicide on turn 1 of an easy fight.
+  // The redesigned Warlock (#39) takes NO self-damage: a full turn never chips him
+  // (the old Soul Tithe that made him a permadeath magnet is gone).
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
-  cfg.enemy = { ...cfg.enemy, maxHP: 50 };
   const g = new Game(7, cfg);
   g.start();
   const w = g.members[0];
   const hp0 = w.hp;
-  // One full turn: Soul Tithe fires once; the Warlock is chipped but not gone.
   g.enemy.hp = 999;
   g.endTurn();
-  check('the Warlock survives an opening turn (Soul Tithe chips, does not kill)', w.alive && w.hp < hp0);
+  check('the Warlock takes no self-damage across a turn (no Soul Tithe)', w.alive && w.hp === hp0);
 }
 {
   // Roster wave 2 (#28): the policy pilots a Berserker/Grave-Augur composition too.
@@ -250,27 +249,22 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   check('the Beast Warden party wins ordinary fights', wins >= Math.floor(N * 0.8), `${wins}/${N} wins`);
 }
 
-// --- issue 34: the re-lined tactics actually engage the new abilities ---------
-// Not gates: the policy plans around Dark Bargain, Crescendo, and Provoke rather
-// than firing them only in a corner case.
+// --- issue 34 / #39: the re-lined tactics actually engage the abilities --------
+// Not gates: the policy plans around Hex, Crescendo, and Provoke rather than firing
+// them only in a corner case.
 {
-  // Dark Bargain FRONT-LOADS and CAPS: over a long fight the Warlock is bargained
-  // early (once MP has headroom) but never past 2 casts — the growth curve is
-  // respected, so he is not slowly bled to death.
-  let everBargained = false;
-  let maxCasts = 0;
+  // The Warlock's Hex (#39): the policy curses the enemy with Vulnerability, so a
+  // Warlock comp reliably makes the enemy Vulnerable over a fight.
+  let everHexed = false;
   for (let s = 1; s <= 40; s++) {
     const cfg = defaultBattleConfig();
-    setParty(cfg, ['warlock', 'mage', 'graveAugur']); // taunt-less, warlock present (#44: rebuild ability cards)
-    cfg.enemy = { ...cfg.enemy, maxHP: 200 }; // a wall, so MP gets spent and turns pass
+    setParty(cfg, ['warlock', 'mage', 'graveAugur']); // #44: rebuild ability cards for the party
+    cfg.enemy = { ...cfg.enemy, maxHP: 200 }; // a wall, so the fight lasts several turns
     const g = new Game(s, cfg);
     playFight(g, 12);
-    const casts = g.members[0].bargainCasts;
-    if (casts > 0) everBargained = true;
-    maxCasts = Math.max(maxCasts, casts);
+    if (g.log.some((e) => e.text.includes('hexes the enemy'))) everHexed = true;
   }
-  check('Dark Bargain front-loads (fires at least once across seeds)', everBargained);
-  check('Dark Bargain is capped at 2 front-load casts (never bled dry)', maxCasts <= 2, `maxCasts=${maxCasts}`);
+  check('the policy plays Hex to make the enemy Vulnerable (#39)', everHexed);
 
   // Provoke is the taunt-less redirection line: a party with no Tank plays Provoke,
   // so a member that does NOT have the Taunt ability ends up holding Taunt.
@@ -287,35 +281,33 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   }
 }
 
-// --- issue 38: the Provoke sink never funnels hits onto the tithe-drained Warlock -
-// The Warlock is often the highest-maxHP body on a taunt-less comp, but Soul Tithe
-// makes him the WORST sink — provoking him would help kill the party's main striker.
+// --- Warlock is a low-damage controller (#39 redesign) ----------------------
 {
-  let everProvoked = false;
-  let everProvokedWarlock = false;
-  for (let s = 1; s <= 30; s++) {
-    const cfg = defaultBattleConfig();
-    cfg.party = partyFromMembers(['warlock', 'skald', 'beastWarden']); // taunt-less; warlock = highest maxHP
-    cfg.deck = [...cfg.deck.slice(0, cfg.deck.length - 1), makeDeckCard('provoke', 999)];
-    cfg.enemy = { ...cfg.enemy, boss: true, maxHP: 200 };
-    const g = new Game(s, cfg);
-    playFight(g, 10);
-    for (const e of g.log) {
-      if (!e.text.includes('Provokes')) continue;
-      everProvoked = true;
-      if (e.text.includes(MEMBER_POOL.warlock.name)) everProvokedWarlock = true;
-    }
-  }
-  check('the taunt-less Warlock comp does play Provoke', everProvoked);
-  check('Provoke never sinks onto the tithe-drained Warlock (#38)', !everProvokedWarlock);
+  // The redesigned Warlock is a support controller, not a striker: his value is the
+  // Hex (Vulnerability), so his own damage is low. (The old #31/#38 spec-value-7 and
+  // Provoke-sink-avoidance tests were tied to the Soul-Tithe striker and are retired.)
+  eq('Warlock damage is the controller value', MEMBER_POOL.warlock.damage, 3);
+  eq('Warlock ability is Hex', MEMBER_POOL.warlock.ability, 'hex');
 }
 
-// --- Warlock damage is the spec value (2026-07-04 playtest) -----------------
+// --- #39: the Warlock is no longer a trap starter or the permadeath system ------
+// The campaign harness measures the structural fix directly (per-starter spread,
+// the banned-vs-allowed delta, and permadeaths-by-member). Playtest 2026-07-05 read
+// warlock-start 21.8% vs ranger 54.4% (a 2.5x trap), a +11.8pp gain from BANNING
+// him, and 386 Warlock permadeaths / 1000. This locks that all three are fixed.
 {
-  // The Warlock is back at the spec's 7: #31's 7->5 nerf was calibrated against the
-  // toBattleConfig identity bug — "warlock" comps were fighting as poison-firing trio
-  // members with warlock stats. With REAL abilities there was no ceiling to nerf.
-  eq('Warlock damage restored to the spec value', MEMBER_POOL.warlock.damage, 7);
+  const N = 120;
+  const rangerStart = aggregate(N, 1, { forceStarter: 'ranger' });
+  const warlockStart = aggregate(N, 1, { forceStarter: 'warlock' });
+  const banned = aggregate(N, 1, { forceStarter: 'ranger', ban: ['warlock'] });
+  check('warlock is a viable starter (within ~12pp of ranger, was a 2.5x trap)',
+    Math.abs(warlockStart.fullRun - rangerStart.fullRun) <= 0.12,
+    `ranger ${(rangerStart.fullRun * 100).toFixed(1)}% vs warlock ${(warlockStart.fullRun * 100).toFixed(1)}%`);
+  check('banning the Warlock no longer RAISES the winrate (the +11.8pp trap is gone)',
+    banned.fullRun - rangerStart.fullRun <= 0.03,
+    `allowed ${(rangerStart.fullRun * 100).toFixed(1)}% vs banned ${(banned.fullRun * 100).toFixed(1)}%`);
+  check('the Warlock is no longer the permadeath system (near-zero permadeaths)',
+    rangerStart.permadeathsByMember.warlock <= 2, `${rangerStart.permadeathsByMember.warlock} warlock permadeaths / ${N}`);
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

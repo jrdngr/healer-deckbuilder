@@ -14,7 +14,6 @@ import type { Member } from '../src/engine';
 import { Run } from '../src/run';
 import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
-  BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, TITHE_AMOUNT,
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
   DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
 } from '../src/constants';
@@ -45,19 +44,13 @@ function affordable(game: Game, idx: number): boolean {
 
 // Damage each living member would take before its next turn, folding in Defense
 // (attackTargets() already applies it). Hidden attacks preview as null; treat them
-// as a worst-case single-hit so the policy still reacts. #38: the Warlock's Soul
-// Tithe (−TITHE_AMOUNT/turn, self-inflicted at the end of the party phase) lands on
-// him every turn regardless of the enemy, so fold it into his incoming — otherwise
-// the policy heals him on the flat fraction only and the tithe quietly kills the
-// party's 7-damage body on a taunt-less comp.
+// as a worst-case single-hit so the policy still reacts. (#39 removed the Warlock's
+// Soul Tithe, so there is no longer a self-inflicted drain to fold in here.)
 function incomingDamage(game: Game): Map<Slot, number> {
   const out = new Map<Slot, number>();
   for (const spec of game.attackTargets()) {
     const dmg = spec.hidden ? 5 : spec.damage ?? 0;
     out.set(spec.slot, (out.get(spec.slot) ?? 0) + dmg);
-  }
-  for (const m of game.members) {
-    if (m.alive && m.ability === 'darkBargain') out.set(m.slot, (out.get(m.slot) ?? 0) + TITHE_AMOUNT);
   }
   return out;
 }
@@ -131,12 +124,9 @@ function tryProvoke(game: Game): boolean {
   if (!game.config.enemy.boss && !anyoneHurt) return false;
   const idx = handIndexOf(game, 'provoke');
   if (!affordable(game, idx)) return false;
-  // The sink is the most DURABLE living member. #38: exclude the Warlock even when
-  // he is the highest-maxHP body — Soul Tithe drains him every turn, so funnelling
-  // hits onto him (plus the tithe) kills the party's main striker, the opposite of
-  // what Provoke is for. With ≥2 alive at least one non-Warlock body exists.
-  const durable = living.filter((m) => m.ability !== 'darkBargain');
-  const sink = (durable.length ? durable : living).sort((a, b) => b.maxHP - a.maxHP)[0];
+  // The sink is the most DURABLE living member (highest maxHP). (#39: the Warlock is
+  // now a fragile 14-HP controller, so the maxHP sort naturally keeps hits off him.)
+  const sink = [...living].sort((a, b) => b.maxHP - a.maxHP)[0];
   game.playCard(idx, sink.slot);
   return true;
 }
@@ -319,25 +309,17 @@ function memberByAbility(game: Game, ability: AbilityId): Member | null {
   return game.members.find((m) => m.alive && m.ability === ability) ?? null;
 }
 
-// Warlock as a planned MP engine (#27, re-lined for #34): Dark Bargain trades HP
-// for MP and the cost GROWS each cast, so the value is FRONT-LOADED — bargain a
-// couple of times while he is near full and the cost is cheapest (cast 0 = 3 HP,
-// cast 1 = 6), banking MP the healer can spend on the opening turns, then STOP
-// before the growth curve (and Soul Tithe) eat his 7-damage body. Only when the MP
-// has somewhere to go (headroom) and he keeps a real cushion above the cost + tithe.
-function tryDarkBargain(game: Game): boolean {
-  const w = memberByAbility(game, 'darkBargain');
+// Warlock Hex (#39): curse the enemy with Vulnerability so the party deals more
+// damage — the bonus is bigger the fewer members are fielded. Keep it up: cast when
+// the enemy isn't already amplified and no channel needs the MP first, so the boost
+// is live for this phase's party strikes (and every downstream damage source).
+function tryHex(game: Game): boolean {
+  const w = memberByAbility(game, 'hex');
   if (!w) return false;
+  if (game.enemy.vulnerableTurns > 1) return false; // already Vulnerable; don't waste a card
   if (channelThreatUnanswered(game)) return false;
-  if (game.mp + BARGAIN_MP > game.maxMana) return false; // no room to bank the MP
-  const idx = abilityCardIndex(game, 'darkBargain');
+  const idx = abilityCardIndex(game, 'hex');
   if (!affordable(game, idx)) return false;
-  const cost = BARGAIN_HP_BASE + BARGAIN_HP_GROWTH * w.bargainCasts;
-  // Front-load only: cap the casts, and keep him well clear of the danger zone
-  // (the cost itself plus a Soul-Tithe turn plus a margin) so a bargain never
-  // strands the party's biggest striker one blow from death.
-  if (w.bargainCasts >= 2) return false;
-  if (w.hp - cost < cost + TITHE_AMOUNT + 4) return false;
   game.playCard(idx);
   return true;
 }
@@ -431,7 +413,8 @@ function trySkaldTempo(game: Game): boolean {
 
 const TACTICS: Array<(game: Game) => boolean> = [
   tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
-  tryBolt, tryPoison, tryRampage, tryDarkBargain, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
+  // Hex before offense so the Vulnerability amplifies this phase's strikes (#39).
+  tryHex, tryBolt, tryPoison, tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];
 
 // Play a single player phase to a natural close (rest or end turn).
@@ -481,7 +464,7 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
   phalanx: 2, brace: 2, provoke: 2,
   // Ability cards (#44) — inserted per-fight, never bought.
-  imbuePoison: 0, bolster: 0, unleash: 0, darkPact: 0, conduct: 0, incite: 0, hush: 0, beckon: 0,
+  imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, hush: 0, beckon: 0,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

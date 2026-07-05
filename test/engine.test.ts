@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
-import { partyFromMembers, isEngineAbility, TITHE_AMOUNT, BARGAIN_HP_BASE, BARGAIN_HP_GROWTH, BARGAIN_MP, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
+import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -286,9 +286,9 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('bolster is unplayable while the tank is dead', g.canPlay(idx, null) !== null);
   eq('playing a card with a dead bound member is refused', g.playCard(idx, null).ok, false);
   // A card whose member was never deployed is likewise unplayable: the default
-  // trio has no Warlock, so darkPact finds no carrier.
-  const pact = giveCard(g, 'darkPact');
-  check('darkPact is unplayable with no Warlock deployed', g.canPlay(pact, null) !== null);
+  // trio has no Warlock, so the Hex card finds no carrier.
+  const pact = giveCard(g, 'hex');
+  check('the Hex card is unplayable with no Warlock deployed', g.canPlay(pact, null) !== null);
 }
 {
   // Every ability card is a no-target card (#44), so the UI plays it immediately
@@ -2454,7 +2454,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   }
 }
 
-// --- party roster wave 1: Hexen Warlock + Skald (#27) -----------------------
+// --- party roster wave 1: Hexen Warlock + Skald (#27; Warlock redesigned #39) ---
 {
   // Warlock identity is read from the drafted member id, seated at its slot.
   const cfg = defaultBattleConfig();
@@ -2463,47 +2463,57 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const w = g.members[0];
   eq('drafted Warlock seated in slot 0', w.id, 'warlock');
   eq('Warlock name from the pool', w.name, 'Hexen Warlock');
-  eq('Warlock ability is Dark Bargain', w.ability, 'darkBargain');
-  // 7 per the spec. (#31's 7->5 nerf was calibrated against the toBattleConfig
-  // identity bug and was reverted by the 2026-07-04 playtest.)
-  eq('Warlock has the highest damage', w.damage, 7);
+  eq('Warlock ability is Hex (#39)', w.ability, 'hex');
+  eq('Warlock is a low-damage controller', w.damage, 3);
 
-  // Dark Bargain: -HP (growing per cast) for +MP.
-  g.mp = 10; w.hp = 15;
+  // Hex curses the enemy with Vulnerability; in a full party it uses the trio value.
+  g.enemy.hp = 999;
   g._fireAbility(w);
-  eq('first Dark Bargain costs BARGAIN_HP_BASE', 15 - w.hp, BARGAIN_HP_BASE);
-  g.mp = 4; // room for the +MP to land unclamped
-  const beforeMp = g.mp;
-  g._fireAbility(w);
-  eq('second Dark Bargain costs base + growth', w.hp, 15 - BARGAIN_HP_BASE - (BARGAIN_HP_BASE + BARGAIN_HP_GROWTH));
-  eq('Dark Bargain grants BARGAIN_MP', g.mp - beforeMp, BARGAIN_MP);
-  eq('bargainCasts tracks casts this fight', w.bargainCasts, 2);
+  eq('Hex makes the enemy Vulnerable for HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
+  eq('trio Hex vuln = HEX_VULN_BY_SIZE[3]', g.enemy.vulnerable, HEX_VULN_BY_SIZE[3]);
+  // Vulnerability amplifies every party damage source (applied in _damageEnemy).
+  const raw = 10;
+  eq('Vulnerability amplifies party damage', g.vulnerableAmount(raw), raw + Math.floor(raw * HEX_VULN_BY_SIZE[3]));
 }
 {
-  // Dark Bargain can BURN OUT the Warlock (lethal, unlike Blood cards).
+  // The Hex is STRONGER the fewer members are fielded (#39): solo > trio.
+  const mkEmpty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
   const cfg = defaultBattleConfig();
-  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
-  const g = new Game(2, cfg); g.start();
-  const w = g.members[0];
-  w.hp = 2; // less than the base cost
-  g._fireAbility(w);
-  check('Dark Bargain can kill the Warlock', !w.alive && w.hp <= 0);
-  check('the lethal Dark Bargain marks a death (DR1 scar)', w.diedThisFight);
+  cfg.party = [partyFromMembers(['warlock'])[0], mkEmpty(), mkEmpty()];
+  const g = new Game(4, cfg); g.start();
+  eq('a solo Warlock fields party size 1', g.fieldedPartySize(), 1);
+  g.enemy.hp = 999;
+  g._fireAbility(g.members[0]);
+  eq('solo Hex uses the solo (largest) vuln', g.enemy.vulnerable, HEX_VULN_BY_SIZE[1]);
+  check('solo Hex is stronger than a full party', HEX_VULN_BY_SIZE[1] > HEX_VULN_BY_SIZE[3]);
 }
 {
-  // Soul Tithe drains the Warlock every party phase, after his strike, and can kill him.
+  // The redesigned Hex has NO self-damage: the old Soul Tithe / Dark Bargain suicide
+  // (a permadeath magnet under the roster campaign) is gone.
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
-  const g = new Game(3, cfg); g.start();
+  const g = new Game(5, cfg); g.start();
   const w = g.members[0];
   const hp0 = w.hp;
-  g.enemy.hp = 999; // keep the fight alive
-  g.endTurn();      // party phase applies Soul Tithe
-  eq('Soul Tithe drains TITHE_AMOUNT per party phase', hp0 - w.hp, TITHE_AMOUNT);
-  // Push him to the brink and confirm the tithe can be lethal.
-  w.hp = TITHE_AMOUNT;
-  g.endTurn();
-  check('Soul Tithe can kill the Warlock', !w.alive);
+  g.enemy.hp = 999;
+  g._fireAbility(w);
+  g._fireAbility(w);
+  eq('Hex costs the Warlock no HP', w.hp, hp0);
+  g.endTurn(); // a full party phase — no Soul Tithe drain any more
+  eq('the Warlock is not drained at end of party phase', w.hp, hp0);
+  check('the Warlock stays alive (no burn-out)', w.alive);
+}
+{
+  // Vulnerability counts down over enemy phases and clears when it expires.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
+  const g = new Game(6, cfg); g.start();
+  g.enemy.hp = 999;
+  g._fireAbility(g.members[0]);
+  eq('Hex sets HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
+  for (let i = 0; i < HEX_TURNS; i++) g.endTurn();
+  eq('Vulnerability expires after HEX_TURNS enemy phases', g.enemy.vulnerableTurns, 0);
+  eq('vuln magnitude resets to 0 on expiry', g.enemy.vulnerable, 0);
 }
 {
   // Skald: 0 base, strikes for SKALD_DMG_PER_CARD × cards played, capped.
@@ -2535,7 +2545,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Crescendo drew CRESCENDO_DRAW cards', g.hand.length, handBefore + CRESCENDO_DRAW);
   eq('Crescendo counts as one card played', g.cardsPlayedThisPhase, played0 + 1);
   check('Crescendo is engine-tagged', isEngineAbility('crescendo'));
-  check('Dark Bargain is engine-tagged', isEngineAbility('darkBargain'));
+  check('Hex is not engine-tagged (#39: no longer mints MP)', !isEngineAbility('hex'));
   check('Poison is not engine-tagged', !isEngineAbility('poison'));
 }
 

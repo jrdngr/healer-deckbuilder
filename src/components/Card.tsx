@@ -13,7 +13,7 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   bloodTithe: 'mana', martyrsGift: 'heal', grimHarvest: 'power',
   phalanx: 'ward', brace: 'ward', provoke: 'ward',
   // Per-member ability cards (#44): the healer enabling an aggressive move — power.
-  imbuePoison: 'power', bolster: 'ward', unleash: 'power', darkPact: 'mana',
+  imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
   conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward',
 };
 
