@@ -120,7 +120,7 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
 export function partyFromMembers(ids: MemberId[]): PartyMemberConfig[] {
   return ids.map((id): PartyMemberConfig => {
     const d = MEMBER_POOL[id];
-    return { maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, member: id };
+    return { maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, upgrades: 0, member: id };
   });
 }
 
@@ -801,6 +801,10 @@ export interface PartyMemberConfig {
   // 2-member deployment leaves the remaining battle slots inert. Only ever set on
   // the length-3 battle party built in Run.toBattleConfig — never on a roster member.
   empty?: boolean;
+  // Count of permanent stat upgrades applied to this roster member (2026-07). Drives
+  // the member's salary (memberSalary): each upgrade raises the fee to field them.
+  // Absent/0 on a fresh member and on the battle party (a run-layer concern only).
+  upgrades?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -1092,7 +1096,32 @@ export const FORK_COUNT = FIGHT_COUNT - 1;             // 8 forks between fights
 export const BRANCHES_PER_FORK = 2;
 export const NODES_PER_BRANCH = 2;
 
-export const GOLD_PER_FIGHT = 40;    // awarded for winning a (non-final) fight (~40 x 8 = 320/run)
+// Raised 40 -> 80 to fund member salaries (2026-07). Deploying the classic trio
+// costs 40 salary/fight, so the trio's NET is the old 40; fielding fewer keeps more.
+export const GOLD_PER_FIGHT = 80;    // awarded for winning a (non-final) fight (before salaries)
+
+// ---------------------------------------------------------------------------
+// Member salaries (2026-07): after each won fight, every DEPLOYED member is paid
+// out of the winnings; benched members are free, so fielding fewer keeps more gold.
+// Salary rises with each stat upgrade and falls with each injury. Base salaries are
+// tuned so the classic trio (ranger+tank+mage) costs exactly GOLD_PER_FIGHT/2. These
+// magnitudes are sim-tuned in the balance pass.
+// ---------------------------------------------------------------------------
+export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
+  ranger: 14, tank: 10, mage: 16,          // classic trio: 14 + 10 + 16 = 40
+  warlock: 20, skald: 12, berserker: 10, graveAugur: 14, beastWarden: 12,
+};
+export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
+export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
+export const MIN_SALARY = 3;         // a salary never drops below this
+export const DEFAULT_MEMBER_SALARY = 12; // fallback for a member without a pool identity (quick-play)
+
+// A roster member's current salary: base (by identity) + per-upgrade, − per-injury,
+// floored at MIN_SALARY. `upgrades` counts permanent stat boosts applied to them.
+export function memberSalary(p: PartyMemberConfig): number {
+  const base = p.member ? MEMBER_BASE_SALARY[p.member] : DEFAULT_MEMBER_SALARY;
+  return Math.max(MIN_SALARY, base + SALARY_PER_UPGRADE * (p.upgrades ?? 0) - SALARY_PER_INJURY * p.injuries);
+}
 
 // Which act a fight belongs to, and whether it is that act's boss (its last fight).
 export const actOfFight = (fightIndex: number): number => Math.floor(fightIndex / FIGHTS_PER_ACT);

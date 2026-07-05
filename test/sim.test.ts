@@ -65,10 +65,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // Re-pinned again for the roster/deployment rework in progress (2026-07): the
   // sim still quick-plays the trio and deploys it every fight, but the new Recruit
   // node type perturbs map generation and the post-boss member draft consumes rng,
-  // shifting the whole downstream stream. Numbers move a few points; the CI bands
-  // below still hold. These will be re-measured once the deploy policy (C7) and the
-  // act-1 + salary rebalance (C8) land.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 152, 152, 150, 72, 69, 66, 30]));
+  // shifting the whole downstream stream. Salaries then raised GOLD_PER_FIGHT 40->80
+  // (trio net stays 40) and made party upgrades raise a member's fee, nudging the
+  // gold economy a point or two more. Numbers move slightly; the CI bands below
+  // still hold. These will be re-measured once the deploy policy (C7) and the act-1
+  // + salary rebalance (C8) land.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 152, 152, 151, 72, 69, 67, 27]));
   // Provisional full-run gate around the observed 13.5% (was: the designed
   // 25-35% band). CI-consistency, not a hard threshold, so subsample noise
   // can't fail a healthy build while a real drift still trips it.

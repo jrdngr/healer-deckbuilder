@@ -13,6 +13,7 @@ import {
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
   DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE,
+  memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../src/constants';
@@ -46,6 +47,11 @@ const crossBranch = (run: Run, branch = 0): void => {
   run.startNextFight();
   deployAll(run);
 };
+
+// Net gold a won fight pays after the default trio's salary (2026-07): the raised
+// GOLD_PER_FIGHT minus what the deployed classic trio (ranger+tank+mage) costs.
+const TRIO_SALARY = new Run(0).deployedSalary();
+const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 
 // --- map shape & determinism ------------------------------------------------
 {
@@ -102,7 +108,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   // Win fight 0 -> fork 0, gold awarded.
   run.winFight();
   eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
-  eq('gold awarded for fight', run.gold, GOLD_PER_FIGHT);
+  eq('gold awarded for fight (net of salary)', run.gold, NET_GOLD);
 
   // Choose a branch -> its hub; stops open in ANY order, leaving a stop returns
   // to the hub, and the hub decides when the next fight starts. Pin the stops so
@@ -245,7 +251,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   }
   eq('act bosses sit at fights 2/5/8', JSON.stringify(bossFights), JSON.stringify([2, 5, 8]));
   eq('reached the final boss fight', run.fightIndex, FIGHT_COUNT - 1);
-  eq('gold accrued over 8 non-final fights', gold, GOLD_PER_FIGHT * (FIGHT_COUNT - 1));
+  eq('gold accrued over 8 non-final fights (net)', gold, NET_GOLD * (FIGHT_COUNT - 1));
   run.winFight();
   eq('beating the final boss wins the run', run.status, 'won');
 }
@@ -776,7 +782,7 @@ const crossBranch = (run: Run, branch = 0): void => {
   run.addRelic('rustyCrown');
   run.beginRun(); deployAll(run);
   run.winFight();
-  eq('the Crown pays extra gold per win', run.gold, GOLD_PER_FIGHT + RUSTY_CROWN_GOLD);
+  eq('the Crown pays extra gold per win', run.gold, NET_GOLD + RUSTY_CROWN_GOLD);
 }
 
 // --- difficulty presets + local stats (issue 23) ------------------------------
@@ -792,9 +798,9 @@ const crossBranch = (run: Run, branch = 0): void => {
   eq('Story floors the attack bonus at 0', storyCfg.enemy.attackBonus, 0);
   eq('Story delays enrage by 2', storyCfg.enemy.enrageTurn, (stdCfg.enemy.enrageTurn ?? 0) + 2);
   story.winFight();
-  eq('Story pads the purse', story.gold, GOLD_PER_FIGHT + DIFFICULTIES.story.goldBonus);
+  eq('Story pads the purse', story.gold, NET_GOLD + DIFFICULTIES.story.goldBonus);
   std.winFight();
-  eq('Standard gold is unchanged', std.gold, GOLD_PER_FIGHT);
+  eq('Standard gold is unchanged (net)', std.gold, NET_GOLD);
   check('Standard is the identity preset',
     DIFFICULTIES.standard.hpMult === 1 && DIFFICULTIES.standard.attackDelta === 0
     && DIFFICULTIES.standard.enrageDelta === 0 && DIFFICULTIES.standard.goldBonus === 0);
@@ -1013,6 +1019,40 @@ const crossBranch = (run: Run, branch = 0): void => {
   eq('the death scarred the deployed roster member', run.roster[2].injuries, 1);
   eq('an undeployed roster member is unscarred', run.roster[1].injuries, 0);
   eq('the other deployed member is unscarred', run.roster[0].injuries, 0);
+}
+
+// --- salaries: deployed members are paid from the win; upgrades/injuries move it -
+{
+  // memberSalary: base by identity, + per upgrade, − per injury, floored.
+  const m = new Run(71).roster[0];
+  const base = MEMBER_BASE_SALARY[m.member!];
+  eq('base salary reads from the pool', memberSalary(m), base);
+  m.upgrades = 2; eq('each upgrade adds to salary', memberSalary(m), base + 2 * SALARY_PER_UPGRADE);
+  m.upgrades = 0; m.injuries = 2; eq('each injury lowers salary', memberSalary(m), base - 2 * SALARY_PER_INJURY);
+  m.injuries = 99; eq('salary floors at MIN_SALARY', memberSalary(m), MIN_SALARY);
+
+  // deployedSalary sums only the fielded members; a solo deploy pays one salary.
+  const run = new Run(70);
+  run.beginRun();
+  run.confirmDeployment([null, 1, null]); // field only the tank (roster index 1)
+  eq('deployedSalary sums only the fielded members', run.deployedSalary(), MEMBER_BASE_SALARY['tank']);
+  const before = run.gold;
+  run.winFight();
+  eq('a solo deployment pays one salary', run.gold, before + GOLD_PER_FIGHT - MEMBER_BASE_SALARY['tank']);
+
+  // Applying a party upgrade bumps the salary counter (so the fee rises next fight).
+  const up = new Run(72);
+  const u0 = up.roster[0].upgrades ?? 0;
+  up.applyPartyUpgrade(0 as Slot, PARTY_UPGRADES[0]);
+  eq('a party upgrade raises the salary counter', up.roster[0].upgrades, u0 + 1);
+
+  // Salary can eat into gold but never drives it negative.
+  const broke = new Run(73);
+  broke.beginRun();
+  broke.confirmDeployment([0, 1, 2]);
+  broke.gold = 0;
+  broke.winFight();
+  check('gold never goes negative after salary', broke.gold >= 0);
 }
 
 // --- Infirmary node (DR1): clear scars for gold, top of the ladder first --------

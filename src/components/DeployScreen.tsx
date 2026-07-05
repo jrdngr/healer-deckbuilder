@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
-import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, INJURY_NAMES } from '../constants';
+import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, INJURY_NAMES, memberSalary } from '../constants';
 
 interface DeployScreenProps {
   run: Run;
@@ -32,6 +32,8 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
     setDeploy(next);
   };
   const seatedCount = deploy.filter((x) => x != null).length;
+  // Salary owed if this deployment fights: paid out of the win, so fielding fewer keeps more.
+  const projectedSalary = deploy.reduce<number>((s, ri) => s + (ri != null && run.roster[ri] ? memberSalary(run.roster[ri]) : 0), 0);
 
   return (
     <main className="shop-screen deploy-screen">
@@ -39,10 +41,11 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
         <div>
           <h2>Deploy your party</h2>
           <p>Field up to three heroes and set their positions. Up next: <strong>{enemy.name}</strong>{enemy.boss ? ' — Boss' : ''}.</p>
+          <p className="deploy-salary-line">Gold {run.gold} · salary this fight: <strong>{projectedSalary}g</strong> (paid from the win)</p>
         </div>
         <button className="primary map-take" disabled={seatedCount === 0}
           onClick={() => act((r) => r.confirmDeployment(deploy))}>
-          {seatedCount === 0 ? 'Deploy at least one' : `Fight with ${seatedCount}`}
+          {seatedCount === 0 ? 'Deploy at least one' : `Fight with ${seatedCount} · −${projectedSalary}g`}
         </button>
       </header>
 
@@ -71,7 +74,7 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
             <button key={ri} className={`draft-member${inSlot >= 0 ? ' chosen' : ''}`}
               onClick={() => assign(ri)} aria-pressed={inSlot >= 0} title={MEMBER_ABILITY_FLAVOR[id]}>
               <span className="draft-member-name">{dm.name}{inSlot >= 0 ? ` — ${SLOT_NAMES[inSlot]}` : ''}</span>
-              <span className="draft-member-stats">HP {p.maxHP} · DMG {p.damage}{scar}</span>
+              <span className="draft-member-stats">HP {p.maxHP} · DMG {p.damage} · {memberSalary(p)}g/fight{scar}</span>
               <span className="draft-member-ability">{MEMBER_ABILITY_FLAVOR[id]}</span>
             </button>
           );

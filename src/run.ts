@@ -23,7 +23,7 @@ import {
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty, INFIRMARY_PRICE,
   injuryRecordCap, injuryIncapacitates,
   partyFromMembers, DRAFT_POOL, CLASSIC_TRIO,
-  STARTER_MEMBERS, DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE,
+  STARTER_MEMBERS, DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
@@ -197,7 +197,7 @@ export class Run {
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
-    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0 }));
+    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0 }));
     run.deployment = [...(snap.deployment ?? [0, 1, 2])];
     run.healer = { ...snap.healer };
     run.relics = [...snap.relics];
@@ -429,6 +429,18 @@ export class Run {
 
   // Resolve the current fight as a win: award gold and advance to the fork (or
   // win the run if that was the boss).
+  // Total salary owed for the members deployed in the current fight (2026-07): the
+  // sum of memberSalary over every seated deployment slot. Empty slots cost nothing.
+  deployedSalary(): number {
+    let total = 0;
+    for (const ri of this.deployment) {
+      if (ri == null) continue;
+      const p = this.roster[ri];
+      if (p) total += memberSalary(p);
+    }
+    return total;
+  }
+
   winFight(): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
@@ -440,9 +452,12 @@ export class Run {
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
     // The Rusty Crown (#22) pays its bonus on every win it made harder; Story
     // (#23) pads the purse so newer players can actually buy their way forward.
-    this.gold += GOLD_PER_FIGHT
+    const reward = GOLD_PER_FIGHT
       + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
       + DIFFICULTIES[this.difficulty].goldBonus;
+    // Pay each DEPLOYED member their salary out of the winnings (2026-07); benched
+    // members are free, so fielding fewer keeps more gold. Gold never goes negative.
+    this.gold = Math.max(0, this.gold + reward - this.deployedSalary());
     // Spoils (#21, Q9): the act-1 and act-2 bosses drop a free relic pick.
     // (The final boss ends the run above, so this is exactly fights 3 and 6.)
     if (isActBoss(fi)) {
@@ -825,6 +840,7 @@ export class Run {
     if (def.stat === 'maxHP') p.maxHP += def.amount;
     else if (def.stat === 'damage') p.damage += def.amount;
     else p.abilityPower += def.amount;
+    p.upgrades = (p.upgrades ?? 0) + 1; // a stat upgrade raises this member's salary
   }
 
   applyHealerUpgrade(def: HealerUpgradeDef): void {
@@ -974,6 +990,7 @@ export class Run {
     this.gold -= MERCENARY_PRICE;
     const slot = Math.floor(this.rng() * this.party.length) as Slot;
     this.party[slot].damage += MERCENARY_DAMAGE;
+    this.party[slot].upgrades = (this.party[slot].upgrades ?? 0) + 1; // raises salary
     return { slot, amount: MERCENARY_DAMAGE };
   }
 
@@ -1006,6 +1023,7 @@ export class Run {
     if (!this.canSacrifice(slot)) return null;
     this.party[slot].maxHP -= BLOOD_ALTAR_HP;
     this.party[slot].damage += BLOOD_ALTAR_DAMAGE;
+    this.party[slot].upgrades = (this.party[slot].upgrades ?? 0) + 1; // the damage gain raises salary
     return { hpLoss: BLOOD_ALTAR_HP, damageGain: BLOOD_ALTAR_DAMAGE };
   }
 }
