@@ -61,7 +61,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // DESIGN bands (25-35% full-run, ~85/70/55 bosses) no longer hold — the pins
   // below are PROVISIONAL regression gates on the observed numbers until a
   // balance pass (or a re-ratified target) restores deliberate bands.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 155, 155, 155, 81, 81, 78, 27]));
+  //
+  // Re-pinned again for the roster/deployment rework in progress (2026-07): the
+  // sim still quick-plays the trio and deploys it every fight, but the new Recruit
+  // node type perturbs map generation and the post-boss member draft consumes rng,
+  // shifting the whole downstream stream. Numbers move a few points; the CI bands
+  // below still hold. These will be re-measured once the deploy policy (C7) and the
+  // act-1 + salary rebalance (C8) land.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 152, 152, 150, 72, 69, 66, 30]));
   // Provisional full-run gate around the observed 13.5% (was: the designed
   // 25-35% band). CI-consistency, not a hard threshold, so subsample noise
   // can't fail a healthy build while a real drift still trips it.

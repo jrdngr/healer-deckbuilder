@@ -12,15 +12,14 @@ import {
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   DIFFICULTIES, MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, INFIRMARY_PRICE,
-  DRAFT_PICKS, DRAFT_POOL, rollDraft, draftOfferViable, partyMeetsDraftConstraints, CLASSIC_TRIO,
-  CONVENTIONAL_STRIKERS,
+  DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE,
   INJURY_RULES, INCAPACITATE_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../src/constants';
-import { shuffle } from '../src/rng';
+import type { RunLocation } from '../src/run';
 import { emptyStats, recordRunEnd } from '../src/stats';
 import { groupPile } from '../src/deckView';
-import type { CardId, ModifierId, Slot } from '../src/constants';
+import type { CardId, ModifierId, Slot, MemberId } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -223,10 +222,13 @@ const crossBranch = (run: Run, branch = 0): void => {
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       gold = run.gold;
-      // Act-1/2 bosses drop a spoils screen first (#21); skipping it moves on.
+      // Act-1/2 bosses drop a spoils screen first (#21), then a post-boss member
+      // draft (2026-07); resolving both moves on to the fork.
       if (isActBoss(f)) {
         check(`win of boss fight ${f} -> spoils`, run.location.kind === 'spoils');
         run.skipSpoils();
+        check(`boss ${f} spoils -> post-boss draft`, run.location.kind === 'draft');
+        run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
       }
       check(`win of fight ${f} -> forkChoice`, run.location.kind === 'forkChoice');
       crossBranch(run, run.rng() < 0.5 ? 0 : 1);
@@ -250,6 +252,7 @@ const crossBranch = (run: Run, branch = 0): void => {
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       if (run.location.kind === 'spoils') run.skipSpoils();
+      if (run.location.kind === 'draft') run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
       crossBranch(run);
     }
   }
@@ -628,7 +631,10 @@ const crossBranch = (run: Run, branch = 0): void => {
     check('spoils are free', offers.every((o) => o.price === 0));
     const picked = run.pickSpoil(0);
     check('the pick lands in the relic list', picked !== null && run.hasRelic(picked));
-    eq('spoils -> forkChoice', run.location.kind, 'forkChoice');
+    eq('spoils -> post-boss draft', run.location.kind, 'draft');
+    // Cast through unknown: TS still has nodeContent narrowed to the spoils type here.
+    run.chooseDraftMember((run.nodeContent as unknown as { options: MemberId[] }).options[0]);
+    eq('post-boss draft -> forkChoice', run.location.kind, 'forkChoice');
     check('the battle config carries the relics', run.toBattleConfig().relics!.includes(picked!));
   }
   // The fight-3 spoils roll guarantees >=1 rare, across seeds.
@@ -1036,96 +1042,92 @@ const crossBranch = (run: Run, branch = 0): void => {
   eq('without the Totem, victory mends nothing', noTotem.party[1].injuries, 2);
 }
 
-// --- draft skeleton (#27) ---------------------------------------------------
+// --- pick-one member draft (2026-07): start + post-boss ---------------------
 {
   const run = new Run(20);
   run.beginDraft();
-  eq('beginDraft enters the draft location', run.location.kind, 'draft');
-  check('draft offers three 1-of-2 pairs', run.nodeContent?.type === 'draft'
-    && run.nodeContent.pairs.length === DRAFT_PICKS
-    && run.nodeContent.pairs.every((p) => p.length === 2));
+  eq('beginDraft enters the start draft', run.location.kind === 'draft' && run.location.post, 'start');
+  check('the start draft clears the default roster', run.roster.length === 0);
+  check('the start draft offers solo-viable starters', run.nodeContent?.type === 'draft'
+    && run.nodeContent.options.length === DRAFT_OFFER_SIZE
+    && run.nodeContent.options.every((id) => STARTER_MEMBERS.includes(id)));
 
-  // Seat a drafted party and confirm it opens fight 0 with those members.
-  run.chooseDraft(['warlock', 'tank', 'skald']);
-  eq('chooseDraft opens the first fight', run.location.kind, 'fight');
-  eq('slot 0 is the drafted Warlock', run.party[0].member, 'warlock');
-  eq('slot 2 is the drafted Skald', run.party[2].member, 'skald');
+  // Pick one: it joins the roster and the run heads into fight 0 (a forced solo).
+  const first = (run.nodeContent as { options: MemberId[] }).options[0];
+  run.chooseDraftMember(first);
+  eq('choosing a starter enters fight 0', run.location.kind === 'fight' && run.location.fightIndex, 0);
+  eq('the roster now holds one member', run.roster.length, 1);
+  eq('the drafted member joined the roster', run.roster[0].member, first);
+  // Fight 0 deploys the lone member; the other two battle slots are empty.
+  eq('fight 0 fields exactly one member', run.toBattleConfig().party.filter((p) => !p.empty).length, 1);
 
-  // A malformed pick (wrong size / unknown id) is ignored — the run can't wedge.
+  // A pick that was never offered (the tank is never a starter) is ignored.
   const bad = new Run(21);
   bad.beginDraft();
-  bad.chooseDraft(['warlock', 'tank'] as never);      // too few
-  eq('a short draft pick is refused', bad.location.kind, 'draft');
-  bad.chooseDraft(['warlock', 'tank', 'ranger', 'mage'] as never); // too many
-  eq('an over-long draft pick is refused', bad.location.kind, 'draft');
+  bad.chooseDraftMember('tank');
+  eq('a non-offered starter pick is refused', bad.location.kind, 'draft');
 
-  // The classic trio path seats the demo party (returning players lose nothing).
-  const trio = new Run(22);
-  trio.beginDraft();
-  trio.chooseDraft(['ranger', 'tank', 'mage']);
-  eq('classic trio drafts into a fight', trio.location.kind, 'fight');
-  eq('classic draft seats the ranger in slot 0', trio.party[0].member, 'ranger');
-
-  // A drafted run round-trips through a save snapshot (v6 carries member identity).
-  const drafted = new Run(23);
-  drafted.beginDraft();
-  drafted.chooseDraft(['warlock', 'mage', 'skald']);
-  const restored = Run.fromJSON(drafted.toJSON());
-  eq('drafted identity survives save/resume', restored.party[0].member, 'warlock');
-  eq('drafted skald survives save/resume', restored.party[2].member, 'skald');
-
-  // Regression (found in the 2026-07-04 playtest): toBattleConfig must carry the
-  // drafted identity through to the fight — dropping `member` silently reverted
-  // every drafted fight to classic-trio abilities (a Warlock arrived as a
-  // poison-firing "Ranger" with Warlock stats).
-  const cfg = drafted.toBattleConfig();
-  eq('toBattleConfig carries drafted identity (slot 0)', cfg.party[0].member, 'warlock');
-  eq('toBattleConfig carries drafted identity (slot 2)', cfg.party[2].member, 'skald');
-}
-
-// --- full draft generator constraints (#30) ---------------------------------
-{
-  // The generator always offers a viable party, uses distinct members with no
-  // repeats across pairs, across many seeds.
-  let allViable = true, allDistinct = true;
-  for (let seed = 1; seed <= 500; seed++) {
-    const pairs = rollDraft(shuffle([...DRAFT_POOL], makeRng(seed)));
-    if (!draftOfferViable(pairs)) allViable = false;
-    const flat = pairs.flat();
-    if (new Set(flat).size !== flat.length) allDistinct = false;
-    if (pairs.length !== DRAFT_PICKS || pairs.some((p) => p.length !== 2)) allDistinct = false;
-  }
-  check('every rolled draft offers a viable party', allViable);
-  check('draft pairs use distinct members (no repeats)', allDistinct);
-
-  // The viability bar itself: the classic trio clears it; a triple of the weakest
-  // members (all rated 2, none "strong") does not.
-  check('the classic trio meets the draft bar', partyMeetsDraftConstraints(CLASSIC_TRIO));
-  check('an all-weak party fails the strong-damage floor', !partyMeetsDraftConstraints(['tank', 'berserker', 'tank']));
-  check('a low-total party fails the damage floor',
-    !partyMeetsDraftConstraints(['tank', 'berserker', 'berserker']));
-  // Two self-reliant members + one healable fails the healable floor.
-  check('too few healable members fails the bar', !partyMeetsDraftConstraints(['warlock', 'berserker', 'mage']));
-  // #31 striker requirement: a comp with no conventional striker fails even when the
-  // damage sum and healable count pass (the #31 sweep showed these floor out).
-  check('a striker-less party fails the bar', !partyMeetsDraftConstraints(['tank', 'berserker', 'graveAugur']));
-  check('every certified-viable offer contains a striker (500 seeds)', (() => {
-    for (let seed = 1; seed <= 500; seed++) {
-      const pairs = rollDraft(shuffle([...DRAFT_POOL], makeRng(seed)));
-      // At least one assemblable party is viable AND every viable one has a striker.
-      const combos = pairs.reduce<string[][]>((acc, pr) => acc.flatMap((pre) => pr.map((id) => [...pre, id])), [[]]);
-      const viable = combos.filter((c) => partyMeetsDraftConstraints(c as never));
-      if (viable.length === 0) return false;
-      if (!viable.every((c) => c.some((id) => CONVENTIONAL_STRIKERS.has(id as never)))) return false;
-    }
-    return true;
-  })());
-
-  // beginDraft is deterministic in the run seed (same offer on the same seed).
+  // The offer is deterministic in the run seed (same offer on the same seed).
   const a = new Run(77); a.beginDraft();
   const b = new Run(77); b.beginDraft();
   check('the draft offer is deterministic in the seed',
-    JSON.stringify((a.nodeContent as { pairs: unknown }).pairs) === JSON.stringify((b.nodeContent as { pairs: unknown }).pairs));
+    JSON.stringify((a.nodeContent as { options: unknown }).options)
+      === JSON.stringify((b.nodeContent as { options: unknown }).options));
+
+  // The drafted identity round-trips through a save snapshot (v8) and reaches the
+  // fight via toBattleConfig (the 2026-07-04 field-drop regression stays covered).
+  const restored = Run.fromJSON(run.toJSON());
+  eq('drafted identity survives save/resume', restored.roster[0].member, first);
+  eq('toBattleConfig carries the drafted identity', restored.toBattleConfig().party[1].member ?? restored.toBattleConfig().party[0].member, first);
+}
+
+// --- post-boss draft: winning an act boss offers a new member ----------------
+{
+  const run = new Run(40);
+  run.beginDraft();
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+  // Jump to the act-1 boss and win it: spoils first, then a member draft. (Cast so
+  // TS doesn't pin run.location to the fight literal across the mutating calls.)
+  run.location = { kind: 'fight', fightIndex: 2 } as RunLocation;
+  run.winFight();
+  eq('an act boss drops spoils first', run.location.kind, 'spoils');
+  run.skipSpoils();
+  eq('leaving spoils opens a post-boss draft', run.location.kind === 'draft' && run.location.post, 'boss');
+  check('the post-boss draft offers only unowned members', run.nodeContent?.type === 'draft'
+    && run.nodeContent.options.length > 0
+    && run.nodeContent.options.every((id) => !run.roster.some((p) => p.member === id)));
+  const before = run.roster.length;
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+  eq('choosing adds to the roster', run.roster.length, before + 1);
+  eq('a post-boss draft leads to the fork', run.location.kind, 'forkChoice');
+}
+
+// --- Recruit node: add one member, once; hidden when the roster is full -------
+{
+  const run = new Run(50);
+  run.beginDraft();
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+  // Enter a synthetic recruit node and roll its offer.
+  run.location = { kind: 'node', forkIndex: 0, branch: 0, index: 0, nodeType: 'recruit' };
+  run.nodeContent = run._rollNodeContent('recruit');
+  check('a recruit node offers unowned members', run.nodeContent?.type === 'recruit'
+    && run.nodeContent.options.length > 0
+    && run.nodeContent.options.every((id) => !run.roster.some((p) => p.member === id)));
+
+  const before = run.roster.length;
+  const opts = (run.nodeContent as { options: MemberId[] }).options;
+  run.recruitMember(opts[0]);
+  eq('recruiting adds the member', run.roster.length, before + 1);
+  check('the recruit node is now spent', run.nodeContent?.type === 'recruit' && run.nodeContent.done);
+  // The node resolves once: a second recruit is refused.
+  if (opts[1]) run.recruitMember(opts[1]);
+  eq('a spent recruit node refuses a second pick', run.roster.length, before + 1);
+
+  // Once the roster holds everyone, a recruit node is unavailable (nothing to offer).
+  const full = new Run(51);
+  full.roster = partyFromMembers(DRAFT_POOL);
+  check('recruit is hidden when the roster is full', !full.nodeAvailable('recruit'));
+  check('recruit is available with members left to offer', new Run(52).nodeAvailable('recruit'));
 }
 
 // --- injury-mode experiments (2026-07-04 playtest) ---------------------------

@@ -24,7 +24,7 @@ import { MemberCard } from '../src/components/MemberCard';
 import { MapScreen } from '../src/components/MapScreen';
 import { BranchScreen } from '../src/components/BranchScreen';
 import { EventScreen } from '../src/components/EventScreen';
-import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS } from '../src/constants';
+import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 
@@ -115,16 +115,16 @@ async function render(el: React.ReactElement): Promise<string> {
   check('an unscarred member shows no injury badge', !wholeText.includes('Injured'), wholeText);
 }
 
-// --- DraftScreen surfaces the placement weights and the classic-trio path (#30) -
+// --- DraftScreen (pick-one) surfaces the offered heroes ------------------------
 {
   const run = new Run(5);
   run.beginDraft();
   const noop = <T,>(fn: (r: Run) => T): T => fn(run);
   const text = await render(<DraftScreen run={run} act={noop} />);
-  check('draft surfaces the open-attack slot weights', text.includes('25%') && text.includes('50%'), text);
-  check('draft surfaces the veiled-attack slot weights', text.includes('40%') && text.includes('20%'), text);
-  check('draft offers the classic-trio shortcut', text.includes('Accept the classic trio'), text);
-  check('draft prompts for one pick per pair', text.includes('Pick 1'), text);
+  const options = (run.nodeContent as { options: MemberId[] }).options;
+  check('the start draft offers the configured number of heroes', options.length === DRAFT_OFFER_SIZE, String(options.length));
+  check('draft prompts to recruit the first hero', text.includes('Recruit your first hero'), text);
+  for (const id of options) check(`draft shows ${id}'s name`, text.includes(MEMBER_POOL[id].name), id);
 }
 
 // --- Run-layer screens show DRAFTED names, not the classic trio (#36) ----------
@@ -156,7 +156,7 @@ async function render(el: React.ReactElement): Promise<string> {
 {
   const draftRun = new Run(5);
   draftRun.beginDraft();
-  const shown = (draftRun.nodeContent as { pairs: MemberId[][] }).pairs.flat();
+  const shown = (draftRun.nodeContent as { options: MemberId[] }).options;
   const noop = <T,>(fn: (r: Run) => T): T => fn(draftRun);
   const text = await render(<DraftScreen run={draftRun} act={noop} />);
   for (const id of shown) {

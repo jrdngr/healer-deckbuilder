@@ -22,7 +22,8 @@ import {
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty, INFIRMARY_PRICE,
   injuryRecordCap, injuryIncapacitates,
-  partyFromMembers, PARTY_SIZE, DRAFT_POOL, rollDraft,
+  partyFromMembers, DRAFT_POOL, CLASSIC_TRIO,
+  STARTER_MEMBERS, DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
@@ -42,7 +43,11 @@ export type RunStatus = 'playing' | 'won' | 'lost';
 // from which the player manually enters the first fight.
 export type RunLocation =
   | { kind: 'start' }
-  | { kind: 'draft' } // party draft before the first fight (#27 skeleton, #30 full)
+  // Pick-one member draft (2026-07): at run start ('start') and after each boss
+  // ('boss'). fightIndex is the fight the draft leads back toward (0 for start; the
+  // boss fight for a post-boss draft, whose fork is fightIndex).
+  | { kind: 'draft'; post: 'start' | 'boss'; fightIndex: number }
+  | { kind: 'deploy'; fightIndex: number } // pre-fight: choose & seat members (C4)
   | { kind: 'fight'; fightIndex: number }
   | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
   | { kind: 'forkChoice'; forkIndex: number }
@@ -61,7 +66,8 @@ export type NodeContent =
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
   | { type: 'infirmary'; price: number }                              // clear scars for gold (DR1)
-  | { type: 'draft'; pairs: MemberId[][] };                           // three 1-of-2 draft picks (#27/#30)
+  | { type: 'draft'; options: MemberId[] }                            // pick-one member draft (2026-07)
+  | { type: 'recruit'; options: MemberId[]; done: boolean };          // Recruit node: add one member, once
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
@@ -128,7 +134,10 @@ export class Run {
     this.rng = makeRng(this.seed);
     this.gold = 0;
     this.deck = defaultDeck();
-    this.roster = defaultParty();
+    // Default roster: the classic trio (with member identities), so quick-play and
+    // the sim have a party without drafting. The pick-one draft (beginDraft) clears
+    // this and rebuilds the roster one member at a time.
+    this.roster = partyFromMembers(CLASSIC_TRIO);
     this.deployment = [0, 1, 2];
     this.healer = { ...DEFAULT_HEALER };
     this.relics = [];
@@ -208,30 +217,64 @@ export class Run {
     return run;
   }
 
-  // Leave the opening map and enter the first fight.
+  // Quick-play (no draft): keep the default trio roster and go straight to deploy.
   beginRun(): void {
     if (this.location.kind !== 'start') return;
-    this._enterFight(0);
+    this._enterDeploy(0);
   }
 
-  // Full draft (#30): roll three 1-of-2 picks from the pool of 8 (generator
-  // guarantees a viable party is achievable), then the player picks one per pair
-  // and assigns L/C/R. Enter it from the start screen.
+  // Member ids not yet in the roster (the pool a draft/recruit can still offer).
+  availableMembers(): MemberId[] {
+    const have = new Set(this.roster.map((p) => p.member));
+    return DRAFT_POOL.filter((id) => !have.has(id));
+  }
+
+  // Roll a pick-one offer of up to `size` distinct members from `pool` (already the
+  // available/eligible set). Uses the run's seeded rng; copies before the in-place
+  // shuffle so the shared pool arrays are never corrupted.
+  _rollMemberOffer(pool: MemberId[], size: number): MemberId[] {
+    return shuffle([...pool], this.rng).slice(0, size);
+  }
+
+  // Pick-one draft at run start (2026-07): clear the default roster and offer the
+  // solo-viable starters (fight 0 is a forced solo). The player picks one, then
+  // deploys and fights.
   beginDraft(): void {
     if (this.location.kind !== 'start') return;
-    this.location = { kind: 'draft' };
-    // shuffle mutates in place — copy the shared DRAFT_POOL so it is never corrupted.
-    this.nodeContent = { type: 'draft', pairs: rollDraft(shuffle([...DRAFT_POOL], this.rng)) };
+    this.roster = [];
+    this.deployment = [null, null, null];
+    this.location = { kind: 'draft', post: 'start', fightIndex: 0 };
+    this.nodeContent = { type: 'draft', options: this._rollMemberOffer(STARTER_MEMBERS, DRAFT_OFFER_SIZE) };
   }
 
-  // Seat a drafted party (one member id per slot) and open the first fight. Ignores
-  // malformed picks (wrong size / unknown id) so a crude UI can't wedge the run.
-  chooseDraft(ids: MemberId[]): void {
-    if (this.location.kind !== 'draft') return;
-    if (ids.length !== PARTY_SIZE || !ids.every((id) => DRAFT_POOL.includes(id))) return;
-    this.party = partyFromMembers(ids);
+  // Take the drafted member into the roster and move on: the start draft leads into
+  // deploying fight 0; a post-boss draft returns to the boss's fork. Ignores an
+  // unknown / already-owned id so a crude UI can't wedge the run.
+  chooseDraftMember(id: MemberId): void {
+    if (this.location.kind !== 'draft' || this.nodeContent?.type !== 'draft') return;
+    if (!this.nodeContent.options.includes(id) || this.roster.some((p) => p.member === id)) return;
+    const { post, fightIndex } = this.location;
+    this.roster.push(partyFromMembers([id])[0]);
     this.nodeContent = null;
-    this._enterFight(0);
+    if (post === 'start') this._enterDeploy(0);
+    else { this.location = { kind: 'forkChoice', forkIndex: fightIndex }; }
+  }
+
+  // Full member roster (unique by id). Members carry per-instance stats, injuries,
+  // and (later) a salary; the battle party is a deploy-time view of it.
+  rosterMemberIds(): MemberId[] { return this.roster.map((p) => p.member!).filter(Boolean); }
+
+  // Default seating: the first three roster members into slots L/C/R, the rest of the
+  // (short) roster leaving empty slots. Used until the deploy screen (C4) sets it.
+  _defaultDeployment(): (number | null)[] {
+    return [0, 1, 2].map((i) => (i < this.roster.length ? i : null));
+  }
+
+  // Open the pre-fight deploy step (C4 renders the screen; for now it seats a default
+  // and enters the fight so the flow is continuous).
+  _enterDeploy(fightIndex: number): void {
+    this.deployment = this._defaultDeployment();
+    this._enterFight(fightIndex);
   }
 
   // Enter a fight: set the location and the enemy that occupies it.
@@ -301,7 +344,10 @@ export class Run {
   // ("Act 2 · Fight 5 / 9") without rehydrating the whole Run.
   static upcomingFightIndex(location: RunLocation): number {
     switch (location.kind) {
+      case 'deploy': return location.fightIndex;
       case 'fight': return location.fightIndex;
+      // A start draft leads into fight 0; a post-boss draft (like spoils) into the next fight.
+      case 'draft': return location.post === 'start' ? 0 : Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'spoils': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'branch': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
@@ -392,10 +438,19 @@ export class Run {
     this.nodeContent = null;
   }
 
-  // Leave the spoils screen (with or without a pick) for the next fork.
+  // Leave the spoils screen (with or without a pick). Every act boss that drops
+  // spoils (F2, F5) is followed by a pick-one member draft (2026-07) before the
+  // next fork — unless the roster already holds everyone, in which case skip it.
   _leaveSpoils(): void {
     if (this.location.kind !== 'spoils') return;
-    this.location = { kind: 'forkChoice', forkIndex: this.location.fightIndex };
+    const fi = this.location.fightIndex;
+    const pool = this.availableMembers();
+    if (pool.length > 0) {
+      this.location = { kind: 'draft', post: 'boss', fightIndex: fi };
+      this.nodeContent = { type: 'draft', options: this._rollMemberOffer(pool, DRAFT_OFFER_SIZE) };
+      return;
+    }
+    this.location = { kind: 'forkChoice', forkIndex: fi };
     this.nodeContent = null;
   }
 
@@ -482,11 +537,23 @@ export class Run {
     return this.party.some((p) => p.injuries > 0);
   }
 
-  // Whether a node of this type can be visited right now. The Infirmary only
-  // opens its doors to a wounded party — with no scars to treat it isn't shown
-  // (map + hub) and can't be entered.
+  // Whether a node of this type can be visited right now. The Infirmary only opens
+  // to a wounded party; the Recruit node is hidden once the roster holds everyone
+  // (nothing left to offer). All other node types are always available.
   nodeAvailable(type: NodeType): boolean {
-    return type !== 'infirmary' || this.hasInjuredMember();
+    if (type === 'infirmary') return this.hasInjuredMember();
+    if (type === 'recruit') return this.availableMembers().length > 0;
+    return true;
+  }
+
+  // Recruit node (2026-07): add the chosen member to the roster, once. Ignores an
+  // unknown / already-owned id or a spent node so a crude UI can't double-recruit.
+  recruitMember(id: MemberId): void {
+    if (this.location.kind !== 'node' || this.nodeContent?.type !== 'recruit') return;
+    if (this.nodeContent.done) return;
+    if (!this.nodeContent.options.includes(id) || this.roster.some((p) => p.member === id)) return;
+    this.roster.push(partyFromMembers([id])[0]);
+    this.nodeContent.done = true;
   }
 
   // Enter one of the current branch's stops from the hub. First entry rolls the
@@ -510,10 +577,10 @@ export class Run {
     this.nodeContent = null;
   }
 
-  // Done with the branch: head to the fight the fork was walking toward.
+  // Done with the branch: head to the deploy step for the fight the fork walks toward.
   startNextFight(): void {
     if (this.location.kind !== 'branch') return;
-    this._enterFight(this.location.forkIndex + 1);
+    this._enterDeploy(this.location.forkIndex + 1);
   }
 
   // Roll the storefront / event for a node's first visit.
@@ -524,6 +591,7 @@ export class Run {
       case 'partyUpgrade': return { type: 'partyUpgrade', offers: this.rollPartyShop() };
       case 'healerUpgrade': return { type: 'healerUpgrade', offers: this.rollHealerShop() };
       case 'event': return { type: 'event', event: this.rollEvent(), done: false };
+      case 'recruit': return { type: 'recruit', options: this._rollMemberOffer(this.availableMembers(), RECRUIT_OFFER_SIZE), done: false };
       case 'reliquary': return { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
       case 'infirmary': return { type: 'infirmary', price: this.discountedPrice(INFIRMARY_PRICE) };
       default: return null;

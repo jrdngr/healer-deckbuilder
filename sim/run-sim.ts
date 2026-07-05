@@ -318,6 +318,14 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         break;
       }
       case 'start': run.beginRun(); break;
+      // Post-boss member draft (2026-07): take the first offered member. (A smarter
+      // roster/deploy policy — pick the strongest, bench to save salary — is C7.)
+      case 'draft': {
+        const c = run.nodeContent;
+        if (c?.type === 'draft' && c.options.length) run.chooseDraftMember(c.options[0]);
+        else run.status = 'lost';
+        break;
+      }
       default: run.status = 'lost'; break; // unreachable safety net
     }
   }

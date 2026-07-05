@@ -163,6 +163,17 @@ export const DRAFT_MIN_HEALABLE = 2;      // a viable party needs >= 2 conventio
 // support the fixed policy can't always give). A viable draft needs at least one.
 export const CONVENTIONAL_STRIKERS: Set<MemberId> = new Set<MemberId>(['ranger', 'mage', 'warlock']);
 
+// Roster acquisition (2026-07): the game no longer drafts a fixed trio up front.
+// The player collects members one at a time — a pick-one draft at run start and
+// after each boss, plus occasional Recruit map nodes — and deploys up to three per
+// fight. These set how many members each such offer shows.
+export const DRAFT_OFFER_SIZE = 3;   // members shown by a start/post-boss draft (pick one)
+export const RECRUIT_OFFER_SIZE = 3; // members shown by a Recruit node (pick one)
+// Fight 0 is a forced solo (only the start draft precedes it), so the START draft
+// offers only members that can win it alone — the conventional strikers. Post-boss
+// drafts and Recruit nodes draw from the full remaining pool.
+export const STARTER_MEMBERS: MemberId[] = ['ranger', 'mage', 'warlock'];
+
 // Does this exact party (a member per slot) clear the draft's viability bar?
 // Tightened by #31: also require a conventional striker, so a certified-viable
 // offer can actually kill the bosses (not just pass a paper damage sum).
@@ -1049,20 +1060,21 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
 
 export type NodeType =
   | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade'
+  | 'recruit'   // add a member to the roster (2026-07) — a weighted node; hidden when the roster is full
   | 'infirmary' // clear death-scars for gold (DR1) — a weighted node
   | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
 // The non-fight node types that fill the branches between fights.
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'infirmary', 'reliquary',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'recruit', 'infirmary', 'reliquary',
 ];
 
-// Weights for placing non-fight node types on the map. The Infirmary (DR1) is a
-// real node in the rolls — you must find one AND afford it — not a guaranteed
-// stop, so the scar economy stays a "get lucky and have gold" decision.
+// Weights for placing non-fight node types on the map. The Recruit node (2026-07)
+// grows the roster past the pick-one drafts; like the Infirmary it is a real roll
+// (you must find one), and it is hidden once the roster already holds every member.
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
-  ['infirmary', 24],
+  ['recruit', 20], ['infirmary', 24],
 ];
 
 // Infirmary (DR1): flat gold to clear one scar (top of the ladder first). Kept
