@@ -43,7 +43,7 @@ bullets.
 | 48 | 🔲 Todo | [View-deck button in the topbar](./issues/48-topbar-deck-view-button.md) | fix | — | intake 2026-07-06 |
 | 49 | 🔲 Todo | [Injury badges on party members](./issues/49-injury-badges-on-members.md) | fix | — | intake 2026-07-06 |
 | 50 | 🔲 Todo | [Remember party positions between fights](./issues/50-remember-party-positions.md) | fix | — | intake 2026-07-06 |
-| 51 | 🔲 Todo | [Change the starting deck's heal mix](./issues/51-starting-deck-composition.md) | rules | — | intake 2026-07-06 |
+| 51 | 🔲 Todo | [Replace the starting deck with the heal-only six](./issues/51-starting-deck-composition.md) | rules | — | intake 2026-07-06 |
 | 52 | 🔲 Todo | [Regen rework: magnitude == duration](./issues/52-regen-magnitude-duration-rework.md) | rules | — | intake 2026-07-06 |
 | 53 | 🔲 Todo | [Passive MP only when ≤1 card played](./issues/53-passive-mp-gate-on-cards-played.md) | rules | — | intake 2026-07-06 |
 | 54 | 🔲 Todo | [Ability cards on member death](./issues/54-ability-cards-on-member-death.md) | rules | — | intake 2026-07-06 |
