@@ -238,7 +238,7 @@ function tryHeal(game: Game): boolean {
   const prefer: CardId[] = missing >= 4 ? ['highHeal', 'aoeHeal', 'regen', 'lowHeal']
     : ['lowHeal', 'regen', 'aoeHeal', 'highHeal'];
   for (const id of prefer) {
-    if (id === 'regen' && worst.regenTurns > 0) continue;
+    if (id === 'regen' && worst.regen > 0) continue;
     const idx = handIndexOf(game, id);
     if (affordable(game, idx)) { game.playCard(idx, worst.slot); return true; }
   }
@@ -276,7 +276,7 @@ function tryGroupHeal(game: Game): boolean {
 // Keep Regen running on the tank for cheap sustained healing between big blows.
 function tryRegenTank(game: Game): boolean {
   const tank = game.tank;
-  if (!tank.alive || tank.regenTurns > 0) return false;
+  if (!tank.alive || tank.regen > 0) return false;
   const idx = handIndexOf(game, 'regen');
   if (!affordable(game, idx)) return false;
   game.playCard(idx, SLOT.CENTER);

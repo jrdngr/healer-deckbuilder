@@ -27,7 +27,7 @@ import {
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
-  CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN,
+  CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
@@ -63,8 +63,8 @@ export interface Member {
   shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
   brace: boolean;       // pending Brace: next damaging instance reduced by BRACE_AMOUNT (#17)
   braceTurns: number;   // enemy turns the pending Brace lasts before fading unused
-  regen: number;      // Regen strength: HP healed per turn while active
-  regenTurns: number; // player phases of Regen remaining
+  regen: number;      // Regen value (#52): heals this much this tick, then decays by 1
+                      // each tick until 0. Magnitude IS duration — a Regen R runs R ticks.
   bloomBurst: number; // pending Lifebloom burst: heals this much when the Regen ends alive (#16)
   taunt: number;   // taunt turns remaining (attributed to whoever cast Taunt)
   defense: number; // Defense turns remaining: incoming hits reduced by defenseAmount
@@ -273,8 +273,7 @@ export class Game {
         shieldTurns: 0,
         brace: false,  // pending Brace (one-shot damage reduction)
         braceTurns: 0,
-        regen: 0,      // Regen strength
-        regenTurns: 0, // Regen turns remaining
+        regen: 0,      // Regen value (magnitude == remaining ticks; #52)
         bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
         defense: 0,    // Defense turns remaining
@@ -782,7 +781,6 @@ export class Game {
     m.brace = false;
     m.braceTurns = 0;
     m.regen = 0;
-    m.regenTurns = 0;
     m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
     m.taunt = 0;
     m.defense = 0;
@@ -873,10 +871,12 @@ export class Game {
   }
 
   // Pay out a pending Lifebloom burst (#16). A Lifebloom Regen that ENDS while
-  // its target lives — natural expiry, overwrite by a new Regen-slot cast, or
-  // Bloom's consume — burst-heals; death forfeits it (_killMember clears the
-  // field without paying). Cultivate modifies the stack in place and never
-  // routes through here, so it keeps the burst pending.
+  // its target lives — natural expiry (regen decays to 0) or Bloom's consume —
+  // burst-heals; death forfeits it (_killMember clears the field without paying).
+  // Under the additive model (#52) casting more Regen only DEEPENS the running
+  // Regen — it no longer ends it — so the burst rides along until the extended
+  // Regen expires. Cultivate likewise modifies the value in place and never routes
+  // through here, so it keeps the burst pending.
   _endRegenBurst(m: Member): void {
     if (m.bloomBurst <= 0 || !m.alive) return;
     const burst = m.bloomBurst;
@@ -1249,13 +1249,14 @@ export class Game {
     // Regen ticks at the start of the player's turn — after the enemy has attacked,
     // so the heal lands on the damage just taken rather than pre-empting the blow.
     for (const m of this.members) {
-      if (m.alive && m.regenTurns > 0) {
+      if (m.alive && m.regen > 0) {
+        // Heal the current value, then decay by 1 (#52). At 0 the Regen is gone;
+        // its magnitude was its duration, so no separate turn counter to clear.
         const healed = this._healMember(m, m.regen);
         this._log(`${m.name} regenerates ${healed} (Regen ${m.regen}).`, 'heal');
         this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
-        m.regenTurns -= 1;
-        if (m.regenTurns === 0) {
-          m.regen = 0;
+        m.regen -= 1;
+        if (m.regen === 0) {
           this._endRegenBurst(m); // natural expiry pays a pending Lifebloom burst
         }
       }
@@ -1338,7 +1339,7 @@ export class Game {
         const m = target == null ? undefined : this.members[target];
         if (!m || !m.alive) return 'target must be a living member';
         // Cultivate / Bloom (#15) operate on an existing Regen — dead without one.
-        if (card.needsRegen && m.regenTurns <= 0) return 'target must have an active Regen';
+        if (card.needsRegen && m.regen <= 0) return 'target must have an active Regen';
         // Blood cards (#16) demand the target survive the payment outright.
         if (card.selfDamage != null && m.hp <= card.selfDamage) return `target must have more than ${card.selfDamage} HP`;
         // Bulwark cards (#17) are Defense-exclusive; Phalanx also refuses the
@@ -1434,12 +1435,11 @@ export class Game {
       }
       case 'regen': {
         const m = this.members[target as number];
-        // Overwriting a Lifebloom Regen ends it — its pending burst pays out first.
-        this._endRegenBurst(m);
-        // Re-applying refreshes the duration and keeps the stronger value (no stacking).
-        m.regen = Math.max(m.regen, card.regen ?? 0);
-        m.regenTurns = card.regenTurns;
-        this._log(`Regen on ${m.name} (${m.regen}/turn for ${m.regenTurns}).`, 'status');
+        // Additive (#52): the card's amount adds to any existing Regen — magnitude
+        // is duration, so Regen +2 onto Regen 3 becomes Regen 5 (deeper AND longer).
+        // A pending Lifebloom burst rides along on the extended Regen (no overwrite).
+        m.regen += card.regen ?? 0;
+        this._log(`Regen on ${m.name} (Regen ${m.regen}, decays each turn).`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         break;
       }
@@ -1458,7 +1458,7 @@ export class Game {
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
         m.brace = false; m.braceTurns = 0;
-        m.regen = 0; m.regenTurns = 0; m.bloomBurst = 0;
+        m.regen = 0; m.bloomBurst = 0;
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
         // Reworked (#18): the revive comes back behind a fresh Shield so the
         // standing telegraph can't immediately undo the 4 MP investment.
@@ -1483,34 +1483,31 @@ export class Game {
         break;
       }
       case 'overgrowth': {
-        // Party-wide Regen with the single-target card's no-stack semantics per
-        // member: refresh the duration, keep the stronger strength.
+        // Party-wide Regen with the single-target card's additive semantics per
+        // member (#52): the card's amount adds to each member's existing Regen.
         for (const m of this.livingMembers()) {
-          this._endRegenBurst(m); // overwrite pays out a pending Lifebloom burst
-          m.regen = Math.max(m.regen, card.regen ?? 0);
-          m.regenTurns = card.regenTurns;
+          m.regen += card.regen ?? 0;
           this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         }
-        this._log(`Overgrowth: Regen ${card.regen} on all living members for ${card.regenTurns} turns.`, 'status');
+        this._log(`Overgrowth: Regen +${card.regen} on all living members (decays each turn).`, 'status');
         break;
       }
       case 'cultivate': {
         const m = this.members[target as number];
-        // Modify the active Regen IN PLACE (canPlay guarantees one): never
-        // overwrite the stack, so a stronger Regen — and later Lifebloom's burst
-        // (#16) — keeps everything it had.
+        // Modify the active Regen IN PLACE (canPlay guarantees one): add to the
+        // single value, so it heals more AND lasts a tick longer (#52), and any
+        // pending Lifebloom burst (#16) rides along untouched.
         m.regen += CULTIVATE_STRENGTH;
-        m.regenTurns += CULTIVATE_TURNS;
-        this._log(`Cultivate: ${m.name}'s Regen grows to ${m.regen}/turn for ${m.regenTurns}.`, 'status');
+        this._log(`Cultivate: ${m.name}'s Regen grows to ${m.regen} (decays each turn).`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         break;
       }
       case 'bloom': {
         const m = this.members[target as number];
-        // Consume the Regen: heal per remaining turn, then the stack is gone.
-        const healed = this._healMember(m, BLOOM_HEAL_PER_TURN * m.regenTurns, true);
+        // Consume the Regen: heal per remaining tick (== the Regen value, #52),
+        // then it's gone.
+        const healed = this._healMember(m, BLOOM_HEAL_PER_TURN * m.regen, true);
         m.regen = 0;
-        m.regenTurns = 0;
         this._log(`Bloom consumes ${m.name}'s Regen: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         // Consuming a Lifebloom Regen is one of its end conditions: burst too.
@@ -1531,13 +1528,12 @@ export class Game {
       }
       case 'lifebloom': {
         const m = this.members[target as number];
-        // Overwriting an older Lifebloom ends it — pay its burst before arming
-        // the new one (a member never holds two pending bursts).
-        this._endRegenBurst(m);
-        m.regen = Math.max(m.regen, card.regen ?? 0);
-        m.regenTurns = card.regenTurns;
+        // Additive Regen like the base card (#52): the amount deepens any existing
+        // Regen. The burst is a single flag, so re-arming keeps just one pending
+        // burst; it pays out when the (possibly extended) Regen ends alive.
+        m.regen += card.regen ?? 0;
         m.bloomBurst = LIFEBLOOM_BURST;
-        this._log(`Lifebloom on ${m.name} (${m.regen}/turn for ${m.regenTurns}; bursts ${LIFEBLOOM_BURST} when it ends).`, 'status');
+        this._log(`Lifebloom on ${m.name} (Regen ${m.regen}, decays each turn; bursts ${LIFEBLOOM_BURST} when it ends).`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
         break;
       }
@@ -1956,7 +1952,7 @@ export class Game {
     let t = target;
     if (t == null) {
       if (needsLiving) {
-        t = this.members.find((m) => m.alive && (!card.needsRegen || m.regenTurns > 0))?.slot ?? null;
+        t = this.members.find((m) => m.alive && (!card.needsRegen || m.regen > 0))?.slot ?? null;
       } else if (card.target === 'dead') t = this.members.find((m) => !m.alive)?.slot ?? null;
     }
     // Bail if a slot-targeted card has no valid target available.

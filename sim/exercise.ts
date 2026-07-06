@@ -93,6 +93,20 @@ function recordPlay(dc: DeckCard, cov: Coverage): void {
 // Make one play this phase, biased to a card we have not yet exercised. Returns
 // false when nothing playable remains (the turn should end).
 function exerciseOnePlay(game: Game, cov: Coverage): boolean {
+  // Pass 0 — seed Regen fodder. Since #52 shortened Regen durations (magnitude ==
+  // duration: a fresh Regen 2 lasts only 2 ticks), incidental Regen can expire
+  // before a needsRegen consumer (Cultivate / Bloom) is drawn. If such a consumer
+  // is in hand but stuck for lack of an active Regen, cast a Regen source first.
+  const stuckConsumer = game.hand.some(
+    (dc, i) => !cov.cardsPlayed.has(dc.id) && CARDS[dc.id].needsRegen && legalPlay(game, i) === null);
+  if (stuckConsumer) {
+    for (let i = 0; i < game.hand.length; i++) {
+      const dc = game.hand[i];
+      if (CARDS[dc.id].regen == null) continue; // only Regen-granting cards
+      const p = legalPlay(game, i);
+      if (p && game.playCard(i, p.target).ok) { recordPlay(dc, cov); return true; }
+    }
+  }
   // Pass 1 — a not-yet-played card (ability cards self-resolve on their bound member).
   for (let i = 0; i < game.hand.length; i++) {
     const dc = game.hand[i];

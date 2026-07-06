@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
@@ -57,7 +57,7 @@ eq('deck has 6 core cards', DECK_LIST.length, 6);
 eq('Quick Heal heals 2', CARDS.lowHeal.heal, 2);
 eq('Heal heals 4', CARDS.highHeal.heal, 4);
 eq('Group Heal heals 2', CARDS.aoeHeal.heal, 2);
-eq('Regen strength 1', CARDS.regen.regen, 1);
+eq('Regen card applies +2 (#52)', CARDS.regen.regen, 2);
 eq('Refresh strength 2', CARDS.refresh.refresh, 2);
 
 // --- enrage damage rounds up ------------------------------------------------
@@ -109,25 +109,37 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     JSON.stringify(seq));
 }
 
-// --- regen: flat strength for its duration, capped at maxHP ----------------
+// --- regen (#52): magnitude IS duration; decays each tick, capped at maxHP ----
 {
   const g = new Game(3);
-  const ranger = g.members[SLOT.LEFT];
-  ranger.hp = ranger.maxHP - 2; ranger.regen = 1; ranger.regenTurns = REGEN_TURNS;
+  g.start();
+  const m = g.members[SLOT.CENTER];
+  m.maxHP = 100; m.hp = 1;
+  g.mp = 10;
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
+  eq('Regen card starts a clean target at Regen 2', m.regen, 2);
   const healed: number[] = [];
-  for (let i = 0; i < REGEN_TURNS; i++) {
-    const before = ranger.hp;
-    if (ranger.regenTurns > 0) {
-      ranger.hp = Math.min(ranger.maxHP, ranger.hp + ranger.regen);
-      ranger.regenTurns -= 1;
-      if (ranger.regenTurns === 0) ranger.regen = 0;
-    }
-    healed.push(ranger.hp - before);
+  for (let i = 0; i < 3; i++) {
+    const before = m.hp;
+    g._startPlayerPhase();
+    healed.push(m.hp - before);
   }
-  // ranger starts maxHP-2: +1, +1 (cap), +1 (no room)
-  eq('regen capped total', ranger.hp, ranger.maxHP);
-  check('regen ticks respect cap', JSON.stringify(healed) === JSON.stringify([1, 1, 0]),
+  // Ticks 2 then 1 then it's gone — a self-expiring, front-loaded HoT.
+  check('single-cast Regen decays 2 then 1 then gone', JSON.stringify(healed) === JSON.stringify([2, 1, 0]),
     JSON.stringify(healed));
+  eq('Regen self-expires to 0', m.regen, 0);
+}
+
+// --- regen respects the HP cap on each tick --------------------------------
+{
+  const g = new Game(3);
+  g.start();
+  const m = g.members[SLOT.CENTER];
+  m.hp = m.maxHP - 1; m.regen = 2; // heal 2 but only 1 room, then heal 1 into 0 room
+  const healed: number[] = [];
+  for (let i = 0; i < 2; i++) { const b = m.hp; g._startPlayerPhase(); healed.push(m.hp - b); }
+  eq('regen capped at maxHP', m.hp, m.maxHP);
+  check('regen ticks respect the cap', JSON.stringify(healed) === JSON.stringify([1, 0]), JSON.stringify(healed));
 }
 
 // --- regen ticks at the start of the player phase, after the enemy attacks -----
@@ -137,17 +149,15 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   const tank = g.members[SLOT.CENTER];
   tank.hp = 5;
   g.mp = 10;
-  const idx = giveCard(g, 'regen'); // regen 1 for 3 turns
+  const idx = giveCard(g, 'regen'); // Regen +2 (decaying)
   g.playCard(idx, SLOT.CENTER);
-  eq('regen primed strength 1', tank.regen, 1);
-  eq('regen primed duration 3', tank.regenTurns, REGEN_TURNS);
+  eq('regen primed at Regen 2', tank.regen, 2);
   // Force a telegraph that spares the tank, so the only change to its HP across the
   // turn is the regen heal (isolating the tick's timing).
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
   g.endTurn();
-  eq('regen healed +1 at player-phase start', tank.hp, 6);
-  eq('regen duration decremented to 2', tank.regenTurns, REGEN_TURNS - 1);
-  eq('regen strength unchanged', tank.regen, 1);
+  eq('regen healed +2 at player-phase start', tank.hp, 7);
+  eq('regen decayed to 1 after the tick', tank.regen, 1);
   // The heal must land after the enemy attack in the event feed, not before it.
   const atkIdx = g.events.findIndex((e) => e.kind === 'enemyAttack');
   const regIdx = g.events.findIndex((e) => e.kind === 'regenTick');
@@ -155,19 +165,21 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     `atkIdx=${atkIdx} regIdx=${regIdx}`);
 }
 
-// --- stacking is non-additive: re-applying refreshes duration, keeps max strength ---
+// --- stacking is ADDITIVE (#52): the card's amount adds to the running Regen ---
 {
   const g = new Game(31);
   g.start();
-  const tank = g.members[SLOT.CENTER];
-  g.mp = 10;
-  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
-  eq('regen first cast strength', tank.regen, 1);
-  tank.regenTurns -= 1; // simulate a tick elapsing
-  // Re-apply: duration resets to full, strength stays the max (not 1+1=2).
-  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
-  eq('regen re-cast keeps strength (no stacking)', tank.regen, 1);
-  eq('regen re-cast refreshes duration', tank.regenTurns, REGEN_TURNS);
+  const m = g.members[SLOT.CENTER];
+  m.maxHP = 100; m.hp = 1;
+  g.mp = 20;
+  m.regen = 3; // an existing Regen 3
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER); // +2
+  eq('re-cast is additive (Regen 3 + card → Regen 5)', m.regen, 5);
+  // Decays 5→4→3→2→1→0, healing the triangular total 15 (headroom guaranteed).
+  let total = 0;
+  for (let i = 0; i < 6; i++) { const b = m.hp; g._startPlayerPhase(); total += m.hp - b; }
+  eq('additive Regen heals the triangular total', total, 5 + 4 + 3 + 2 + 1);
+  eq('additive Regen self-expires', m.regen, 0);
 }
 
 // --- enemy never aims its primary at a dead square (no invisible telegraph) ----
@@ -1065,8 +1077,10 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('potent stacks', resolveCard(makeDeckCard('highHeal', 1, ['potent', 'potent'])).heal, (CARDS.highHeal.heal ?? 0) + 2);
 }
 {
-  // Lingering: +1 duration on Regen/Refresh.
-  eq('lingering +regen turns', resolveCard(makeDeckCard('regen', 1, ['lingering'])).regenTurns, REGEN_TURNS + 1);
+  // Lingering: +1 turn of Refresh; on Regen (#52) magnitude IS duration, so it
+  // folds into the applied regen amount rather than a separate turn count.
+  eq('lingering +regen magnitude (#52)', resolveCard(makeDeckCard('regen', 1, ['lingering'])).regen, (CARDS.regen.regen ?? 0) + 1);
+  eq('potent + lingering both deepen regen', resolveCard(makeDeckCard('regen', 1, ['potent', 'lingering'])).regen, (CARDS.regen.regen ?? 0) + 2);
   eq('lingering +refresh turns', resolveCard(makeDeckCard('refresh', 1, ['lingering'])).refreshTurns, REFRESH_TURNS + 1);
 }
 {
@@ -1401,7 +1415,7 @@ function hexweaverGame(seed: number, enrageTurn = 99): Game {
   const healed = g._healMember(g.tank, 4);
   eq('direct heal is halved under Hex', healed, 2);
   // Regen tick path: strength 2 regens 1 while Wounded.
-  g.mage.hp = 1; g.mage.regen = 2; g.mage.regenTurns = 3;
+  g.mage.hp = 1; g.mage.regen = 2;
   g.phase = 'idle'; g._startPlayerPhase();
   eq('Regen tick is halved under Hex', g.mage.hp, 1 + 1);
 }
@@ -1732,46 +1746,44 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
       .every((id) => CARD_POOL.includes(id)));
 }
 {
-  // Overgrowth: Regen 1 to every living member with the Regen card's no-stack
-  // semantics (keep the stronger strength, refresh the duration); dead skipped.
+  // Overgrowth (#52): Regen +1 to every living member, additive onto any running
+  // Regen (magnitude == duration); the dead are skipped.
   const g = new Game(60); g.start();
   const [ranger, tank, mage] = g.members;
-  tank.regen = 2; tank.regenTurns = 1; // a stronger, nearly-spent stack
+  tank.regen = 2; // an existing Regen
   g._killMember(mage);
   g.playCard(giveCard(g, 'overgrowth'), null);
-  eq('Overgrowth grants Regen 1', ranger.regen, 1);
-  eq('Overgrowth runs for REGEN_TURNS', ranger.regenTurns, REGEN_TURNS);
-  eq('Overgrowth keeps a stronger Regen', tank.regen, 2);
-  eq('Overgrowth refreshes the stronger stack\'s duration', tank.regenTurns, REGEN_TURNS);
-  eq('Overgrowth skips the dead', mage.regenTurns, 0);
-  // Potent-ineligible (a +1 would be x3 members x3 turns); Lingering still applies.
+  eq('Overgrowth grants Regen 1 to a clean target', ranger.regen, 1);
+  eq('Overgrowth adds to a running Regen', tank.regen, 2 + 1);
+  eq('Overgrowth skips the dead', mage.regen, 0);
+  // Potent-ineligible (a +1 would be x3 members); Lingering still applies.
   check('Overgrowth is Potent-ineligible', !MODIFIERS.potent.eligible('overgrowth'));
   check('Overgrowth still takes Lingering', MODIFIERS.lingering.eligible('overgrowth'));
 }
 {
-  // Cultivate: dead without an active Regen; modifies the stack IN PLACE.
+  // Cultivate (#52): dead without an active Regen; adds to the single value IN
+  // PLACE, so it heals more AND lasts a tick longer.
   const g = new Game(61); g.start();
   const tank = g.tank;
   const idx = giveCard(g, 'cultivate');
   eq('Cultivate is dead without an active Regen', g.canPlay(idx, SLOT.CENTER), 'target must have an active Regen');
-  tank.regen = 1; tank.regenTurns = 2;
+  tank.regen = 1;
   eq('Cultivate is playable with an active Regen', g.canPlay(idx, SLOT.CENTER), null);
   g.playCard(idx, SLOT.CENTER);
-  eq('Cultivate adds strength in place (never overwrites)', tank.regen, 1 + CULTIVATE_STRENGTH);
-  eq('Cultivate adds duration in place', tank.regenTurns, 2 + CULTIVATE_TURNS);
+  eq('Cultivate adds to the Regen value in place', tank.regen, 1 + CULTIVATE_STRENGTH);
 }
 {
-  // Bloom: dead without an active Regen; consumes it, healing per remaining turn.
+  // Bloom: dead without an active Regen; consumes it, healing per remaining tick
+  // (== the Regen value, #52).
   const g = new Game(62); g.start();
   const tank = g.tank;
   tank.hp = 5;
   const idx = giveCard(g, 'bloom');
   eq('Bloom is dead without an active Regen', g.canPlay(idx, SLOT.CENTER), 'target must have an active Regen');
-  tank.regen = 1; tank.regenTurns = 3;
+  tank.regen = 3;
   g.playCard(idx, SLOT.CENTER);
-  eq('Bloom heals 2 per remaining turn', tank.hp, 5 + BLOOM_HEAL_PER_TURN * 3);
-  eq('Bloom consumes the Regen strength', tank.regen, 0);
-  eq('Bloom consumes the Regen turns', tank.regenTurns, 0);
+  eq('Bloom heals 2 per remaining tick', tank.hp, 5 + BLOOM_HEAL_PER_TURN * 3);
+  eq('Bloom consumes the Regen', tank.regen, 0);
 }
 {
   // Font of Mana: Refresh 3 in the same status slot, with its own larger
@@ -1861,40 +1873,45 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
       .every((id) => CARD_POOL.includes(id)));
 }
 {
-  // Lifebloom end condition 1 — natural expiry: ticks 2/turn, then bursts 3.
+  // Lifebloom end condition 1 — natural expiry (#52): Regen 2 ticks 2 then 1,
+  // then bursts 3 as it decays to 0.
   const g = new Game(70); g.start();
   const tank = g.tank;
-  tank.hp = 5;
+  tank.maxHP = 100; tank.hp = 5;
   g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
   eq('Lifebloom applies Regen 2', tank.regen, 2);
-  eq('Lifebloom runs for REGEN_TURNS', tank.regenTurns, REGEN_TURNS);
   eq('Lifebloom arms its burst', tank.bloomBurst, LIFEBLOOM_BURST);
-  for (let i = 0; i < REGEN_TURNS; i++) g._startPlayerPhase(); // each ticks Regen once
-  eq('Lifebloom ticks then bursts on expiry', tank.hp, 5 + 2 * REGEN_TURNS + LIFEBLOOM_BURST);
+  for (let i = 0; i < 2; i++) g._startPlayerPhase(); // Regen 2 = exactly 2 ticks
+  eq('Lifebloom ticks (2 then 1) then bursts on expiry', tank.hp, 5 + (2 + 1) + LIFEBLOOM_BURST);
   eq('the paid burst is cleared', tank.bloomBurst, 0);
 }
 {
-  // End condition 2 — overwrite by a new Regen-slot cast pays the burst out.
+  // Casting Regen onto a Lifebloom now DEEPENS it (#52) — the burst is NOT paid
+  // out early; it rides along on the extended Regen and pays once, on expiry.
   const g = new Game(71); g.start();
   const tank = g.tank;
-  tank.hp = 5;
-  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
+  tank.maxHP = 100; tank.hp = 5;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER); // Regen 2 + burst
+  g.mp = 10;
   const hpBefore = tank.hp;
-  g.playCard(giveCard(g, 'regen'), SLOT.CENTER);
-  eq('overwrite pays the burst immediately', tank.hp, hpBefore + LIFEBLOOM_BURST);
-  eq('keep-stronger keeps Lifebloom strength', tank.regen, 2);
-  eq('no burst left pending', tank.bloomBurst, 0);
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER); // +2 -> Regen 4
+  eq('additive Regen deepens the Lifebloom', tank.regen, 4);
+  eq('the burst does NOT pay out early', tank.hp, hpBefore);
+  eq('the burst is still pending', tank.bloomBurst, LIFEBLOOM_BURST);
+  for (let i = 0; i < 4; i++) g._startPlayerPhase(); // Regen 4 = 4 ticks
+  eq('the burst pays once on the extended expiry', tank.hp, hpBefore + (4 + 3 + 2 + 1) + LIFEBLOOM_BURST);
+  eq('burst cleared after paying', tank.bloomBurst, 0);
 }
 {
-  // End condition 3 — Bloom's consume: consume heal + burst together.
+  // End condition 2 — Bloom's consume: consume heal + burst together.
   const g = new Game(72); g.start();
   const tank = g.tank;
-  tank.hp = 3;
-  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
+  tank.maxHP = 100; tank.hp = 3;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER); // Regen 2
   const hpBefore = tank.hp;
   g.playCard(giveCard(g, 'bloom'), SLOT.CENTER);
-  eq('Bloom on Lifebloom heals consume + burst', tank.hp, hpBefore + BLOOM_HEAL_PER_TURN * REGEN_TURNS + LIFEBLOOM_BURST);
-  eq('the Regen is consumed', tank.regenTurns, 0);
+  eq('Bloom on Lifebloom heals consume + burst', tank.hp, hpBefore + BLOOM_HEAL_PER_TURN * 2 + LIFEBLOOM_BURST);
+  eq('the Regen is consumed', tank.regen, 0);
   eq('the burst is spent', tank.bloomBurst, 0);
 }
 {
@@ -2454,7 +2471,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     g2.start();
     const tank2 = g2.tank;
     tank2.hp = tank2.maxHP;
-    tank2.regen = 2; tank2.regenTurns = 1;
+    tank2.regen = 1; // a one-tick Regen whose whole heal overheals
     g2._startPlayerPhase(); // the whole tick overheals
     eq('Regen-tick overheal never converts', tank2.ward, 0);
   }
@@ -2545,11 +2562,11 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     const g = relicGame(408, ['martyrsIcon']);
     g.start();
     const tank = g.tank;
-    tank.regen = 2; tank.regenTurns = 2; tank.taunt = 2;
+    tank.regen = 2; tank.taunt = 2;
     const died = g._killMember(tank);
     check('the Icon refuses the first death', !died && tank.alive);
     eq('the spared member stands at 1 HP', tank.hp, 1);
-    eq('the brush with death strips statuses', tank.regenTurns + tank.taunt, 0);
+    eq('the brush with death strips statuses', tank.regen + tank.taunt, 0);
     check('no wipe with the survivor standing', !g.allDead());
     check('the fight reports the spent Icon', g.spentRelicIds().includes('martyrsIcon'));
     const died2 = g._killMember(tank);

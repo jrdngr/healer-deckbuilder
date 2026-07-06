@@ -104,7 +104,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // EASIER across the board: F0/F1 189/198 -> 200/200, the walls softened (F2 69->80,
   // F5 38->53, F8 17->22). A KNOWN shift; the #58 balance pass re-anchors the settled
   // system. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 80, 80, 79, 53, 53, 53, 22]));
+  // #52 (2026-07-06): Regen reworked to magnitude==duration with additive stacking —
+  // the card now applies Regen 2 (heal 2 then 1, triangular) and re-casts stack, so
+  // the policy's tank-Regen sustain heals more per cast. A small EASIER nudge on the
+  // fights where members trade blows: F2/F3/F4 80/80/79 -> 81/81/80, F5/F6/F7 53 -> 54,
+  // F8 22 -> 26 (F0/F1 already 200). A KNOWN shift; the #58 balance pass re-anchors the
+  // settled system. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 81, 81, 80, 54, 54, 54, 26]));
   // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

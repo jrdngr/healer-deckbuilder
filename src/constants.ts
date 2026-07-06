@@ -570,7 +570,9 @@ export const CHARGE_MAX = 5;
 // baseline note in sim/run-sim.ts for the full numbers.
 export const POISON_BASE = 5;   // Poison strength: damage dealt per enemy turn.
 export const POISON_TURNS = 5;  // enemy turns Poison lasts
-export const REGEN_TURNS = 3;   // player phases Regen lasts
+// Regen (#52): magnitude IS duration — a member's regen is a single value R that
+// heals R then decays to R-1 each tick until it hits 0. There is no separate
+// duration constant; a Regen R runs for exactly R ticks.
 export const REFRESH_TURNS = 3; // enemy turns Refresh lasts
 export const TAUNT_TURNS = 4;
 export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defense is active
@@ -627,9 +629,9 @@ export function memberDefAt(party: PartyMemberConfig[], slot: number): MemberDef
 }
 
 // Card set phase A (#15) magnitudes.
-export const CULTIVATE_STRENGTH = 1;  // Regen strength Cultivate adds in place
-export const CULTIVATE_TURNS = 1;     // Regen turns Cultivate adds in place
-export const BLOOM_HEAL_PER_TURN = 2; // healing per remaining Regen turn Bloom consumes
+export const CULTIVATE_STRENGTH = 1;  // amount Cultivate adds to a Regen value in place
+                                      // (#52: magnitude is duration, so +1 also = +1 tick)
+export const BLOOM_HEAL_PER_TURN = 2; // healing per remaining Regen tick Bloom consumes
 
 // Card set phase B (#16) magnitudes.
 export const LIFEBLOOM_BURST = 3;     // burst heal when a Lifebloom Regen ends on a living target
@@ -705,8 +707,8 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Heal a member for 4.' },
   aoeHeal: { id: 'aoeHeal', name: 'Group Heal', cost: 3, target: 'all', heal: 2,
     desc: 'Heal all living members for 2.' },
-  regen: { id: 'regen', name: 'Regen', cost: 2, target: 'single', regen: 1,
-    desc: 'Regen 1: heal 1 HP per turn for 3 enemy turns.' },
+  regen: { id: 'regen', name: 'Regen', cost: 2, target: 'single', regen: 2,
+    desc: 'Regen +2: heal 2, then 1, decaying each turn. Adds to an existing Regen.' },
   shield: { id: 'shield', name: 'Shield', cost: 3, target: 'single',
     desc: 'Fully block the next attack instance on a member.' },
   // Resurrect reworked (#18, flaw #14): 6 MP -> 4 and the revived member comes
@@ -720,11 +722,11 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Remove Hex (the healing-reduction curse) from the party.' },
   // --- card set phase A (#15): shop-only cards on existing engine state ------
   overgrowth: { id: 'overgrowth', name: 'Overgrowth', cost: 3, target: 'all', regen: 1, noPotent: true,
-    desc: 'Regen 1 on every living member for 3 enemy turns.' },
+    desc: 'Regen +1 on every living member (decays each turn; adds to existing Regen).' },
   cultivate: { id: 'cultivate', name: 'Cultivate', cost: 1, target: 'single', needsRegen: true,
-    desc: 'Strengthen a member\'s active Regen: +1 healing and +1 turn.' },
+    desc: 'Strengthen a member\'s active Regen: +1 (heals more and lasts a turn longer).' },
   bloom: { id: 'bloom', name: 'Bloom', cost: 2, target: 'single', needsRegen: true,
-    desc: 'Consume a member\'s Regen: heal 2 per remaining turn.' },
+    desc: 'Consume a member\'s Regen: heal 2 per remaining tick.' },
   fontOfMana: { id: 'fontOfMana', name: 'Font of Mana', cost: 3, target: 'none',
     refresh: 3, refreshCap: FONT_MP_CAP, engine: true,
     desc: 'Refresh 3: restore 3 MP per turn for 3 enemy turns.' },
@@ -732,7 +734,7 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Draw 2 cards.' },
   // --- card set phase B (#16): cards with small new engine state -------------
   lifebloom: { id: 'lifebloom', name: 'Lifebloom', cost: 3, target: 'single', regen: 2,
-    desc: 'Regen 2 for 3 turns; when it ends while the target lives, burst-heal 3.' },
+    desc: 'Regen +2 (decays each turn); when it ends while the target lives, burst-heal 3.' },
   surge: { id: 'surge', name: 'Surge', cost: 2, target: 'none',
     desc: 'The next card you play this turn costs 0 MP.' },
   battleHymn: { id: 'battleHymn', name: 'Battle Hymn', cost: 1, target: 'none',
@@ -1036,7 +1038,8 @@ export interface ResolvedCard {
   noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
   noTaunt: boolean;   // Phalanx targeting gate: not the taunting member
   ability?: AbilityId; // per-member ability card (#44): fires the bound member's move
-  regenTurns: number;
+  // Regen has no separate duration (#52): `regen` is the applied magnitude, which
+  // is also its number of ticks. Lingering folds into `regen` (see resolveCard).
   refreshTurns: number;
   retain: boolean;
   upgrades: ModifierId[];
@@ -1622,7 +1625,12 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     target: base.target,
     desc: base.desc,
     heal: bump(base.heal),
-    regen: bump(base.regen),
+    // Regen magnitude IS its duration (#52), so Lingering adds to the applied
+    // amount here rather than to a separate turn count — Potent and Lingering both
+    // deepen the same value. Refresh keeps its own turn count below.
+    regen: base.regen == null
+      ? undefined
+      : base.regen + potent * MOD_POTENT_STRENGTH + lingering * MOD_LINGERING_TURNS,
     refresh: bump(base.refresh),
     draw: base.draw,
     needsRegen: base.needsRegen === true,
@@ -1633,7 +1641,6 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     noDefense: base.noDefense === true,
     noTaunt: base.noTaunt === true,
     ability: base.ability,
-    regenTurns: REGEN_TURNS + lingering * MOD_LINGERING_TURNS,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
     retain,
     upgrades: card.upgrades,
