@@ -1305,7 +1305,9 @@ export const HEALER_UPGRADES: HealerUpgradeDef[] = [
   { id: 'mana', stat: 'maxMana', amount: 1, rarity: 'common', name: '+1 Max Mana', desc: 'Raise max mana (and starting mana) by 1.' },
   // +1 Rest Regen repriced to 50g (flaw #9): it was too cheap for the sustain it buys.
   { id: 'rest', stat: 'restRegen', amount: 1, rarity: 'uncommon', name: '+1 Rest Regen', desc: 'Rest restores 1 more MP.' },
-  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', name: '+1 Passive MP', desc: `Gain 1 MP at the start of each of your turns (max +${PASSIVE_MP_CAP} per run).` },
+  // Priced at double its rarity cost (rare 75 → 150): passive MP is the strongest
+  // sustain lever, so it should be a real gold commitment.
+  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', price: 150, name: '+1 Passive MP', desc: `Gain 1 MP at the start of each of your turns (max +${PASSIVE_MP_CAP} per run).` },
   { id: 'hand', stat: 'handSize', amount: 1, rarity: 'rare', name: '+1 Hand Size', desc: 'Draw 1 more card each turn.' },
 ];
 

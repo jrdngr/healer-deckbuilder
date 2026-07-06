@@ -81,7 +81,10 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // and the win bounty scales with empty deploy seats — so the sim's small act-1
   // rosters win more gold, a richer economy. The walls re-anchored up again
   // (Gatewarden ->90, Hexweaver ->208, Devourer ->216); full-run ~22% at N=1000.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 197, 111, 110, 109, 80, 80, 80, 49]));
+  // Passive-MP upgrade repriced 75->150 (double): the buyer's strongest sustain lever
+  // now costs a real gold commitment, so fewer runs can afford it and the later walls
+  // got a touch harder — re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 197, 102, 102, 102, 73, 73, 72, 34]));
   // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
