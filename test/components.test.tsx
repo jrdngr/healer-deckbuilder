@@ -213,7 +213,7 @@ async function render(el: React.ReactElement): Promise<string> {
 }
 
 
-// --- MapScreen: choosing a path is gated behind the leaving transition ----------
+// --- MapScreen: choosing a path advances immediately (no travel animation) ------
 {
   const mapRun = new Run(21);
   mapRun.location = { kind: 'forkChoice', forkIndex: 0 };
@@ -232,14 +232,12 @@ async function render(el: React.ReactElement): Promise<string> {
   await act(async () => {
     (takes[1] as HTMLElement).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
   });
-  check('choose does NOT fire synchronously (token travels first)', chosen === null);
-  check('the canvas enters the leaving state',
-    rootEl.querySelector('.map-canvas')?.className.includes('chosen-1') === true);
-  check('further clicks are ignored while leaving',
-    (takes[0] as HTMLButtonElement).disabled && (takes[1] as HTMLButtonElement).disabled);
-  await new Promise((r) => setTimeout(r, 900));
-  await act(async () => {});
-  check('choose fires after the travel delay with the picked branch', chosen === 1, String(chosen));
+  check('choose fires synchronously with the picked branch (no travel animation)',
+    chosen === 1, String(chosen));
+  check('no leaving state is applied to the canvas',
+    rootEl.querySelector('.map-canvas')?.className.includes('leaving') === false);
+  check('no travel state is applied to the token',
+    rootEl.querySelector('.map-token')?.className.includes('travel') === false);
 }
 
 // --- MapScreen hides a Recruit node once the roster is full ---------------------

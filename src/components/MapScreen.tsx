@@ -3,16 +3,11 @@ import type { CSSProperties } from 'react';
 import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss, memberDefAt } from '../constants';
 import type { Run } from '../run';
 import { NODE_META } from './nodeMeta';
-import { getAnimSpeed } from '../settings';
 
 interface MapScreenProps {
   run: Run;
   onChoose: (branch: number) => void;
 }
-
-// How long the leaving transition plays (party token travels the chosen trail)
-// before the run actually advances. Scaled by the animation-speed setting.
-const LEAVE_MS = 780;
 
 // Column x-positions (percent of the canvas) for the two branches, and the
 // y-positions of the waypoints going down the map.
@@ -38,7 +33,6 @@ type MapStyle = CSSProperties & Record<string, string | number>;
 // one injured) aren't shown.
 export function MapScreen({ run, onChoose }: MapScreenProps) {
   const [hovered, setHovered] = useState<number | null>(null);
-  const [leaving, setLeaving] = useState<number | null>(null);
   if (run.location.kind !== 'forkChoice') return null;
   const fork = run.map[run.location.forkIndex];
   // The next fight is shared by both paths — preview its foe and rough threat
@@ -50,18 +44,9 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
   const hp = ENEMY_HP_BY_FIGHT[nextFight] ?? 0;
   const threat = boss ? '💀💀💀' : hp >= 140 ? '💀💀' : '💀';
 
-  const take = (b: number) => {
-    if (leaving !== null) return;
-    setLeaving(b);
-    const reduced = typeof matchMedia !== 'undefined'
-      && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setTimeout(() => onChoose(b), (reduced ? 120 : LEAVE_MS) * getAnimSpeed());
-  };
-
   const canvasCls = [
     'map-canvas',
-    hovered !== null && leaving === null && `hover-${hovered}`,
-    leaving !== null && `leaving chosen-${leaving}`,
+    hovered !== null && `hover-${hovered}`,
   ].filter(Boolean).join(' ');
 
   const injured = run.party
@@ -83,9 +68,9 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
             <path key={b} className={`map-path map-path-${b}`} d={d} pathLength={1} />
           ))}
         </svg>
-        <div className={`map-token${leaving !== null ? ` travel-${leaving}` : ''}`} aria-hidden="true">◉</div>
+        <div className="map-token" aria-hidden="true">◉</div>
         {fork.branches.map((branch, b) => (
-          <div key={b} className={`map-branch-group branch-${b}${leaving === b ? ' chosen' : ''}`}
+          <div key={b} className={`map-branch-group branch-${b}`}
             onMouseEnter={() => setHovered(b)} onMouseLeave={() => setHovered(null)}>
             {branch.nodes.filter((node) => run.nodeAvailable(node.type)).map((node, i) => {
               const meta = NODE_META[node.type];
@@ -104,8 +89,7 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
             <button
               className="primary map-take"
               style={{ left: `${BRANCH_X[b]}%`, top: `${TAKE_Y}%`, '--d': '460ms' } as MapStyle}
-              onClick={() => take(b)}
-              disabled={leaving !== null}
+              onClick={() => onChoose(b)}
             >
               Take this path
             </button>

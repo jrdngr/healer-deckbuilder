@@ -26,7 +26,8 @@ the next session real time.
 
 ## Progress
 
-**Open: 45–59 — the 2026-07-06 intake batch (15 issues), all Todo.** Ordered quick isolated fixes
+**Open: 46–59 — the 2026-07-06 intake batch (15 issues); #45 (remove path-selection travel
+animation) has landed, 14 remaining.** Ordered quick isolated fixes
 first, then self-contained engine rules, then draft/map structure, then the reward flow, and last
 the between-fight-healing rework (**#58**, which carries the balance pass — so it lands after every
 other balance-affecting change and its N=1000 sweep tunes the settled system); the pure-cosmetic
@@ -37,7 +38,7 @@ bullets.
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 45 | 🔲 Todo | [Remove path-selection travel animation](./issues/45-remove-path-selection-animation.md) | fix | — | intake 2026-07-06 |
+| 45 | ✅ Done | [Remove path-selection travel animation](./issues/45-remove-path-selection-animation.md) | fix | — | intake 2026-07-06 |
 | 46 | 🔲 Todo | [Fix "Continue saved run" button](./issues/46-fix-continue-saved-run.md) | fix | — | intake 2026-07-06 |
 | 47 | 🔲 Todo | [Enemy targets/telegraphs dead players](./issues/47-enemy-targets-dead-players.md) | fix | — | intake 2026-07-06 |
 | 48 | 🔲 Todo | [View-deck button in the topbar](./issues/48-topbar-deck-view-button.md) | fix | — | intake 2026-07-06 |
