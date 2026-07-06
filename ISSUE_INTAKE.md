@@ -1,6 +1,3 @@
-# Quick items to fix that don't need full issues
-
-- BALANCE FOLLOW-UP (from enemy-first): the enemy-first opening strike landed but dropped full-run winrate ~22% -> ~10.5% (Gatewarden ~61% -> ~39%). Sim gates were re-pinned to the harder numbers as a known regression. Do a proper balance pass (re-anchor ENEMY_HP_BY_FIGHT down) to pull winrates back toward the ~22% / 50-72% boss target.
 - Path selection animation makes it look like the player is skipping both nodes. Get rid of this animation entirely.
 - Remember the party member positions between fights
 - Party members should no longer fully heal between fights. They should only heal a percentage of their max HP. Let's start with 20% and do a balance pass to figure out the best number. Add back the infirmary node which allows the player to heal their party members for a price and heal injuries for a much larger price. If a party member is dead at the end of the fight, resurrect them with the normal amount of recovered HP.
