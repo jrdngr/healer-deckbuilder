@@ -96,17 +96,21 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('different seeds differ', JSON.stringify(new Run(1).map) !== JSON.stringify(new Run(2).map));
 }
 {
-  // #41: forks 0/1 (the two before the Gatewarden, F2) always offer at least one
-  // Recruit, so the act-1 roster growth is no longer a structural coin flip. Sweep
-  // many seeds; the guarantee holds every time and never breaks fork uniqueness.
-  let everyRunHasAct1Recruit = true;
+  // #56 recruiter cadence: the fork that begins each fight cycle — after the first
+  // fight (fork 0) and after each act boss (forks 2 and 5) — always contains a
+  // Recruit node, so the "who joins" beat is predictable and roster growth is no
+  // longer a structural coin flip. Sweep many seeds; every cadence fork guarantees a
+  // recruiter, and the injection never breaks fork uniqueness (checked below).
+  const cadenceForks = [0, 2, 5];
+  let everyCadenceForkHasRecruit = true;
   for (let seed = 1; seed <= 300; seed++) {
     const map = new Run(seed).map;
-    const has = [0, 1].some((fi) =>
-      map[fi].branches.some((br) => br.nodes.some((n) => n.type === 'recruit')));
-    if (!has) everyRunHasAct1Recruit = false;
+    for (const fi of cadenceForks) {
+      const has = map[fi].branches.some((br) => br.nodes.some((n) => n.type === 'recruit'));
+      if (!has) everyCadenceForkHasRecruit = false;
+    }
   }
-  check('every run offers a Recruit in an act-1 fork (0 or 1)', everyRunHasAct1Recruit);
+  check('every run guarantees a Recruit in each cadence fork (0, 2, 5)', everyCadenceForkHasRecruit);
 }
 
 // --- initial state ----------------------------------------------------------
@@ -249,13 +253,12 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       gold = run.gold;
-      // Act-1/2 bosses drop a spoils screen first (#21), then a post-boss member
-      // draft (2026-07); resolving both moves on to the fork.
+      // Act-1/2 bosses drop a spoils screen first (#21); leaving it goes straight to
+      // the fork now that the post-boss draft is gone (#56 — recruitment is the node).
       if (isActBoss(f)) {
         check(`win of boss fight ${f} -> spoils`, run.location.kind === 'spoils');
         run.skipSpoils();
-        check(`boss ${f} spoils -> post-boss draft`, run.location.kind === 'draft');
-        run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+        check(`boss ${f} spoils -> forkChoice (no post-boss draft, #56)`, run.location.kind === 'forkChoice');
       }
       check(`win of fight ${f} -> forkChoice`, run.location.kind === 'forkChoice');
       crossBranch(run, run.rng() < 0.5 ? 0 : 1);
@@ -278,8 +281,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     enrage.push(run.toBattleConfig().enemy.enrageTurn ?? -1);
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
-      if (run.location.kind === 'spoils') run.skipSpoils();
-      if (run.location.kind === 'draft') run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+      if (run.location.kind === 'spoils') run.skipSpoils(); // spoils lead straight to the fork now (#56)
       crossBranch(run);
     }
   }
@@ -688,10 +690,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     check('spoils are free', offers.every((o) => o.price === 0));
     const picked = run.pickSpoil(0);
     check('the pick lands in the relic list', picked !== null && run.hasRelic(picked));
-    eq('spoils -> post-boss draft', run.location.kind, 'draft');
-    // Cast through unknown: TS still has nodeContent narrowed to the spoils type here.
-    run.chooseDraftMember((run.nodeContent as unknown as { options: MemberId[] }).options[0]);
-    eq('post-boss draft -> forkChoice', run.location.kind, 'forkChoice');
+    eq('spoils -> forkChoice (no post-boss draft, #56)', run.location.kind, 'forkChoice');
     check('the battle config carries the relics', run.toBattleConfig().relics!.includes(picked!));
   }
   // The fight-3 spoils roll guarantees >=1 rare, across seeds.
@@ -1303,25 +1302,25 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('toBattleConfig carries the drafted identity', restored.toBattleConfig().party[1].member ?? restored.toBattleConfig().party[0].member, first);
 }
 
-// --- post-boss draft: winning an act boss offers a new member ----------------
+// --- #56: no post-boss draft — winning an act boss goes spoils -> fork -------
 {
   const run = new Run(40);
   run.beginDraft();
   run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
-  // Jump to the act-1 boss and win it: spoils first, then a member draft. (Cast so
-  // TS doesn't pin run.location to the fight literal across the mutating calls.)
+  // Jump to the act-1 boss and win it: spoils, then straight to the fork (the
+  // post-boss member draft was removed with #56). (Cast so TS doesn't pin
+  // run.location to the fight literal across the mutating calls.)
   run.location = { kind: 'fight', fightIndex: 2 } as RunLocation;
   run.winFight();
   eq('an act boss drops spoils first', run.location.kind, 'spoils');
-  run.skipSpoils();
-  eq('leaving spoils opens a post-boss draft', run.location.kind === 'draft' && run.location.post, 'boss');
-  check('the post-boss draft offers only unowned members', run.nodeContent?.type === 'draft'
-    && run.nodeContent.options.length > 0
-    && run.nodeContent.options.every((id) => !run.roster.some((p) => p.member === id)));
   const before = run.roster.length;
-  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
-  eq('choosing adds to the roster', run.roster.length, before + 1);
-  eq('a post-boss draft leads to the fork', run.location.kind, 'forkChoice');
+  run.skipSpoils();
+  eq('leaving spoils goes straight to the fork (no draft)', run.location.kind, 'forkChoice');
+  eq('winning a boss no longer auto-adds a member', run.roster.length, before);
+  // A recruiter fork is guaranteed after each boss (fork 2 here), so the roster can
+  // still grow — just through the Recruit node, not an auto-draft.
+  check('the post-boss fork (2) guarantees a recruiter path',
+    run.map[2].branches.some((br) => br.nodes.some((n) => n.type === 'recruit')));
 }
 
 // --- Recruit node: add one member, once; hidden when the roster is full -------

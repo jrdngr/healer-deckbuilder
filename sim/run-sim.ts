@@ -12,7 +12,8 @@
 // BASELINE
 //
 // CURRENT (2026-07 roster campaign): the sim plays the real campaign — draft a solo
-// starter, build the roster (post-boss drafts + Recruit nodes), deploy the best three
+// starter, build the roster via Recruit nodes (guaranteed after fight 1 and each boss,
+// #56; the post-boss auto-draft is gone), deploy the best three
 // each fight. Enemy HP re-anchored down for the under-strength party (act 1 is fought
 // SOLO/duo). N=200: full-run ~22%; per-fight ~98/94/61/100/94/76/92/95/65%. Normals
 // clear cleanly; the act bosses are the walls, sharpest at the under-strength
@@ -289,7 +290,7 @@ function fightSeed(runSeed: number, fightIndex: number): number {
 // `setup` (optional) mutates the fresh Run before it begins — the balance-gate
 // hook for forcing a relic/curse into every run (#22's per-relic gates).
 // Play one full run of the roster campaign: draft a solo starter, build the roster
-// (post-boss drafts + Recruit nodes), and deploy the best three each fight.
+// via Recruit nodes (guaranteed after fight 1 and each boss, #56), deploy the best three each fight.
 export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutcome {
   const run = new Run(seed);
   setup?.(run);

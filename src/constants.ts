@@ -179,7 +179,7 @@ export const CONVENTIONAL_STRIKERS: Set<MemberId> = new Set<MemberId>(['ranger',
 // The player collects members one at a time — a pick-one draft at run start and
 // after each boss, plus occasional Recruit map nodes — and deploys up to three per
 // fight. These set how many members each such offer shows.
-export const DRAFT_OFFER_SIZE = 3;   // members shown by a start/post-boss draft (pick one)
+export const DRAFT_OFFER_SIZE = 3;   // members shown by the start draft (pick one)
 export const RECRUIT_OFFER_SIZE = 3; // members shown by a Recruit node (pick one)
 // The start draft (#55) samples three heroes from the full DRAFT_POOL — any hero can
 // open the run, not a fixed striker trio. Fight 0 is still a forced solo; the solo

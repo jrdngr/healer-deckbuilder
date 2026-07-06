@@ -22,7 +22,7 @@ function progressLabel(run: Run): string {
   if (run.status === 'lost') return 'Run over';
   const loc = run.location;
   if (loc.kind === 'start') return 'The journey begins';
-  if (loc.kind === 'draft') return loc.post === 'start' ? 'Recruit your first hero' : 'A new hero joins';
+  if (loc.kind === 'draft') return 'Recruit your first hero';
   if (loc.kind === 'deploy') return 'Deploy your party';
   if (loc.kind === 'fight') {
     const act = actOfFight(loc.fightIndex) + 1;

@@ -121,7 +121,15 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // HARDER nudge, mostly on the early solo/wall fights: F1 200 -> 199, F2/F3/F4 81 -> 77,
   // F5/F6 56 -> 57, F8 26 -> 21 (F0 stays 200; F7 stays 56). A KNOWN shift; the #58
   // balance pass re-anchors the settled system. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 77, 77, 77, 57, 57, 56, 21]));
+  // #56 (2026-07-06): recruiter cadence — the post-boss auto-draft is removed and a
+  // Recruit node is guaranteed in the fork that begins each cycle (after fight 1, and
+  // after each boss). The roster now grows only if the player ROUTES to the recruiter,
+  // and the changed map-injection RNG reshuffles the whole downstream stream, so the
+  // per-fight vector moved broadly: F0/F1 200/199 -> 197/194, F2/F3 77 -> 97, F4 77 ->
+  // 94, F5/F6 57 -> 62, F7 56 -> 61, F8 21 -> 25 (the guaranteed post-boss recruiters
+  // let more seeds field a full three into the later walls). A KNOWN shift; the #58
+  // balance pass re-anchors the settled system. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([197, 194, 97, 97, 94, 62, 62, 61, 25]));
   // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

@@ -43,10 +43,10 @@ export type RunStatus = 'playing' | 'won' | 'lost';
 // from which the player manually enters the first fight.
 export type RunLocation =
   | { kind: 'start' }
-  // Pick-one member draft (2026-07): at run start ('start') and after each boss
-  // ('boss'). fightIndex is the fight the draft leads back toward (0 for start; the
-  // boss fight for a post-boss draft, whose fork is fightIndex).
-  | { kind: 'draft'; post: 'start' | 'boss'; fightIndex: number }
+  // Pick-one member draft: at run start only ('start'). The post-boss draft was
+  // removed with #56 (recruitment now lives solely in the guaranteed Recruit node),
+  // so `post` is always 'start'; fightIndex is the fight the draft leads into (0).
+  | { kind: 'draft'; post: 'start'; fightIndex: number }
   | { kind: 'deploy'; fightIndex: number } // pre-fight: choose & seat members (C4)
   | { kind: 'fight'; fightIndex: number }
   | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
@@ -75,8 +75,11 @@ export type NodeContent =
 // v7: branch hub location + per-branch cached node content;
 // v8: collectible roster + per-fight deployment, replacing the fixed 3-member party;
 // v9: single mode — difficulty removed (the roster campaign is the only way to play);
-// v10: graveyard of permanently-dead members (#40), excluded from future offers.)
-export const RUN_SAVE_VERSION = 10;
+// v10: graveyard of permanently-dead members (#40), excluded from future offers;
+// v11: post-boss draft removed (#56) — draft.post is 'start'-only and the recruiter
+// cadence guarantees a Recruit node after fight 1 and each boss, so old saves that
+// hold a post:'boss' draft location or a pre-cadence map are discarded.)
+export const RUN_SAVE_VERSION = 11;
 
 export interface RunSnapshot {
   version: number;
@@ -263,17 +266,15 @@ export class Run {
     this.nodeContent = { type: 'draft', options: this._rollMemberOffer(DRAFT_POOL, DRAFT_OFFER_SIZE) };
   }
 
-  // Take the drafted member into the roster and move on: the start draft leads into
-  // deploying fight 0; a post-boss draft returns to the boss's fork. Ignores an
-  // unknown / already-owned id so a crude UI can't wedge the run.
+  // Take the drafted member into the roster and move on into deploying fight 0. Only
+  // the start draft exists now (#56 removed the post-boss draft). Ignores an unknown /
+  // already-owned id so a crude UI can't wedge the run.
   chooseDraftMember(id: MemberId): void {
     if (this.location.kind !== 'draft' || this.nodeContent?.type !== 'draft') return;
     if (!this.nodeContent.options.includes(id) || this.roster.some((p) => p.member === id)) return;
-    const { post, fightIndex } = this.location;
     this.roster.push(partyFromMembers([id])[0]);
     this.nodeContent = null;
-    if (post === 'start') this._enterDeploy(0);
-    else { this.location = { kind: 'forkChoice', forkIndex: fightIndex }; }
+    this._enterDeploy(0);
   }
 
   // Full member roster (unique by id). Members carry per-instance stats, injuries,
@@ -355,16 +356,17 @@ export class Run {
       const idx = Math.floor(this.rng() * branch.nodes.length);
       branch.nodes[idx] = { type: 'reliquary' };
     }
-    // Guaranteed act-1 Recruit (#41): forks 0/1 are the two forks before the
-    // Gatewarden (F2). Whether a Recruit appeared there was structural RNG that
-    // swung the boss ~25pp (solo 72% -> duo 97%); guarantee one so the "whether"
-    // coin flip is gone and only the "which fork" choice remains (the fork
-    // preview lets the player route to it). Skip if a natural roll already placed
-    // one in forks 0/1, so we never duplicate a node type within a fork.
-    const act1HasRecruit = [0, 1].some((fi) =>
-      forks[fi].branches.some((br) => br.nodes.some((n) => n.type === 'recruit')));
-    if (!act1HasRecruit) {
-      const fork = forks[Math.floor(this.rng() * 2)]; // fork 0 or 1
+    // Recruiter cadence (#56): recruitment now lives solely in the Recruit node
+    // (the post-boss draft is gone), so guarantee a recruiter in the fork that
+    // begins each fight cycle — after the first fight (fork 0) and after each act
+    // boss (the boss's own fork). A full roster still HIDES the offer at runtime
+    // (nodeAvailable), so this is a structural guarantee, not a forced pick. Skip a
+    // fork that already rolled a Recruit so a fork never holds two of the same type.
+    const recruiterForks = [0]; // after the first fight (fork 0 leads into fight 1)
+    for (let fi = 0; fi < FORK_COUNT; fi++) if (isActBoss(fi)) recruiterForks.push(fi);
+    for (const fi of recruiterForks) {
+      const fork = forks[fi];
+      if (fork.branches.some((br) => br.nodes.some((n) => n.type === 'recruit'))) continue;
       const branch = fork.branches[Math.floor(this.rng() * fork.branches.length)];
       const idx = Math.floor(this.rng() * branch.nodes.length);
       branch.nodes[idx] = { type: 'recruit' };
@@ -403,8 +405,8 @@ export class Run {
     switch (location.kind) {
       case 'deploy': return location.fightIndex;
       case 'fight': return location.fightIndex;
-      // A start draft leads into fight 0; a post-boss draft (like spoils) into the next fight.
-      case 'draft': return location.post === 'start' ? 0 : Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
+      // The draft is start-only now (#56): it always leads into fight 0.
+      case 'draft': return 0;
       case 'spoils': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'branch': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
@@ -516,19 +518,12 @@ export class Run {
     this.nodeContent = null;
   }
 
-  // Leave the spoils screen (with or without a pick). Every act boss that drops
-  // spoils (F2, F5) is followed by a pick-one member draft (2026-07) before the
-  // next fork — unless the roster already holds everyone, in which case skip it.
+  // Leave the spoils screen (with or without a pick) straight on to the fork. The
+  // post-boss member draft was removed with #56 — recruitment now lives solely in the
+  // Recruit node, and the map guarantees a recruiter fork after each boss.
   _leaveSpoils(): void {
     if (this.location.kind !== 'spoils') return;
-    const fi = this.location.fightIndex;
-    const pool = this.availableMembers();
-    if (pool.length > 0) {
-      this.location = { kind: 'draft', post: 'boss', fightIndex: fi };
-      this.nodeContent = { type: 'draft', options: this._rollMemberOffer(pool, DRAFT_OFFER_SIZE) };
-      return;
-    }
-    this.location = { kind: 'forkChoice', forkIndex: fi };
+    this.location = { kind: 'forkChoice', forkIndex: this.location.fightIndex };
     this.nodeContent = null;
   }
 

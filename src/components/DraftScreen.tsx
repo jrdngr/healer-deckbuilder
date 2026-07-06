@@ -26,22 +26,20 @@ interface DraftScreenProps {
   act: RunAct;
 }
 
-// Pick-one member draft (2026-07): at run start (a forced solo — choose your carry)
-// and after each boss (add to the roster). The player deploys their roster per fight.
+// Pick-one member draft: at run start only (a forced solo — choose your carry). The
+// post-boss draft was removed with #56; later heroes join via the Recruit node, which
+// the map now guarantees after the first fight and after each boss. Deploy per fight.
 export function DraftScreen({ run, act }: DraftScreenProps) {
   if (run.location.kind !== 'draft' || run.nodeContent?.type !== 'draft') return null;
   const options = run.nodeContent.options;
-  const isStart = run.location.post === 'start';
   const rosterNames = run.roster.map((p) => (p.member ? MEMBER_POOL[p.member].name : null)).filter(Boolean);
 
   return (
     <main className="shop-screen draft-screen">
       <header className="shop-head">
         <div>
-          <h2>{isStart ? 'Choose your starting hero' : 'A new hero joins your roster'}</h2>
-          <p>{isStart
-            ? 'Pick one of three heroes drawn from the full roster to open your run. Your first battle is a solo; more heroes join after each boss.'
-            : 'Pick one hero to add to your roster.'}</p>
+          <h2>Choose your starting hero</h2>
+          <p>Pick one of three heroes drawn from the full roster to open your run. Your first battle is a solo; more heroes join at the recruiter after your first fight and after each boss.</p>
         </div>
       </header>
 

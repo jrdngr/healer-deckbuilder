@@ -32,12 +32,12 @@ interface RunResult {
 
 interface Options {
   forceStarter?: MemberId; // choose this member at the start draft instead of the policy
-  ban?: MemberId[];        // members excluded from every post-boss draft and Recruit offer
+  ban?: MemberId[];        // members excluded from the start draft and every Recruit offer
 }
 
 // One full campaign run. Mirrors run-sim's runSingleRun, with two overrides: a forced
 // starter, and a banned set (seeded into the graveyard so availableMembers — which
-// every post-boss draft and Recruit roll keys on — never offers them).
+// the start draft and every Recruit roll keys on — never offers them).
 function runCampaign(seed: number, opts: Options = {}): RunResult {
   const run = new Run(seed);
   const ban = opts.ban ?? [];
