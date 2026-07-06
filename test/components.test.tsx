@@ -19,7 +19,7 @@ import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen
 import { Actions } from '../src/components/Actions';
 import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
-import { MemberCard } from '../src/components/MemberCard';
+import { MemberCard, injuryBadges } from '../src/components/MemberCard';
 import { Topbar } from '../src/components/Topbar';
 import { MapScreen } from '../src/components/MapScreen';
 import { BranchScreen } from '../src/components/BranchScreen';
@@ -96,6 +96,19 @@ async function render(el: React.ReactElement): Promise<string> {
   check('Enter does nothing on an ineligible card', clicks === 0, `clicks=${clicks}`);
 }
 
+// --- injuryBadges: one named descriptor per scar, with its own penalty (#49) ----
+{
+  check('no scars → no badges', injuryBadges(0).length === 0);
+  const two = injuryBadges(2);
+  check('two scars → two badges', two.length === 2, String(two.length));
+  check('1st scar is Cracked (Max HP)', two[0].name === 'Cracked' && two[0].detail.includes('Max HP'), JSON.stringify(two[0]));
+  check('2nd scar is Weakened (damage)', two[1].name === 'Weakened' && two[1].detail.includes('damage'), JSON.stringify(two[1]));
+  const three = injuryBadges(3);
+  check('3rd scar is Broken (ability)', three[2].name === 'Broken' && three[2].detail.includes('ability'), JSON.stringify(three[2]));
+  check('every scar detail names the Infirmary', injuryBadges(4).every((b) => b.detail.includes('Infirmary')));
+  check('4th scar is Shattered', injuryBadges(4)[3].name === 'Shattered', JSON.stringify(injuryBadges(4)[3]));
+}
+
 // --- MemberCard surfaces a member's scars (DR1) --------------------------------
 {
   const cfg = defaultBattleConfig();
@@ -106,14 +119,26 @@ async function render(el: React.ReactElement): Promise<string> {
     <MemberCard member={injured} displayHp={injured.hp} displayDead={false} react={null} mageCharge={0} liveDamage={injured.damage} berserkerBands={null}
       targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
   );
-  check('MemberCard shows the injury badge with the scar count', text.includes('Injured 2'), text);
+  // #49: each scar is its own named badge (Cracked, Weakened, …), not a single count pill.
+  check('MemberCard shows a badge per scar, named by tier', text.includes('Cracked') && text.includes('Weakened'), text);
+  check('MemberCard no longer shows the old "Injured N" count pill', !text.includes('Injured'), text);
+  {
+    const injBadges = rootEl.querySelectorAll('.badge.injury');
+    check('MemberCard renders one injury badge per scar', injBadges.length === 2, String(injBadges.length));
+    // Hover detail: the scar's own penalty and where it heals.
+    const titles = Array.from(injBadges).map((b) => b.getAttribute('title') ?? '');
+    check('Cracked badge details its Max HP penalty', titles.some((t) => t.includes('Cracked') && t.includes('Max HP')), titles.join(' | '));
+    check('Weakened badge details its damage penalty', titles.some((t) => t.includes('Weakened') && t.includes('damage')), titles.join(' | '));
+    check('injury badge tooltip points at the Infirmary', titles.every((t) => t.includes('Infirmary')), titles.join(' | '));
+  }
 
   const whole = game.members[1]; // tank, unscarred
   const wholeText = await render(
     <MemberCard member={whole} displayHp={whole.hp} displayDead={false} react={null} mageCharge={0} liveDamage={whole.damage} berserkerBands={null}
       targetedByEnemy={false} validTarget={false} onClick={() => {}} />,
   );
-  check('an unscarred member shows no injury badge', !wholeText.includes('Injured'), wholeText);
+  check('an unscarred member shows no injury badge',
+    !wholeText.includes('Cracked') && rootEl.querySelectorAll('.badge.injury').length === 0, wholeText);
 }
 
 // --- DraftScreen (pick-one) surfaces the offered heroes ------------------------

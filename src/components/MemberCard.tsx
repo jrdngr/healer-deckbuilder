@@ -14,13 +14,26 @@ const REACT_MS: Record<MemberReactKind, number> = {
 };
 const REACT_CLASSES = ['react-hit', 'react-heal', 'react-death', 'react-block', 'react-lunge'];
 
-// One-line summary of the stat penalty a member's scars currently impose (DR1).
-export function injuryPenaltyText(injuries: number): string {
-  const parts: string[] = [];
-  if (injuryMaxHPPenalty(injuries)) parts.push(`Max HP −${injuryMaxHPPenalty(injuries)}`);
-  if (injuryDamagePenalty(injuries)) parts.push(`damage −${injuryDamagePenalty(injuries)}`);
-  if (injuryAbilityPenalty(injuries)) parts.push(`ability −${injuryAbilityPenalty(injuries)}`);
-  return parts.join(', ');
+// Per-scar badge descriptors: one entry per scar a member carries, oldest first.
+// Each names the scar tier (Cracked / Weakened / Broken / Shattered) and spells out
+// the specific penalty THAT scar added — mirroring the buff/debuff pills, one pill
+// per status (#49). The penalty tables are cumulative-by-tier, so a tier's own cost
+// is its increment over the previous tier. Extracted so the label/detail is unit-testable.
+export function injuryBadges(injuries: number): { name: string; detail: string }[] {
+  const badges: { name: string; detail: string }[] = [];
+  for (let tier = 1; tier <= injuries; tier++) {
+    const name = INJURY_NAMES[Math.min(tier - 1, INJURY_NAMES.length - 1)];
+    const parts: string[] = [];
+    const dHp = injuryMaxHPPenalty(tier) - injuryMaxHPPenalty(tier - 1);
+    const dDmg = injuryDamagePenalty(tier) - injuryDamagePenalty(tier - 1);
+    const dAbil = injuryAbilityPenalty(tier) - injuryAbilityPenalty(tier - 1);
+    if (dHp) parts.push(`Max HP −${dHp}`);
+    if (dDmg) parts.push(`damage −${dDmg}`);
+    if (dAbil) parts.push(`ability −${dAbil}`);
+    const penalty = parts.length ? parts.join(', ') : 'takes this member out of the run';
+    badges.push({ name, detail: `${penalty}. Heals at an Infirmary.` });
+  }
+  return badges;
 }
 
 interface MemberCardProps {
@@ -131,7 +144,9 @@ export function MemberCard({
         {m.regen > 0 && <span className="badge regen" title={`Regen — heals ${m.regen} at the start of each of your turns for ${m.regenTurns} more turn(s).`}>♻ Regen {m.regen}</span>}
         {m.defense > 0 && <span className="badge defense" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}>🪖 Def {m.defenseAmount}·{m.defense}t</span>}
         {m.taunt > 0 && <span className="badge taunt" title={`Taunt — aimed attacks funnel onto this member for ${m.taunt} more enemy turn(s).`}>⚔ Taunt {m.taunt}</span>}
-        {m.injuries > 0 && <span className="badge injury" title={`Injuries — ${INJURY_NAMES.slice(0, m.injuries).join(', ')} (${injuryPenaltyText(m.injuries)}). Heal at an Infirmary.`}>🩹 Injured {m.injuries}</span>}
+        {injuryBadges(m.injuries).map((inj, i) => (
+          <span key={`injury-${i}`} className="badge injury" title={`${inj.name} — ${inj.detail}`}>🩹 {inj.name}</span>
+        ))}
         {m.boarHp > 0 && <span className="badge shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}>🐗 Boar {m.boarHp}·{m.boarTurns}t</span>}
       </div>
       {m.id === 'mage' && <div className="charge">⚡ Charge {mageCharge}/{CHARGE_MAX}</div>}

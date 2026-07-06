@@ -28,7 +28,8 @@ the next session real time.
 
 **Open: 49–59 — the 2026-07-06 intake batch (15 issues); #45 (remove path-selection travel
 animation), #46 (fix the "Continue saved run" button), #47 (enemy targets/telegraphs dead
-players) and #48 (view-deck button in the topbar) have landed, 11 remaining.** Ordered quick isolated fixes
+players) #48 (view-deck button in the topbar) and #49 (injury badges on party members) have landed, 10
+remaining.** Ordered quick isolated fixes
 first, then self-contained engine rules, then draft/map structure, then the reward flow, and last
 the between-fight-healing rework (**#58**, which carries the balance pass — so it lands after every
 other balance-affecting change and its N=1000 sweep tunes the settled system); the pure-cosmetic
@@ -43,7 +44,7 @@ bullets.
 | 46 | ✅ Done | [Fix "Continue saved run" button](./issues/46-fix-continue-saved-run.md) | fix | — | intake 2026-07-06 |
 | 47 | ✅ Done | [Enemy targets/telegraphs dead players](./issues/47-enemy-targets-dead-players.md) | fix | — | intake 2026-07-06 |
 | 48 | ✅ Done | [View-deck button in the topbar](./issues/48-topbar-deck-view-button.md) | fix | — | intake 2026-07-06 |
-| 49 | 🔲 Todo | [Injury badges on party members](./issues/49-injury-badges-on-members.md) | fix | — | intake 2026-07-06 |
+| 49 | ✅ Done | [Injury badges on party members](./issues/49-injury-badges-on-members.md) | fix | — | intake 2026-07-06 |
 | 50 | 🔲 Todo | [Remember party positions between fights](./issues/50-remember-party-positions.md) | fix | — | intake 2026-07-06 |
 | 51 | 🔲 Todo | [Replace the starting deck with the heal-only six](./issues/51-starting-deck-composition.md) | rules | — | intake 2026-07-06 |
 | 52 | 🔲 Todo | [Regen rework: magnitude == duration](./issues/52-regen-magnitude-duration-rework.md) | rules | — | intake 2026-07-06 |
