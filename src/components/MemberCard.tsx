@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import {
   CHARGE_MAX, BERSERKER_BAND_BONUS,
-  INJURY_NAMES, MEMBER_ABILITY_FLAVOR, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
+  INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
 import type { Member } from '../engine';
 import type { MemberReactKind } from '../animations';
@@ -140,7 +140,6 @@ export function MemberCard({
           🔥 {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg
         </div>
       )}
-      <div className="ability">{MEMBER_ABILITY_FLAVOR[m.id]}</div>
     </div>
   );
 }
