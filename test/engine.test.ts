@@ -660,6 +660,105 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('tank still takes its hit despite ally whiff', tank.hp, before - 3);
 }
 
+// --- #47: dead-target telegraphs re-point instead of whiffing on a corpse ----
+{
+  // A single-target attack whose SOLE target has died re-points to a living
+  // member: the preview shows that living member, and the applied hit matches it
+  // (no wasted swing on a corpse).
+  const g = new Game(31);
+  g.start();
+  g._killMember(g.members[SLOT.LEFT]);
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: 2 };
+  const lines = g.attackTargets();
+  eq('dead single re-points to one living line', lines.length, 1);
+  check('re-pointed line lands on a living member', g.members[lines[0].slot].alive);
+  const spec = lines[0];
+  const target = g.members[spec.slot];
+  const before = target.hp;
+  g._resolveAttack();
+  eq('#47 single: applied equals the re-pointed preview', before - target.hp, spec.damage);
+  check('#47 single: no whiff logged (a living target existed)',
+    !g.log.some((l) => l.kind === 'whiff'));
+}
+{
+  // A two-target swing whose primary died drops onto the living secondary — the
+  // preview and the resolution agree on exactly that one slot.
+  const g = new Game(32);
+  g.start();
+  g._killMember(g.members[SLOT.CENTER]);
+  g.telegraph = { type: 'two', hidden: false, damage: 3, targets: [SLOT.CENTER, SLOT.LEFT], enraged: false, forTurn: 2 };
+  const lines = g.attackTargets();
+  eq('#47 two-target with dead primary shows only the living slot', lines.length, 1);
+  eq('#47 surviving slot is the left member', lines[0].slot, SLOT.LEFT);
+  const left = g.members[SLOT.LEFT];
+  const before = left.hp;
+  g._resolveAttack();
+  eq('#47 two-target: applied equals preview on the surviving slot', before - left.hp, lines[0].damage);
+}
+{
+  // Taunt retarget onto a slot whose telegraphed neighbour is dead: the stored
+  // telegraph re-points, and preview == applied for the funnelled hit.
+  const g = new Game(33);
+  g.start();
+  g._killMember(g.members[SLOT.LEFT]);
+  const tank = g.members[SLOT.CENTER];
+  tank.taunt = TAUNT_TURNS;
+  g.telegraph = { type: 'two', hidden: false, damage: 3, targets: [SLOT.RIGHT, SLOT.LEFT], enraged: false, forTurn: 2 };
+  g._retargetTelegraphTo(tank.slot); // funnel onto the taunter
+  const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
+  check('#47 taunt retarget previews the taunter', preview.has(SLOT.CENTER));
+  check('#47 taunt retarget never previews the dead slot', !preview.has(SLOT.LEFT));
+  const hpBefore = g.members.map((m) => m.hp);
+  g._resolveAttack();
+  let mismatches = 0;
+  for (const m of g.members) {
+    const taken = hpBefore[m.slot] - m.hp;
+    if (taken === 0) continue;
+    if (taken !== preview.get(m.slot)) mismatches++;
+  }
+  eq('#47 taunt retarget: preview == applied (no mismatches)', mismatches, 0);
+}
+{
+  // PROPERTY (#47): preview == applied across randomized turns that kill members
+  // mid-run, so a stored telegraph can point at a slot that has since died. Some
+  // seeds also stand a Taunt, exercising the retarget path.
+  let checked = 0;
+  let mismatches = 0;
+  let deadTargetTurns = 0; // turns where the telegraph named at least one dead slot
+  for (let seed = 300; seed < 380; seed++) {
+    const g = new Game(seed);
+    g.start();
+    // Deterministically kill some members off the game's own rng, then top the
+    // survivors up so a kill's HP floor can't mask the comparison.
+    for (const m of g.members) {
+      if (g.rng() < 0.4) g._killMember(m);
+    }
+    if (g.allDead()) continue; // nothing left to compare
+    for (const m of g.members) if (m.alive) m.hp = m.maxHP;
+    if (g.livingMembers().some((m) => g.rng() < 0.5)) {
+      const t = g.livingMembers()[0];
+      t.taunt = TAUNT_TURNS;
+      if (g._standingTelegraphRedirectable(t.slot)) g._retargetTelegraphTo(t.slot);
+    }
+    const t = g.telegraph;
+    if (t && !t.hidden && !t.cast && t.targets.some((s) => !g.members[s]?.alive)) deadTargetTurns++;
+    const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
+    const hpBefore = g.members.map((m) => m.hp);
+    g._runEnemyPhase();
+    for (const m of g.members) {
+      const taken = hpBefore[m.slot] - m.hp;
+      if (taken === 0) continue; // not struck (or fully mitigated) — nothing to compare
+      checked++;
+      if (taken !== preview.get(m.slot)) mismatches++;
+    }
+  }
+  check('#47 property: preview == applied with mid-turn deaths (no mismatches)', mismatches === 0,
+    `${mismatches} mismatches`);
+  check('#47 property: exercised real hits', checked > 20, `${checked} hits checked`);
+  check('#47 property: exercised telegraphs aimed at dead slots', deadTargetTurns > 3,
+    `${deadTargetTurns} dead-target turns`);
+}
+
 // --- heal cannot overheal --------------------------------------------------
 {
   const g = new Game(14);

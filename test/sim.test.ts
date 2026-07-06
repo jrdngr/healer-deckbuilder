@@ -91,7 +91,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // the walls sharper (Gatewarden ~61% -> ~39%). Re-pinned on the new observed numbers
   // as a KNOWN regression — a dedicated balance pass (re-anchoring ENEMY_HP_BY_FIGHT)
   // is deferred, as the maintainer flagged the balance fix as separate work.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 189, 73, 73, 72, 42, 40, 40, 21]));
+  // #47 (2026-07-06): the enemy no longer whiffs an aimed attack onto a corpse — a
+  // telegraph pointing at a slot that has since died re-points to the nearest living
+  // member (and a two-target drops its dead half onto the survivor). That lands hits
+  // that previously wasted themselves, so the boss fights (where members die mid-fight)
+  // got a touch harder: F2/F3/F4 73/73/72 -> 69/69/67, F5/F6/F7 42/40/40 -> 38/36/36,
+  // F8 21 -> 17. The normals (F0/F1) are unchanged (nobody dies to re-point onto).
+  // Re-pinned on the new observed numbers; the balance re-anchor remains deferred.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 189, 69, 69, 67, 38, 36, 36, 17]));
   // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

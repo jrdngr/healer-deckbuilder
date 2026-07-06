@@ -518,10 +518,53 @@ export class Game {
     if (type === 'single' || type === 'hidden' || type === 'heavy') return [primary];
     if (type === 'aoe' || type === 'sweep') return [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT];
     // two-target: primary + one adjacent. center -> random edge; edge -> center.
+    // Prefer a LIVING neighbour so the second hit isn't spent on a corpse (#47) —
+    // but always consume the rng coin the same way (only the fallback differs), so
+    // the telegraph stream stays deterministic across seeds.
     let second: Slot;
-    if (primary === SLOT.CENTER) second = this.rng() < 0.5 ? SLOT.LEFT : SLOT.RIGHT;
-    else second = SLOT.CENTER;
+    if (primary === SLOT.CENTER) {
+      const coin = this.rng() < 0.5 ? SLOT.LEFT : SLOT.RIGHT;
+      const other = coin === SLOT.LEFT ? SLOT.RIGHT : SLOT.LEFT;
+      // Keep the coin unless it landed on a dead edge while the other edge lives.
+      second = (this.members[coin]?.alive || !this.members[other]?.alive) ? coin : other;
+    } else {
+      second = SLOT.CENTER;
+      // Center down but the far edge lives: swing across rather than at the corpse.
+      if (!this.members[SLOT.CENTER]?.alive) {
+        const far = primary === SLOT.LEFT ? SLOT.RIGHT : SLOT.LEFT;
+        if (this.members[far]?.alive) second = far;
+      }
+    }
     return [primary, second];
+  }
+
+  // The nearest LIVING slot to `from` (ties broken toward the lower slot index).
+  // Falls back to `from` when the party is wiped (callers guard that case). Pure,
+  // deterministic — no rng — so the preview and the resolution agree exactly.
+  _nearestLivingSlot(from: Slot): Slot {
+    const living = this.livingMembers();
+    if (living.length === 0) return from;
+    let best = living[0];
+    for (const m of living) {
+      const d = Math.abs(m.slot - from), bd = Math.abs(best.slot - from);
+      if (d < bd || (d === bd && m.slot < best.slot)) best = m;
+    }
+    return best.slot;
+  }
+
+  // The living slots a (revealed) telegraph will ACTUALLY strike, resolved at call
+  // time. Single source of truth for both the preview (attackTargets) and the
+  // application (_resolveAttack), so the two can never diverge once a target has
+  // died mid-turn or a Taunt has retargeted (#47). Dead targets are dropped; an
+  // aimed attack whose entire target set has died is re-pointed to the nearest
+  // living member, so the enemy never wastes a whole swing whiffing on a corpse.
+  // A no-target telegraph (a 'cast') strikes nothing.
+  _resolvedTargets(t: Telegraph): Slot[] {
+    if (t.targets.length === 0) return [];
+    const living = t.targets.filter((slot) => this.members[slot]?.alive);
+    if (living.length > 0) return living;
+    if (this.livingMembers().length === 0) return []; // party wiped — nothing to hit
+    return [this._nearestLivingSlot(t.targets[0])];
   }
 
   // The rotation the enemy is currently cycling. A phase transition (#14) swaps
@@ -621,8 +664,9 @@ export class Game {
         { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: true }
       ));
     }
-    return t.targets
-      .filter((slot) => this.members[slot]?.alive)
+    // Resolve targets through the shared helper (#47), so the preview lines match
+    // the slots _resolveAttack will actually strike after a mid-turn death/retarget.
+    return this._resolvedTargets(t)
       .map((slot): AttackSpec => {
         const m = this.members[slot];
         // The preview runs the same Defense -> Brace -> Shield pipeline the
@@ -1131,9 +1175,13 @@ export class Game {
       : t.hidden ? 'Hidden attack' : t.type === 'two' ? 'Two-target attack'
       : t.type === 'aoe' ? 'AoE attack' : t.type === 'heavy' ? 'Heavy attack'
       : t.type === 'sweep' ? 'Sweeping attack' : 'Attack';
-    for (const slot of t.targets) {
+    // Strike exactly the slots the preview drew (#47): the shared resolver drops
+    // dead targets and re-points a fully-dead aimed attack onto a living member,
+    // so applied damage is bit-equal to attackTargets() and no swing is spent on a
+    // corpse while a valid target lives.
+    for (const slot of this._resolvedTargets(t)) {
       const m = this.members[slot];
-      if (!m || !m.alive) {
+      if (!m || !m.alive) { // defensive — _resolvedTargets only returns living slots
         this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
         this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden, attackType: t.type });
         continue;
