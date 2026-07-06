@@ -2,7 +2,7 @@
 // Run instance lives in a ref, and a tick reducer forces a re-render after each
 // mutation. Screens read run state directly and call `act` with a mutation.
 import { useCallback, useReducer, useRef } from 'react';
-import { Run, RUN_SAVE_VERSION } from './run';
+import { Run } from './run';
 import type { RunSnapshot } from './run';
 import { loadStats, saveStats, recordRunEnd } from './stats';
 
@@ -14,14 +14,25 @@ function randomSeed(): number {
 // between-fight/node state, so writing it after every mutation is boundary-safe.
 const SAVE_KEY = 'healer-deckbuilder-save-v1';
 
+// Read the stored snapshot, but only surface one we can actually resume (#46):
+// Run.tryFromJSON rejects a wrong-version or corrupt/truncated snapshot without
+// throwing, so the Continue button never appears for a save that would crash on
+// resume (older strict `version ===` gate let a same-version-but-malformed save
+// through, so the button showed and clicking it was a silent no-op).
 function loadSnapshot(): RunSnapshot | null {
   try {
     if (typeof localStorage === 'undefined') return null;
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const snap = JSON.parse(raw) as RunSnapshot;
-    return snap && snap.version === RUN_SAVE_VERSION ? snap : null;
+    return Run.tryFromJSON(snap) !== null ? snap : null;
   } catch { return null; }
+}
+
+function clearSave(): void {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.removeItem(SAVE_KEY);
+  } catch { /* storage unavailable — nothing to clear */ }
 }
 
 function saveRun(run: Run): void {
@@ -89,10 +100,20 @@ export function useRun(initialSeed?: number): RunController {
 
   const continueRun = useCallback((): number | null => {
     const snap = loadSnapshot();
-    if (!snap) return null;
-    ref.current = Run.fromJSON(snap);
+    // tryFromJSON never throws (#46): a corrupt/older save resolves to null here
+    // instead of taking down the Start screen. Drop the dead save and hide the
+    // (now useless) Continue button so a returning player isn't stuck on a no-op.
+    const resumed = snap ? Run.tryFromJSON(snap) : null;
+    if (!resumed) {
+      clearSave();
+      hasSaveRef.current = false;
+      savedFightRef.current = null;
+      force();
+      return null;
+    }
+    ref.current = resumed;
     force();
-    return ref.current.seed;
+    return resumed.seed;
   }, []);
 
   return {

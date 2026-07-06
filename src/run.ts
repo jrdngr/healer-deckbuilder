@@ -222,6 +222,22 @@ export class Run {
     return run;
   }
 
+  // Safe rehydrate for the persistence boundary (#46). A stored snapshot can be
+  // from an older RUN_SAVE_VERSION, or truncated/corrupt (a partial write, or a
+  // shape change made without bumping the version). fromJSON throws on those, so
+  // resume paths must never call it unguarded. This returns null instead of
+  // throwing for anything that is not a resumable current-version snapshot, so a
+  // caller can hide the Continue button / drop the dead save rather than crash.
+  static tryFromJSON(snap: unknown): Run | null {
+    try {
+      const s = snap as RunSnapshot | null;
+      if (!s || s.version !== RUN_SAVE_VERSION) return null;
+      return Run.fromJSON(s);
+    } catch {
+      return null;
+    }
+  }
+
   // Member ids not yet in the roster (the pool a draft/recruit can still offer).
   availableMembers(): MemberId[] {
     const have = new Set(this.roster.map((p) => p.member));

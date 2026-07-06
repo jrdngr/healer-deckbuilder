@@ -1,5 +1,5 @@
 // Run-layer test harness. Run with: tsx test/run.test.ts
-import { Run } from '../src/run';
+import { Run, RUN_SAVE_VERSION } from '../src/run';
 import { makeRng } from '../src/rng';
 import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
@@ -902,6 +902,55 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const restored = Run.fromJSON(snap);
   eq('snapshot round-trips', JSON.stringify(restored.toJSON()), JSON.stringify(snap));
   eq('restored rng continues from the saved position', run.rng(), restored.rng());
+}
+{
+  // #46 "Continue saved run": a live run resumed from its snapshot must land back
+  // at the exact saved position (map/screen), with the same roster, deck, gold,
+  // and seed. Guards the resume the Start screen's Continue button drives.
+  const run = new Run(4242);
+  startRun(run);          // deploy + fight 0 with the default trio
+  run.winFight();         // -> forkChoice
+  run.gold = 137;
+  run.chooseBranch(0);    // -> branch hub (a real mid-run boundary)
+  const snap = JSON.parse(JSON.stringify(run.toJSON()));
+  const resumed = Run.tryFromJSON(snap)!;
+  check('tryFromJSON resumes a valid current-version save', resumed !== null);
+  eq('resumed seed matches', resumed.seed, run.seed);
+  eq('resumed location matches', JSON.stringify(resumed.location), JSON.stringify(run.location));
+  eq('resumed gold matches', resumed.gold, 137);
+  eq('resumed roster matches', JSON.stringify(resumed.roster), JSON.stringify(run.roster));
+  eq('resumed deck matches', JSON.stringify(resumed.deck), JSON.stringify(run.deck));
+  eq('resumed relics match', JSON.stringify(resumed.relics), JSON.stringify(run.relics));
+}
+{
+  // #46 graceful failure — a save from an OLDER RUN_SAVE_VERSION must not resume
+  // (and must not throw): tryFromJSON returns null so the caller can hide the
+  // Continue button rather than silently no-op or crash.
+  const run = new Run(7);
+  startRun(run);
+  run.winFight();
+  const snap = JSON.parse(JSON.stringify(run.toJSON()));
+  snap.version = snap.version - 1; // pretend it was written by an older build
+  let threw = false;
+  let out: Run | null = run;
+  try { out = Run.tryFromJSON(snap); } catch { threw = true; }
+  check('version-mismatched snapshot does not throw', !threw);
+  check('version-mismatched snapshot does not resume', out === null);
+}
+{
+  // #46 graceful failure — a truncated/corrupt snapshot that still parses and
+  // even carries the CURRENT version (a partial write, or a shape change made
+  // without a version bump: the actual root-cause shape) must resolve to null,
+  // never throw. This is the exact snapshot that made the Continue button a
+  // silent no-op before the fix (fromJSON blew up on the missing deck).
+  let threw = false;
+  let out: Run | null = new Run(0);
+  try {
+    out = Run.tryFromJSON({ version: RUN_SAVE_VERSION, seed: 1, location: { kind: 'branch', forkIndex: 0, branch: 0 } });
+  } catch { threw = true; }
+  check('truncated current-version snapshot does not throw', !threw);
+  check('truncated snapshot does not resume', out === null);
+  check('non-object snapshot does not resume', Run.tryFromJSON(null) === null && Run.tryFromJSON(undefined) === null);
 }
 {
   // A save+resume at a boundary produces the same run as never interrupting.
