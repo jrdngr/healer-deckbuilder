@@ -1043,8 +1043,14 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('the permadead member is removed from the roster',
     !run.roster.some((p) => p.member === 'warlock'));
   check('the permadead member is recorded in the graveyard', run.graveyard.includes('warlock'));
-  check('deployment is cleared after a permadeath',
-    run.deployment.every((d) => d === null));
+  // #50: the seating is reconciled, not blown away. Warlock sat in slot 0 (killed →
+  // empty); mage/ranger sat in slots 1/2 and keep those seats at their shifted indices.
+  eq('the killed member\'s slot is emptied and survivors keep their seats',
+    JSON.stringify(run.deployment), JSON.stringify([null, 0, 1]));
+  check('no reconciled deployment index is out of range',
+    run.deployment.every((d) => d == null || (d >= 0 && d < run.roster.length)));
+  check('the reconciled seats still point at mage and ranger',
+    run.roster[0].member === 'mage' && run.roster[1].member === 'ranger');
 
   // The buried member must never return through any offer path (all key on availableMembers).
   check('a buried member is not in availableMembers', !run.availableMembers().includes('warlock'));
@@ -1120,6 +1126,48 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('the death scarred the deployed roster member', run.roster[2].injuries, 1);
   eq('an undeployed roster member is unscarred', run.roster[1].injuries, 0);
   eq('the other deployed member is unscarred', run.roster[0].injuries, 0);
+}
+
+// --- #50: the deploy step remembers the player's last seating between fights -----
+{
+  const run = new Run(50);
+  run._enterDeploy(0);
+  eq('the first deploy defaults to the classic trio order',
+    JSON.stringify(run.deployment), JSON.stringify([0, 1, 2]));
+
+  // Seat a non-default order (Center empty, roster 2 at Left, roster 0 at Right).
+  run.confirmDeployment([2, null, 0]);
+  eq('the chosen deployment fights', run.location.kind, 'fight');
+
+  // Advance to the next fight's deploy step: it must still reflect the prior seating,
+  // not reset to [0,1,2].
+  run._enterDeploy(1);
+  eq('the next deploy step keeps the prior seating',
+    JSON.stringify(run.deployment), JSON.stringify([2, null, 0]));
+
+  // The player can still freely re-seat.
+  run.confirmDeployment([1, 0, null]);
+  run._enterDeploy(2);
+  eq('a re-seated deployment is itself remembered next fight',
+    JSON.stringify(run.deployment), JSON.stringify([1, 0, null]));
+
+  // The remembered seating round-trips through save/resume.
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  eq('the remembered seating survives save/resume',
+    JSON.stringify(restored.deployment), JSON.stringify([1, 0, null]));
+  restored._enterDeploy(3);
+  eq('a resumed run still defaults the deploy step to the remembered seating',
+    JSON.stringify(restored.deployment), JSON.stringify([1, 0, null]));
+}
+
+// --- #50: a stale seating (roster too small) falls back to the default -----------
+{
+  const run = new Run(51);
+  run.deployment = [2, null, 1];   // valid for a trio
+  run.roster = partyFromMembers(['ranger']); // roster shrank to one — index 2/1 now stale
+  run._enterDeploy(0);
+  eq('an out-of-range remembered seating falls back to the default',
+    JSON.stringify(run.deployment), JSON.stringify([0, null, null]));
 }
 
 // --- salaries: deployed members are paid from the win; upgrades/injuries move it -

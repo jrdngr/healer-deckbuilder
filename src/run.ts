@@ -286,28 +286,36 @@ export class Run {
     return [0, 1, 2].map((i) => (i < this.roster.length ? i : null));
   }
 
+  // A deployment is fieldable for the current roster: length 3, at least one member
+  // seated, every seated index in range, and no member seated twice. Shared by
+  // confirmDeployment (reject malformed input) and _enterDeploy (decide whether the
+  // remembered seating still holds after a roster change).
+  _deploymentIsValid(deployment: (number | null)[]): boolean {
+    if (deployment.length !== 3) return false;
+    const seated = deployment.filter((ri): ri is number => ri != null);
+    if (seated.length === 0) return false;
+    if (seated.some((ri) => ri < 0 || ri >= this.roster.length)) return false;
+    return new Set(seated).size === seated.length;
+  }
+
   // Open the pre-fight deploy step: the player chooses which roster members fight
-  // and where. Seeds a default seating (the first three roster members) the screen
-  // can adjust, then waits for confirmDeployment.
+  // and where. Remembers the player's last seating (#50) so positioning persists
+  // between fights; only falls back to the default (first three roster members)
+  // when there is no valid prior seating (first fight, or a splice invalidated it).
   _enterDeploy(fightIndex: number): void {
     // Permanent death can empty the roster between boss drafts — with no one left to
     // field, the run is lost.
     if (this.roster.length === 0) { this.status = 'lost'; return; }
-    this.deployment = this._defaultDeployment();
+    if (!this._deploymentIsValid(this.deployment)) this.deployment = this._defaultDeployment();
     this.location = { kind: 'deploy', fightIndex };
     this.nodeContent = null;
   }
 
   // Confirm the chosen deployment (which roster member sits in each battle slot) and
-  // start the fight. Validates length 3, at least one member, and valid distinct
-  // roster indices; a malformed deployment is ignored so the screen can't wedge the run.
+  // start the fight. A malformed deployment is ignored so the screen can't wedge the run.
   confirmDeployment(deployment: (number | null)[]): void {
     if (this.location.kind !== 'deploy') return;
-    if (deployment.length !== 3) return;
-    const seated = deployment.filter((ri): ri is number => ri != null);
-    if (seated.length === 0) return;
-    if (seated.some((ri) => ri < 0 || ri >= this.roster.length)) return;
-    if (new Set(seated).size !== seated.length) return;
+    if (!this._deploymentIsValid(deployment)) return;
     this.deployment = [...deployment];
     this._enterFight(this.location.fightIndex);
   }
@@ -561,8 +569,7 @@ export class Run {
       if (injuryKills(p.injuries)) killed.add(ri);
     }
     // Permanent death (2026-07 'death' mode): remove killed members from the roster,
-    // highest index first so a splice never shifts one still to remove. The
-    // deployment is rebuilt at the next deploy step; clear it to drop stale indices.
+    // highest index first so a splice never shifts one still to remove.
     if (killed.size > 0) {
       for (const ri of [...killed].sort((a, b) => b - a)) {
         const [removed] = this.roster.splice(ri, 1);
@@ -570,7 +577,14 @@ export class Run {
         // 4th death is permanent, not a reset to a fresh copy.
         if (removed?.member) this.graveyard.push(removed.member);
       }
-      this.deployment = [null, null, null];
+      // Reconcile the remembered seating (#50) so survivors keep their relative
+      // positions: a killed member's slot empties, and every surviving index shifts
+      // down by the count of removed indices below it (the roster splice above).
+      const removedAsc = [...killed].sort((a, b) => a - b);
+      this.deployment = this.deployment.map((ri) => {
+        if (ri == null || killed.has(ri)) return null;
+        return ri - removedAsc.filter((k) => k < ri).length;
+      });
     }
   }
 
