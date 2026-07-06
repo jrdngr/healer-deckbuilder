@@ -50,12 +50,16 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
           {game.hand.map((dc, i) => {
             const card = resolveCard(dc);
             const affordable = game.mp >= game.effectiveCost(card) && !over && !disabled;
+            // #54: an ability card whose bound member is down is drawn but unplayable —
+            // render it clearly disabled (grayed) rather than only refusing the click.
+            const ineligible = game.isAbilityCardDisabled(card);
             return (
               <Card
                 key={dc.uid}
                 uid={dc.uid}
                 card={card}
                 affordable={affordable}
+                ineligible={ineligible}
                 selected={selectedIndex === i}
                 onClick={() => onCardClick(i)}
                 // Fan geometry + draw-stagger inputs; uid-keying means only

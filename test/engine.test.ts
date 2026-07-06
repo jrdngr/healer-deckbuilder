@@ -3,6 +3,7 @@ import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
+import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -314,6 +315,55 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     if (card.ability == null) continue;
     eq(`${id} is a no-target ability card`, card.target, 'none');
   }
+}
+
+// --- #54: ability cards disable on death, vanish on incapacitation --------------
+{
+  // A normal in-fight death: the bound member's ability card is still IN the fight
+  // (drawn like any card) but unplayable and flagged disabled for the UI. Reviving
+  // the member re-enables it.
+  const g = new Game(54);
+  g.start();
+  g.mp = 10;
+  const idx = giveCard(g, 'bolster'); // tank's Taunt card
+  eq('#54: dead-member ability card is disabled while the tank is down (setup: alive)',
+    g.isAbilityCardDisabled(resolveCard(g.hand[idx])), false);
+  g.members[SLOT.CENTER].alive = false; // tank falls mid-fight
+  g.members[SLOT.CENTER].hp = 0;
+  check('#54: the card is still in hand (drawn but disabled)', g.hand[idx] != null);
+  eq('#54: canPlay refuses a disabled ability card', g.canPlay(idx, null) !== null, true);
+  eq('#54: isAbilityCardDisabled flags it for the UI', g.isAbilityCardDisabled(resolveCard(g.hand[idx])), true);
+  // Resurrect the tank — the card becomes playable again.
+  g.members[SLOT.CENTER].alive = true;
+  g.members[SLOT.CENTER].hp = 5;
+  eq('#54: resurrecting the member re-enables the card', g.isAbilityCardDisabled(resolveCard(g.hand[idx])), false);
+  eq('#54: canPlay allows the re-enabled card', g.canPlay(idx, null), null);
+  // A non-ability card is never disabled by this rule.
+  const heal = giveCard(g, 'lowHeal');
+  eq('#54: a plain heal is not an ability card, never disabled', g.isAbilityCardDisabled(resolveCard(g.hand[heal])), false);
+}
+{
+  // Incapacitation (unresurrectable this fight): the member's ability card is NEVER
+  // injected — removed from deck+hand for the whole fight — while every other
+  // member's card is untouched.
+  const party = defaultBattleConfig().party.map((p) => ({ ...p }));
+  party[SLOT.LEFT] = { ...party[SLOT.LEFT], incapacitated: true };
+  const ids = abilityCardsForParty(party).map((c) => c.id);
+  check('#54: incapacitated LEFT drops its ability card (imbuePoison gone)', !ids.includes('imbuePoison'));
+  check('#54: CENTER ability card survives', ids.includes('bolster'));
+  check('#54: RIGHT ability card survives', ids.includes('unleash'));
+  eq('#54: exactly the two living members\' ability cards remain', ids.length, 2);
+
+  // And at the whole-fight level: the incapacitated member's card is absent from
+  // every pile for the entire battle (it is simply never in the deck).
+  const cfg = defaultBattleConfig();
+  cfg.party = party;
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(party)];
+  const g = new Game(55, cfg);
+  g.start();
+  const all = [...g.hand, ...g.drawPile, ...g.discardPile].map((c) => c.id);
+  check('#54: incapacitated member\'s ability card never enters the fight', !all.includes('imbuePoison'));
+  check('#54: living members\' ability cards are in the fight', all.includes('bolster') && all.includes('unleash'));
 }
 
 // --- #42: small-party cards scale on empty deploy seats -------------------------

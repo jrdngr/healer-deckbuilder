@@ -1003,6 +1003,12 @@ export function abilityCardsForParty(party: PartyMemberConfig[]): DeckCard[] {
   const cards: DeckCard[] = [];
   party.forEach((p, slot) => {
     if (p.empty) return;
+    // #54: an incapacitated member cannot return this fight (unresurrectable), so
+    // their ability card is permanent dead weight — never inject it. This is the
+    // "removed from deck+hand for the remainder of the fight" path: because
+    // incapacitated members enter the fight already dead, skipping injection here is
+    // equivalent to purging at fight start (the card is never drawn at all).
+    if (p.incapacitated) return;
     const ability = (p.member ? MEMBER_POOL[p.member] : MEMBER_DEFS[slot]).ability;
     cards.push(makeDeckCard(ABILITY_CARD[ability], -(cards.length + 1)));
   });

@@ -1411,6 +1411,16 @@ export class Game {
     return this.members.find((m) => m.alive && m.ability === ability);
   }
 
+  // #54: is this ability card currently disabled — drawn but unplayable because its
+  // bound member is down (recoverable via Resurrect)? Non-ability cards are never
+  // disabled by this rule. The UI reads this to render the card in a disabled state
+  // instead of only refusing the click. (Incapacitated members never inject a card
+  // at all — abilityCardsForParty skips them — so this only fires for revivable
+  // in-fight deaths.)
+  isAbilityCardDisabled(card: ResolvedCard): boolean {
+    return card.ability != null && this._abilityMember(card.ability) == null;
+  }
+
   _applyCard(card: ResolvedCard, target: number | null): void {
     // Per-member ability cards (#44): fire the bound member's ability. canPlay has
     // already ensured a living carrier exists (devPlayCard tolerates its absence).
