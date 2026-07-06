@@ -150,7 +150,8 @@ async function render(el: React.ReactElement): Promise<string> {
   const options = (run.nodeContent as { options: MemberId[] }).options;
   check('the start draft offers the configured number of heroes', options.length === DRAFT_OFFER_SIZE, String(options.length));
   check('draft prompts to choose the starting hero', text.includes('Choose your starting hero'), text);
-  check('start draft owns the fixed class pick (no fake-shuffle framing)', text.includes('three classes'), text);
+  // #55: the start draft draws from the full roster, not a fixed class trio.
+  check('start draft frames the pick as three heroes from the full roster', text.includes('full roster'), text);
   for (const id of options) check(`draft shows ${id}'s name`, text.includes(MEMBER_POOL[id].name), id);
   // #43: the generator's damage rating must not leak to the player as a recommendation.
   check('offer button hides the DRAFT_RATING "rated N" string', !text.includes('rated '), text);

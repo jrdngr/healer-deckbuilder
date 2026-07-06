@@ -115,7 +115,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // nudging the policy's play/Rest choices; the net was a small shift on the fights where
   // members trade blows: F4 80 -> 81, F5/F6/F7 54 -> 56. A KNOWN shift; the #58 balance
   // pass re-anchors the settled system. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 81, 81, 81, 56, 56, 56, 26]));
+  // #55 (2026-07-06): the start draft now samples three heroes from the FULL pool
+  // instead of the fixed striker trio, so some seeds offer no conventional striker as
+  // a starter — the policy's solo carry into fight 0 is weaker on those seeds. A small
+  // HARDER nudge, mostly on the early solo/wall fights: F1 200 -> 199, F2/F3/F4 81 -> 77,
+  // F5/F6 56 -> 57, F8 26 -> 21 (F0 stays 200; F7 stays 56). A KNOWN shift; the #58
+  // balance pass re-anchors the settled system. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 77, 77, 77, 57, 57, 56, 21]));
   // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

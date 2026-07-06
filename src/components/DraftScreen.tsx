@@ -40,7 +40,7 @@ export function DraftScreen({ run, act }: DraftScreenProps) {
         <div>
           <h2>{isStart ? 'Choose your starting hero' : 'A new hero joins your roster'}</h2>
           <p>{isStart
-            ? 'Pick one of the three classes to open your run. Your first battle is a solo; more heroes join after each boss.'
+            ? 'Pick one of three heroes drawn from the full roster to open your run. Your first battle is a solo; more heroes join after each boss.'
             : 'Pick one hero to add to your roster.'}</p>
         </div>
       </header>

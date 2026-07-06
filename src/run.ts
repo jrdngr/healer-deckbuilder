@@ -23,7 +23,7 @@ import {
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   injuryRecordCap, injuryIncapacitates, injuryKills,
   partyFromMembers, DRAFT_POOL, CLASSIC_TRIO,
-  STARTER_MEMBERS, DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
+  DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
 } from './constants';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
@@ -252,15 +252,15 @@ export class Run {
     return shuffle([...pool], this.rng).slice(0, size);
   }
 
-  // Pick-one draft at run start (2026-07): clear the default roster and offer the
-  // solo-viable starters (fight 0 is a forced solo). The player picks one, then
-  // deploys and fights.
+  // Pick-one draft at run start (2026-07; #55): clear the default roster and offer
+  // three heroes sampled from the FULL member pool (any hero can start — no longer a
+  // fixed striker trio). The player picks one, then deploys into the solo fight 0.
   beginDraft(): void {
     if (this.location.kind !== 'start') return;
     this.roster = [];
     this.deployment = [null, null, null];
     this.location = { kind: 'draft', post: 'start', fightIndex: 0 };
-    this.nodeContent = { type: 'draft', options: this._rollMemberOffer(STARTER_MEMBERS, DRAFT_OFFER_SIZE) };
+    this.nodeContent = { type: 'draft', options: this._rollMemberOffer(DRAFT_POOL, DRAFT_OFFER_SIZE) };
   }
 
   // Take the drafted member into the roster and move on: the start draft leads into

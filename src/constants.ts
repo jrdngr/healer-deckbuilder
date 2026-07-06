@@ -181,10 +181,10 @@ export const CONVENTIONAL_STRIKERS: Set<MemberId> = new Set<MemberId>(['ranger',
 // fight. These set how many members each such offer shows.
 export const DRAFT_OFFER_SIZE = 3;   // members shown by a start/post-boss draft (pick one)
 export const RECRUIT_OFFER_SIZE = 3; // members shown by a Recruit node (pick one)
-// Fight 0 is a forced solo (only the start draft precedes it), so the START draft
-// offers only members that can win it alone — the conventional strikers. Post-boss
-// drafts and Recruit nodes draw from the full remaining pool.
-export const STARTER_MEMBERS: MemberId[] = ['ranger', 'mage', 'warlock'];
+// The start draft (#55) samples three heroes from the full DRAFT_POOL — any hero can
+// open the run, not a fixed striker trio. Fight 0 is still a forced solo; the solo
+// opener must stay winnable whichever starter is picked. Post-boss drafts and Recruit
+// nodes likewise draw from the full remaining pool.
 
 // Does this exact party (a member per slot) clear the draft's viability bar?
 // Tightened by #31: also require a conventional striker, so a certified-viable

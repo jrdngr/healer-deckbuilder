@@ -12,7 +12,7 @@ import {
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
-  DRAFT_POOL, partyFromMembers, STARTER_MEMBERS, DRAFT_OFFER_SIZE, isAbilityCard,
+  DRAFT_POOL, partyFromMembers, DRAFT_OFFER_SIZE, isAbilityCard,
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
@@ -1247,9 +1247,14 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   run.beginDraft();
   eq('beginDraft enters the start draft', run.location.kind === 'draft' && run.location.post, 'start');
   check('the start draft clears the default roster', run.roster.length === 0);
-  check('the start draft offers solo-viable starters', run.nodeContent?.type === 'draft'
-    && run.nodeContent.options.length === DRAFT_OFFER_SIZE
-    && run.nodeContent.options.every((id) => STARTER_MEMBERS.includes(id)));
+  // #55: the start draft samples three DISTINCT heroes from the FULL pool (not the
+  // old fixed striker trio).
+  const startOpts = (run.nodeContent as { options: MemberId[] }).options;
+  check('the start draft offers three distinct members from the full pool',
+    run.nodeContent?.type === 'draft'
+    && startOpts.length === DRAFT_OFFER_SIZE
+    && new Set(startOpts).size === DRAFT_OFFER_SIZE
+    && startOpts.every((id) => DRAFT_POOL.includes(id)));
 
   // Pick one: it joins the roster and the run heads into the deploy step for fight 0.
   const first = (run.nodeContent as { options: MemberId[] }).options[0];
@@ -1262,10 +1267,12 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('deploying enters fight 0', run.location.kind, 'fight');
   eq('fight 0 fields exactly one member', run.toBattleConfig().party.filter((p) => !p.empty).length, 1);
 
-  // A pick that was never offered (the tank is never a starter) is ignored.
+  // A pick that was never offered is ignored (pick a member not in this offer).
   const bad = new Run(21);
   bad.beginDraft();
-  bad.chooseDraftMember('tank');
+  const badOpts = (bad.nodeContent as { options: MemberId[] }).options;
+  const notOffered = DRAFT_POOL.find((id) => !badOpts.includes(id))!;
+  bad.chooseDraftMember(notOffered);
   eq('a non-offered starter pick is refused', bad.location.kind, 'draft');
 
   // The offer is deterministic in the run seed (same offer on the same seed).
@@ -1274,6 +1281,20 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('the draft offer is deterministic in the seed',
     JSON.stringify((a.nodeContent as { options: unknown }).options)
       === JSON.stringify((b.nodeContent as { options: unknown }).options));
+
+  // #55: the offer varies by seed, and every hero in the full pool is reachable as a
+  // starter across seeds (all 8 members show up within a modest seed sweep).
+  const seen = new Set<MemberId>();
+  const offerStrings = new Set<string>();
+  for (let seed = 0; seed < 200; seed++) {
+    const r = new Run(seed); r.beginDraft();
+    const opts = (r.nodeContent as { options: MemberId[] }).options;
+    offerStrings.add(JSON.stringify(opts));
+    for (const id of opts) seen.add(id);
+  }
+  check('the start offer varies across seeds', offerStrings.size > 1);
+  check('every hero can appear as a starter across seeds',
+    DRAFT_POOL.every((id) => seen.has(id)), `saw ${[...seen].join(',')}`);
 
   // The drafted identity round-trips through a save snapshot (v8) and reaches the
   // fight via toBattleConfig (the 2026-07-04 field-drop regression stays covered).
