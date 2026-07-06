@@ -2496,7 +2496,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const g = new Game(1, cfg); g.start();
   const w = g.members[0];
   eq('drafted Warlock seated in slot 0', w.id, 'warlock');
-  eq('Warlock name from the pool', w.name, 'Hexen Warlock');
+  eq('Warlock name from the pool', w.name, 'Warlock');
   eq('Warlock ability is Hex (#39)', w.ability, 'hex');
   eq('Warlock is a low-damage controller', w.damage, 3);
 

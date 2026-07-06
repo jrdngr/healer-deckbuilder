@@ -111,7 +111,7 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // is bigger the fewer members are fielded — strongest solo, where it amplifies his
   // own low damage enough to carry act 1. No self-damage: the old Soul Tithe / Dark
   // Bargain suicide (a permadeath magnet under the roster campaign) is gone.
-  warlock: { slot: 0, id: 'warlock', name: 'Hexen Warlock', maxHP: 14, damage: 3, ability: 'hex' },
+  warlock: { slot: 0, id: 'warlock', name: 'Warlock', maxHP: 14, damage: 3, ability: 'hex' },
   // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
   skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
