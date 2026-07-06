@@ -110,7 +110,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // fights where members trade blows: F2/F3/F4 80/80/79 -> 81/81/80, F5/F6/F7 53 -> 54,
   // F8 22 -> 26 (F0/F1 already 200). A KNOWN shift; the #58 balance pass re-anchors the
   // settled system. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 81, 81, 80, 54, 54, 54, 26]));
+  // #53 (2026-07-06): passive MP is now gated on a restrained turn (≤1 card played),
+  // matching the Rest gate. This reshuffles MP timing (mostly the Pact of Silence line),
+  // nudging the policy's play/Rest choices; the net was a small shift on the fights where
+  // members trade blows: F4 80 -> 81, F5/F6/F7 54 -> 56. A KNOWN shift; the #58 balance
+  // pass re-anchors the settled system. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 81, 81, 81, 56, 56, 56, 26]));
   // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

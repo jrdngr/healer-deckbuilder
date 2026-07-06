@@ -1262,9 +1262,12 @@ export class Game {
       }
     }
     // Passive MP income (healer upgrade, plus the Pact of Silence's tithe)
-    // lands at the start of the player phase.
+    // lands at the start of the player phase — but only as a reward for a
+    // restrained previous turn (#53): gated on the same ≤1-cards signal the Rest
+    // gate uses, read here BEFORE cardsPlayedThisPhase is reset below. On the very
+    // first player phase the count is still its 0 init, so the opening turn grants.
     const passive = this.passiveMp + (this.hasRelic('pactOfSilence') ? PACT_PASSIVE_MP : 0);
-    if (passive > 0 && this.mp < this.maxMana) {
+    if (passive > 0 && this.cardsPlayedThisPhase <= 1 && this.mp < this.maxMana) {
       const before = this.mp;
       this.mp = Math.min(this.maxMana, this.mp + passive);
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');

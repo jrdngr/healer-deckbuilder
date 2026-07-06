@@ -146,6 +146,12 @@ function runExerciseFight(cfg: BattleConfig, cov: Coverage, where: string, preKi
     if (preKill) game._killMember(game.memberById(preKill));
     let turns = 0;
     while (game.status === 'playing' && turns++ < 80) {
+      // #53: passive MP now only lands on a restrained (≤1-card) turn, but the
+      // exerciser deliberately plays many cards per phase, so it would otherwise
+      // starve on MP and miss late plays (e.g. the Regen->Bloom setup). Keep the
+      // harness's "MP never gates a play we want to make" invariant by topping the
+      // pool up each turn — coverage stays decoupled from the MP economy.
+      game.mp = game.maxMana;
       let plays = 0;
       while (game.phase === 'player' && plays++ < 40) {
         if (!exerciseOnePlay(game, cov)) break;

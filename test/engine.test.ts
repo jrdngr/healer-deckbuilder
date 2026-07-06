@@ -1012,6 +1012,70 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     g.status !== 'playing' || g.mp >= 3, `mp=${g.mp}`);
 }
 {
+  // #53: passive MP is a reward for a RESTRAINED previous turn — it only lands when
+  // the turn that just ended played ≤1 card (the same cardsPlayedThisPhase signal the
+  // Rest gate uses), read at the start of the next phase before the counter resets.
+  const mkGame = () => {
+    const cfg = defaultBattleConfig();
+    cfg.healer = { ...DEFAULT_HEALER, maxMana: 10, passiveMp: 3 };
+    const g = new Game(30, cfg);
+    g.start();
+    return g;
+  };
+  // 0 cards played → passive granted (cardsPlayedThisPhase is still its 0 init).
+  {
+    const g = mkGame();
+    g.mp = 0;
+    g._startPlayerPhase();
+    check('#53 passive grants after a 0-card turn', g.mp >= 3, `mp=${g.mp}`);
+  }
+  // Exactly 1 card played → still granted.
+  {
+    const g = mkGame();
+    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+    eq('#53 one card is counted', g.cardsPlayedThisPhase, 1);
+    g.mp = 0;
+    g._startPlayerPhase();
+    check('#53 passive grants after a 1-card turn', g.mp >= 3, `mp=${g.mp}`);
+  }
+  // 2+ cards played → passive withheld entirely.
+  {
+    const g = mkGame();
+    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+    eq('#53 two cards are counted', g.cardsPlayedThisPhase, 2);
+    g.mp = 0;
+    g._startPlayerPhase();
+    eq('#53 no passive after a busy (2-card) turn', g.mp, 0);
+  }
+  // The counter resets each phase, so eligibility returns the very next restrained turn.
+  {
+    const g = mkGame();
+    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+    g.mp = 0;
+    g._startPlayerPhase();                     // busy turn: withheld
+    eq('#53 counter resets to 0 after the phase', g.cardsPlayedThisPhase, 0);
+    g.mp = 0;
+    g._startPlayerPhase();                     // now 0 cards played
+    check('#53 passive resumes once the counter resets', g.mp >= 3, `mp=${g.mp}`);
+  }
+  // The Pact of Silence passive flows through the same add, so it obeys the same gate.
+  {
+    const cfg = defaultBattleConfig();
+    cfg.relics = ['pactOfSilence'];
+    const g = new Game(31, cfg);
+    g.start();
+    g.cardsPlayedThisPhase = 2;
+    g.mp = 0;
+    g._startPlayerPhase();
+    eq('#53 the Pact passive is withheld after a busy turn', g.mp, 0);
+    g.mp = 0;
+    g._startPlayerPhase();                     // 0 cards played this time
+    eq('#53 the Pact passive returns on a restrained turn', g.mp, PACT_PASSIVE_MP);
+  }
+}
+{
   // Ability power scales poison strength (Ranger).
   const cfg = defaultBattleConfig();
   cfg.party = cfg.party.map((p) => ({ ...p, abilityPower: 2 }));
