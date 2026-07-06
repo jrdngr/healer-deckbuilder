@@ -162,7 +162,13 @@ function fieldedWinRate(n: number, roster: MemberId[], fielded: number, relics: 
 // warband/focusStone keep the smaller party alive.
 export function deploySizeEdge(n: number): { two: number; three: number; twoNoRelics: number } {
   const roster: MemberId[] = ['warlock', 'mage', 'tank']; // Hex + striker + low-dmg soak
-  const hp = 108, atk = 3; // a real early-normal contest for this roster
+  // Contest HP re-anchored 108 -> 80 for the heal-only starter deck (#51): the leaner
+  // 6-card opener (no starter Refresh/Regen/Shield/Resurrect) kills survivability on
+  // this fixed fight, so 108 collapsed BOTH field sizes to ~3% (no longer a contest).
+  // At 80 it is a genuine contest again (field-2 ~29% vs field-3 ~20%), and the
+  // property still holds cleanly. The #58 balance pass owns the settled numbers.
+  const hp = 80, atk = 3; // a real early-normal contest for this roster
+
   return {
     // Fielding 2 WITH the small-party build.
     two: fieldedWinRate(n, roster, 2, SMALL_PARTY_RELICS, DEFAULT_ENEMY_DEF, hp, atk),

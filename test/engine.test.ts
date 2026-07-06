@@ -32,21 +32,25 @@ function giveAbility(game: Game, slot: number): number {
 }
 
 // --- deck composition -------------------------------------------------------
-// #44: the 3 generic Ability cards left the core deck — each deployed member now
+// #51: the starter deck is exactly the heal-only six — 1× Group Heal, 3× Quick
+// Heal, 2× Heal, and nothing else. Regen/Refresh/Shield/Resurrect left the opener
+// (they remain reachable via rewards/shops). Per #44, each deployed member still
 // inserts their own bound ability card at fight lock-in (see the toBattleConfig
-// injection test in run.test.ts), so the core deck is 12 and a full trio fights 15.
-eq('deck has 12 core cards', DECK_LIST.length, 12);
+// injection test in run.test.ts), so the core deck is 6 and a full trio fights 9.
+eq('deck has 6 core cards', DECK_LIST.length, 6);
 {
   const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
-  eq('2 Quick Heal', counts.lowHeal, 2);
+  eq('3 Quick Heal', counts.lowHeal, 3);
   eq('2 Heal', counts.highHeal, 2);
-  eq('2 Group Heal', counts.aoeHeal, 2);
-  eq('2 Regen', counts.regen, 2);
-  eq('2 Refresh', counts.refresh, 2);
+  eq('1 Group Heal', counts.aoeHeal, 1);
+  eq('no Regen in the starter', counts.regen, undefined);
+  eq('no Refresh in the starter', counts.refresh, undefined);
+  eq('no Shield in the starter', counts.shield, undefined);
+  eq('no Resurrect in the starter', counts.resurrect, undefined);
   eq('no generic Ability cards in the core deck', counts.ability, undefined);
-  eq('1 Shield', counts.shield, 1);
-  eq('1 Resurrect', counts.resurrect, 1);
+  // Exactly the six heal-only cards, no extras of any other id.
+  eq('starter has exactly 3 distinct card ids', Object.keys(counts).length, 3);
 }
 
 // --- card heal values -------------------------------------------------------

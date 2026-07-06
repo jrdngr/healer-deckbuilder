@@ -361,8 +361,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   const run = new Run(8);
   run.gold = 1000;
+  // Regen left the starter deck (#51); acquire one so the upgrade target exists.
+  const regenUid = run.addCard('regen').uid;
   run.nodeContent = { type: 'cardUpgrade', offers: [{ modifier: 'lingering', rarity: 'common', price: RARITY_PRICE.common }] };
-  const regenUid = uidOf(run, 'regen');
   check('apply lingering to regen succeeds', run.buyModifierOffer(0, regenUid));
   eq('gold deducted for upgrade', run.gold, 1000 - RARITY_PRICE.common);
   check('regen card carries lingering', run.deck.find((c) => c.uid === regenUid)!.upgrades.includes('lingering'));

@@ -26,10 +26,11 @@ the next session real time.
 
 ## Progress
 
-**Open: 51–59 — the 2026-07-06 intake batch (15 issues); #45 (remove path-selection travel
+**Open: 52–59 — the 2026-07-06 intake batch (15 issues); #45 (remove path-selection travel
 animation), #46 (fix the "Continue saved run" button), #47 (enemy targets/telegraphs dead
-players) #48 (view-deck button in the topbar), #49 (injury badges on party members) and #50
-(remember party positions between fights) have landed, 9
+players) #48 (view-deck button in the topbar), #49 (injury badges on party members), #50
+(remember party positions between fights) and #51 (replace the starting deck with the heal-only
+six) have landed, 8
 remaining.** Ordered quick isolated fixes
 first, then self-contained engine rules, then draft/map structure, then the reward flow, and last
 the between-fight-healing rework (**#58**, which carries the balance pass — so it lands after every
@@ -47,7 +48,7 @@ bullets.
 | 48 | ✅ Done | [View-deck button in the topbar](./issues/48-topbar-deck-view-button.md) | fix | — | intake 2026-07-06 |
 | 49 | ✅ Done | [Injury badges on party members](./issues/49-injury-badges-on-members.md) | fix | — | intake 2026-07-06 |
 | 50 | ✅ Done | [Remember party positions between fights](./issues/50-remember-party-positions.md) | fix | — | intake 2026-07-06 |
-| 51 | 🔲 Todo | [Replace the starting deck with the heal-only six](./issues/51-starting-deck-composition.md) | rules | — | intake 2026-07-06 |
+| 51 | ✅ Done | [Replace the starting deck with the heal-only six](./issues/51-starting-deck-composition.md) | rules | — | intake 2026-07-06 |
 | 52 | 🔲 Todo | [Regen rework: magnitude == duration](./issues/52-regen-magnitude-duration-rework.md) | rules | — | intake 2026-07-06 |
 | 53 | 🔲 Todo | [Passive MP only when ≤1 card played](./issues/53-passive-mp-gate-on-cards-played.md) | rules | — | intake 2026-07-06 |
 | 54 | 🔲 Todo | [Ability cards on member death](./issues/54-ability-cards-on-member-death.md) | rules | — | intake 2026-07-06 |

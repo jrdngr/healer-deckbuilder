@@ -766,17 +766,17 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: `While fielding ${SMALL_PARTY_MAX} or fewer, every living member gains a Shield.` },
 };
 
-// The fixed 12-card core starting deck. The three generic Ability cards are gone
-// (#44): each deployed member now inserts their OWN bound ability card at fight
-// lock-in (see abilityCardsForParty), so a full trio still fights with 12 + 3 = 15.
+// The fixed 6-card core starting deck: the heal-only six (#51) —
+// 1× Group Heal / 3× Quick Heal / 2× Heal, and nothing else. Regen, Refresh,
+// Shield and Resurrect are no longer in the opener (they remain reachable via
+// card rewards and shops). A 6-card pile cycles fast and cuts early-game power,
+// landing before the #58 between-fight-healing balance pass. The per-member
+// ability cards are still inserted per deployed member at fight lock-in (see
+// abilityCardsForParty), so a full trio fights with 6 + 3 = 9.
 export const DECK_LIST: CardId[] = [
-  'lowHeal', 'lowHeal',
+  'aoeHeal',
+  'lowHeal', 'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
-  'aoeHeal', 'aoeHeal',
-  'regen', 'regen',
-  'refresh', 'refresh',
-  'shield',
-  'resurrect',
 ];
 
 // The bound ability card for each ability (#44). Each member contributes exactly
@@ -986,7 +986,7 @@ export function defaultParty(): PartyMemberConfig[] {
   return MEMBER_DEFS.map((d) => ({ maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0 }));
 }
 
-// The 12-card core deck as concrete instances (uid = position). Member ability
+// The 6-card core deck as concrete instances (uid = position). Member ability
 // cards are added on top per-fight (abilityCardsForParty), not stored here.
 export function defaultDeck(): DeckCard[] {
   return DECK_LIST.map((id, i) => makeDeckCard(id, i));

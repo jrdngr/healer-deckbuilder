@@ -97,8 +97,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // that previously wasted themselves, so the boss fights (where members die mid-fight)
   // got a touch harder: F2/F3/F4 73/73/72 -> 69/69/67, F5/F6/F7 42/40/40 -> 38/36/36,
   // F8 21 -> 17. The normals (F0/F1) are unchanged (nobody dies to re-point onto).
-  // Re-pinned on the new observed numbers; the balance re-anchor remains deferred.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 189, 69, 69, 67, 38, 36, 36, 17]));
+  // #51 (2026-07-06): the starter deck became the heal-only six (1× Group Heal / 3×
+  // Quick Heal / 2× Heal), dropping the starter Regen/Refresh/Shield/Resurrect. The
+  // leaner, heal-DENSE 6-card opener cycles twice as fast to the heals the policy
+  // actually plays and stops clogging draws with the removed utility, so the sim got
+  // EASIER across the board: F0/F1 189/198 -> 200/200, the walls softened (F2 69->80,
+  // F5 38->53, F8 17->22). A KNOWN shift; the #58 balance pass re-anchors the settled
+  // system. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 80, 80, 79, 53, 53, 53, 22]));
   // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
@@ -234,6 +240,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   const w = g.members[0];
   const hp0 = w.hp;
   g.enemy.hp = 999;
+  // Aim the standing telegraph at the Tank (slot 1) so the only thing that could
+  // move the Warlock's HP this turn is a self-damage effect — isolating the "no
+  // Soul Tithe" check from incidental enemy fire. (The heal-only starter deck of
+  // #51 reshuffled the RNG stream, so the turn-1 telegraph would otherwise land on
+  // slot 0; the redirect makes the assertion deck-independent.)
+  if (g.telegraph) g.telegraph.targets = [SLOT.CENTER];
   g.endTurn();
   check('the Warlock takes no self-damage across a turn (no Soul Tithe)', w.alive && w.hp === hp0);
 }
