@@ -16,7 +16,7 @@ import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import { INJURY_RULES, MAX_INJURIES } from '../src/constants';
 import type { InjuryMode } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, advanceBranch, draftPick, deployBest } from './policy';
 
 // Mirrors run-sim's per-fight sub-seed so results line up with the main harness.
 const fightSeed = (runSeed: number, fightIndex: number): number =>
@@ -81,6 +81,7 @@ function runMode(mode: InjuryMode, n: number, firstSeed = 1, healScars = true): 
           }
           break;
         }
+        case 'cardReward': { const ci = chooseCardReward(run); if (ci >= 0) run.pickCardReward(ci); else run.skipCardReward(); break; } // #57
         case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
         case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
         case 'branch': advanceBranch(run); break;

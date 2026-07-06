@@ -585,6 +585,20 @@ export function chooseSpoil(run: Run): number {
   return best;
 }
 
+// Card reward (#57): a free pick of 3 after every won fight. Take the best-valued
+// offer, but only if it clears the same selectivity bar shops use — a card this
+// policy never plays is dead deck weight that dilutes ability draws — otherwise
+// skip. Returns the offer index to take, or -1 to walk on empty-handed.
+export function chooseCardReward(run: Run): number {
+  if (run.nodeContent?.type !== 'cardReward') return -1;
+  let best = -1, bestVal = 2; // skip filler valued <= 2, mirroring shopCardNode
+  run.nodeContent.offers.forEach((o, i) => {
+    const v = cardBuyValue(run, o.cardId);
+    if (v > bestVal) { bestVal = v; best = i; }
+  });
+  return best;
+}
+
 // The most-injured member's slot, or -1 if the party is unscarred (DR1).
 function mostInjuredSlot(run: Run): number {
   let slot = -1;

@@ -265,7 +265,7 @@ import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
 import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, advanceBranch, draftPick, deployBest } from './policy';
 
 export interface FightOutcome {
   fightIndex: number;
@@ -314,6 +314,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         } else run.loseFight();
         break;
       }
+      case 'cardReward': { const ci = chooseCardReward(run); if (ci >= 0) run.pickCardReward(ci); else run.skipCardReward(); break; } // #57
       case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
       case 'branch': advanceBranch(run); break;

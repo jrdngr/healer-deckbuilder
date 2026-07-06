@@ -15,7 +15,7 @@ import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import { FIGHT_COUNT, DRAFT_POOL, defaultBattleConfig, partyFromMembers, abilityCardsForParty, isAbilityCard, DEFAULT_ENEMY_DEF } from '../src/constants';
 import type { MemberId, RelicId, PartyMemberConfig, EnemyDef } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, advanceBranch, draftPick, deployBest } from './policy';
 
 // Same per-fight sub-seed the real runner uses (run-sim.ts), recreated here so this
 // harness doesn't need to reach into that module's internals.
@@ -65,6 +65,7 @@ function runCampaign(seed: number, opts: Options = {}): RunResult {
         } else run.loseFight();
         break;
       }
+      case 'cardReward': { const ci = chooseCardReward(run); if (ci >= 0) run.pickCardReward(ci); else run.skipCardReward(); break; } // #57
       case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
       case 'branch': advanceBranch(run); break;

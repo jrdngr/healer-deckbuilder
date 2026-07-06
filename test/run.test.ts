@@ -8,7 +8,7 @@ import {
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
-  SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
+  SPOILS_OFFER_SIZE, CARD_REWARD_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
@@ -50,6 +50,11 @@ const startRun = (run: Run): void => {
 };
 
 const crossBranch = (run: Run, branch = 0): void => {
+  // Every won fight now opens a free card reward (#57), and act bosses still drop
+  // spoils, both BEFORE the fork. Skip whichever sits in front so a progression
+  // helper reaches the fork regardless of what the win produced.
+  if (run.location.kind === 'cardReward') run.skipCardReward();
+  if (run.location.kind === 'spoils') run.skipSpoils();
   run.chooseBranch(branch);
   for (let i = 0; i < NODES_PER_BRANCH; i++) { run.enterNode(i); run.completeNode(); }
   run.startNextFight();
@@ -130,9 +135,11 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   const run = new Run(3);
   startRun(run);
-  // Win fight 0 -> fork 0, gold awarded.
+  // Win fight 0 -> card reward (#57) -> fork 0, gold awarded.
   run.winFight();
-  eq('win fight -> forkChoice', run.location.kind, 'forkChoice');
+  eq('win fight -> card reward first (#57)', run.location.kind, 'cardReward');
+  run.skipCardReward();
+  eq('leaving the card reward -> forkChoice', run.location.kind, 'forkChoice');
   eq('gold awarded for fight (net of salary)', run.gold, NET_GOLD);
 
   // Choose a branch -> its hub; stops open in ANY order, leaving a stop returns
@@ -157,6 +164,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const run = new Run(31);
   startRun(run);
   run.winFight();
+  run.skipCardReward(); // clear the post-win card reward (#57) to reach the fork
   run.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
   run.chooseBranch(0);
 
@@ -198,6 +206,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const run = new Run(32);
   startRun(run);
   run.winFight();
+  run.skipCardReward(); // #57
   run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
   run.chooseBranch(0);
 
@@ -216,6 +225,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const run = new Run(33);
   startRun(run);
   run.winFight();
+  run.skipCardReward(); // #57
   run.map[0].branches[1].nodes = [{ type: 'cardShop' }, { type: 'partyUpgrade' }];
   run.chooseBranch(1);
   run.enterNode(0);
@@ -253,7 +263,10 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
       gold = run.gold;
-      // Act-1/2 bosses drop a spoils screen first (#21); leaving it goes straight to
+      // Every won fight opens a free card reward first (#57), before spoils/fork.
+      check(`win of fight ${f} -> card reward first (#57)`, run.location.kind === 'cardReward');
+      run.skipCardReward();
+      // Act-1/2 bosses then drop a spoils screen (#21); leaving it goes straight to
       // the fork now that the post-boss draft is gone (#56 — recruitment is the node).
       if (isActBoss(f)) {
         check(`win of boss fight ${f} -> spoils`, run.location.kind === 'spoils');
@@ -270,6 +283,83 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   run.winFight();
   eq('beating the final boss wins the run', run.status, 'won');
 }
+
+// --- #57: free card reward after every won fight ----------------------------
+{
+  // A won fight opens a 3-card, rarity-weighted, FREE reward; picking one adds it
+  // to the deck and ends the step onto the fork.
+  const run = new Run(202);
+  startRun(run);
+  const deckBefore = run.deck.length;
+  run.winFight();
+  eq('a won fight opens a card reward', run.location.kind, 'cardReward');
+  check('the reward content is a cardReward offer set', run.nodeContent?.type === 'cardReward');
+  if (run.nodeContent?.type === 'cardReward') {
+    const offers = run.nodeContent.offers;
+    eq('three cards offered', offers.length, CARD_REWARD_SIZE);
+    check('offers are distinct', new Set(offers.map((o) => o.cardId)).size === offers.length);
+    check('the reward is free', offers.every((o) => o.price === 0));
+    check('offer rarity tags match the card rarity map', offers.every((o) => o.rarity === CARD_RARITY[o.cardId]));
+    const want = offers[1].cardId;
+    const picked = run.pickCardReward(1);
+    eq('picking returns the chosen card', picked, want);
+    eq('the picked card is added to the deck', run.deck.length, deckBefore + 1);
+    check('the newest deck card is the pick', run.deck[run.deck.length - 1].id === want);
+    eq('the pick ends the step -> forkChoice', run.location.kind, 'forkChoice');
+  }
+}
+{
+  // Deterministic per seed and per-fight sub-seed: same seed -> same offers, and
+  // rollCardReward reads a sub-seed, so it never disturbs the run's rng stream.
+  const a = new Run(303); const b = new Run(303);
+  eq('same seed -> identical reward offers',
+    JSON.stringify(a.rollCardReward(0)), JSON.stringify(b.rollCardReward(0)));
+  const before = a.rng.getState();
+  a.rollCardReward(4);
+  eq('rolling the reward consumes no run rng (sub-seeded)', a.rng.getState(), before);
+  check('different fights roll independent offers',
+    JSON.stringify(a.rollCardReward(0)) !== JSON.stringify(a.rollCardReward(5)));
+}
+{
+  // Skippable (mirrors spoils): skipping adds nothing and still advances.
+  const run = new Run(404);
+  startRun(run);
+  const deckBefore = run.deck.length;
+  run.winFight();
+  run.skipCardReward();
+  eq('skipping the reward adds no card', run.deck.length, deckBefore);
+  eq('skipping still advances to the fork', run.location.kind, 'forkChoice');
+}
+{
+  // Boss order (#57 + #21): the card reward comes first, THEN relic spoils.
+  const run = new Run(505);
+  run.beginDraft();
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+  run.location = { kind: 'fight', fightIndex: 2 } as RunLocation; // act-1 boss
+  run.winFight();
+  eq('boss win opens the card reward first', run.location.kind, 'cardReward');
+  run.pickCardReward(0);
+  eq('leaving the card reward reaches boss spoils', run.location.kind, 'spoils');
+  check('spoils rolled after the card reward', run.nodeContent?.type === 'spoils');
+}
+{
+  // Save/resume mid-choice: the rolled offer survives the snapshot, and resuming
+  // then picking still lands a card.
+  const run = new Run(606);
+  startRun(run);
+  run.winFight();
+  const offers = run.nodeContent?.type === 'cardReward' ? run.nodeContent.offers : [];
+  const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  eq('a mid-choice snapshot round-trips byte-stable',
+    JSON.stringify(restored.toJSON()), JSON.stringify(run.toJSON()));
+  check('the resumed run is still at the card reward', restored.location.kind === 'cardReward');
+  check('the resumed offer matches the saved offer',
+    restored.nodeContent?.type === 'cardReward'
+    && JSON.stringify(restored.nodeContent.offers) === JSON.stringify(offers));
+  const deckBefore = restored.deck.length;
+  restored.pickCardReward(0);
+  eq('resuming then picking adds the card', restored.deck.length, deckBefore + 1);
+}
 {
   // Enemy HP / enrage turn follow the per-act curve.
   const run = new Run(77);
@@ -281,8 +371,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     enrage.push(run.toBattleConfig().enemy.enrageTurn ?? -1);
     if (f < FIGHT_COUNT - 1) {
       run.winFight();
-      if (run.location.kind === 'spoils') run.skipSpoils(); // spoils lead straight to the fork now (#56)
-      crossBranch(run);
+      crossBranch(run); // crossBranch clears the card reward (#57) and any boss spoils
     }
   }
   eq('HP curve matches ENEMY_HP_BY_FIGHT', JSON.stringify(seen), JSON.stringify(ENEMY_HP_BY_FIGHT));
@@ -681,7 +770,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   }
   eq('at the act-1 boss', run.fightIndex, 2);
   run.winFight();
-  eq('boss win -> spoils', run.location.kind, 'spoils');
+  eq('boss win -> card reward first (#57)', run.location.kind, 'cardReward');
+  run.skipCardReward();
+  eq('card reward -> spoils', run.location.kind, 'spoils');
   check('spoils content rolled', run.nodeContent?.type === 'spoils');
   if (run.nodeContent?.type === 'spoils') {
     const offers = run.nodeContent.offers;
@@ -897,6 +988,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const run = new Run(5);
   startRun(run);
   run.winFight();
+  run.skipCardReward(); // #57
   run.chooseBranch(0);
   const snap = JSON.parse(JSON.stringify(run.toJSON())); // survive real serialization
   const restored = Run.fromJSON(snap);
@@ -909,7 +1001,8 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // and seed. Guards the resume the Start screen's Continue button drives.
   const run = new Run(4242);
   startRun(run);          // deploy + fight 0 with the default trio
-  run.winFight();         // -> forkChoice
+  run.winFight();         // -> card reward (#57)
+  run.skipCardReward();   // -> forkChoice
   run.gold = 137;
   run.chooseBranch(0);    // -> branch hub (a real mid-run boundary)
   const snap = JSON.parse(JSON.stringify(run.toJSON()));
@@ -1312,6 +1405,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   // run.location to the fight literal across the mutating calls.)
   run.location = { kind: 'fight', fightIndex: 2 } as RunLocation;
   run.winFight();
+  run.skipCardReward(); // #57: the card reward precedes boss spoils
   eq('an act boss drops spoils first', run.location.kind, 'spoils');
   const before = run.roster.length;
   run.skipSpoils();

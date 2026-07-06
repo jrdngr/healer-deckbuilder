@@ -287,6 +287,7 @@ async function render(el: React.ReactElement): Promise<string> {
   hubRun._enterDeploy(0); // default trio -> deploy step
   hubRun.confirmDeployment(hubRun.deployment); // pass the pre-fight deploy step
   hubRun.winFight();
+  hubRun.skipCardReward(); // #57: clear the post-win card reward to reach the fork
   hubRun.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
   hubRun.roster = partyFromMembers(DRAFT_POOL); // full roster: the recruit stop hides
   hubRun.chooseBranch(0);

@@ -129,8 +129,16 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // 94, F5/F6 57 -> 62, F7 56 -> 61, F8 21 -> 25 (the guaranteed post-boss recruiters
   // let more seeds field a full three into the later walls). A KNOWN shift; the #58
   // balance pass re-anchors the settled system. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([197, 194, 97, 97, 94, 62, 62, 61, 25]));
-  // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
+  // #57 (2026-07-06): a free card reward now follows EVERY won fight (pick 1 of 3,
+  // rarity-weighted). The greedy sim policy takes any offer above the shop bar, which
+  // steadily DILUTES the lean, heal-/ability-dense deck the campaign relies on — so
+  // draws of the per-fight ability cards and the heal core thin out and the walls got
+  // harder: F0/F1 unchanged (the first reward lands after F0), F2 97 -> 89, F3/F4 97/94
+  // -> 88/87, F5 62 -> 47, F6/F7 62/61 -> 46/46, F8 25 -> 14; full-run ~10.5% -> ~7%.
+  // This is a real power-flow change that #58's balance pass owns (it re-anchors the
+  // settled system once between-fight healing lands). Re-pinned on the new numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([197, 194, 89, 88, 87, 47, 46, 46, 14]));
+  // Full-run gate around the observed ~7% (post-#57 card-reward dilution; was ~10.5%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
   check('full-run consistent with the ~10.5% enemy-first band',

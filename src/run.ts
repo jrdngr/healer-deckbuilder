@@ -12,7 +12,7 @@ import {
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
-  GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
+  GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, SHOP_SIZE, CARD_REWARD_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
@@ -49,6 +49,7 @@ export type RunLocation =
   | { kind: 'draft'; post: 'start'; fightIndex: number }
   | { kind: 'deploy'; fightIndex: number } // pre-fight: choose & seat members (C4)
   | { kind: 'fight'; fightIndex: number }
+  | { kind: 'cardReward'; fightIndex: number } // free card pick after every won fight (#57)
   | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
   | { kind: 'forkChoice'; forkIndex: number }
   | { kind: 'branch'; forkIndex: number; branch: number } // the hub on a chosen branch: pick a stop, or move on
@@ -59,6 +60,7 @@ export type RunLocation =
 // back never rerolls a storefront or restocks what was bought.
 export type NodeContent =
   | { type: 'cardShop'; offers: CardOffer[] }
+  | { type: 'cardReward'; offers: CardOffer[] } // free pick of 1 after a won fight (#57)
   | { type: 'cardUpgrade'; offers: ModifierOffer[] }
   | { type: 'partyUpgrade'; offers: PartyUpgradeOffer[] }
   | { type: 'healerUpgrade'; offers: HealerUpgradeOffer[] }
@@ -78,8 +80,11 @@ export type NodeContent =
 // v10: graveyard of permanently-dead members (#40), excluded from future offers;
 // v11: post-boss draft removed (#56) — draft.post is 'start'-only and the recruiter
 // cadence guarantees a Recruit node after fight 1 and each boss, so old saves that
-// hold a post:'boss' draft location or a pre-cadence map are discarded.)
-export const RUN_SAVE_VERSION = 11;
+// hold a post:'boss' draft location or a pre-cadence map are discarded.
+// v12: card reward after every won fight (#57) — a new 'cardReward' location +
+// {type:'cardReward'} node content sit between a win and the fork/spoils, so old
+// saves that predate the reward step are discarded rather than skipping it.)
+export const RUN_SAVE_VERSION = 12;
 
 export interface RunSnapshot {
   version: number;
@@ -407,6 +412,7 @@ export class Run {
       case 'fight': return location.fightIndex;
       // The draft is start-only now (#56): it always leads into fight 0.
       case 'draft': return 0;
+      case 'cardReward': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'spoils': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'branch': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
@@ -507,8 +513,37 @@ export class Run {
     // Pay each DEPLOYED member their salary out of the winnings (2026-07); benched
     // members are free, so fielding fewer keeps more gold. Gold never goes negative.
     this.gold = Math.max(0, this.gold + reward - this.deployedSalary());
-    // Spoils (#21, Q9): the act-1 and act-2 bosses drop a free relic pick.
-    // (The final boss ends the run above, so this is exactly fights 3 and 6.)
+    // Card reward (#57): every non-final won fight opens a free pick of 3 cards,
+    // BEFORE the fork — and before boss spoils. It is a real power gain per fight,
+    // so the #58 between-fight-healing pass accounts for it. Boss spoils are rolled
+    // once the reward is left (_leaveCardReward), off the same rng position they
+    // were before, since the reward roll uses a per-fight sub-seed (no stream cost).
+    this.location = { kind: 'cardReward', fightIndex: fi };
+    this.nodeContent = { type: 'cardReward', offers: this.rollCardReward(fi) };
+  }
+
+  // Roll the free card reward (#57): CARD_REWARD_SIZE distinct, rarity-weighted
+  // cards at price 0. Rolled from a per-fight SUB-seed (like peekEncounter) instead
+  // of the run's rng stream, so the reward is deterministic per fight and
+  // independent of the path taken to reach it; the rolled offers live in
+  // nodeContent, so they also survive save/resume mid-choice.
+  rollCardReward(fightIndex: number): CardOffer[] {
+    const sub = makeRng((this.seed ^ Math.imul(fightIndex + 1, 0x85ebca6b)) >>> 0);
+    const ids = this._pickDistinct(
+      CARD_POOL.map((id): [CardId, number] => [id, RARITY_WEIGHT[CARD_RARITY[id]]]),
+      CARD_REWARD_SIZE,
+      sub,
+    );
+    return ids.map((cardId): CardOffer => ({ cardId, rarity: CARD_RARITY[cardId], price: 0 }));
+  }
+
+  // Leave the card reward (picked or skipped) onward to the same destination the
+  // win used to route to directly: boss spoils on an act boss (#21), else the fork.
+  _leaveCardReward(): void {
+    if (this.location.kind !== 'cardReward') return;
+    const fi = this.location.fightIndex;
+    // Spoils (#21, Q9): the act-1 and act-2 bosses drop a free relic pick after the
+    // card reward. (The final boss ends the run in winFight, so this is fights 3/6.)
     if (isActBoss(fi)) {
       this.location = { kind: 'spoils', fightIndex: fi };
       this.nodeContent = { type: 'spoils', offers: this.rollSpoils(fi) };
@@ -517,6 +552,19 @@ export class Run {
     this.location = { kind: 'forkChoice', forkIndex: fi };
     this.nodeContent = null;
   }
+
+  // Take the card reward offer at `index` (free), add it to the deck, and move on.
+  pickCardReward(index: number): CardId | null {
+    if (this.location.kind !== 'cardReward' || this.nodeContent?.type !== 'cardReward') return null;
+    const offer = this.nodeContent.offers[index];
+    if (!offer) return null;
+    this.addCard(offer.cardId);
+    this._leaveCardReward();
+    return offer.cardId;
+  }
+
+  // Skip the card reward empty-handed (allowed, mirroring spoils) and move on.
+  skipCardReward(): void { this._leaveCardReward(); }
 
   // Leave the spoils screen (with or without a pick) straight on to the fork. The
   // post-boss member draft was removed with #56 — recruitment now lives solely in the
@@ -670,12 +718,13 @@ export class Run {
 
   // ---- storefront rolls ----------------------------------------------------
 
-  // Weighted pick without replacement.
-  private _pickDistinct<K>(entries: Array<[K, number]>, n: number): K[] {
+  // Weighted pick without replacement. Uses the run's rng stream by default; a
+  // caller can pass a separate rng (e.g. a per-fight sub-seed) to roll off-stream.
+  private _pickDistinct<K>(entries: Array<[K, number]>, n: number, rng: Rng = this.rng): K[] {
     const pool = entries.slice();
     const out: K[] = [];
     while (out.length < n && pool.length > 0) {
-      const k = weightedPick(pool, this.rng);
+      const k = weightedPick(pool, rng);
       out.push(k);
       pool.splice(pool.findIndex(([key]) => key === k), 1);
     }

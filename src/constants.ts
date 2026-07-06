@@ -1598,6 +1598,7 @@ export const RELIC_PRICE: Record<Rarity, number> = { common: 50, uncommon: 75, r
 export const ACT3_COUNTER_RELICS: RelicId[] = ['groundingRod', 'stormglass', 'warDrum', 'vanguardsBanner'];
 
 export const SPOILS_OFFER_SIZE = 3;      // relics offered on a spoils screen (pick 1, free)
+export const CARD_REWARD_SIZE = 3;       // cards offered after every won fight (pick 1, free, #57)
 export const RELIQUARY_STOCK = 3;        // relics stocked by a Reliquary visit
 export const RELIQUARY_REMOVALS_MAX = 2; // card removals per Reliquary visit (at CARD_REMOVAL_PRICE)
 
