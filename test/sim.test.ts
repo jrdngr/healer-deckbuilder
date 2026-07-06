@@ -7,7 +7,7 @@
 // baseline, not a balance target — see the BASELINE note in sim/run-sim.ts.
 
 import { runSingleRun, runSim } from '../sim/run-sim';
-import { aggregate } from '../sim/campaign-exp';
+import { aggregate, deploySizeEdge } from '../sim/campaign-exp';
 import { MEMBER_POOL } from '../src/constants';
 import { Game } from '../src/engine';
 import { playFight } from '../sim/policy';
@@ -76,10 +76,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // #44 (abilities as per-member cards): small parties field a LEANER, heal-denser
   // deck and the buyer stopped loading up on offense — the curve got easier.
   // #39 (Warlock -> Hex controller): his Vulnerability amplifies ALL party damage, a
-  // net party-power boost (he is a good pick now, not a trap), so the walls were
-  // re-anchored up again (Gatewarden ->76, Hexweaver ->182, Devourer ->190). N=200
-  // runs hot; full-run ~23% at N=1000, bosses ~62/75/44% conditional.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 198, 122, 122, 120, 90, 89, 87, 38]));
+  // net party-power boost (he is a good pick now, not a trap).
+  // #42 (real small-party decision): GOLD_PER_FIGHT 80->100, salaries rescaled up,
+  // and the win bounty scales with empty deploy seats — so the sim's small act-1
+  // rosters win more gold, a richer economy. The walls re-anchored up again
+  // (Gatewarden ->90, Hexweaver ->208, Devourer ->216); full-run ~22% at N=1000.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 197, 111, 110, 109, 80, 80, 80, 49]));
   // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
@@ -308,6 +310,20 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
     `allowed ${(rangerStart.fullRun * 100).toFixed(1)}% vs banned ${(banned.fullRun * 100).toFixed(1)}%`);
   check('the Warlock is no longer the permadeath system (near-zero permadeaths)',
     rangerStart.permadeathsByMember.warlock <= 2, `${rangerStart.permadeathsByMember.warlock} warlock permadeaths / ${N}`);
+}
+
+// --- #42: "field fewer, keep more" is a real decision (the gate) ----------------
+// The playtest found sub-max deployment was NEVER right (best-2 collapsed to 0.3%).
+// With the small-party build (loneWolf + focusStone + warband + the Warlock's
+// fewer-allies Hex + the empty-seat gold), fielding 2 must be a WINNING line in at
+// least one fight class — and a losing one without the build (so it's a real choice,
+// not a free lunch).
+{
+  const edge = deploySizeEdge(150);
+  check('with the small-party build, fielding 2 beats fielding 3 (sub-max is a real line)',
+    edge.two > edge.three, `field-2 ${(edge.two * 100).toFixed(1)}% vs field-3 ${(edge.three * 100).toFixed(1)}%`);
+  check('the build is what makes it work (field-2 collapses without it — not a free lunch)',
+    edge.two - edge.twoNoRelics >= 0.10, `build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp`);
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

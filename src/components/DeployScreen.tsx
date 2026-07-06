@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
-import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, INJURY_NAMES, memberSalary } from '../constants';
+import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, INJURY_NAMES, memberSalary, GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS } from '../constants';
 
 interface DeployScreenProps {
   run: Run;
@@ -34,18 +34,23 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
   const seatedCount = deploy.filter((x) => x != null).length;
   // Salary owed if this deployment fights: paid out of the win, so fielding fewer keeps more.
   const projectedSalary = deploy.reduce<number>((s, ri) => s + (ri != null && run.roster[ri] ? memberSalary(run.roster[ri]) : 0), 0);
+  // "Field fewer, keep more" (#42): the win bounty scales up with empty seats, and
+  // benched wages are saved — so a smaller party is the richer (riskier) line.
+  const emptySeats = 3 - seatedCount;
+  const projectedBounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * emptySeats));
+  const projectedNet = projectedBounty - projectedSalary;
 
   return (
     <main className="shop-screen deploy-screen">
       <header className="shop-head">
         <div>
           <h2>Deploy your party</h2>
-          <p>Field up to three heroes and set their positions. Up next: <strong>{enemy.name}</strong>{enemy.boss ? ' — Boss' : ''}.</p>
-          <p className="deploy-salary-line">Gold {run.gold} · salary this fight: <strong>{projectedSalary}g</strong> (paid from the win)</p>
+          <p>Field up to three heroes and set their positions — fewer bodies is riskier, but earns more gold. Up next: <strong>{enemy.name}</strong>{enemy.boss ? ' — Boss' : ''}.</p>
+          <p className="deploy-salary-line">Gold {run.gold} · win pays <strong>{projectedBounty}g</strong>{emptySeats > 0 ? ` (+${Math.round(EMPTY_SEAT_GOLD_BONUS * emptySeats * 100)}% for ${emptySeats} empty)` : ''} − <strong>{projectedSalary}g</strong> wages = <strong>{projectedNet}g</strong></p>
         </div>
         <button className="primary map-take" disabled={seatedCount === 0}
           onClick={() => act((r) => r.confirmDeployment(deploy))}>
-          {seatedCount === 0 ? 'Deploy at least one' : `Fight with ${seatedCount} · −${projectedSalary}g`}
+          {seatedCount === 0 ? 'Deploy at least one' : `Fight with ${seatedCount} · +${projectedNet}g`}
         </button>
       </header>
 

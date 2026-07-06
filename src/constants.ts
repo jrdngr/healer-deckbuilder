@@ -26,6 +26,8 @@ export type CardId =
   | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
   | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
   | 'phalanx' | 'brace' | 'provoke'
+  // Small-party cards (#42): stronger the fewer members you field.
+  | 'rally' | 'focus' | 'channel' | 'holdTheLine'
   // Per-member ability cards (#44): one bound card per member, inserted into the
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
@@ -660,6 +662,19 @@ export const TAUNT_RETARGET_SURCHARGE = 1; // extra MP to redirect the standing 
 
 export const HAND_SIZE = 3;
 
+// Small-party build (#42): relics/cards that reward fielding fewer bodies, so a
+// sub-max deployment is a real line (paired with the empty-seat gold bounty and the
+// Warlock's fewer-allies Hex). "Small" means a fielded party of SMALL_PARTY_MAX or
+// fewer; per-seat effects scale on empty deploy seats (3 − fielded).
+export const SMALL_PARTY_MAX = 2;
+export const LONE_WOLF_DMG = 2;        // loneWolf relic: +damage per fielded member while small
+export const FOCUS_STONE_MP = 2;       // focusStone relic: +max MP while small
+export const WARBAND_HP_PER_SEAT = 3;  // warband relic: +max HP per empty deploy seat
+export const RALLY_DMG_PER_SEAT = 2;   // Rally card: +auto damage this turn per empty seat
+export const FOCUS_HEAL = 3;           // Focus card: base single-target heal
+export const FOCUS_SMALL_BONUS = 4;    // Focus card: extra heal while fielding small
+export const CHANNEL_MP = 2;           // Channel card: base MP gained (+1 per empty seat)
+
 // Card definitions. `target` drives the UI's targeting flow.
 //   'single' -> one living member, 'all' -> no pick, 'dead' -> one dead member,
 //   'none'   -> no pick. Per-member ability cards (#44) are 'none' + an `ability`
@@ -740,6 +755,15 @@ export const CARDS: Record<CardId, CardDef> = {
   // redirection tool, so the Tank isn't mandatory in every party.
   provoke: { id: 'provoke', name: 'Provoke', cost: 1, target: 'single',
     desc: 'The target Taunts (enemy aims at them) and braces (Defense 1) for 2 enemy turns.' },
+  // --- small-party cards (#42): reward fielding fewer bodies -------------------
+  rally: { id: 'rally', name: 'Rally', cost: 1, target: 'none',
+    desc: `Every living member's attack this turn deals +${RALLY_DMG_PER_SEAT} per empty deploy seat.` },
+  focus: { id: 'focus', name: 'Focus', cost: 2, target: 'single', heal: FOCUS_HEAL,
+    desc: `Heal a member for ${FOCUS_HEAL} — or ${FOCUS_HEAL + FOCUS_SMALL_BONUS} while fielding ${SMALL_PARTY_MAX} or fewer.` },
+  channel: { id: 'channel', name: 'Channel', cost: 1, target: 'none', engine: true,
+    desc: `Restore ${CHANNEL_MP} MP, +1 more per empty deploy seat.` },
+  holdTheLine: { id: 'holdTheLine', name: 'Hold the Line', cost: 3, target: 'all',
+    desc: `While fielding ${SMALL_PARTY_MAX} or fewer, every living member gains a Shield.` },
 };
 
 // The fixed 12-card core starting deck. The three generic Ability cards are gone
@@ -1138,7 +1162,11 @@ export const NODES_PER_BRANCH = 2;
 
 // Raised 40 -> 80 to fund member salaries (2026-07). Deploying the classic trio
 // costs 40 salary/fight, so the trio's NET is the old 40; fielding fewer keeps more.
-export const GOLD_PER_FIGHT = 80;    // awarded for winning a (non-final) fight (before salaries)
+export const GOLD_PER_FIGHT = 100;   // awarded for winning a (non-final) fight (before salaries)
+// "Field fewer, keep more" made real (#42): the win bounty scales UP with empty
+// deploy seats, so an undermanned win pays a premium on top of the wages it saves.
+// Each empty seat adds this fraction of the base bounty (2 empty = solo = +60%).
+export const EMPTY_SEAT_GOLD_BONUS = 0.30;
 
 // ---------------------------------------------------------------------------
 // Member salaries (2026-07): after each won fight, every DEPLOYED member is paid
@@ -1147,9 +1175,12 @@ export const GOLD_PER_FIGHT = 80;    // awarded for winning a (non-final) fight 
 // tuned so the classic trio (ranger+tank+mage) costs exactly GOLD_PER_FIGHT/2. These
 // magnitudes are sim-tuned in the balance pass.
 // ---------------------------------------------------------------------------
+// Rescaled up with GOLD_PER_FIGHT (#42) so the wages a benched member saves are a
+// meaningful slice of the (now larger, empty-seat-scaled) bounty — the two levers
+// together make fielding fewer a real gold decision, not a rounding error.
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
-  ranger: 14, tank: 10, mage: 16,          // classic trio: 14 + 10 + 16 = 40
-  warlock: 11, skald: 12, berserker: 10, graveAugur: 14, beastWarden: 12,
+  ranger: 18, tank: 13, mage: 20,          // classic trio: 18 + 13 + 20 = 51
+  warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -1177,9 +1208,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // small roster — far less party DPS/bodies than the old fixed trio. HP drops across
 // the board; act 1 especially. Sim-tuned against the campaign policy.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  14, 20, 76,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#41 recruit; #39 Hex amps party)
-  70, 88, 182,    // Act 2: duo/trio normals + Hexweaver (#39 re-anchor)
-  102, 108, 190,  // Act 3: small-roster normals + Devourer (#39 re-anchor)
+  14, 20, 90,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#42 richer economy)
+  70, 88, 208,    // Act 2: duo/trio normals + Hexweaver (#42 re-anchor)
+  102, 108, 216,  // Act 3: small-roster normals + Devourer (#42 re-anchor)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
@@ -1225,6 +1256,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   fontOfMana: 'rare',
   barrier: 'rare',
   grimHarvest: 'rare',
+  // Small-party cards (#42).
+  rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
@@ -1440,7 +1473,11 @@ export type RelicId =
   // --- phase B (#22): curses (bought only, never in spoils, never forced) ---
   | 'pactOfSilence'  // you can no longer Rest; +1 passive MP each turn
   | 'crackedHourglass'// enrage on turn 8; Poison & Bolt +2 power
-  | 'rustyCrown';    // all enemies +1 attack; fight wins pay +40g
+  | 'rustyCrown'     // all enemies +1 attack; fight wins pay +40g
+  // --- small-party relics (#42): reward fielding fewer bodies ----------------
+  | 'loneWolf'       // while fielding <=2, fielded members deal +2 damage
+  | 'focusStone'     // while fielding <=2, +2 max MP (fewer bodies to heal)
+  | 'warband';       // fielded members gain +3 max HP per empty deploy seat
 
 export interface RelicDef {
   id: RelicId;
@@ -1531,6 +1568,13 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `CURSE — enemies enrage on turn ${CRACKED_HOURGLASS_ENRAGE}; Poison and Bolt gain +${HOURGLASS_POWER_BONUS} power.` },
   rustyCrown: { id: 'rustyCrown', name: 'Rusty Crown', rarity: 'rare', icon: '👑', curse: true,
     desc: `CURSE — normal enemies attack +${RUSTY_CROWN_ATTACK} harder (bosses are proud enough); fight wins pay +${RUSTY_CROWN_GOLD}g.` },
+  // --- small-party relics (#42): a build-around for fielding fewer bodies -------
+  loneWolf: { id: 'loneWolf', name: 'Lone Wolf Totem', rarity: 'uncommon', icon: '🐺',
+    desc: `While fielding ${SMALL_PARTY_MAX} or fewer members, each of them deals +${LONE_WOLF_DMG} damage.` },
+  focusStone: { id: 'focusStone', name: 'Focus Stone', rarity: 'uncommon', icon: '🔷',
+    desc: `While fielding ${SMALL_PARTY_MAX} or fewer members, +${FOCUS_STONE_MP} max MP (fewer bodies to tend).` },
+  warband: { id: 'warband', name: 'Warband Standard', rarity: 'rare', icon: '⚔️',
+    desc: `Fielded members gain +${WARBAND_HP_PER_SEAT} max HP for each empty deploy seat.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

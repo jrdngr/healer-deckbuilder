@@ -12,6 +12,8 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   lifebloom: 'heal', surge: 'mana', battleHymn: 'power', barrier: 'ward',
   bloodTithe: 'mana', martyrsGift: 'heal', grimHarvest: 'power',
   phalanx: 'ward', brace: 'ward', provoke: 'ward',
+  // Small-party cards (#42).
+  rally: 'power', focus: 'heal', channel: 'mana', holdTheLine: 'ward',
   // Per-member ability cards (#44): the healer enabling an aggressive move — power.
   imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
   conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward',

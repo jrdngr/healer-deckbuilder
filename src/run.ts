@@ -12,7 +12,7 @@ import {
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
-  GOLD_PER_FIGHT, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
+  GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, SHOP_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
@@ -462,13 +462,22 @@ export class Run {
     return total;
   }
 
+  // Unfilled deploy slots for the upcoming/current fight (#42): fielding fewer than
+  // three leaves empty seats, which scale the win bounty up.
+  emptySeats(): number {
+    return this.deployment.filter((ri) => ri == null).length;
+  }
+
   winFight(): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
     this.fightsWon += 1;
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
-    // The Rusty Crown (#22) pays its bonus on every win it made harder.
-    const reward = GOLD_PER_FIGHT + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
+    // "Field fewer, keep more" (#42): the base bounty scales UP with empty deploy
+    // seats, so an undermanned win pays a premium. The Rusty Crown (#22) bonus is
+    // added after (a flat reward for a harder fight, not scaled by seats).
+    const bounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * this.emptySeats()));
+    const reward = bounty + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
     // Pay each DEPLOYED member their salary out of the winnings (2026-07); benched
     // members are free, so fielding fewer keeps more gold. Gold never goes negative.
     this.gold = Math.max(0, this.gold + reward - this.deployedSalary());

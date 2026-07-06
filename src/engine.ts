@@ -12,6 +12,8 @@
 import {
   MEMBER_DEFS, MEMBER_POOL, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,
   HEX_TURNS, HEX_VULN_BY_SIZE, HEX_VULN_PER_POWER,
+  SMALL_PARTY_MAX, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
+  RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, CHANNEL_MP,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
@@ -240,6 +242,10 @@ export class Game {
     this.enemyDef = config.enemy.def ?? (config.enemy.boss ? BOSS_ENEMY_DEF : DEFAULT_ENEMY_DEF);
     this.enrageTurn = config.enemy.enrageTurn ?? ENRAGE_TURN;
 
+    // Warband Standard (#42): every fielded member gains max HP per EMPTY deploy
+    // seat, so a smaller party is sturdier per body. Computed once from the config.
+    const emptySeatsAtStart = config.party.filter((p) => p.empty === true).length;
+    const warbandBonus = (config.relics?.includes('warband') ? WARBAND_HP_PER_SEAT * emptySeatsAtStart : 0);
     this.members = config.party.map((p, slot): Member => {
       // Identity comes from the drafted member id (#27) when present, else the
       // classic trio member that homes this slot. The engine seats it at the map
@@ -251,13 +257,14 @@ export class Game {
       // absent (memberById skips absent members).
       const empty = p.empty === true;
       const down = empty || (p.incapacitated ?? false);
+      const maxHP = p.maxHP + (empty ? 0 : warbandBonus); // Warband only sturdies seated bodies
       return {
-        slot: slot as Slot, id: d.id, name: d.name, maxHP: p.maxHP, damage: p.damage,
+        slot: slot as Slot, id: d.id, name: d.name, maxHP, damage: p.damage,
         ability: d.ability, abilityPower: p.abilityPower,
         // An incapacitated member ('incapacitate' injury mode) or an empty slot starts
         // the fight dead; diedThisFight stays false (no NEW scar for a fight they never
         // stood in).
-        hp: down ? 0 : p.maxHP, alive: !down,
+        hp: down ? 0 : maxHP, alive: !down,
         shield: false, // pending shield (blocks the next damaging instance)
         shieldTurns: 0,
         brace: false,  // pending Brace (one-shot damage reduction)
@@ -285,7 +292,9 @@ export class Game {
       poison: 0, poisonTurns: 0, vulnerable: 0, vulnerableTurns: 0, enraged: false,
     };
 
-    this.maxMana = config.healer.maxMana;
+    // Focus Stone (#42): fewer bodies to tend means more MP to spare while small.
+    const focusStoneMp = (config.relics?.includes('focusStone') && (3 - emptySeatsAtStart) <= SMALL_PARTY_MAX) ? FOCUS_STONE_MP : 0;
+    this.maxMana = config.healer.maxMana + focusStoneMp;
     this.handSize = config.healer.handSize;
     this.carryover = config.healer.carryover ?? 0;
     this.restRegen = config.healer.restRegen;
@@ -380,7 +389,9 @@ export class Game {
       // The Boar (#29) fights alongside the Warden, lending its strike (1 -> 5).
       base += BOAR_STRIKE_BONUS;
     }
-    return base + this.hymnBonus + banner;
+    // Lone Wolf Totem (#42): a small fielded party hits harder per body.
+    const lone = this.hasRelic('loneWolf') && this.fieldedPartySize() <= SMALL_PARTY_MAX ? LONE_WOLF_DMG : 0;
+    return base + this.hymnBonus + banner + lone;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -1538,6 +1549,48 @@ export class Game {
         m.defenseAmount = Math.max(m.defense > 0 ? m.defenseAmount : 0, TAUNT_LITE_DEFENSE);
         this._log(`${m.name} Provokes — the enemy turns to them (Defense ${TAUNT_LITE_DEFENSE}) for ${TAUNT_LITE_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_LITE_TURNS });
+        break;
+      }
+      // --- small-party cards (#42) ---------------------------------------------
+      case 'rally': {
+        // Every attack this turn deals more, scaled by empty deploy seats — a lone
+        // striker swings for a lot; a full party gains nothing.
+        const empty = 3 - this.fieldedPartySize();
+        this.hymnBonus = Math.max(this.hymnBonus, RALLY_DMG_PER_SEAT * empty);
+        this._log(`Rally: every attack this turn deals +${RALLY_DMG_PER_SEAT * empty} (${empty} empty seat${empty === 1 ? '' : 's'}).`, 'status');
+        this._emit({ kind: 'hymn', bonus: this.hymnBonus });
+        break;
+      }
+      case 'focus': {
+        // A concentrated heal: more efficient when there are fewer bodies to spread across.
+        const m = this.members[target as number];
+        const amount = (card.heal ?? FOCUS_HEAL) + (this.fieldedPartySize() <= SMALL_PARTY_MAX ? FOCUS_SMALL_BONUS : 0);
+        const healed = this._healMember(m, amount, true);
+        this._log(`Focus: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
+        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        break;
+      }
+      case 'channel': {
+        const empty = 3 - this.fieldedPartySize();
+        const before = this.mp;
+        this.mp = Math.min(this.maxMana, this.mp + CHANNEL_MP + empty);
+        this._log(`Channel restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
+        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
+        break;
+      }
+      case 'holdTheLine': {
+        // A mass Shield, but only a small party can hold it — a reward for undermanning.
+        if (this.fieldedPartySize() <= SMALL_PARTY_MAX) {
+          for (const m of this.livingMembers()) {
+            m.shield = true;
+            m.shieldTurns = SHIELD_TURNS;
+            m.brace = false; m.braceTurns = 0;
+            this._emit({ kind: 'shieldApplied', slot: m.slot });
+          }
+          this._log('Hold the Line — the small party braces behind Shields.', 'status');
+        } else {
+          this._log('Hold the Line finds too many bodies to shield (field 2 or fewer).', 'status');
+        }
         break;
       }
       case 'cleanse': {

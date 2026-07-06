@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REGEN_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, CULTIVATE_TURNS, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
-import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
+import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import type { CardId, ModifierId, RelicId } from '../src/constants';
 
 let passed = 0;
@@ -297,6 +297,40 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
     const card = CARDS[id];
     if (card.ability == null) continue;
     eq(`${id} is a no-target ability card`, card.target, 'none');
+  }
+}
+
+// --- #42: small-party cards scale on empty deploy seats -------------------------
+{
+  const mkEmpty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
+  // A DUO (ranger + mage, one empty seat) — fielded size 2, one empty.
+  const duo = () => {
+    const cfg = defaultBattleConfig();
+    cfg.party = [partyFromMembers(['ranger'])[0], partyFromMembers(['mage'])[0], mkEmpty()];
+    const g = new Game(21, cfg); g.start(); g.mp = 10; g.enemy.hp = 999;
+    return g;
+  };
+  {
+    // Rally: +RALLY_DMG_PER_SEAT per empty seat (a duo has 1 empty).
+    const g = duo();
+    g.playCard(giveCard(g, 'rally'));
+    eq('Rally buffs autos by RALLY_DMG_PER_SEAT × empty seats', g.hymnBonus, RALLY_DMG_PER_SEAT * 1);
+  }
+  {
+    // Focus: heals FOCUS_HEAL + FOCUS_SMALL_BONUS while fielding <= SMALL_PARTY_MAX.
+    const g = duo();
+    g.members[0].hp = 1;
+    g.playCard(giveCard(g, 'focus'), SLOT.LEFT);
+    eq('Focus heals the small-party amount', g.members[0].hp, Math.min(g.members[0].maxHP, 1 + FOCUS_HEAL + FOCUS_SMALL_BONUS));
+  }
+  {
+    // Hold the Line shields a small party; a full trio gets nothing.
+    const g = duo();
+    g.playCard(giveCard(g, 'holdTheLine'));
+    check('Hold the Line shields a small party', g.members[0].shield && g.members[1].shield);
+    const trio = new Game(21, defaultBattleConfig()); trio.start(); trio.mp = 10;
+    trio.playCard(giveCard(trio, 'holdTheLine'));
+    check('Hold the Line does nothing for a full trio', !trio.members[0].shield);
   }
 }
 

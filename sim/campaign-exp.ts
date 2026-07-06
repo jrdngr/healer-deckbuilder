@@ -13,8 +13,8 @@
 
 import { Game } from '../src/engine';
 import { Run } from '../src/run';
-import { FIGHT_COUNT, DRAFT_POOL } from '../src/constants';
-import type { MemberId } from '../src/constants';
+import { FIGHT_COUNT, DRAFT_POOL, defaultBattleConfig, partyFromMembers, abilityCardsForParty, isAbilityCard, DEFAULT_ENEMY_DEF } from '../src/constants';
+import type { MemberId, RelicId, PartyMemberConfig, EnemyDef } from '../src/constants';
 import { playFight, resolveNode, chooseBranch, chooseSpoil, advanceBranch, draftPick, deployBest } from './policy';
 
 // Same per-fight sub-seed the real runner uses (run-sim.ts), recreated here so this
@@ -120,6 +120,59 @@ function aggregate(n: number, firstSeed: number, opts: Options = {}): Agg {
 
 const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
 
+// ---------------------------------------------------------------------------
+// #42 gate: is a SUB-MAX deployment ever the winning line?
+//
+// Field K of a fixed roster against the same enemy, with the small-party build
+// (loneWolf + focusStone + warband) equipped, and compare win rates. If fielding 2
+// wins MORE than fielding 3 in some fight class, the deployment decision is real —
+// the relics + the empty-seat gold + the Warlock's fewer-allies Hex outweigh the
+// lost body there. Without them, a third body is always strictly better (the trap
+// the playtest measured).
+// ---------------------------------------------------------------------------
+
+const SMALL_PARTY_RELICS: RelicId[] = ['loneWolf', 'focusStone', 'warband'];
+
+function mkEmpty(): PartyMemberConfig {
+  return { maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true };
+}
+
+// Win rate fielding the first `fielded` members of `roster` against `enemyDef`/`hp`,
+// with `relics` equipped, over N seeds. The battle party is length 3 (empties fill in).
+function fieldedWinRate(n: number, roster: MemberId[], fielded: number, relics: RelicId[], enemyDef: EnemyDef, hp: number, attackBonus: number): number {
+  const party = partyFromMembers(roster);
+  let wins = 0;
+  for (let s = 1; s <= n; s++) {
+    const cfg = defaultBattleConfig();
+    cfg.relics = relics;
+    cfg.party = [0, 1, 2].map((i) => (i < fielded ? party[i] : mkEmpty()));
+    cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+    cfg.enemy = { maxHP: hp, boss: false, attackBonus, def: enemyDef };
+    const g = new Game(s, cfg);
+    playFight(g);
+    if (g.status === 'win') wins++;
+  }
+  return wins / n;
+}
+
+// The gate measurement: the small-party build's fielded-2 vs fielded-3 win rate on a
+// fight tuned to be a genuine contest. The roster's third body is a low-damage soak
+// (Tank), so dropping it and buffing the two strikers (loneWolf +2 each, plus the
+// Warlock's Hex is stronger with fewer allies) can out-DPS the plain trio while
+// warband/focusStone keep the smaller party alive.
+export function deploySizeEdge(n: number): { two: number; three: number; twoNoRelics: number } {
+  const roster: MemberId[] = ['warlock', 'mage', 'tank']; // Hex + striker + low-dmg soak
+  const hp = 108, atk = 3; // a real early-normal contest for this roster
+  return {
+    // Fielding 2 WITH the small-party build.
+    two: fieldedWinRate(n, roster, 2, SMALL_PARTY_RELICS, DEFAULT_ENEMY_DEF, hp, atk),
+    // Fielding 3 (the relics don't trigger past SMALL_PARTY_MAX, so it's the plain line).
+    three: fieldedWinRate(n, roster, 3, SMALL_PARTY_RELICS, DEFAULT_ENEMY_DEF, hp, atk),
+    // Fielding 2 WITHOUT the build — the "trap" baseline (a third body would be better).
+    twoNoRelics: fieldedWinRate(n, roster, 2, [], DEFAULT_ENEMY_DEF, hp, atk),
+  };
+}
+
 // CLI report.
 if (process.argv[1] && process.argv[1].endsWith('campaign-exp.ts')) {
   const N = Number(process.argv[2] ?? 1000);
@@ -146,6 +199,13 @@ if (process.argv[1] && process.argv[1].endsWith('campaign-exp.ts')) {
     if (byMember[id] > 0) console.log(`  ${id.padEnd(11)} ${byMember[id]}`);
   }
   console.log(`  total permadeaths: ${total}`);
+
+  console.log('\n-- #42 gate: is sub-max a winning line? (warlock/mage/tank, small-party build) --');
+  const edge = deploySizeEdge(N);
+  console.log(`  field 2 WITH small-party build: ${pct(edge.two)}`);
+  console.log(`  field 3 (plain, relics inert):  ${pct(edge.three)}`);
+  console.log(`  field 2 WITHOUT the build:      ${pct(edge.twoNoRelics)}  (the trap baseline)`);
+  console.log(`  verdict: ${edge.two > edge.three ? 'sub-max IS the winning line here ✓' : 'sub-max still loses to max'} (build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp)`);
 }
 
 export { runCampaign, aggregate };

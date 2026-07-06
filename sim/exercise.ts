@@ -26,6 +26,7 @@ import {
   CARDS, RELIC_IDS, RELICS, SLOT, RARITY_PRICE, GROUNDING_ROD_REDUCTION,
   POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, injuryRecordCap,
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
+  MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -52,6 +53,7 @@ const EXERCISE_DECK: CardId[] = [
   'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'refresh', 'cleanse',
   'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
   'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
+  'rally', 'focus', 'channel', 'holdTheLine',
 ];
 
 // A generous healer + a high-HP, low-threat enemy, so a fight lasts long enough
@@ -163,6 +165,15 @@ function probeGame(relics: RelicId[], enemy: Partial<BattleConfig['enemy']> = {}
   cfg.enemy = { ...cfg.enemy, ...enemy };
   return new Game(7, cfg);
 }
+
+// A SOLO fielded party (ranger + two empty seats), for the small-party relics (#42).
+function smallProbeGame(relics: RelicId[]): Game {
+  const cfg = defaultBattleConfig();
+  cfg.relics = relics;
+  const mkEmpty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true as const });
+  cfg.party = [cfg.party[0], mkEmpty(), mkEmpty()];
+  return new Game(7, cfg);
+}
 function single(damage: number, slot: Slot, type: Telegraph['type'] = 'single'): Telegraph {
   return { type, hidden: type === 'hidden', damage, targets: [slot], enraged: false, forTurn: 2 };
 }
@@ -260,6 +271,21 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const base = new Game(7, defaultBattleConfig()).attackDamage('single', 1);
     const g = probeGame(['rustyCrown']); // normal enemy
     return g.attackDamage('single', 1) === base + RUSTY_CROWN_ATTACK;
+  },
+  // --- small-party relics (#42): probed with a SOLO fielded party ---------------
+  loneWolf: () => {
+    const g = smallProbeGame(['loneWolf']); g.start();
+    return g.memberDamage(g.members[0]) === MEMBER_POOL.ranger.damage + LONE_WOLF_DMG;
+  },
+  focusStone: () => {
+    const g = smallProbeGame(['focusStone']); g.start();
+    const base = smallProbeGame([]).maxMana;
+    return g.maxMana === base + FOCUS_STONE_MP;
+  },
+  warband: () => {
+    const g = smallProbeGame(['warband']); g.start();
+    // A solo deploy leaves 2 empty seats -> +WARBAND_HP_PER_SEAT * 2 max HP.
+    return g.members[0].maxHP === MEMBER_POOL.ranger.maxHP + WARBAND_HP_PER_SEAT * 2;
   },
 };
 

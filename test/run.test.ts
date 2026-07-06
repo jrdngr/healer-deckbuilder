@@ -3,7 +3,7 @@ import { Run } from '../src/run';
 import { makeRng } from '../src/rng';
 import {
   FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH, NON_FIGHT_NODES,
-  GOLD_PER_FIGHT, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
+  GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, SHOP_SIZE, RARITY_PRICE, CARD_RARITY, MODIFIERS, DEFAULT_HEALER,
   defaultDeck, MAX_UPGRADE_SLOTS, EVENTS, ENEMY_HP_BY_FIGHT, ENEMY_ENRAGE_TURN_BY_FIGHT,
   CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
@@ -1090,7 +1090,12 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('deployedSalary sums only the fielded members', run.deployedSalary(), MEMBER_BASE_SALARY['tank']);
   const before = run.gold;
   run.winFight();
-  eq('a solo deployment pays one salary', run.gold, before + GOLD_PER_FIGHT - MEMBER_BASE_SALARY['tank']);
+  // #42: a solo deploy leaves 2 empty seats, so the win bounty scales up (+60%) —
+  // fielding fewer pays a premium on top of the wages it saves.
+  const soloBounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * 2));
+  eq('a solo win pays the empty-seat-scaled bounty minus one salary',
+    run.gold, before + soloBounty - MEMBER_BASE_SALARY['tank']);
+  check('the empty-seat bounty exceeds the base bounty (#42)', soloBounty > GOLD_PER_FIGHT);
 
   // Applying a party upgrade bumps the salary counter (so the fee rises next fight).
   const up = new Run(72);

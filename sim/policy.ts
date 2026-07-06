@@ -463,6 +463,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
   lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
   phalanx: 2, brace: 2, provoke: 2,
+  // Small-party cards (#42): the best-3 policy never fields small, so it has no
+  // tactic for them — low buy value (they're for a human's undermanned build).
+  rally: 1, focus: 1, channel: 1, holdTheLine: 1,
   // Ability cards (#44) — inserted per-fight, never bought.
   imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, hush: 0, beckon: 0,
 };
@@ -566,6 +569,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   martyrsIcon: 6, duskChime: 6, aegisFont: 4, firstLightTaper: 0,
   // Curses are deliberate player trades; the fixed policy never buys one.
   pactOfSilence: 0, crackedHourglass: 0, rustyCrown: 0,
+  // Small-party relics (#42): the best-3 policy never fields small, so it can't use
+  // these — value 0 (they're a human undermanned-build reward, exercised via #42's gate).
+  loneWolf: 0, focusStone: 0, warband: 0,
 };
 
 // Spoils are free: always take the best-valued offer.
