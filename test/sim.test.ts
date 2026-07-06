@@ -84,25 +84,34 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // Passive-MP upgrade repriced 75->150 (double): the buyer's strongest sustain lever
   // now costs a real gold commitment, so fewer runs can afford it and the later walls
   // got a touch harder — re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 197, 102, 102, 102, 73, 73, 72, 34]));
-  // Full-run gate around the observed ~22% (N=200 runs a touch hot vs N=1000).
+  // ENEMY-FIRST ordering (2026-07-06): the enemy now takes the first turn — one
+  // opening single-target strike lands before the player can act (restricted to a
+  // single so it can't gib a squishy; see engine _openingStrike). That is one extra
+  // hit per fight, which raised difficulty across the board: full-run ~22% -> ~10.5%,
+  // the walls sharper (Gatewarden ~61% -> ~39%). Re-pinned on the new observed numbers
+  // as a KNOWN regression — a dedicated balance pass (re-anchoring ENEMY_HP_BY_FIGHT)
+  // is deferred, as the maintainer flagged the balance fix as separate work.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 189, 73, 73, 72, 42, 40, 40, 21]));
+  // Full-run gate around the observed ~10.5% (enemy-first regression; was ~22%).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
-  check('full-run consistent with the ~22% campaign band',
-    r.fullRun.rate - r.fullRun.ci95 <= 0.30 && r.fullRun.rate + r.fullRun.ci95 >= 0.15,
+  check('full-run consistent with the ~10.5% enemy-first band',
+    r.fullRun.rate - r.fullRun.ci95 <= 0.16 && r.fullRun.rate + r.fullRun.ci95 >= 0.06,
     `${(r.fullRun.rate * 100).toFixed(1)}% ±${(r.fullRun.ci95 * 100).toFixed(1)}`);
   // Normals clear cleanly even under-strength: act-1/2 normals >= 88%, act-3 >= 85%.
   for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 88%`, r.perFight[fi].rate >= 0.88);
   for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 85%`, r.perFight[fi].rate >= 0.85);
-  // Provisional boss gates on the campaign observations (N=200: Gatewarden ~61%,
-  // Hexweaver ~76%, Devourer ~65%) — CI-consistent bands.
+  // Provisional boss gates on the campaign observations. Re-pinned for ENEMY-FIRST
+  // (2026-07-06): the opening strike lowered the conditional boss winrates (N=200:
+  // Gatewarden ~39%, Hexweaver ~58%, Devourer ~53%). These are conditional on
+  // REACHING the boss, so the later two are noisy (small n) — CI-consistent bands.
   const bandConsistent = (p: { rate: number; ci95: number }, lo: number, hi: number): boolean =>
     p.rate + p.ci95 >= lo && p.rate - p.ci95 <= hi;
-  check('Act-1 boss (Gatewarden) consistent with ~50-72% (the under-strength wall)', bandConsistent(r.perFight[2], 0.50, 0.72),
+  check('Act-1 boss (Gatewarden) consistent with ~28-50% (the enemy-first wall)', bandConsistent(r.perFight[2], 0.28, 0.50),
     `${(r.perFight[2].rate * 100).toFixed(1)}% ±${(r.perFight[2].ci95 * 100).toFixed(1)}`);
-  check('Act-2 boss (Hexweaver) consistent with ~66-86%', bandConsistent(r.perFight[5], 0.66, 0.86),
+  check('Act-2 boss (Hexweaver) consistent with ~44-72%', bandConsistent(r.perFight[5], 0.44, 0.72),
     `${(r.perFight[5].rate * 100).toFixed(1)}% ±${(r.perFight[5].ci95 * 100).toFixed(1)}`);
-  check('Act-3 boss (Devourer) consistent with ~52-78%', bandConsistent(r.perFight[8], 0.52, 0.78),
+  check('Act-3 boss (Devourer) consistent with ~36-72%', bandConsistent(r.perFight[8], 0.36, 0.72),
     `${(r.perFight[8].rate * 100).toFixed(1)}% ±${(r.perFight[8].ci95 * 100).toFixed(1)}`);
 }
 
@@ -325,8 +334,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   const edge = deploySizeEdge(150);
   check('with the small-party build, fielding 2 beats fielding 3 (sub-max is a real line)',
     edge.two > edge.three, `field-2 ${(edge.two * 100).toFixed(1)}% vs field-3 ${(edge.three * 100).toFixed(1)}%`);
+  // Enemy-first (2026-07-06) made field-2 harder overall (it now tops out ~7%), so the
+  // absolute lift shrank — but the PROPERTY holds: without the build field-2 collapses
+  // to ~0%, so the build is still entirely what makes sub-max deployment a line. Lift
+  // threshold relaxed 10pp -> 5pp to track the harder environment.
   check('the build is what makes it work (field-2 collapses without it — not a free lunch)',
-    edge.two - edge.twoNoRelics >= 0.10, `build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp`);
+    edge.two - edge.twoNoRelics >= 0.05, `build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp`);
 }
 
 if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }

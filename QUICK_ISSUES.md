@@ -1,9 +1,6 @@
 # Quick items to fix that don't need full issues
 
-- Enemy should take the first turn. Whatever balance issues this causes need to be fixed another way, maybe by simply limiting which enemy attacks can be used on the first turn.
-- Double the cost of the passive MP healer upgrade
-- Rename "Hexen Warlock" to "Warlock"
-- Remove ability text from party member cards
+- BALANCE FOLLOW-UP (from enemy-first): the enemy-first opening strike landed but dropped full-run winrate ~22% -> ~10.5% (Gatewarden ~61% -> ~39%). Sim gates were re-pinned to the harder numbers as a known regression. Do a proper balance pass (re-anchor ENEMY_HP_BY_FIGHT down) to pull winrates back toward the ~22% / 50-72% boss target.
 - Path selection animation makes it look like the player is skipping both nodes. Get rid of this animation entirely.
 - Remember the party member positions between fights
 - Party members should no longer fully heal between fights. They should only heal a percentage of their max HP. Let's start with 20% and do a balance pass to figure out the best number. Add back the infirmary node which allows the player to heal their party members for a price and heal injuries for a much larger price. If a party member is dead at the end of the fight, resurrect them with the normal amount of recovered HP.
@@ -15,4 +12,7 @@
 - Winning a fight should have card rewards. Offer 3 cards and the player chooses 1. Cards probabilities are based on rarity. These cards are free
 - Show UI elements for injuries on players. Use same style as buffs and debuffs. Show injury name, mouse over for details
 - Enemy is targeting dead players. This is a bug. It also seems like the telegraph is aimed at a dead player but a living player still gets hit sometimes.
-- 
+- Continue saved run button doesn't work
+- Add a button to view your deck in the top status bar
+- Change the starting deck to be 1x group heal, 3x quick heal, 2x heal
+- Passive MP gain upgrades should only trigger when 0 or 1 card is played.

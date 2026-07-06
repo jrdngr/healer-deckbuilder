@@ -1,9 +1,13 @@
 // Core battle engine for the Healer Deckbuilder prototype.
 // Pure logic, no DOM. Drives one handcrafted fight end to end.
 //
-// Phase cycle per turn (player-first, #26): player phase -> party phase -> enemy phase.
+// Turn order: the enemy takes the first turn — an opening strike lands before the
+// player can act. After that, each turn runs player phase -> party phase -> enemy
+// phase. The opener is a bonus ambush (a plain single, never a heavy/sweep) that
+// advances neither the rotation nor the enrage clock, so turn 1 is still the
+// player's first planning turn against the standing telegraph.
 // The UI drives it by calling:
-//   new Game(seed); game.start();          // telegraphs turn 1, opens the player phase (no mount-time blow)
+//   new Game(seed); game.start();          // resolves the opening strike, telegraphs turn 1, opens the player phase
 //   game.playCard(handIndex, target);      // during player phase
 //   game.skipTurn();                        // regen MP instead of playing (before any card)
 //   game.endTurn();                         // discard, party phase, then the enemy resolves + telegraphs next
@@ -580,9 +584,10 @@ export class Game {
       }
       return this._telegraphFromStep(this._normalizeStep(rotation[idx]), turn);
     }
-    // #26 retired the turn-1-single patch (#04): under player-first ordering the
-    // party acts and can Brace/Shield before the opening blow ever resolves, so the
-    // first attack no longer needs to be forced to a plain single hit.
+    // The standing telegraph is unrestricted even on turn 1: the player gets a full
+    // planning turn against it (can Brace/Shield before it resolves at end of turn).
+    // The one unreactable blow — the enemy's opening strike — is the only attack held
+    // to a plain single, and that restriction lives in _openingStrike, not here.
     const type = this._pickType(turn);
     const primary = this._pickPrimary(type);
     const targets = this._geometry(type, primary);
@@ -681,14 +686,37 @@ export class Game {
   start(): this {
     this.events = [];
     this._log('Combat begins.', 'system');
-    // Player-first ordering (#26 / flaw #12): the opening telegraph stands and the
-    // player acts BEFORE the enemy's first resolution — no more free mount-time
-    // blow. The enemy phase now runs only at end of turn (_endTurnInternal), so the
-    // party always gets a planning turn against turn 1's telegraph.
+    // Enemy-first ordering: the enemy takes the first turn — an opening strike lands
+    // before the player can act. It is a bonus ambush that advances neither the
+    // rotation nor the enrage clock, so turn 1 remains the player's first planning
+    // turn against the standing telegraph generated below.
+    this._openingStrike();
+    if (this.status !== 'playing') return this; // an opener can't wipe a full party, but stay safe
     this.telegraph = this._generateTelegraph(this.turn);
     this._announceChannel(this.telegraph);
     this._startPlayerPhase();
     return this;
+  }
+
+  // The enemy's opening strike (enemy-first ordering). One unreactable hit lands
+  // before the player's first turn, so it is restricted to a plain single-target
+  // blow — never a heavy/sweep/AoE that would gib a squishy before any Shield can
+  // go up ("limiting which enemy attacks can be used on the first turn"). Resolved
+  // directly: it does NOT advance the rotation index or the turn counter, so a
+  // boss's learnable cycle and the enrage race are untouched — it is purely a bonus
+  // ambush layered ahead of the normal turn-1 telegraph.
+  _openingStrike(): void {
+    const primary = this._pickPrimary('single');
+    const opener: Telegraph = {
+      type: 'single', hidden: false,
+      damage: this.attackDamage('single', this.turn),
+      targets: this._geometry('single', primary),
+      enraged: false, forTurn: this.turn, turnsUntilResolve: 1,
+      name: 'Ambush',
+    };
+    this._emit({ kind: 'enemyPhase' });
+    this._resolveAttack(opener);
+    this._checkWipe();
   }
 
   // Kill a member — unless the Martyr's Icon (#22) spends its once-per-fight

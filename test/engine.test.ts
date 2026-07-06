@@ -1429,31 +1429,37 @@ function devourerGame(seed: number, maxHP = 200, enrageTurn = 99): Game {
   check('Maw resolved for DEVOURER_MAW_DMG on each member', allTookMaw);
 }
 
-// --- player-first ordering: the party acts before the first enemy blow (#26) -
+// --- enemy-first ordering: an opening strike lands before the player's turn ----
 {
-  // The proper fix for flaw #12: start() no longer resolves an enemy attack on
-  // mount. The opening telegraph stands and the player gets a full turn first, so
-  // the turn-1-single patch (#04) is retired — turn 1 may now be any type.
+  // The enemy takes the first turn: start() resolves one opening strike before the
+  // player can act. It is unreactable (no Shield can be up yet), so it is always a
+  // plain single hit — never a heavy/sweep/AoE. It is a bonus ambush that leaves the
+  // turn counter at 1, so turn 1 is still the player's first planning turn.
   const boss = defaultBattleConfig(); boss.enemy = { maxHP: 150, boss: true, attackBonus: 0 };
   const g = new Game(3, boss);
   g.start();
-  eq('player phase opens the fight', g.phase, 'player');
-  check('party is untouched before the first player turn', g.members.every((m) => m.hp === m.maxHP));
-  check('no enemy hit landed on mount', !g.log.some((l) => l.kind === 'hit'));
-  check('an opening telegraph is standing', g.telegraph !== null);
+  eq('player phase opens the fight after the enemy strikes', g.phase, 'player');
+  check('the opening strike damaged exactly one member',
+    g.members.filter((m) => m.hp < m.maxHP).length === 1);
+  check('an enemy hit landed on mount', g.log.some((l) => l.kind === 'hit'));
+  check('the opening strike animates in the event feed',
+    g.events.some((e) => e.kind === 'enemyAttack'));
+  check('a standing telegraph opens the player turn', g.telegraph !== null);
   eq('this.turn is 1 during the opening player phase', g.turn, 1);
-  // Turn 1 is no longer forced to single — the boss pool opens on heavy/sweep too.
-  let sawNonSingle = false;
+  // The opener is ALWAYS a plain single, whatever the enemy's attack pool — a boss
+  // that opens on heavy/sweep otherwise would gib a squishy before any answer.
   for (let seed = 0; seed < 400; seed++) {
-    if (new Game(seed, boss)._generateTelegraph(1).type !== 'single') { sawNonSingle = true; break; }
+    const gg = new Game(seed, boss); gg.start();
+    const hits = gg.events.filter((e) => e.kind === 'enemyAttack');
+    check('opening strike is single-target (one target)', hits.length === 1, `seed=${seed} hits=${hits.length}`);
   }
-  check('turn-1 boss telegraph is no longer forced to single', sawNonSingle);
-  // The very first end-of-turn resolves turn 1's blow (party phase runs first).
-  const g2 = new Game(3, boss); g2.start();
-  const before = g2.members.reduce((s, m) => s + m.hp, 0);
-  g2.endTurn();
-  check('the enemy resolves its opening blow at end of turn 1',
-    g2.log.some((l) => l.kind === 'hit') || g2.members.reduce((s, m) => s + m.hp, 0) < before || g2.status !== 'playing');
+  // The opener does not advance a boss's learnable rotation: after start(), turn 1's
+  // standing telegraph is still the rotation's first step (Gatewarden opens 'single').
+  const gwCfg = defaultBattleConfig();
+  gwCfg.enemy = { maxHP: 200, boss: true, attackBonus: 0, def: GATEWARDEN_DEF };
+  const gw = new Game(3, gwCfg); gw.start();
+  eq('opener leaves the rotation index at 0', gw.rotationIndex, 0);
+  eq("turn 1's standing telegraph is the rotation's first step", gw.telegraph!.type, 'single');
 }
 
 // --- enrage fires exactly on ENRAGE_TURN; countdown counts down -------------
