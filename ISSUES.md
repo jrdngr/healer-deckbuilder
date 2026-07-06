@@ -29,13 +29,21 @@ truth for where the project stands; a stale Status column costs the next session
 
 ## Progress
 
-**Done: 01–38 — the demo (01–24), the experiments, the full post-demo party subsystem, the
-2026-07-04 playtest batch, and the #34 sim-policy follow-up (#38).
-Open: 39–43, filed from the 2026-07-05 roster-campaign playtest (see
-[Playtest 2026-07-05](#playtest-2026-07-05-roster-campaign-round)): the Warlock is a trap
-pick/permadeath magnet (#39), permadead members return to the pool as fresh copies (#40), act-1
-recruit luck decides the Gatewarden (#41), the deploy-fewer/salary decision space is degenerate
-(#42), and the draft UI endorses the trap via `rated N` (#43).**
+**Done: 01–44 — the demo (01–24), the experiments, the full post-demo party subsystem, the
+2026-07-04 playtest batch, the #34 sim-policy follow-up (#38), and the 2026-07-05 roster-campaign
+batch (#39–#44), all landed 2026-07-05.**
+The 2026-07-05 batch: **#43** dropped the misleading `rated N` from offers; **#40** added a graveyard
+so a permadead member is never re-offered (save v10); **#41** guarantees an act-1 Recruit so a map
+roll no longer decides the Gatewarden (re-anchored for the duo); **#44** moved party abilities out of
+the generic Ability card into per-member cards the healer plays (Imbue Venom / Bolster / Unleash /
+Hex / …), injected per deployed member; **#39** redesigned the Warlock from an HP→mana suicide
+striker into a Hex controller whose Vulnerability is stronger with fewer allies (permadeaths 386→0,
+starter spread 2.5×→~1.06×, no longer a trap); **#42** made "field fewer, keep more" a real decision
+(GOLD_PER_FIGHT 80→100 + rescaled salaries + empty-seat-scaled bounty + a small-party card/relic
+build — the campaign-exp gate shows fielding 2 winning 33.5% vs a plain trio's 10.8% when built for).
+The abilities-as-cards + Hex + richer economy shifted the whole curve, so the enemy walls were
+re-anchored up across the batch to hold the campaign band (**full-run ~22% at N=1000**;
+Gatewarden 90 / Hexweaver 208 / Devourer 216).**
 #32 (the standing backlog holding file) was
 **closed as a tracker row** on 2026-07-04 — it was never buildable; its deferred ideas live on inside
 the file and each is promoted to its own numbered issue when picked up. What remains is not tracked
@@ -160,11 +168,12 @@ human, not more code:
 | 36 | ✅ Done | [Drafted names in run-layer screens](./issues/36-drafted-names-in-run-screens.md) | post-demo | 27 | UI playtest 2026-07-04 |
 | 37 | ✅ Done | [UI polish batch](./issues/37-ui-polish-batch-2026-07-04.md) | post-demo | — | UI playtest 2026-07-04 |
 | 38 | ✅ Done | [Sim policy: per-identity damage lines](./issues/38-sim-policy-per-identity-damage-lines.md) | post-demo | 34 | #34 follow-up |
-| 39 | 📋 Open | [Warlock: trap starter, permadeath magnet](./issues/39-warlock-roster-campaign-trap.md) | campaign | — | playtest 2026-07-05 |
-| 40 | 📋 Open | [Permadeath returns the member to the pool](./issues/40-permadeath-pool-return.md) | campaign | — | playtest 2026-07-05 |
-| 41 | 📋 Open | [Act-1 recruit luck decides the Gatewarden](./issues/41-act1-recruit-luck-variance.md) | campaign | — | playtest 2026-07-05 |
-| 42 | 📋 Open | [Deploy-fewer / salary decision space is degenerate](./issues/42-deploy-fewer-salary-decision-space.md) | campaign | — | playtest 2026-07-05 |
-| 43 | 📋 Open | [Draft UI surfaces DRAFT_RATING as a recommendation](./issues/43-draft-rating-legibility.md) | campaign | — | playtest 2026-07-05 |
+| 39 | ✅ Done | [Warlock: trap starter, permadeath magnet](./issues/39-warlock-roster-campaign-trap.md) | campaign | 44 | playtest 2026-07-05 |
+| 40 | ✅ Done | [Permadeath returns the member to the pool](./issues/40-permadeath-pool-return.md) | campaign | — | playtest 2026-07-05 |
+| 41 | ✅ Done | [Act-1 recruit luck decides the Gatewarden](./issues/41-act1-recruit-luck-variance.md) | campaign | — | playtest 2026-07-05 |
+| 42 | ✅ Done | [Deploy-fewer / salary decision space is degenerate](./issues/42-deploy-fewer-salary-decision-space.md) | campaign | — | playtest 2026-07-05 |
+| 43 | ✅ Done | [Draft UI surfaces DRAFT_RATING as a recommendation](./issues/43-draft-rating-legibility.md) | campaign | — | playtest 2026-07-05 |
+| 44 | ✅ Done | [Party abilities become per-member cards](./issues/44-abilities-as-per-member-cards.md) | campaign | — | maintainer request 2026-07-05 |
 
 **Notes on ordering:** #01 blocks everything (all gates run through the sim). #02–#06 (P1 balance
 repair) must precede #07 because the bit-identical plumbing gate needs a stable baseline. Bosses

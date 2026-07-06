@@ -36,3 +36,10 @@ could own that it's a fixed choice, and the fake variance costs nothing to drop.
 ## Out of scope
 
 - Fixing the Warlock himself (issue 39). This issue only stops the UI from endorsing him.
+
+## Resolution (landed 2026-07-05)
+
+**Removed `rated N`** from `MemberOfferButton` (DraftScreen.tsx) — `DMG` already carries the damage
+fact, and `DRAFT_RATING` stays engine/generator + sim-policy side. Also **reworked the start-draft
+copy** to own the fixed 3-class pick ("Choose your starting hero", no fake-shuffle framing).
+components.test asserts the offer button renders without the rating string.

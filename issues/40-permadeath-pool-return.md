@@ -46,3 +46,11 @@ Consequences:
 
 - The Warlock-specific magnitude (issue 39) — this issue is the system rule, not who triggers it.
 - Wipe-loss reachability / permadeath teeth (issue 42's design discussion).
+
+## Resolution (landed 2026-07-05)
+
+**Chose: exclude permanently.** Added `graveyard: MemberId[]` to the Run; `recordInjuries` pushes a
+permadead member's id there at the splice, and `availableMembers()` excludes it — so every
+draft/recruit path (and the Recruit-node gate, which keys on `availableMembers`) never re-offers a
+killed hero. Save version 9 → 10; `fromJSON` defaults `[]` for older saves. run.test covers the
+4th-death removal, offer/recruit exclusion, save round-trip, and the fully-buried-pool Recruit hide.

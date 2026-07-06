@@ -53,3 +53,12 @@ average over this coin flip, which means it is mistuned for both sides of it.
 - The Warlock's solo-F2 3.1% (issue 39 — no roster guarantee rescues a member whose solo line is
   structurally dead).
 - Full-band re-baseline (ISSUES.md playtest section).
+
+## Resolution (landed 2026-07-05)
+
+**Chose: guarantee one act-1 Recruit (option 1).** `_generateMap` now injects a Recruit node into a
+random act-1 fork (0 or 1, the two before the Gatewarden) the way the Reliquary is injected into
+acts 2/3 — skipping when a natural roll already placed one there, so fork-uniqueness holds. The
+player still chooses which fork to route. The Gatewarden, now fought as a duo far more often, was
+re-anchored (HP 38 → 44 at the time; later raised further by the #44/#39/#42 batch). run.test sweeps
+300 seeds to confirm every run offers an act-1 Recruit; sim pins re-baselined.

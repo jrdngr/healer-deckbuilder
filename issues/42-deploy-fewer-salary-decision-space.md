@@ -68,3 +68,24 @@ Is "field fewer, keep more gold" a fantasy worth making real, or flavor worth si
 - Warlock permadeath concentration (issue 39), pool-return exploit (issue 40).
 - The `upgrades`-raise-salary interaction is *in* scope only under option 1/2 rewrites; under
   option 3 file it as its own polish item.
+
+## Written decision (landed 2026-07-05)
+
+**Chose: option 1 — make it real** (via "scaled gold only" + a small-party build). Rejected: option 2
+(repoint/drop wages) and option 3 (keep as flavor).
+
+**Economy:** GOLD_PER_FIGHT 80→100, salaries rescaled up (trio 40→51), and `winFight` scales the base
+bounty UP with empty deploy seats (`EMPTY_SEAT_GOLD_BONUS` = +30%/seat). Deploy screen reworked to
+show bounty / wages / net. The `Math.max(0, …)` waiver is retained (documented as forgiveness); the
+`upgrades`-raise-salary interaction is left as-is (a shrine gift costing income) — filed as future
+polish rather than reworked here.
+
+**Content (broad set):** relics Lone Wolf Totem (+2 dmg/body while ≤2), Focus Stone (+2 max MP while
+≤2), Warband Standard (+3 max HP/empty seat); cards Rally (+2 auto/turn per empty seat), Focus (a
+heal bigger while small), Channel (MP +1/empty seat), Hold the Line (mass Shield only a small party
+can hold).
+
+**Gate:** `sim/campaign-exp.ts deploySizeEdge` (N=400) on a contested early normal — fielding 2 with
+the build wins **33.5%** vs the plain trio's **10.8%**, and fielding 2 WITHOUT the build is **0.0%**
+(the trap). So sub-max is a real winning line when you build for it; the decision exists. Locked in a
+sim.test gate.

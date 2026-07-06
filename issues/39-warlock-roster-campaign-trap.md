@@ -76,3 +76,19 @@ merely refusing to hire him) and the permadeath concentration are structural, no
 - The permadeath pool-return exploit (issue 40) and the act-1 roster-variance question (issue 41) —
   both interact with this issue but are independently fixable.
 - Re-baselining the campaign band (tracked in the ISSUES.md playtest section).
+
+## Resolution (landed 2026-07-05)
+
+**Chose: full redesign (beyond the three cheap options).** The Warlock became a small-party
+**controller**: HP 15→14, damage 7→3, ability `darkBargain` → `hex`. His Hex curses the enemy with
+**Vulnerability** — the party deals (1 + vuln) damage to it for `HEX_TURNS`, and the bonus is LARGER
+the fewer members are fielded (solo +100% down to +35% in a full party), so his own low damage is
+amplified enough to carry act 1 solo. **No self-damage** — Soul Tithe and the Dark-Bargain HP cost
+are gone (they were the permadeath magnet). Vulnerability is applied once in `_damageEnemy`, so every
+party source is boosted; it decrements over enemy phases. Salary 20→11, DRAFT_RATING 7→4. He stays a
+starter.
+
+**Gate (sim/campaign-exp.ts, N≥400):** warlock-start 25.4% vs ranger 27.0% (spread 2.5×→~1.06×),
+solo-F2 3.1%→53.8%, ban delta +11.8pp → −4.4pp (a solid hire, not a trap — just outside the ±3pp
+band, on the healthy side), **Warlock permadeaths 386 → 0**. Locked in a sim.test gate. The Hex is a
+net party-power boost, so the enemy walls re-anchored up across the batch (see #42).
