@@ -103,6 +103,7 @@ export function App() {
         gold={run.gold}
         progress={progressLabel(run)}
         relics={run.relics}
+        deck={run.deck}
       />
       {screen}
       {import.meta.env.DEV && <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />}

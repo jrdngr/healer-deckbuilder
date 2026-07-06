@@ -1004,6 +1004,13 @@ button.pile { font: inherit; color: inherit; cursor: pointer; }
 .pile-viewer h4 { margin: 0 0 6px; }
 .pile-viewer ul { margin: 0 0 8px; padding-left: 18px; text-align: left; columns: 2; }
 .pile-viewer li { font-size: 13px; }
+.overlay-card.deck-view { max-width: 520px; }
+.overlay-card.deck-view h2 { margin-bottom: 14px; }
+.deck-view-list {
+  margin: 0 0 18px; padding: 0 0 0 18px; text-align: left; columns: 2; column-gap: 24px;
+  max-height: 50vh; overflow-y: auto;
+}
+.deck-view-list li { font-size: 14px; line-height: 1.55; break-inside: avoid; }
 .upgrade-names { font-size: 11px; opacity: .85; margin-left: 4px; }
 .next-fight { font-size: 15px; }
 .runover-score { font-size: 14px; opacity: .95; }

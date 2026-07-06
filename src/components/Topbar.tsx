@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toggleAnimSpeed, animSpeedLabel } from '../settings';
 import { RELICS } from '../constants';
-import type { RelicId } from '../constants';
+import type { DeckCard, RelicId } from '../constants';
+import { groupPile } from '../deckView';
 
 interface TopbarProps {
   seedField: string;
@@ -10,10 +11,12 @@ interface TopbarProps {
   gold: number;
   progress: string;
   relics: RelicId[];
+  deck: DeckCard[];
 }
 
-export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, relics }: TopbarProps) {
+export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, relics, deck }: TopbarProps) {
   const [confirming, setConfirming] = useState(false);
+  const [viewingDeck, setViewingDeck] = useState(false);
   const [, forceSpeed] = useState(0);
 
   return (
@@ -33,6 +36,13 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, reli
         )}
       </div>
       <div className="newgame">
+        <button
+          className="view-deck"
+          title="View your full run deck"
+          onClick={() => setViewingDeck(true)}
+        >
+          View Deck ({deck.length})
+        </button>
         <button
           className="speed-toggle"
           title="Animation speed"
@@ -54,6 +64,34 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, reli
         </label>
         <button onClick={() => setConfirming(true)}>New Run</button>
       </div>
+
+      {viewingDeck && (
+        <div className="overlay" onClick={() => setViewingDeck(false)}>
+          <div
+            className="overlay-card deck-view"
+            role="dialog"
+            aria-label="Your deck"
+            tabIndex={-1}
+            ref={(el) => el?.focus()}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === 'Escape') setViewingDeck(false); }}
+          >
+            <h2>Your deck ({deck.length})</h2>
+            {deck.length === 0
+              ? <p className="pile-empty">Your deck is empty.</p>
+              : (
+                <ul className="deck-view-list">
+                  {groupPile(deck).map((g) => (
+                    <li key={g.label}>{g.count}× {g.label}</li>
+                  ))}
+                </ul>
+              )}
+            <div className="overlay-actions">
+              <button className="primary" onClick={() => setViewingDeck(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirming && (
         <div className="overlay" onClick={() => setConfirming(false)}>

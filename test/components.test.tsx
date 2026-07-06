@@ -20,12 +20,14 @@ import { Actions } from '../src/components/Actions';
 import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
 import { MemberCard } from '../src/components/MemberCard';
+import { Topbar } from '../src/components/Topbar';
 import { MapScreen } from '../src/components/MapScreen';
 import { BranchScreen } from '../src/components/BranchScreen';
 import { EventScreen } from '../src/components/EventScreen';
 import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE, DRAFT_POOL } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
+import { groupPile } from '../src/deckView';
 
 let passed = 0;
 let failed = 0;
@@ -295,6 +297,35 @@ async function render(el: React.ReactElement): Promise<string> {
   check('a spent event says the moment has passed', text.includes('The moment has passed'), text);
   check('a spent event hides its choices', !text.includes(EVENTS[0].choices[0].label), text);
   check('a spent event still offers the way out', text.includes('Leave'), text);
+}
+
+// --- Topbar: the View Deck button opens a read-only grouped deck view (#48) -----
+{
+  const deckRun = new Run(48); // fresh run: the default starter deck
+  const noop = () => {};
+  const text = await render(
+    <Topbar seedField="48" onSeedChange={noop} onNewRun={noop} gold={deckRun.gold}
+      progress="Test" relics={deckRun.relics} deck={deckRun.deck} />,
+  );
+  check('topbar shows a View Deck control with the deck size', text.includes(`View Deck (${deckRun.deck.length})`), text);
+  check('the deck view is closed until clicked', rootEl.querySelector('.deck-view') === null);
+
+  const btn = rootEl.querySelector('.view-deck') as HTMLElement;
+  await act(async () => { btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
+  const view = rootEl.querySelector('.deck-view');
+  check('clicking View Deck opens the read-only deck dialog', view !== null);
+  check('the deck view carries the dialog role', view?.getAttribute('role') === 'dialog');
+  // Every card, grouped by name with counts — matches groupPile over the same deck.
+  const groups = groupPile(deckRun.deck);
+  const viewText = view?.textContent ?? '';
+  for (const g of groups) check(`deck view lists ${g.label} ×${g.count}`, viewText.includes(`${g.count}× ${g.label}`), viewText);
+  // Purely informational: no pickable Cards leak into the view.
+  check('the deck view renders no interactive cards (read-only)', view?.querySelector('.card') === null);
+
+  // Click-away on the overlay backdrop dismisses it.
+  const overlay = rootEl.querySelector('.overlay') as HTMLElement;
+  await act(async () => { overlay.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
+  check('clicking the backdrop closes the deck view', rootEl.querySelector('.deck-view') === null);
 }
 
 await act(async () => { root.unmount(); });
