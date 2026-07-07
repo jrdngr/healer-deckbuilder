@@ -16,7 +16,7 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   rally: 'power', focus: 'heal', channel: 'mana', holdTheLine: 'ward',
   // Per-member ability cards (#44): the healer enabling an aggressive move — power.
   imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
-  conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward',
+  conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward', stagger: 'ward',
 };
 
 interface CardProps {

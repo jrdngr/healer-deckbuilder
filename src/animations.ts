@@ -266,6 +266,21 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return impact + 200;
   },
+  sentinel: (ev, push, t) => {
+    // A heavy shield bash — a slow wind-up into a blunt, grounding slam.
+    const c = '#c9b26b';
+    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 260 }] });
+    push({ at: t + 200, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 1.4, dur: 300 },
+    ] });
+    const impact = t + 200 + 300;
+    push({ at: impact, shake: 9, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'slash', at: 'enemy', color: c, angle: -18 },
+      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 54, mode: 'fall' },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c, big: true },
+    ] });
+    return impact + 240;
+  },
 };
 
 // Resolve one enemy-attack target at `at`: a whiff, a block, a hit, or a kill

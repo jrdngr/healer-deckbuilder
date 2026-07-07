@@ -10,15 +10,17 @@ export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep'
 export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel';
 // 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
 // damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
 // controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
 // 'rampage' (Berserker) doubles his current strike at an HP cost; 'graveChill'
 // (Augur) weakens the standing telegraph; 'callBoar' (Beast Warden) summons a pet
-// that soaks whole hits. Each fires via that member's own ability card (#44),
-// inserted into the deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar';
+// that soaks whole hits; 'stun' (Sentinel, #61) cancels the enemy's standing
+// telegraph — the move is consumed (rotation advances, channel wind-up aborts) and
+// a fresh action telegraphs next turn. Each fires via that member's own ability
+// card (#44), inserted into the deck when they are deployed.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun';
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -32,7 +34,7 @@ export type CardId =
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
   | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'hush' | 'beckon';
+  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -124,6 +126,10 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // her slot that soaks whole hits and lends her its strike — the most invasive
   // member (a new board entity).
   beastWarden: { slot: 0, id: 'beastWarden', name: 'Beast Warden', maxHP: 9, damage: 1, ability: 'callBoar' },
+  // Sentinel (#61): a sturdy front-line bruiser whose Stun cancels the enemy's
+  // standing telegraph — a control member. Low damage; the value is the lost enemy
+  // turn. Home slot 0 (front line).
+  sentinel: { slot: 0, id: 'sentinel', name: 'Sentinel', maxHP: 13, damage: 2, ability: 'stun' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -144,7 +150,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel'];
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
@@ -155,14 +161,14 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // Conservative damage rating per member (the review's numbers), used only by the
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
-  ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3,
+  ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3, sentinel: 2,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
 // and the Berserker wants to STAY low (healing him is friendly fire), so neither
 // counts toward the healable floor.
 export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
-  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden'],
+  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel'],
 );
 
 export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
@@ -617,6 +623,7 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
   graveAugur: `Grave Chill — shave ${GRAVE_CHILL_REDUCTION} damage per target off the enemy's telegraphed attack.`,
   beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
+  sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity
@@ -701,6 +708,11 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: 'Channel the Augur\'s Grave Chill — weaken the enemy\'s telegraph.' },
   beckon: { id: 'beckon', name: 'Beckon', cost: 2, target: 'none', ability: 'callBoar',
     desc: 'Beckon the Beast Warden\'s Boar to soak hits at her side.' },
+  // Stagger (#61) costs 5 MP — the higher price (vs the 2 MP other ability cards) is
+  // the balance lever: no once-per-fight cap, the MP burn plus the tempo lost toward
+  // enrage is what limits stunning.
+  stagger: { id: 'stagger', name: 'Stagger', cost: 5, target: 'none', ability: 'stun',
+    desc: 'Through the Sentinel, Stun the enemy — cancel its telegraphed action.' },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -792,6 +804,7 @@ export const ABILITY_CARD: Record<AbilityId, CardId> = {
   rampage: 'incite',
   graveChill: 'hush',
   callBoar: 'beckon',
+  stun: 'stagger',
 };
 
 // The set of per-member ability card ids — excluded from the shop pool and Retain
@@ -1222,7 +1235,7 @@ export const INFIRMARY_INJURY_PRICE = 45;  // shed one death-scar from a chosen 
 // together make fielding fewer a real gold decision, not a rounding error.
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
   ranger: 18, tank: 13, mage: 20,          // classic trio: 18 + 13 + 20 = 51
-  warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15,
+  warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15, sentinel: 15,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -1303,7 +1316,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
-  conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon',
+  conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a

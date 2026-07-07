@@ -4,7 +4,8 @@ import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS,
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
-import type { CardId, ModifierId, RelicId } from '../src/constants';
+import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constants';
+import type { CardId, ModifierId, RelicId, Slot } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -2964,6 +2965,152 @@ function wardenGame(seed: number) {
   g.telegraph = { type: 'heavy', hidden: false, damage: 99, targets: [0], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
   g._resolveAttack();
   check('the lone Warden survives behind the Boar', w.alive && g.status === 'playing');
+}
+
+// --- party roster: Sentinel + Stun (#61) ------------------------------------
+// A boss game seating the Sentinel in slot 0, so the Stun can cancel a scripted
+// rotation step / channel wind-up / cast.
+function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
+  cfg.enemy = { maxHP: 9999, boss: true, attackBonus: 0, def, enrageTurn: 99 };
+  return new Game(seed, cfg).start();
+}
+{
+  // Data: the Sentinel is a sturdy bruiser carrying Stun; the bound card is Stagger
+  // (5 MP, no target), and it maps through ABILITY_CARD like every other member card.
+  const s = MEMBER_POOL.sentinel;
+  eq('Sentinel HP 13', s.maxHP, 13);
+  eq('Sentinel damage 2', s.damage, 2);
+  eq('Sentinel ability is stun', s.ability, 'stun');
+  eq('stun binds to the Stagger card', ABILITY_CARD.stun, 'stagger');
+  eq('Stagger costs 5 MP (the balance lever)', CARDS.stagger.cost, 5);
+  eq('Stagger takes no target', CARDS.stagger.target, 'none');
+  eq('Stagger fires the stun ability', CARDS.stagger.ability, 'stun');
+  check('Stagger is a per-member ability card', isAbilityCard('stagger'));
+  check('the Sentinel has ability flavor', MEMBER_ABILITY_FLAVOR.sentinel.length > 0);
+}
+{
+  // Playing Stagger cancels the standing telegraph: the coming enemy resolution
+  // deals NO damage, the MP is spent, and a fresh telegraph stands afterward.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
+  const g = new Game(1, cfg); g.start();
+  const victim = g.members[1];
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [1], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+  victim.hp = victim.maxHP;
+  g.mp = 5;
+  g.playCard(giveCard(g, 'stagger'), null);
+  check('the telegraph is flagged Stunned', g.telegraph.stunned === true);
+  eq('Stagger spent its 5 MP', g.mp, 0);
+  eq('a Stunned telegraph previews nothing', g.attackTargets().length, 0);
+  const hpBefore = victim.hp;
+  const turnBefore = g.turn;
+  g._runEnemyPhase();
+  eq('the enemy dealt 0 damage on the stunned turn', victim.hp, hpBefore);
+  check('a fresh telegraph stands afterward', g.telegraph != null && g.telegraph.stunned !== true);
+  eq('the turn counter still ticked (progress toward enrage)', g.turn, turnBefore + 1);
+}
+{
+  // Stunning a rotation-boss step CONSUMES it: the rotation advances and the
+  // stunned step is skipped, not repeated (single -> the NEXT step 'two' stands).
+  const g = sentinelBossGame(2);
+  g.rotationIndex = 0;                       // 'single'
+  g.telegraph = g._generateTelegraph(g.turn);
+  eq('the standing step is the single', g.telegraph.type, 'single');
+  g._fireAbility(g.members[0]);             // Sentinel Stuns
+  check('the single is flagged Stunned', g.telegraph.stunned === true);
+  g._runEnemyPhase();
+  eq('the rotation advanced past the stunned step', g.rotationIndex, 1);
+  eq('the next step telegraphs fresh (not a repeat)', g.telegraph.type, 'two');
+  check('the fresh telegraph is not itself stunned', g.telegraph.stunned !== true);
+}
+{
+  // Stunning a channel wind-up ABORTS it: it never lands and does not resume — the
+  // rotation advances past the channel slot to the next plain step.
+  const g = sentinelBossGame(3);
+  g.rotationIndex = 6;                       // Crushing Blow channel slot (cycle 2)
+  g.telegraph = g._generateTelegraph(g.turn);
+  check('a channel is standing', g.telegraph.channel === true);
+  const target = g.telegraph.targets[0];
+  g.members[target].hp = 50;
+  g._fireAbility(g.members[0]);
+  g._runEnemyPhase();
+  eq('the aborted channel dealt no damage', g.members[target].hp, 50);
+  eq('the rotation advanced past the channel', g.rotationIndex, 7);
+  check('the channel did not resume/stand', g.telegraph.channel !== true);
+  // Drive a full extra cycle: the consumed Crushing Blow does not re-stand this cycle.
+  for (let i = 0; i < 3; i++) g._runEnemyPhase();
+  check('the consumed channel is not repeated within the cycle',
+    g.telegraph.channelName !== 'Crushing Blow' || g.rotationIndex % 8 !== 6);
+}
+{
+  // A 'cast' telegraph (Hexweaver's Hex) is likewise consumed with NO scripted
+  // effect — no healing-reduction Wound is applied.
+  const g = sentinelBossGame(4, HEXWEAVER_DEF);
+  g.rotationIndex = 2;                       // Hex ('cast' -> 'wound') slot
+  g.telegraph = g._generateTelegraph(g.turn);
+  check('the standing telegraph is a cast', g.telegraph.cast != null);
+  eq('no Wound is active yet', g.woundTurns, 0);
+  g._fireAbility(g.members[0]);
+  g._runEnemyPhase();
+  eq('the cancelled cast ran no scripted effect (no Wound)', g.woundTurns, 0);
+  eq('the cancelled cast advanced the rotation', g.rotationIndex, 3);
+}
+{
+  // Property: while stunned, the preview (attackTargets) and the applied damage are
+  // both 0, across every telegraph geometry — the telegraph==applied invariant holds.
+  let checked = 0;
+  for (const type of ['single', 'two', 'aoe', 'heavy', 'sweep'] as const) {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
+    const g = new Game(100 + checked, cfg); g.start();
+    const targets: Slot[] = type === 'single' || type === 'heavy' ? [SLOT.CENTER] : [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT];
+    g.telegraph = { type, hidden: false, damage: 6, targets, enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+    for (const m of g.members) m.hp = m.maxHP;
+    g._fireAbility(g.members[0]);
+    eq(`stunned ${type} previews nothing`, g.attackTargets().length, 0);
+    const hpBefore = g.members.map((m) => m.hp);
+    g._runEnemyPhase();
+    const applied = g.members.reduce((s, m, i) => s + (hpBefore[i] - m.hp), 0);
+    eq(`stunned ${type} applied 0 damage (preview == applied)`, applied, 0);
+    checked++;
+  }
+  check('stun property test exercised every geometry', checked === 5, `${checked} checked`);
+}
+{
+  // Enrage still fires and the turn counter still advances on a stunned turn — the
+  // lost turn is real tempo cost toward enrage (the intended balance lever).
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
+  const g = new Game(6, cfg); g.start();
+  g.enemy.hp = 999;
+  g.turn = ENRAGE_TURN;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [1], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+  g._fireAbility(g.members[0]);
+  g._runEnemyPhase();
+  check('enrage fired on the stunned turn', g.enemy.enraged === true);
+  eq('the turn counter advanced through the stunned turn', g.turn, ENRAGE_TURN + 1);
+}
+{
+  // The Stagger card is unplayable while the Sentinel is down (the #44/#54 path),
+  // and firing Stun with nothing to interrupt is a harmless no-op.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
+  const g = new Game(7, cfg); g.start();
+  g.mp = 10;
+  const idx = giveCard(g, 'stagger');
+  check('Stagger is playable with a living Sentinel', g.canPlay(idx, null) === null);
+  g._killMember(g.members[0]);
+  check('Stagger is disabled once the Sentinel is down', g.canPlay(idx, null) !== null);
+  // Idempotent: stunning an already-stunned telegraph does not double-consume.
+  const cfg2 = defaultBattleConfig();
+  cfg2.party = partyFromMembers(['sentinel', 'tank', 'mage']);
+  const g2 = new Game(8, cfg2); g2.start();
+  g2.telegraph = { type: 'single', hidden: false, damage: 4, targets: [1], enraged: false, forTurn: g2.turn, turnsUntilResolve: 1 };
+  g2._fireAbility(g2.members[0]);
+  g2._fireAbility(g2.members[0]);
+  check('re-stunning keeps the telegraph stunned (no error)', g2.telegraph.stunned === true);
 }
 
 // --- Provoke / Taunt-lite card (#31) ----------------------------------------

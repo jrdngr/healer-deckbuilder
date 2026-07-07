@@ -111,6 +111,9 @@ export interface Telegraph {
   ignoreDefense?: boolean;    // Defense reduction does not apply to this hit
   targetLowest?: boolean;     // aimed at the lowest-HP living member (locked at telegraph time)
   cast?: CastKind;            // a scripted no-damage effect resolves instead of a hit
+  stunned?: boolean;          // Sentinel's Stun (#61): the move is cancelled — it deals no
+                              // damage / runs no cast, is consumed (rotation advances,
+                              // channel wind-up aborts), and a fresh action telegraphs next turn
 }
 
 export interface LogEntry {
@@ -183,6 +186,7 @@ export type GameEvent =
   | { kind: 'boarSummon'; slot: Slot; hp: number; turns: number } // Beast Warden calls a Boar (#29)
   | { kind: 'boarHit'; slot: Slot; amount: number; boarHp: number; killed: boolean } // Boar soaks a hit (#29)
   | { kind: 'boarExpire'; slot: Slot } // Boar returns to the wild (#29)
+  | { kind: 'stun'; slot: Slot; intent: string } // Sentinel cancels the standing telegraph (#61)
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -652,6 +656,9 @@ export class Game {
   attackTargets(): AttackSpec[] {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
+    // A Stunned telegraph (#61) is cancelled: it strikes nothing, so the preview is
+    // empty (preview == applied == 0) and the UI clears the incoming-attack lines.
+    if (t.stunned) return [];
     // Lantern of Foresight (#21): a hidden attack's TARGET is revealed too, so
     // its lines collapse from the every-member fan-out to the true target(s)
     // (the magnitude was already revealed by flaw #11's fix). Still drawn in
@@ -1018,6 +1025,21 @@ export class Game {
     // in which case the enemy takes no other action this turn (its wind-up IS the
     // telegraph) and the channel stays standing for another turn.
     const t = this.telegraph;
+    // Sentinel's Stun (#61): the standing telegraph is cancelled. The enemy deals no
+    // damage and runs no cast — it loses the turn — but the move is CONSUMED, so this
+    // runs the normal resolve tail (advance the rotation, tick the turn counter toward
+    // enrage, re-telegraph a fresh action) instead of the channel-tick early-return
+    // that keeps the same telegraph standing. A cancelled channel wind-up therefore
+    // does not resume/land later, and a cancelled boss step is not repeated.
+    if (t && t.stunned) {
+      this._log(`${this.enemyDef.name} is Stunned — its turn is lost.`, 'system');
+      this._decayBuffs();
+      this.rotationIndex += 1;
+      this.turn += 1;
+      this.telegraph = this._generateTelegraph(this.turn);
+      this._announceChannel(this.telegraph);
+      return;
+    }
     if (t && t.channel && (t.turnsUntilResolve ?? 1) > 1) {
       t.turnsUntilResolve = (t.turnsUntilResolve ?? 1) - 1;
       this._log(`${this.enemyDef.name} channels ${t.channelName} — ${t.turnsUntilResolve} turn(s) to resolve.`, 'system');
@@ -1811,6 +1833,24 @@ export class Game {
         m.boarTurns = BOAR_TURNS;
         this._log(`${m.name} calls a Boar (${m.boarHp} HP) to her side for ${m.boarTurns} enemy turns.`, 'status');
         this._emit({ kind: 'boarSummon', slot: m.slot, hp: m.boarHp, turns: m.boarTurns });
+        break;
+      }
+      case 'stun': {
+        // The Sentinel (#61) Stuns the enemy: flag the standing telegraph as
+        // cancelled. On the enemy phase it deals no damage and runs no cast — the
+        // enemy loses the turn — but the move is CONSUMED: the rotation still
+        // advances and any channel wind-up aborts (the "cooldown as if the move was
+        // successful" clause; the engine has no per-move cooldown, so advancing the
+        // rotation index IS consuming the move). A fresh action telegraphs next turn.
+        const t = this.telegraph;
+        if (t && !t.stunned) {
+          const intent = this.telegraphIntent() ?? 'attack';
+          t.stunned = true;
+          this._log(`${m.name} Stuns the ${this.enemyDef.name} — its ${intent} is cancelled.`, 'status');
+          this._emit({ kind: 'stun', slot: m.slot, intent });
+        } else {
+          this._log(`${m.name} winds up to Stun, but there is nothing to interrupt.`, 'status');
+        }
         break;
       }
       default:

@@ -155,7 +155,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // stream, so the vector shifts slightly: F2 133->138, F3/F4 124/111->130/119, F5
   // 75->76, F6/F7 70/65->72/66, F8 45->47 (F0/F1 unchanged). A stream perturbation, not
   // a balance move; all the band/CI gates below still hold. Re-pinned on the new numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 195, 138, 130, 119, 76, 72, 66, 47]));
+  // 2026-07-07 (#61): the Sentinel joins the roster as a 9th draftable member, so the
+  // start/post-boss drafts now sample from a pool of 9 instead of 8. That extra draw
+  // perturbs the deterministic rng stream (and the best-3 policy occasionally seats the
+  // Sentinel), shifting the vector: F0/F1 198/195->194/193, F2 138->133, F3/F4 130/119->
+  // 126/112, F5 76->83, F6/F7 72/66->75/69, F8 unchanged at 47. A pool/stream change, not
+  // a balance move; all the band/CI/boss gates below still hold. Re-pinned on the new numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 133, 126, 112, 83, 75, 69, 47]));
   // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
   // not a hard threshold, so subsample noise can't fail a healthy build while a real
   // drift still trips it.

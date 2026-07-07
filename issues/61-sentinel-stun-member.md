@@ -1,6 +1,6 @@
 # Issue 61 — Sentinel: a Stun party member and the Stun ability
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (roster + ability)   **Size:** L
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — "Create a new party member with a stun ability. This ability
