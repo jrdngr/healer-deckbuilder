@@ -45,11 +45,12 @@ through this list and, for each note:
 3. **Add its row** to the [Issues table](#issues-implementation-order) below.
 4. **Remove the note** from this Intake list once it has become an issue.
 
-_(No notes queued.)_
+- 
 
 ## Issues (implementation order)
 
-_No open issues._
-
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
+| 60 | 📋 Open | [Deploy screen: smart slot selection + drag-and-drop](issues/60-deploy-slot-selection-dnd.md) | ux (deploy) | #50 (soft) | intake 2026-07-07 (deploy slot UX) |
+| 61 | 📋 Open | [Sentinel: a Stun party member and the Stun ability](issues/61-sentinel-stun-member.md) | content (roster + ability) | — | intake 2026-07-07 (stun member) |
+| 62 | 📋 Open | [Hero buff card batch](issues/62-hero-buff-card-batch.md) | content (cards) | — | intake 2026-07-07 (buff cards) |
