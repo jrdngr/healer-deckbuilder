@@ -29,18 +29,47 @@ interface BattleScreenProps {
   playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
   skipTurn: () => void;
   endTurn: () => void;
+  // Play the end-of-fight gold burst over the live board on a win (#59); returns how
+  // long (ms) to hold the result overlay while it plays.
+  onWinFx: () => number;
   // Resolve the fight within the run (win -> advance, loss -> run over).
   onBattleEnd: () => void;
 }
 
 export function BattleScreen({
-  game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn, onBattleEnd,
+  game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn, onWinFx, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
+  // The result overlay waits until the win burst has played (#59): false while the
+  // fight is live or the gold coins are still flying, true once it's time to show
+  // Victory/Defeat. A ref keeps the burst firing exactly once per fight.
+  const [resultReady, setResultReady] = useState(false);
+  const resultFired = useRef(false);
+  const onWinFxRef = useRef(onWinFx);
+  onWinFxRef.current = onWinFx;
   const mainRef = useRef<HTMLElement>(null);
 
   // A fresh Game instance (newGame) means any pending targeting is stale.
   useEffect(() => { setSelected(null); }, [game]);
+
+  // A fresh fight re-arms the result gate.
+  useEffect(() => { resultFired.current = false; setResultReady(false); }, [game]);
+
+  // Once the fight ends and the board settles (#59): on a win, play the gold burst
+  // over the live board first and reveal Victory a beat later; on a loss, show the
+  // result at once. Fires once per fight (resultFired) and holds the overlay for the
+  // burst's own duration so a skipped burst never adds a dead pause.
+  useEffect(() => {
+    if (animating || game.status === 'playing' || resultFired.current) return;
+    resultFired.current = true;
+    if (game.status === 'win') {
+      const holdMs = onWinFxRef.current();
+      if (holdMs <= 0) { setResultReady(true); return; }
+      const t = setTimeout(() => setResultReady(true), holdMs);
+      return () => clearTimeout(t);
+    }
+    setResultReady(true);
+  }, [animating, game.status, game]);
 
   // Cancel any pending targeting once a sequence starts playing.
   useEffect(() => { if (animating) setSelected(null); }, [animating]);
@@ -139,8 +168,8 @@ export function BattleScreen({
       {/* The standing telegraph would flash the *next* turn's lines mid-sequence. */}
       {!animating && <AttackLines game={game} containerRef={mainRef} />}
       <FxLayer fx={fx} containerRef={mainRef} />
-      {/* Let the victory/defeat flourish play before the result card drops in. */}
-      {!animating && <GameOverlay game={game} onContinue={onBattleEnd} />}
+      {/* Result card drops in only after the flourish AND the win gold burst (#59). */}
+      {resultReady && <GameOverlay game={game} onContinue={onBattleEnd} />}
     </main>
   );
 }

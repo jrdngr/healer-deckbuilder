@@ -524,11 +524,13 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   animation: gold-coin var(--dur, 1160ms) cubic-bezier(.35,.05,.25,1) forwards;
 }
 @keyframes gold-coin {
-  0%   { transform: translate(var(--jx), var(--jy)) scale(.3); opacity: 0; }
-  12%  { opacity: 1; }
-  22%  { transform: translate(0, 0) scale(1); opacity: 1; }
-  30%  { transform: translate(0, 0) scale(1.12); }
-  100% { transform: translate(var(--dx), var(--dy)) scale(.45); opacity: 0; }
+  /* Fade in and hold as a spread cloud in the starting area (0%–34%), then fly to a
+     scattered landing near the target (--ex/--ey already include per-coin scatter),
+     so a group never collapses onto a single point at either end. */
+  0%   { transform: translate(var(--jx), var(--jy)) scale(.35); opacity: 0; }
+  14%  { opacity: 1; }
+  34%  { transform: translate(var(--jx), var(--jy)) scale(1); opacity: 1; }
+  100% { transform: translate(var(--ex), var(--ey)) scale(.5); opacity: 0; }
 }
 
 /* Floating number / label — pops then drifts upward and fades. */

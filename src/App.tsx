@@ -4,7 +4,8 @@ import type { Run } from './run';
 import type { GameController } from './useGame';
 import { FIGHTS_PER_ACT, ACT_COUNT, isActBoss, actOfFight, memberSalary } from './constants';
 import { planGoldFx } from './goldFx';
-import { GoldFx } from './components/GoldFx';
+import { getAnimSpeed } from './settings';
+import { GoldFx, GOLD_FX_TOTAL_MS } from './components/GoldFx';
 import type { GoldFxJob, GoldFxTarget } from './components/GoldFx';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
@@ -93,29 +94,41 @@ export function App() {
   const [goldFxJob, setGoldFxJob] = useState<GoldFxJob | null>(null);
   const [goldOverride, setGoldOverride] = useState<number | null>(null);
   const goldFxNonce = useRef(0);
+  const goldTickRef = useRef(0); // the total the counter climbs to as the coins land
 
-  // Resolve a won fight, then fly the reward as coins (#59). Geometry is measured
-  // from the still-mounted battle DOM BEFORE winFight advances the run; the coin
-  // split is one-per-gold (salaries to each paid member, the remainder to the
-  // topbar). Skipped under reduced-motion, on the final (bounty-less) boss win,
-  // or if nothing could be measured.
-  const onWin = (hpBySlot: (number | null)[]) => {
-    const geom = prefersReducedMotion() ? null : measureGoldGeometry(run);
-    const before = run.gold;
-    act((r) => r.winFight(hpBySlot));
-    const gained = run.gold - before;
-    if (!geom || gained <= 0) return;
+  // Fire the end-of-fight gold burst (#59) the instant the enemy falls — over the
+  // still-live battle board, BEFORE the Victory overlay. Uses a bounty PREVIEW so
+  // nothing is awarded yet (winFight banks it on Continue); the coins fly the split
+  // (salaries to each paid member, the take to the topbar) measured from the live
+  // battle DOM. Returns how long (ms) the result overlay should wait for the burst;
+  // 0 means no burst played (reduced motion, final boss, or nothing to measure), so
+  // the overlay appears at once. The topbar counter holds its pre-win total until
+  // the player's coins arrive, then climbs to the new total.
+  const onWinFx = (): number => {
+    if (prefersReducedMotion()) return 0;
+    const { playerGold, salaries } = run.winBountyPreview();
+    const plan = planGoldFx(playerGold, salaries);
+    if (plan.total === 0) return 0;
 
-    const plan = planGoldFx(gained, geom.salaries);
+    const geom = measureGoldGeometry(run);
     const targets: GoldFxTarget[] = [];
     for (const t of plan.targets) {
       const pt = t.kind === 'player' ? geom.goldEl : geom.members[t.slot ?? -1];
       if (pt) targets.push({ x: pt.x, y: pt.y, particles: t.particles });
     }
-    if (targets.length === 0) return;
+    if (targets.length === 0) return 0;
 
-    setGoldOverride(before); // hold the counter until the coins land
+    goldTickRef.current = run.gold + playerGold;
+    setGoldOverride(run.gold); // hold the counter at the pre-win total
     setGoldFxJob({ nonce: ++goldFxNonce.current, origin: geom.origin, targets });
+    return GOLD_FX_TOTAL_MS * getAnimSpeed();
+  };
+
+  // Continue past the Victory overlay: NOW bank the win (the burst has already
+  // played over the board) and drop the counter override back to the live total.
+  const onWin = (hpBySlot: (number | null)[]) => {
+    act((r) => r.winFight(hpBySlot));
+    setGoldOverride(null);
   };
 
   const startNewRun = (seed?: number) => setSeedField(String(newRun(seed)));
@@ -147,6 +160,7 @@ export function App() {
       <FightScreen
         key={`fight-${run.location.fightIndex}-${run.seed}`}
         run={run}
+        onWinFx={onWinFx}
         onWin={onWin}
         onLose={() => act((r) => r.loseFight())}
         onSpent={(ids) => act((r) => r.markRelicsSpent(ids))}
@@ -186,7 +200,7 @@ export function App() {
       {screen}
       <GoldFx
         job={goldFxJob}
-        onArrive={() => setGoldOverride(null)}
+        onArrive={() => setGoldOverride(goldTickRef.current)}
         onDone={() => setGoldFxJob(null)}
       />
       {import.meta.env.DEV && <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />}

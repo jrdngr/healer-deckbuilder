@@ -10,13 +10,14 @@ import type { GoldFxPlan } from '../goldFx';
 // which live in different containers. It is purely presentational: useGame/App
 // decide when and where; this just plays the coins and cleans itself up.
 
-// A single coin's flight: viewport px start (the swarm origin) and delta to its
-// destination, plus a stagger delay so the swarm trickles in rather than snapping.
+// A single coin's flight: viewport px start (the swarm origin), its own scattered
+// spot within the origin cloud, and its own scattered landing near the destination,
+// plus a launch delay so the cloud trickles out rather than snapping as one.
 interface Coin {
   id: number;
-  ox: number; oy: number;   // swarm-origin viewport px
-  jx: number; jy: number;   // initial scatter offset (coins gather from a cloud)
-  dx: number; dy: number;   // delta from origin to destination
+  ox: number; oy: number;   // cloud-origin viewport px (all coins share this anchor)
+  jx: number; jy: number;   // this coin's offset within the origin cloud
+  ex: number; ey: number;   // this coin's landing offset from origin (delta + scatter)
   delay: number;            // ms stagger before this coin flies
 }
 
@@ -32,11 +33,21 @@ export interface GoldFxJob {
   targets: GoldFxTarget[];
 }
 
-// Coin flight time (before speed scaling). The full run also includes the last
-// coin's stagger delay; see GATHER/STAGGER below.
-const FLY_MS = 900;
-const GATHER_MS = 260;   // time coins spend converging into the swarm first
-const STAGGER_MS = 22;   // per-coin launch stagger
+// Per-coin animation length (before speed scaling): fade in as a cloud, hold that
+// cloud briefly, then fly to a scattered landing. LAUNCH_WINDOW_MS is the total
+// spread of launch delays across the WHOLE burst (not per coin), so the run lasts
+// ~1s regardless of coin count — see GOLD_FX_TOTAL_MS.
+const FLY_MS = 760;
+const LAUNCH_WINDOW_MS = 220;
+
+// Nominal total length of the burst before animSpeed scaling (~1s), so callers can
+// hold a result overlay for exactly as long as the coins are on screen.
+export const GOLD_FX_TOTAL_MS = LAUNCH_WINDOW_MS + FLY_MS;
+
+// How far coins spread within the origin cloud, and how far their landings scatter
+// around the destination (so a group reads as a cloud at both ends, never a point).
+const CLOUD_W = 120, CLOUD_H = 84;
+const LAND_W = 52, LAND_H = 46;
 
 type CoinStyle = CSSProperties & Record<string, string | number>;
 
@@ -69,24 +80,24 @@ export function GoldFx({ job, onArrive, onDone }: GoldFxProps) {
         next.push({
           id: idRef.current++,
           ox: job.origin.x, oy: job.origin.y,
-          // Cloud scatter around the origin so the gather reads as a swarm.
-          jx: (Math.random() - 0.5) * 90, jy: (Math.random() - 0.5) * 70,
-          dx, dy,
-          delay: 0, // assigned an even stagger across the whole swarm below
+          // Own spot within the origin cloud, and own scattered landing near the
+          // target — so the group is a cloud at BOTH ends, not stacked on a point.
+          jx: (Math.random() - 0.5) * CLOUD_W, jy: (Math.random() - 0.5) * CLOUD_H,
+          ex: dx + (Math.random() - 0.5) * LAND_W, ey: dy + (Math.random() - 0.5) * LAND_H,
+          delay: 0, // assigned an even launch stagger across the whole burst below
         });
       }
     }
-    // Even stagger across the whole swarm (independent of target order) so coins
-    // don't leave in per-target clumps.
-    next.forEach((c, i) => { c.delay = i * STAGGER_MS; });
+    // Spread every coin's launch evenly across a FIXED window (independent of count
+    // and of target order), so the burst stays ~1s whether 3 coins fly or 60.
+    const n = next.length;
+    next.forEach((c, i) => { c.delay = n > 1 ? (i / (n - 1)) * LAUNCH_WINDOW_MS : 0; });
     setCoins(next);
 
-    const lastDelay = next.length > 0 ? (next.length - 1) * STAGGER_MS : 0;
-    const flightMs = (GATHER_MS + FLY_MS + lastDelay) * speed;
-    // The player's coins are the last leg landing on the topbar; tick the counter
-    // up a touch before the very last fade so the number moves "as" they arrive.
-    timers.current.push(setTimeout(() => onArrive?.(), (GATHER_MS + FLY_MS * 0.75) * speed + lastDelay * speed));
-    timers.current.push(setTimeout(() => { setCoins([]); onDone?.(); }, flightMs + 120 * speed));
+    // The player's coins land on the topbar; tick the counter up a touch before the
+    // last fade so the number moves "as" they arrive.
+    timers.current.push(setTimeout(() => onArrive?.(), (LAUNCH_WINDOW_MS + FLY_MS * 0.72) * speed));
+    timers.current.push(setTimeout(() => { setCoins([]); onDone?.(); }, (GOLD_FX_TOTAL_MS + 100) * speed));
 
     return clear;
     // Re-run only when a new job is handed in.
@@ -101,8 +112,8 @@ export function GoldFx({ job, onArrive, onDone }: GoldFxProps) {
         const style: CoinStyle = {
           left: c.ox, top: c.oy,
           '--jx': `${c.jx}px`, '--jy': `${c.jy}px`,
-          '--dx': `${c.dx}px`, '--dy': `${c.dy}px`,
-          '--dur': `${(GATHER_MS + FLY_MS) * speed}ms`,
+          '--ex': `${c.ex}px`, '--ey': `${c.ey}px`,
+          '--dur': `${FLY_MS * speed}ms`,
           animationDelay: `${c.delay * speed}ms`,
         };
         return <span key={c.id} className="gold-coin" style={style}>⦿</span>;

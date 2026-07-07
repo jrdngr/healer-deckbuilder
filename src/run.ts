@@ -541,6 +541,28 @@ export class Run {
     }
   }
 
+  // Preview the win bounty split for the end-of-fight gold burst (#59) WITHOUT
+  // awarding it or advancing the run — winFight banks the gold on Continue. Mirrors
+  // winFight's math: the seat-scaled base bounty (+ Rusty Crown), the player's take
+  // after deployed salaries, and each deployed member's salary share, so the coins
+  // fly the right amounts a beat before the gold is actually credited. Returns empty
+  // off a fight and on the final boss (which pays no bounty), so the burst is skipped.
+  winBountyPreview(): { playerGold: number; salaries: { slot: number; gold: number }[] } {
+    if (this.location.kind !== 'fight' || this.location.fightIndex >= FIGHT_COUNT - 1) {
+      return { playerGold: 0, salaries: [] };
+    }
+    const bounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * this.emptySeats()));
+    const reward = bounty + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
+    const salaries: { slot: number; gold: number }[] = [];
+    for (let s = 0; s < this.deployment.length; s++) {
+      const ri = this.deployment[s];
+      if (ri == null) continue;
+      const p = this.roster[ri];
+      if (p) salaries.push({ slot: s, gold: memberSalary(p) });
+    }
+    return { playerGold: Math.max(0, reward - this.deployedSalary()), salaries };
+  }
+
   winFight(hpBySlot?: (number | null)[]): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;

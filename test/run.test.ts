@@ -251,6 +251,25 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('an openable recruit stop survives untouched', nodes[0].type === 'recruit' && nodes[1].type === 'event');
 }
 
+// --- end-of-fight gold burst: the bounty preview matches what winFight banks ----
+{
+  const run = new Run(70);
+  startRun(run); // location: fight 0, default trio deployed
+  const before = run.gold;
+  const preview = run.winBountyPreview();
+  run.winFight();
+  const gained = run.gold - before;
+  eq('winBountyPreview.playerGold matches the actual win gold delta', preview.playerGold, gained);
+  eq('winBountyPreview lists one salary share per deployed member', preview.salaries.length, 3);
+
+  // The final boss pays no bounty, so the burst is skipped there.
+  const boss = new Run(71);
+  boss.location = { kind: 'fight', fightIndex: FIGHT_COUNT - 1 };
+  const bossPreview = boss.winBountyPreview();
+  check('the final boss preview is empty (no bounty burst)',
+    bossPreview.playerGold === 0 && bossPreview.salaries.length === 0);
+}
+
 // --- branch hub: a mid-branch save/resume keeps the cached stops ---------------
 {
   const run = new Run(33);

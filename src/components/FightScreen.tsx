@@ -7,6 +7,9 @@ import { BattleScreen } from './BattleScreen';
 
 interface FightScreenProps {
   run: Run;
+  // Play the end-of-fight gold burst the moment the enemy dies, over the live board
+  // (#59). Returns how long (ms) to hold the result overlay while it plays.
+  onWinFx: () => number;
   // Win handler — receives each battle slot's ending HP (#58) so the run can carry
   // it back onto the deployed roster members.
   onWin: (hpBySlot: (number | null)[]) => void;
@@ -29,7 +32,7 @@ function fightSeed(run: Run): number {
 // One fight within the run. Mounted fresh per fight (keyed by fight index), so its
 // useGame builds a fresh battle from this fight's config. On end, resolves the
 // fight into the run.
-export function FightScreen({ run, onWin, onLose, onSpent, onInjuries, onController }: FightScreenProps) {
+export function FightScreen({ run, onWinFx, onWin, onLose, onSpent, onInjuries, onController }: FightScreenProps) {
   // Capture config and seed once on mount (this component is remounted per fight).
   const config = useRef(run.toBattleConfig()).current;
   const seed = useRef(fightSeed(run)).current;
@@ -65,6 +68,7 @@ export function FightScreen({ run, onWin, onLose, onSpent, onInjuries, onControl
       playCard={ctrl.playCard}
       skipTurn={ctrl.skipTurn}
       endTurn={ctrl.endTurn}
+      onWinFx={onWinFx}
       onBattleEnd={onBattleEnd}
     />
   );
