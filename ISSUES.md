@@ -26,39 +26,14 @@ the next session real time.
 
 ## Progress
 
-**Open: 0 — the 2026-07-06 intake batch (15 issues, #45–#59) is complete.** #45 (remove
-path-selection travel animation), #46 (fix the "Continue saved run" button), #47 (enemy
-targets/telegraphs dead players) #48 (view-deck button in the topbar), #49 (injury badges on
-party members), #50 (remember party positions between fights), #51 (replace the starting deck
-with the heal-only six), #52 (Regen rework: magnitude == duration, additive stacking), #53
-(passive MP only when ≤1 card played), #54 (ability cards disable on death, vanish on
-incapacitation), #55 (starting draft from the full hero pool), #56 (recruiter cadence; drop
-the post-boss recruit), #57 (free card reward after every won fight), #58 (partial
-between-fight heal + Infirmary + resurrect — the balance pass: HP now persists, members heal
-HERO_HEAL_PCT=0.40 between fights, and the enemy-HP curve was re-anchored down so full-run
-lands ~23% at N=1000) and #59 (end-of-fight gold particle burst) have all landed. Ordered
-quick isolated fixes first, then self-contained engine rules, then draft/map structure, then
-the reward flow, the between-fight-healing rework (**#58**, which carried the balance pass — so
-it landed after every other balance-affecting change and its N=1000 sweep tuned the settled
-system), and last the pure-cosmetic gold animation (**#59**). See
-[ISSUE_INTAKE.md](./ISSUE_INTAKE.md) for the raw source bullets.
+**Open: 0 — the backlog is clear.** The most recent batch (the 2026-07-06 intake, #45–#59)
+landed in full; the completed rows have been cleared from the table below. The issue files
+remain in [`issues/`](./issues/) as a historical archive (through #59). The next batch's rows
+will be added here when it is written up.
 
 ## Issues (implementation order)
 
+_No open issues. Add the next batch's rows here when it is filed._
+
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 45 | ✅ Done | [Remove path-selection travel animation](./issues/45-remove-path-selection-animation.md) | fix | — | intake 2026-07-06 |
-| 46 | ✅ Done | [Fix "Continue saved run" button](./issues/46-fix-continue-saved-run.md) | fix | — | intake 2026-07-06 |
-| 47 | ✅ Done | [Enemy targets/telegraphs dead players](./issues/47-enemy-targets-dead-players.md) | fix | — | intake 2026-07-06 |
-| 48 | ✅ Done | [View-deck button in the topbar](./issues/48-topbar-deck-view-button.md) | fix | — | intake 2026-07-06 |
-| 49 | ✅ Done | [Injury badges on party members](./issues/49-injury-badges-on-members.md) | fix | — | intake 2026-07-06 |
-| 50 | ✅ Done | [Remember party positions between fights](./issues/50-remember-party-positions.md) | fix | — | intake 2026-07-06 |
-| 51 | ✅ Done | [Replace the starting deck with the heal-only six](./issues/51-starting-deck-composition.md) | rules | — | intake 2026-07-06 |
-| 52 | ✅ Done | [Regen rework: magnitude == duration](./issues/52-regen-magnitude-duration-rework.md) | rules | — | intake 2026-07-06 |
-| 53 | ✅ Done | [Passive MP only when ≤1 card played](./issues/53-passive-mp-gate-on-cards-played.md) | rules | — | intake 2026-07-06 |
-| 54 | ✅ Done | [Ability cards on member death](./issues/54-ability-cards-on-member-death.md) | rules | — | intake 2026-07-06 |
-| 55 | ✅ Done | [Starting draft from the full pool](./issues/55-draft-from-full-pool.md) | structure | — | intake 2026-07-06 |
-| 56 | ✅ Done | [Recruiter cadence; drop post-boss recruit](./issues/56-recruiter-node-cadence.md) | structure | — | intake 2026-07-06 |
-| 57 | ✅ Done | [Card reward after every won fight](./issues/57-card-rewards-on-win.md) | economy | — | intake 2026-07-06 |
-| 58 | ✅ Done | [Partial heal + Infirmary + resurrect (balance pass)](./issues/58-percentage-heal-infirmary-resurrect.md) | economy | 54, 56, 57 | intake 2026-07-06 |
-| 59 | ✅ Done | [End-of-fight gold animation](./issues/59-end-of-fight-gold-animation.md) | fx | 57 | intake 2026-07-06 |
