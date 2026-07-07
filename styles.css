@@ -511,6 +511,26 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   100% { transform: translate(var(--dx), var(--dy)) scale(.15); opacity: 0; }
 }
 
+/* End-of-fight gold burst (#59). A full-viewport, click-through overlay so coins
+   can fly from the loot swarm to BOTH the party cards and the topbar counter,
+   which live in different containers. Coins are absolutely placed at the swarm
+   origin; the animation gathers them from a scatter, then flies each to its
+   target (--dx/--dy) and fades. */
+.gold-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 50; overflow: visible; }
+.gold-coin {
+  position: absolute; margin: -9px 0 0 -9px; width: 18px; height: 18px; line-height: 18px;
+  text-align: center; font-size: 15px; color: #ffcf4d;
+  text-shadow: 0 0 6px #ffcf4d, 0 1px 2px #000;
+  animation: gold-coin var(--dur, 1160ms) cubic-bezier(.35,.05,.25,1) forwards;
+}
+@keyframes gold-coin {
+  0%   { transform: translate(var(--jx), var(--jy)) scale(.3); opacity: 0; }
+  12%  { opacity: 1; }
+  22%  { transform: translate(0, 0) scale(1); opacity: 1; }
+  30%  { transform: translate(0, 0) scale(1.12); }
+  100% { transform: translate(var(--dx), var(--dy)) scale(.45); opacity: 0; }
+}
+
 /* Floating number / label — pops then drifts upward and fades. */
 .fx-float {
   font-weight: 800; font-size: 18px; color: currentColor; white-space: nowrap;
@@ -694,6 +714,9 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
   .map-path { animation: none; stroke-dashoffset: 0; }
   .map-canvas .map-node, .map-canvas .map-take, .map-token { animation: none; }
   .map-node .map-node-icon { animation: none !important; }
+  /* Gold burst is skipped entirely (App also declines to spawn it), but hide any
+     coins outright as a belt-and-braces guard against a lingering node. */
+  .gold-fx-layer { display: none; }
 }
 @keyframes fx-fade-out { to { opacity: 0; } }
 @keyframes fx-banner-reduced {
