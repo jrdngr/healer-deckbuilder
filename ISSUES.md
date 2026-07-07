@@ -26,18 +26,20 @@ the next session real time.
 
 ## Progress
 
-**Open: 58–59 — the 2026-07-06 intake batch (15 issues); #45 (remove path-selection travel
+**Open: 59 — the 2026-07-06 intake batch (15 issues); #45 (remove path-selection travel
 animation), #46 (fix the "Continue saved run" button), #47 (enemy targets/telegraphs dead
 players) #48 (view-deck button in the topbar), #49 (injury badges on party members), #50
 (remember party positions between fights), #51 (replace the starting deck with the heal-only
 six), #52 (Regen rework: magnitude == duration, additive stacking), #53 (passive MP only
 when ≤1 card played), #54 (ability cards disable on death, vanish on incapacitation), #55
 (starting draft from the full hero pool), #56 (recruiter cadence; drop the post-boss
-recruit) and #57 (free card reward after every won fight) have landed, 2 remaining
-(#58, #59).** Ordered quick isolated fixes
+recruit), #57 (free card reward after every won fight) and #58 (partial between-fight heal +
+Infirmary + resurrect — the balance pass: HP now persists, members heal HERO_HEAL_PCT=0.40
+between fights, and the enemy-HP curve was re-anchored down so full-run lands ~23% at N=1000)
+have landed, 1 remaining (#59).** Ordered quick isolated fixes
 first, then self-contained engine rules, then draft/map structure, then the reward flow, and last
-the between-fight-healing rework (**#58**, which carries the balance pass — so it lands after every
-other balance-affecting change and its N=1000 sweep tunes the settled system); the pure-cosmetic
+the between-fight-healing rework (**#58**, which carried the balance pass — so it landed after every
+other balance-affecting change and its N=1000 sweep tuned the settled system); the pure-cosmetic
 gold animation (**#59**) is dead last. See [ISSUE_INTAKE.md](./ISSUE_INTAKE.md) for the raw source
 bullets.
 
@@ -58,5 +60,5 @@ bullets.
 | 55 | ✅ Done | [Starting draft from the full pool](./issues/55-draft-from-full-pool.md) | structure | — | intake 2026-07-06 |
 | 56 | ✅ Done | [Recruiter cadence; drop post-boss recruit](./issues/56-recruiter-node-cadence.md) | structure | — | intake 2026-07-06 |
 | 57 | ✅ Done | [Card reward after every won fight](./issues/57-card-rewards-on-win.md) | economy | — | intake 2026-07-06 |
-| 58 | 🔲 Todo | [Partial heal + Infirmary + resurrect (balance pass)](./issues/58-percentage-heal-infirmary-resurrect.md) | economy | 54, 56, 57 | intake 2026-07-06 |
+| 58 | ✅ Done | [Partial heal + Infirmary + resurrect (balance pass)](./issues/58-percentage-heal-infirmary-resurrect.md) | economy | 54, 56, 57 | intake 2026-07-06 |
 | 59 | 🔲 Todo | [End-of-fight gold animation](./issues/59-end-of-fight-gold-animation.md) | fx | 57 | intake 2026-07-06 |
