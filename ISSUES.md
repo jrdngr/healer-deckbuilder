@@ -11,10 +11,17 @@ every damage-modifying card/relic/boss mechanic must keep the telegraph preview 
 equal to applied damage (a property test); the engine stays pure/DOM-free; each issue ends in a
 `jj` commit with its own tests per `CLAUDE.md`.
 
-**Keep this file current:** when an issue lands, flip its row to ✅ Done and update the
-[Progress](#progress) line **in the same commit** — or, at latest, a docs commit immediately after.
-This table is the single source of truth for where the project stands; a stale Status column costs
-the next session real time.
+**This table lists only open issues.** It is the single source of truth for what is left to do.
+
+## Completing an issue
+
+When an issue lands:
+
+1. **Update the issue file's own status.** Flip its `- **Status:**` line (the first list item in
+   the file) to `✅ Complete` **in the same commit** as the work.
+2. **Remove the issue's row from this file.** Once the file's status is updated, delete the row from
+   the [Issues table](#issues-implementation-order) below. The issue file stays in [`issues/`](./issues/)
+   as the historical archive — the table only ever shows what is still open.
 
 ## Legend
 
@@ -24,16 +31,25 @@ the next session real time.
 - **Status 📥 Backlog** — a standing holding file (not a buildable issue); its items become their own
   numbered issues when picked up.
 
-## Progress
+## Intake
 
-**Open: 0 — the backlog is clear.** The most recent batch (the 2026-07-06 intake, #45–#59)
-landed in full; the completed rows have been cleared from the table below. The issue files
-remain in [`issues/`](./issues/) as a historical archive (through #59). The next batch's rows
-will be added here when it is written up.
+Brief notes I've taken that need to be written up as issues. When I say **"run issue intake"**, go
+through this list and, for each note:
+
+1. **Interview me** about anything unclear, ambiguous, or that needs my input before writing (scope,
+   acceptance criteria, dependencies, balance targets). Don't guess on decisions that are mine to make.
+2. **Write a self-contained issue file** in [`issues/`](./issues/) (next number in sequence) with the
+   standard shape: a `- **Status:**` line as the **first list item** (new issues start `📋 Open`),
+   then Phase / Depends / Addresses, then why / acceptance criteria / implementation notes (code
+   anchors) / tests / out-of-scope.
+3. **Add its row** to the [Issues table](#issues-implementation-order) below.
+4. **Remove the note** from this Intake list once it has become an issue.
+
+_(No notes queued.)_
 
 ## Issues (implementation order)
 
-_No open issues. Add the next batch's rows here when it is filed._
+_No open issues._
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
