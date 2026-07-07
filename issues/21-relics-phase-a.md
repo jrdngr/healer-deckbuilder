@@ -1,5 +1,6 @@
 # Issue 21 — Relics phase A: infrastructure + 10 legible relics (P9a)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P9 (a) — **committed demo scope**   **Size:** M
 - **Depends on:** #14 (bands), #17 (preview==applied precedent)   **Blocks:** #22
 - **Addresses:** review §3.3; **Open Q9 (accepted: spoils after 3 & 6, Reliquary in acts 2/3)**

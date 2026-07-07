@@ -1,5 +1,6 @@
 # Issue 11 — Save/resume + long-run ergonomics (P3b)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P3 (b)   **Size:** M
 - **Depends on:** #10   **Blocks:** none (quality-of-life for long runs)
 - **Addresses:** review §4 P3 (roadmap M2 ergonomics)

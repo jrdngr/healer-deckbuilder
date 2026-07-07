@@ -1,5 +1,6 @@
 # Issue 23 — Difficulty presets + local stats (P10)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P10   **Size:** S–M
 - **Depends on:** #14 (Standard band anchored there)   **Blocks:** none
 - **Addresses:** review §4 P10 (roadmap M7); **Open Q8 (accepted: 25–35% Standard, Story ≥60%)**

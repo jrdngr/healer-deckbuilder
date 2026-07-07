@@ -1,5 +1,6 @@
 # Issue 17 — Card set phase C: Bulwark / Defense pipeline (P7c)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P7 (c)   **Size:** M
 - **Depends on:** #16   **Blocks:** none
 - **Addresses:** review §3.2 (Bulwark), §3.1.5, §3.1.6 naming (Q10 — accepted)

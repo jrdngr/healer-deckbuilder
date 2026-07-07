@@ -1,5 +1,6 @@
 # Issue 12 — Boss 1: Gatewarden — "learn to read" (P4)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P4   **Size:** M
 - **Depends on:** #10 (and #04 enrage fix, #07 EnemyDef)   **Blocks:** #13 (strict boss order)
 - **Addresses:** review §4 P4 (roadmap M3)

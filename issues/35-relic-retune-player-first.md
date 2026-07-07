@@ -1,5 +1,6 @@
 # Issue 35 — Relic power re-tune under player-first ordering (playtest 2026-07-04)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo   **Size:** S–M (targeted number changes + re-measure)
 - **Depends on:** #26 (the ordering change that moved the numbers)   **Blocks:** none
 - **Addresses:** the twice-flagged stale #22 per-relic gate baseline

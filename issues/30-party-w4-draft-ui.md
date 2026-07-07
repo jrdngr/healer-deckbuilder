@@ -1,5 +1,6 @@
 # Issue 30 — Party W4: full draft + weight-surfacing UI
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party wave 4)   **Size:** M
 - **Depends on:** #29   **Blocks:** #31
 - **Addresses:** review §3.4 (draft flow)

@@ -1,5 +1,6 @@
 # Issue 40 — Permadeath returns the member to the pool as a fresh copy (scar laundering)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-campaign correctness   **Size:** S
 - **Depends on:** the 2026-07 permanent-injury rework   **Blocks:** any reading of permadeath as a real cost
 - **Addresses:** playtest 2026-07-05 — edge-case probe finding

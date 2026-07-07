@@ -1,5 +1,6 @@
 # Issue 43 — Draft/recruit offers surface DRAFT_RATING as a recommendation
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-campaign UI polish   **Size:** XS
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** playtest 2026-07-05 — legibility finding

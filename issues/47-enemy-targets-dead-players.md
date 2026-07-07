@@ -1,5 +1,6 @@
 # Issue 47 — Enemy targets dead players; telegraph ≠ applied hit
 
+- **Status:** ✅ Complete
 - **Phase:** fix (bug)   **Size:** S
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "Enemy is targeting dead players … telegraph aimed at a dead

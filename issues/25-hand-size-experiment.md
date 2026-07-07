@@ -1,5 +1,6 @@
 # Issue 25 — Hand-size experiment: hand 4 + 1-card carryover (Q6)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** experimental (must precede #22 if adopted, per Q6)   **Size:** S–M
 - **Depends on:** #06 (needs a stable sim baseline)   **Blocks:** #22 *if* adopted
 - **Addresses:** flaw #16; **Open Q6 (accepted: explore it)**

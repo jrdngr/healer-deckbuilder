@@ -1,5 +1,6 @@
 # Issue 34 — Composition re-baseline after the drafted-identity fix (playtest 2026-07-04)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party track)   **Size:** M–L (policy work + re-tune)
 - **Depends on:** #31 (its harness; its *findings* are superseded)   **Blocks:** any per-comp tuning
 - **Addresses:** the invalidated #31 conclusions; §3.4 per-comp balance, for real this time

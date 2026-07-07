@@ -1,5 +1,6 @@
 # Issue 54 — Disable ability cards on death; remove them on permanent death
 
+- **Status:** ✅ Complete
 - **Phase:** rules (engine)   **Size:** S–M
 - **Depends on:** —   **Blocks:** none (resurrect in #58 re-enables disabled cards)
 - **Addresses:** intake 2026-07-06 — "When a party member dies, disable their ability cards but

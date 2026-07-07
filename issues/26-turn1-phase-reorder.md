@@ -1,5 +1,6 @@
 # Issue 26 — Full turn-1 phase reorder (Q7 full)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo backlog (schedule after playtest #1)   **Size:** M (test-migration budget)
 - **Depends on:** #04 (the cheap patch)   **Blocks:** none
 - **Addresses:** flaw #12 (full fix); **Open Q7-full (accepted: defer past the demo)**

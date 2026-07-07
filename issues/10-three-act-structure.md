@@ -1,5 +1,6 @@
 # Issue 10 — 3-act / 9-fight structure + per-act curve (P3a)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P3 (a)   **Size:** M–L
 - **Depends on:** #09   **Blocks:** #11, #12
 - **Addresses:** review §4 P3 (roadmap M2); supersedes `FIGHT_COUNT = 5`

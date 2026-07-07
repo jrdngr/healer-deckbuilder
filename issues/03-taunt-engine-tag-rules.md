@@ -1,5 +1,6 @@
 # Issue 03 — Dominant-line breakers: Taunt pricing + unified engine-tag rules (P1b)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P1 (b)   **Size:** M
 - **Depends on:** #01   **Blocks:** #06; establishes the tag reused by #15, #16, #22
 - **Addresses:** flaws #1, #3; review §3.5; **Open Q3 (accepted)**

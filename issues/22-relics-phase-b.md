@@ -1,5 +1,6 @@
 # Issue 22 — Relics phase B: rule-changers + curses (P9b)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P9 (b) — **in-demo stretch / designated cut line**   **Size:** M
 - **Depends on:** #21   **Blocks:** none
 - **Addresses:** review §3.3, §3.5, §3.6; **Open Q1 (accepted: in-demo stretch, this is the cut line)**

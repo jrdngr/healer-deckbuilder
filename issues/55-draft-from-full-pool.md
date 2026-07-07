@@ -1,5 +1,6 @@
 # Issue 55 — Starting draft offers 3 random from the full hero pool
 
+- **Status:** ✅ Complete
 - **Phase:** structure (draft, design-relevant)   **Size:** S
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "The starting hero pool should allow for all heroes to be

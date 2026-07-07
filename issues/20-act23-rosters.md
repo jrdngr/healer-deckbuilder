@@ -1,5 +1,6 @@
 # Issue 20 — Act 2/3 named rosters (P8)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P8   **Size:** M
 - **Depends on:** #14 (reuses boss tech), #09   **Blocks:** none
 - **Addresses:** review §4 P8 (roadmap M6b)

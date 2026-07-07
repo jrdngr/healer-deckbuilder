@@ -1,5 +1,6 @@
 # Issue 37 — UI polish batch (UI playtest 2026-07-04)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo   **Size:** S (batch of small fixes)
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** UI playtest 2026-07-04 (Chrome DevTools round; everything below reproduced live)

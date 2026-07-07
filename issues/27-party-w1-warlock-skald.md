@@ -1,5 +1,6 @@
 # Issue 27 — Party W1: Hexen Warlock + Skald + draft skeleton
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party wave 1)   **Size:** M
 - **Depends on:** #08 (member-identity refactor)   **Blocks:** #28
 - **Addresses:** review §3.4 (roster wave 1)

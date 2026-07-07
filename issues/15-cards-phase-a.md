@@ -1,5 +1,6 @@
 # Issue 15 — Card set phase A: existing-field cards (P7a)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P7 (a)   **Size:** M
 - **Depends on:** #14   **Blocks:** #16
 - **Addresses:** review §3.2; part of the card set that supersedes the roadmap M6a placeholders

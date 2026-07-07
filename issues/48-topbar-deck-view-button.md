@@ -1,5 +1,6 @@
 # Issue 48 — "View deck" button in the top status bar
 
+- **Status:** ✅ Complete
 - **Phase:** fix (quick UI)   **Size:** S
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "Add a button to view your deck in the top status bar"

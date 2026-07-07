@@ -1,5 +1,6 @@
 # Issue 07 — Data-driven EnemyDef + intent names (P2a)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P2 (a)   **Size:** M
 - **Depends on:** #06   **Blocks:** #09, #12
 - **Addresses:** review §4 P2 (roadmap M1a)

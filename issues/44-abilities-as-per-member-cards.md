@@ -1,5 +1,6 @@
 # Issue 44 — Party abilities become per-member cards the healer plays
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-campaign architecture   **Size:** M–L
 - **Depends on:** the data-driven roster (#27–#31)   **Blocks:** —
 - **Addresses:** maintainer request, 2026-07-05 (filed alongside the roster-campaign batch)

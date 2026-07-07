@@ -1,5 +1,6 @@
 # Issue 04 — Boss enrage race: countdown UI + tuning + turn-1 single (P1c)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P1 (c)   **Size:** M
 - **Depends on:** #01   **Blocks:** #06; assumed by all three bosses (#12–#14)
 - **Addresses:** flaws #2, #12 (cheap fix); **Open Q7-partial (accepted: P1 patch suffices for demo)**

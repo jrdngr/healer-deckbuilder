@@ -1,5 +1,6 @@
 # Issue 59 — End-of-fight gold particle animation
 
+- **Status:** ✅ Complete
 - **Phase:** fx (cosmetic)   **Size:** M
 - **Depends on:** #57 (settled post-fight reward sequence) — soft   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "Add an animation at the end of each fight for gold. One gold

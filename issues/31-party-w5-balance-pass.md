@@ -11,6 +11,7 @@
 > re-baseline work. The Provoke card, the striker requirement, and the sweep harness itself remain
 > valid and shipped.
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party wave 5)   **Size:** M
 - **Depends on:** #30   **Blocks:** none
 - **Addresses:** review §3.4 (per-comp balance)

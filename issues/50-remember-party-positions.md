@@ -1,5 +1,6 @@
 # Issue 50 — Remember party member positions between fights
 
+- **Status:** ✅ Complete
 - **Phase:** fix (small run-state)   **Size:** S
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "Remember the party member positions between fights"

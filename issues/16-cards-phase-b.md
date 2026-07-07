@@ -1,5 +1,6 @@
 # Issue 16 — Card set phase B: small-new-state cards (P7b)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P7 (b)   **Size:** M
 - **Depends on:** #15 (and #02 for the shield-expiry field)   **Blocks:** #17
 - **Addresses:** review §3.2 (Verdant finisher, Blood, Tempo)

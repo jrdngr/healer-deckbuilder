@@ -1,5 +1,6 @@
 # Issue 38 — Sim policy: per-identity damage lines (fairer comp-sweep measurement)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party track)   **Size:** M (policy work + re-measure)
 - **Depends on:** #34 (which lined the abilities but judged the floor a stick limit)   **Blocks:** any
   member-balance call that leans on the composition sweep

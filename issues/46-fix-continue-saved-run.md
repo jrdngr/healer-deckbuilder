@@ -1,5 +1,6 @@
 # Issue 46 — "Continue saved run" button doesn't work
 
+- **Status:** ✅ Complete
 - **Phase:** fix (bug)   **Size:** S
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "Continue saved run button doesn't work"

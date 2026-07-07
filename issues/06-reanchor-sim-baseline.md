@@ -1,5 +1,6 @@
 # Issue 06 — Re-anchor the post-P1 sim baseline
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P1 (close)   **Size:** S
 - **Depends on:** #02, #03, #04, #05   **Blocks:** #07 (needs a stable reference)
 - **Addresses:** flaw #8

@@ -1,5 +1,6 @@
 # Issue 49 — Injury badges on party members (buff/debuff style)
 
+- **Status:** ✅ Complete
 - **Phase:** fix (quick UI)   **Size:** S
 - **Depends on:** —   **Blocks:** none (feeds the Infirmary UI in #58)
 - **Addresses:** intake 2026-07-06 — "Show UI elements for injuries on players. Use same style as

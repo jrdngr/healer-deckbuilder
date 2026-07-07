@@ -1,5 +1,6 @@
 # Issue 56 — Recruiter cadence: drop post-boss recruit, guarantee a recruiter each cycle
 
+- **Status:** ✅ Complete
 - **Phase:** structure (map/nodes)   **Size:** M
 - **Depends on:** —   **Blocks:** #58 (settles the node/branch machinery the Infirmary node slots into)
 - **Addresses:** intake 2026-07-06 — "Remove party member recruitment after bosses. Leave it to the

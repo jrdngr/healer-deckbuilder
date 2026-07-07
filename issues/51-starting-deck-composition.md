@@ -1,5 +1,6 @@
 # Issue 51 — Replace the starting deck with the heal-only six
 
+- **Status:** ✅ Complete
 - **Phase:** rules (constant, balance-relevant)   **Size:** S
 - **Depends on:** —   **Blocks:** none (folds into the #58 balance pass)
 - **Addresses:** intake 2026-07-06 — "Change the starting deck to be 1x group heal, 3x quick heal,

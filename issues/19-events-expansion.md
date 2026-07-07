@@ -1,5 +1,6 @@
 # Issue 19 — Events expansion 3 → ~8 (P7e)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P7 (e)   **Size:** M
 - **Depends on:** #10 (map/node layer)   **Blocks:** none
 - **Addresses:** review §4 P7 (roadmap M6a events)

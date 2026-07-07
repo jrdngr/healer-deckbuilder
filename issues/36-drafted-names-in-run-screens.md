@@ -1,5 +1,6 @@
 # Issue 36 — Run-layer screens show classic-trio names for drafted parties (UI playtest 2026-07-04)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party track)   **Size:** S–M (one resolver + call-site sweep)
 - **Depends on:** #27 (draft)   **Blocks:** shipping the draft as a visible feature
 - **Addresses:** UI playtest 2026-07-04 (live-verified in Chrome)

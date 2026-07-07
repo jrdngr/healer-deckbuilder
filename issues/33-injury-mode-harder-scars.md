@@ -1,5 +1,6 @@
 # Issue 33 — Injuries past the cap: adopt a harder scar mode (playtest 2026-07-04)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (DR1 follow-up)   **Size:** S (mechanics landed; the flip + UI remain)
 - **Depends on:** DR1 (landed)   **Blocks:** none
 - **Addresses:** the maintainer's playtest question — "the third death nullifies the system"

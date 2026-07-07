@@ -1,5 +1,6 @@
 # Issue 45 — Remove the path-selection travel animation
 
+- **Status:** ✅ Complete
 - **Phase:** fix (quick, isolated)   **Size:** XS
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-06 — "path selection animation makes it look like the player is skipping both nodes"

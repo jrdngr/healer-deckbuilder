@@ -1,5 +1,6 @@
 # Issue 52 — Regen rework: magnitude == duration, additive stacking
 
+- **Status:** ✅ Complete
 - **Phase:** rules (engine, balance-relevant)   **Size:** M
 - **Depends on:** —   **Blocks:** none (folds into the #58 balance pass)
 - **Addresses:** intake 2026-07-06 — regen rework

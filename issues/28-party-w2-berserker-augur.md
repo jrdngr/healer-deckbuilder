@@ -1,5 +1,6 @@
 # Issue 28 — Party W2: Berserker + Grave Augur
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party wave 2)   **Size:** M
 - **Depends on:** #27   **Blocks:** #29
 - **Addresses:** review §3.4 (roster wave 2)

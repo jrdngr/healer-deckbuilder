@@ -1,5 +1,6 @@
 # Issue 29 — Party W3: Beast Warden + pet subsystem
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-demo (party wave 3)   **Size:** M–L (most invasive member)
 - **Depends on:** #28   **Blocks:** #30
 - **Addresses:** review §3.4 (roster wave 3)

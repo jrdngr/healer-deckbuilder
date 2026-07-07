@@ -1,5 +1,6 @@
 # Issue 02 — Shield lifetime + bug-class fixes (P1a)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P1 (a)   **Size:** M
 - **Depends on:** #01   **Blocks:** #06, and #16 (Barrier reuses the shield-expiry field)
 - **Addresses:** flaws #4, #19, #20

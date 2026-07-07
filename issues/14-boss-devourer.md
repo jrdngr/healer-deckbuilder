@@ -1,5 +1,6 @@
 # Issue 14 — Boss 3: Devourer — "race or die" + phase system (P6)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P6   **Size:** M–L
 - **Depends on:** #13 (strict boss order; needs `'cast'`)   **Blocks:** #20; anchors #21/#22 gates
 - **Addresses:** review §4 P6 (roadmap M5); the enrage race designed on purpose

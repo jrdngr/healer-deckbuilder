@@ -1,5 +1,6 @@
 # Issue 41 — Act-1 recruit luck decides the Gatewarden (roster-size variance)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-campaign balance   **Size:** S–M (map/structure change + re-anchor)
 - **Depends on:** the 2026-07 roster campaign   **Blocks:** honest act-1 tuning
 - **Addresses:** playtest 2026-07-05 — the biggest single variance source measured

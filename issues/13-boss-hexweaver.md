@@ -1,5 +1,6 @@
 # Issue 13 — Boss 2: Hexweaver — "you can't turtle" + Cleanse card (P5)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P5   **Size:** M
 - **Depends on:** #12 (strict boss order)   **Blocks:** #14 (needs the `'cast'` telegraph kind)
 - **Addresses:** review §4 P5 (roadmap M4); the content-side answer to flaw #1

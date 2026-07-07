@@ -1,5 +1,6 @@
 # Issue 42 — The deploy-fewer / salary decision space is degenerate
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-campaign design   **Size:** M (design decision + whichever lever lands)
 - **Depends on:** member salaries (d170c12) + pre-fight deploy (dcfd70f)   **Blocks:** —
 - **Addresses:** playtest 2026-07-05 — the decision-space finding the round was asked to exercise

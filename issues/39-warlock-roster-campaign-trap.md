@@ -1,5 +1,6 @@
 # Issue 39 — Warlock under the roster campaign: trap starter, permadeath magnet
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** post-campaign balance   **Size:** M (member tune + re-measure)
 - **Depends on:** the 2026-07 roster campaign (single mode)   **Blocks:** #44-style re-baseline
 - **Addresses:** playtest 2026-07-05 — the headline balance finding

@@ -1,5 +1,6 @@
 # Issue 05 — Rest rework + economy repricing (P1d)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P1 (d)   **Size:** M
 - **Depends on:** #01   **Blocks:** #06
 - **Addresses:** flaws #5, #6, #7, #9, #10, #11, #17, #18; **Open Q4 (accepted: decaying Rest)**

@@ -1,5 +1,6 @@
 # Issue 18 — Resurrect rework + poison decision + optional Second Wind (P7d)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P7 (d)   **Size:** M
 - **Depends on:** #14 (Devourer's Consume informs poison), #16   **Blocks:** none
 - **Addresses:** flaws #13, #14; **Open Q5 (accepted: defer, then decide)**

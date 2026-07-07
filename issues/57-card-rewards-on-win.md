@@ -1,5 +1,6 @@
 # Issue 57 — Card reward after every won fight (pick 1 of 3, free, rarity-weighted)
 
+- **Status:** ✅ Complete
 - **Phase:** economy (reward flow, balance-relevant)   **Size:** M
 - **Depends on:** —   **Blocks:** #58 (a balance-affecting change; lands before the #58 pass)
 - **Addresses:** intake 2026-07-06 — "Winning a fight should have card rewards. Offer 3 cards and

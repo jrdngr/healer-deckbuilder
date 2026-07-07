@@ -1,5 +1,6 @@
 # Issue 24 — Hardening & UX batch (P11)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P11   **Size:** M
 - **Depends on:** #23 (near-final)   **Blocks:** none (final ship gate)
 - **Addresses:** flaws #15, #16, #20 (tooltips), #21; review §4 P11

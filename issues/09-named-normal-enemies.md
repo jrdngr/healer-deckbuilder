@@ -1,5 +1,6 @@
 # Issue 09 — Four named normal enemies + encounter tables (P2c)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P2 (c)   **Size:** M
 - **Depends on:** #07   **Blocks:** #10
 - **Addresses:** review §4 P2 (roadmap M1b)

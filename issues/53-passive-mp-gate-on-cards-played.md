@@ -1,5 +1,6 @@
 # Issue 53 — Passive MP gain only when ≤1 card was played
 
+- **Status:** ✅ Complete
 - **Phase:** rules (engine, balance-relevant)   **Size:** S
 - **Depends on:** —   **Blocks:** none (folds into the #58 balance pass)
 - **Addresses:** intake 2026-07-06 — "Passive MP gain upgrades should only trigger when 0 or 1 card

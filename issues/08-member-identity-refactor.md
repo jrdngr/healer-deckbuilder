@@ -1,5 +1,6 @@
 # Issue 08 — Member-identity refactor (P2b / party W0)
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P2 (b)   **Size:** M–L (1–2 days + test churn)
 - **Depends on:** #06   **Blocks:** #27 (party roster waves)
 - **Addresses:** review §3.2 party-M0; **Open Q2 (accepted: do it in-demo)**

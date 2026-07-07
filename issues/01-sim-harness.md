@@ -1,5 +1,6 @@
 # Issue 01 — Sim harness as infrastructure
 
+- **Status:** ✅ Complete
 - **Roadmap phase:** P0   **Size:** S–M
 - **Depends on:** none   **Blocks:** every other issue (all balance gates run through it)
 - **Addresses:** review §4 P0; precondition for flaw #8

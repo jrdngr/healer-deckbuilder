@@ -1,5 +1,6 @@
 # Issue 58 — Partial heal between fights + Infirmary node + resurrect at recovered HP
 
+- **Status:** ✅ Complete
 - **Phase:** economy (between-fight healing, **balance pass**)   **Size:** L — land as several commits
 - **Depends on:** #54 (ability-card death behaviour), #56 (node/branch machinery), #57 (card
   rewards — a balance-affecting change that must be in before this pass)   **Blocks:** none
