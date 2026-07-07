@@ -51,3 +51,15 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
+| 65 | 📋 Open | [Iron mitigation web](issues/65-iron-mitigation-web.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
+| 66 | 📋 Open | [Regen conversions](issues/66-regen-conversions.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
+| 67 | 📋 Open | [Status-window management](issues/67-status-window-management.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
+| 68 | 📋 Open | [Blood + cycling](issues/68-blood-and-cycling.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
+| 69 | 📋 Open | [Holy overheal payoffs](issues/69-holy-overheal-payoffs.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
+| 70 | 📋 Open | [Channel + arcane](issues/70-channel-arcane.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
+| 71 | 📋 Open | [Meta relics](issues/71-meta-relics.md) | content (relics) | — | intake 2026-07-07 new-content wave |
+| 72 | 📋 Open | [Plaguewright + Ferment](issues/72-member-plaguewright.md) | content (roster + ability) | 67 | intake 2026-07-07 new-content wave |
+| 73 | 📋 Open | [Hierophant + Liturgy](issues/73-member-hierophant.md) | content (roster + ability) | 70 | intake 2026-07-07 new-content wave |
+| 74 | 📋 Open | [Duelist + En Garde](issues/74-member-duelist.md) | content (roster + ability) | 65 | intake 2026-07-07 new-content wave |
+| 75 | 📋 Open | [Flagellant + Penance](issues/75-member-flagellant.md) | content (roster + ability) | 68 | intake 2026-07-07 new-content wave |
+| 76 | 📋 Open | [Lightkeeper + Radiance](issues/76-member-lightkeeper.md) | content (roster + ability) | 69 | intake 2026-07-07 new-content wave |
