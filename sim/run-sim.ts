@@ -267,6 +267,23 @@
 //     walls still cost ~0.7 each; ~1.0 residual scar/run. Sub-max deployment got HARDER
 //     (persistent HP concentrates attrition on fewer bodies): fielding 2 no longer
 //     out-winrates fielding 3, though the small-party build still lifts field-2 off 0%.
+//   after the 2026-07-07 SKILL-TIER BALANCE PASS (this file's runSim default is still the
+//     STICK profile, so the number below is the flawless good-player line): full-run
+//     ~75% ±2.7 at N=1000. F0 100 | F1 100 | F2 A1boss ~92 | F3 97 | F4 99 | F5 A2boss
+//     ~93 | F6 99 | F7 100 | F8 A3boss ~94 (conditional). The sim gained three PLAY-QUALITY
+//     tiers (optimal / average / poor — sim/profile.ts) and a matrix harness
+//     (sim/balance-tiers.ts). The #61-64 content re-test found the Shadow / channel / count
+//     cards are a ~15pp DILUTION TRAP for a 3-card hand (buying them starves ability draws
+//     faster than they pay off), so the optimal edge is a lean flawless line + Consume-
+//     awareness, NOT a bigger toolbox. Content was re-anchored so the flawless line hits
+//     the maintainer's OPTIMAL target (~75%): ENEMY_HP_BY_FIGHT down (Gatewarden 64->35,
+//     Hexweaver 174->120, Devourer 172->120, normals eased). The difficulty GRADIENT is
+//     carried by the tiers on identical content — the average tier (a 3-card-hand dilution
+//     + a ~14% wasted-phase slip rate) reads ~30% (boss-survival milestones 75/48/30) and
+//     poor <1%. Solo-only levers (HEX_VULN_BY_SIZE solo 1.0->2.2, WARBAND 3->8, LONE_WOLF
+//     2->4, all gated on fielding <= SMALL_PARTY_MAX so the trio is untouched) put a solo
+//     Warlock at ~25%. MP economy and healing throughput were NOT touched (maintainer
+//     constraint). Judge tiers via `npx tsx sim/balance-tiers.ts 1000`.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now
@@ -284,7 +301,19 @@ import { Game } from '../src/engine';
 import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
 import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
+import type { MemberId } from '../src/constants';
 import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, advanceBranch, draftPick, deployBest } from './policy';
+import { STICK, type SkillProfile } from './profile';
+
+// Options that steer a whole run for the balance-tier / party-size matrix. All default to
+// today's behavior (STICK profile, field 3, no forced members), so `runSim(n)` with no
+// opts reproduces the pinned measuring stick byte-for-byte.
+export interface RunOptions {
+  profile?: SkillProfile;         // skill tier (default STICK)
+  maxDeploy?: number;             // deployment cap 1/2/3 (default 3)
+  forceStarter?: MemberId;        // pin the opening draft pick
+  forcedDeployMember?: MemberId;  // pin this member to the field every deploy
+}
 
 export interface FightOutcome {
   fightIndex: number;
@@ -310,7 +339,9 @@ function fightSeed(runSeed: number, fightIndex: number): number {
 // hook for forcing a relic/curse into every run (#22's per-relic gates).
 // Play one full run of the roster campaign: draft a solo starter, build the roster
 // via Recruit nodes (guaranteed after fight 1 and each boss, #56), deploy the best three each fight.
-export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutcome {
+export function runSingleRun(seed: number, setup?: (run: Run) => void, opts: RunOptions = {}): RunOutcome {
+  const profile = opts.profile ?? STICK;
+  const deployOpts = { maxDeploy: opts.maxDeploy, forcedMember: opts.forcedDeployMember };
   const run = new Run(seed);
   setup?.(run);
   run.beginDraft();
@@ -322,7 +353,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
       case 'fight': {
         const fi = run.location.fightIndex;
         const game = new Game(fightSeed(seed, fi), run.toBattleConfig());
-        playFight(game);
+        playFight(game, 40, profile);
         run.markRelicsSpent(game.spentRelicIds()); // once-per-RUN relics (#22)
         const win = game.status === 'win';
         const died = game.diedThisFightSlots();
@@ -333,18 +364,27 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         } else run.loseFight();
         break;
       }
-      case 'cardReward': { const ci = chooseCardReward(run); if (ci >= 0) run.pickCardReward(ci); else run.skipCardReward(); break; } // #57
-      case 'spoils': run.pickSpoil(chooseSpoil(run)); break;
+      case 'cardReward': { const ci = chooseCardReward(run, profile); if (ci >= 0) run.pickCardReward(ci); else run.skipCardReward(); break; } // #57
+      case 'spoils': run.pickSpoil(chooseSpoil(run, profile)); break;
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
       case 'branch': advanceBranch(run); break;
       case 'node': {
-        resolveNode(run);
+        resolveNode(run, profile);
         run.completeNode();
         break;
       }
       case 'start': run.beginDraft(); break;
-      case 'deploy': deployBest(run); break;             // field the best three
-      case 'draft': draftPick(run); break;               // strongest offer, striker-first
+      case 'deploy': deployBest(run, deployOpts); break; // field the best `maxDeploy`
+      case 'draft': {
+        // Force the opening starter if requested; else the profile's draft line.
+        const dc = run.nodeContent;
+        if (run.location.post === 'start' && opts.forceStarter && dc?.type === 'draft' && dc.options.includes(opts.forceStarter)) {
+          run.chooseDraftMember(opts.forceStarter);
+        } else {
+          draftPick(run, profile);
+        }
+        break;
+      }
       default: run.status = 'lost'; break; // unreachable safety net
     }
   }
@@ -367,7 +407,7 @@ export interface SimReport {
 }
 
 // 95% confidence half-width for a binomial proportion (normal approximation).
-function ci95(rate: number, n: number): number {
+export function ci95(rate: number, n: number): number {
   if (n === 0) return 0;
   return 1.96 * Math.sqrt((rate * (1 - rate)) / n);
 }
@@ -377,7 +417,7 @@ function proportion(wins: number, n: number): Proportion {
   return { wins, n, rate, ci95: ci95(rate, n) };
 }
 
-export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): SimReport {
+export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, opts: RunOptions = {}): SimReport {
   let fullWins = 0;
   const fightWins = new Array(FIGHT_COUNT).fill(0);
   const fightAttempts = new Array(FIGHT_COUNT).fill(0);
@@ -385,7 +425,7 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void): Si
   const fightDeathsOnWin = new Array(FIGHT_COUNT).fill(0); // DR1: deaths summed over WON fights
   let injuriesTotal = 0;
   for (let i = 0; i < n; i++) {
-    const outcome = runSingleRun(firstSeed + i, setup);
+    const outcome = runSingleRun(firstSeed + i, setup, opts);
     if (outcome.status === 'won') fullWins++;
     injuriesTotal += outcome.injuriesAtEnd;
     for (const f of outcome.fights) {

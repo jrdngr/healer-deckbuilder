@@ -11,14 +11,20 @@
 
 import { Game } from '../src/engine';
 import type { Member } from '../src/engine';
+import type { Rng } from '../src/rng';
 import { Run } from '../src/run';
 import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
   DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
-  INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
+  INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, SAP_VULN_CAP,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
+import type { SkillProfile } from './profile';
+import { STICK, fightPolicyRng } from './profile';
+
+// A fight tactic: acts and returns true, or returns false (does nothing this call).
+type Tactic = (game: Game) => boolean;
 
 // ---------------------------------------------------------------------------
 // Fight policy
@@ -412,22 +418,146 @@ function trySkaldTempo(game: Game): boolean {
   return false;
 }
 
-const TACTICS: Array<(game: Game) => boolean> = [
+// ---------------------------------------------------------------------------
+// Optimal-only tactics (2026-07-07 balance pass). These encode the player power the
+// stick leaves on the table: not feeding the Devourer's Consume, and the #61-64 Shadow /
+// count / channel cards it treats as dead deck weight. They only appear in OPTIMAL_TACTICS,
+// so the stick / average / poor lines are unchanged.
+// ---------------------------------------------------------------------------
+
+// Does the enemy have a Consume step (the Devourer cleanses its own Poison and self-heals
+// off it)? If so, re-applying Poison is negative value — the ~15pp mistake the stick makes.
+function enemyCanConsume(game: Game): boolean {
+  const rot = game.config.enemy.def?.rotation;
+  const phaseRot = game.config.enemy.def?.phase?.rotation;
+  const has = (r?: readonly unknown[]): boolean =>
+    !!r && r.some((s) => typeof s === 'object' && s !== null && (s as { cast?: string }).cast === 'consume');
+  return has(rot) || has(phaseRot);
+}
+
+// Poison, but skip it entirely when the enemy can Consume (feeding it heals the boss).
+function tryConsumeAwarePoison(game: Game): boolean {
+  if (enemyCanConsume(game)) return false;
+  return tryPoison(game);
+}
+
+// Sap: a channel that deepens the enemy's Vulnerability (+25%/tick, cap +75%). Its first
+// tick lands immediately on cast, so even as a one-shot it amplifies this phase's free
+// party strikes and sets up Doom's double-dip. Only worth a card when we hold the Doom
+// payoff (or the enemy is a boss worth amplifying) and it isn't already near the vuln cap.
+function trySap(game: Game): boolean {
+  if (game.channelActive()) return false;
+  if (game.enemy.vulnerable >= SAP_VULN_CAP) return false;
+  if (channelThreatUnanswered(game)) return false;
+  const hasPayoff = handIndexOf(game, 'doom') >= 0 || game.config.enemy.boss;
+  if (!hasPayoff) return false;
+  const idx = handIndexOf(game, 'sap');
+  if (!affordable(game, idx)) return false;
+  game.playCard(idx);
+  return true;
+}
+
+// Doom: a nuke that scales with how debuffed the enemy is and double-dips Vulnerability
+// (the base cap bounds only the roll; the global vuln multiplier applies on top). Fire it
+// once the enemy is amplified (Vulnerable, or carrying poison), so the debuff-first line
+// pays off — a naked Doom is weak. Target 'none'.
+function tryDoom(game: Game): boolean {
+  const idx = handIndexOf(game, 'doom');
+  if (!affordable(game, idx)) return false;
+  if (channelThreatUnanswered(game)) return false;
+  if (game.enemy.vulnerableTurns <= 0 && game.enemy.poisonTurns <= 0) return false;
+  game.playCard(idx);
+  return true;
+}
+
+// Nightfall: damage that scales with Shadow cards played this fight (base 3, +2 each, cap
+// 14) and is amplified by Vulnerability. Worth a card once the count has built. Target
+// 'none'.
+function tryNightfall(game: Game): boolean {
+  const idx = handIndexOf(game, 'nightfall');
+  if (!affordable(game, idx)) return false;
+  if (channelThreatUnanswered(game)) return false;
+  if (game.typePlayedThisFight.shadow < 2) return false; // payoff too small to spend on yet
+  game.playCard(idx);
+  return true;
+}
+
+// Cheap Shadow chip: Shadow Bolt (cost 1) is efficient damage that also builds the Shadow
+// count for Nightfall and a debuff footprint for Doom. Keep an MP reserve so it never
+// starves the heals/answers below it.
+function tryShadowChip(game: Game): boolean {
+  if (channelThreatUnanswered(game)) return false;
+  const idx = handIndexOf(game, 'shadowBolt');
+  if (!affordable(game, idx)) return false;
+  if (game.mp - cardCost(game, idx) < 2) return false; // keep a reserve for answers/heals
+  game.playCard(idx);
+  return true;
+}
+
+// Siphon Life: chip damage that also heals the most-hurt member — efficient when someone
+// is below the comfort line, otherwise held (don't burn it as pure chip).
+function trySiphon(game: Game): boolean {
+  if (channelThreatUnanswered(game)) return false;
+  const idx = handIndexOf(game, 'siphonLife');
+  if (!affordable(game, idx)) return false;
+  const hurt = [...game.livingMembers()]
+    .filter((m) => m.hp < m.maxHP * SAFE_FRACTION)
+    .sort((a, b) => a.hp / a.maxHP - b.hp / b.maxHP)[0];
+  if (!hurt) return false;
+  if (game.mp - cardCost(game, idx) < 1) return false;
+  game.playCard(idx, hurt.slot);
+  return true;
+}
+
+const STICK_TACTICS: Tactic[] = [
   tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   // Hex before offense so the Vulnerability amplifies this phase's strikes (#39).
   tryHex, tryBolt, tryPoison, tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];
 
-// Play a single player phase to a natural close (rest or end turn).
-function takeFightTurn(game: Game): void {
+// Optimal: the stick's survival core, then Vulnerability set-up (Hex/Sap) so every
+// downstream strike is amplified, the Doom/Nightfall burst, the damage race with
+// Consume-aware poison, and cheap Shadow chip that keeps an MP reserve.
+const OPTIMAL_TACTICS: Tactic[] = [
+  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryHex, trySap, tryDoom, tryNightfall, tryBolt, tryConsumeAwarePoison, trySiphon, tryShadowChip,
+  tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
+];
+
+// Poor: offense before the survival guards (greedy attacking), economy/tempo tactics
+// dropped. Combined with a high mistake rate this reliably under-pilots.
+const POOR_TACTICS: Tactic[] = [
+  tryBolt, tryPoison, tryRampage, tryCrescendo,
+  tryPreventLethal, tryRetaunt, tryCleanse, tryHeal, tryResurrect,
+];
+
+function tacticsFor(profile: SkillProfile): Tactic[] {
+  switch (profile.tier) {
+    case 'optimal': return OPTIMAL_TACTICS;
+    case 'poor': return POOR_TACTICS;
+    default: return STICK_TACTICS; // stick + average share the good-player line
+  }
+}
+
+// Play a single player phase to a natural close (rest or end turn). A mistake roll (only
+// when mistakeProb > 0) mutes ONE tactic slot for this turn — a bounded, deterministic
+// model of a real slip (a missed cleanse, a late re-taunt, a reactive instead of proactive
+// heal). stick/optimal set mistakeProb 0, so rng is never drawn and the turn is identical.
+function takeFightTurn(game: Game, tactics: Tactic[], mistakeProb: number, rng: Rng | null): void {
   // A heuristic policy must always make progress toward ending the turn; this guard
   // is a backstop so a mis-registered tactic can never hang the sim (it would leave
   // status 'playing', which the caller reads as a loss).
   let guard = 0;
-  while (game.phase === 'player') {
+  // A slip WASTES the whole player phase: the fumbling player passes without securing the
+  // board (no brace / heal / attack) and the enemy phase lands on an untended party. One
+  // roll per turn. Modelling a slip as a whole-turn waste — not a single muted tactic — is
+  // what actually costs winrate: the tactic loop re-scans, so a later tactic recovers a
+  // single mute and the line self-heals (measured ~0pp even muting a front slot at p=0.6).
+  const wasteTurn = !!rng && mistakeProb > 0 && rng() < mistakeProb;
+  while (game.phase === 'player' && !wasteTurn) {
     let acted = false;
-    for (const tactic of TACTICS) {
-      if (tactic(game)) { acted = true; break; }
+    for (let i = 0; i < tactics.length; i++) {
+      if (tactics[i](game)) { acted = true; break; }
     }
     if (!acted || ++guard > 200) break;
   }
@@ -440,13 +570,16 @@ function takeFightTurn(game: Game): void {
 
 // Play a fight from a fresh Game to completion. A turn cap guards against a
 // stalled line dragging on forever; exceeding it leaves status 'playing', which
-// the caller reads as a loss.
-export function playFight(game: Game, turnCap = 40): void {
+// the caller reads as a loss. `profile` defaults to STICK (the pinned good player),
+// so every existing caller is byte-identical.
+export function playFight(game: Game, turnCap = 40, profile: SkillProfile = STICK): void {
   game.start();
+  const tactics = tacticsFor(profile);
+  const rng = profile.mistakeProb > 0 ? fightPolicyRng(game.seed) : null;
   let guard = 0;
   while (game.status === 'playing' && game.turn <= turnCap && guard < 1000) {
     guard++;
-    takeFightTurn(game);
+    takeFightTurn(game, tactics, profile.mistakeProb, rng);
   }
 }
 
@@ -496,21 +629,23 @@ function partyIsTauntless(run: Run): boolean {
   return !run.party.some((_, slot) => memberDefAt(run.party, slot).ability === 'taunt');
 }
 
-function cardBuyValue(run: Run, id: CardId): number {
+function cardBuyValue(run: Run, id: CardId, profile: SkillProfile = STICK): number {
+  const override = profile.valueOverride[id];
+  if (override != null) return override;         // tier values a card the stick treats as filler
   if (id === 'provoke' && partyIsTauntless(run)) return 6;
   return CARD_BUY_VALUE[id];
 }
 
-function shopCardNode(run: Run): void {
+function shopCardNode(run: Run, profile: SkillProfile = STICK): void {
   if (run.nodeContent?.type !== 'cardShop') return;
   let bought = 0;
-  while (bought < MAX_CARDS_PER_SHOP) {
+  while (bought < profile.shopMaxCards) {
     const offers = run.nodeContent.offers;
-    // Best affordable, worthwhile offer (skip low-value filler like lowHeal).
-    let best = -1, bestVal = 2;
+    // Best affordable offer above the tier's buy bar (skip low-value filler like lowHeal).
+    let best = -1, bestVal = profile.shopBuyBar;
     offers.forEach((o, i) => {
       if (o.price > run.gold) return;
-      const v = cardBuyValue(run, o.cardId);
+      const v = cardBuyValue(run, o.cardId, profile);
       if (v > bestVal) { bestVal = v; best = i; }
     });
     if (best < 0 || !run.buyCardOffer(best)) break;
@@ -590,12 +725,20 @@ const RELIC_VALUE: Record<RelicId, number> = {
   reliquaryOfLight: 0, shadowSigil: 0, ironWard: 0,
 };
 
+// Relic buy-value, letting a tier value relics the stick treats as inert (the #63
+// synergy relics for the optimal line, small-party relics for solo/duo).
+function relicBuyValue(id: RelicId, profile: SkillProfile = STICK): number {
+  const override = profile.valueOverride[id];
+  if (override != null) return override;
+  return RELIC_VALUE[id] ?? 0;
+}
+
 // Spoils are free: always take the best-valued offer.
-export function chooseSpoil(run: Run): number {
+export function chooseSpoil(run: Run, profile: SkillProfile = STICK): number {
   if (run.nodeContent?.type !== 'spoils') return 0;
   let best = 0, bestVal = -1;
   run.nodeContent.offers.forEach((o, i) => {
-    const v = RELIC_VALUE[o.relicId] ?? 0;
+    const v = relicBuyValue(o.relicId, profile);
     if (v > bestVal) { bestVal = v; best = i; }
   });
   return best;
@@ -605,11 +748,11 @@ export function chooseSpoil(run: Run): number {
 // offer, but only if it clears the same selectivity bar shops use — a card this
 // policy never plays is dead deck weight that dilutes ability draws — otherwise
 // skip. Returns the offer index to take, or -1 to walk on empty-handed.
-export function chooseCardReward(run: Run): number {
+export function chooseCardReward(run: Run, profile: SkillProfile = STICK): number {
   if (run.nodeContent?.type !== 'cardReward') return -1;
-  let best = -1, bestVal = 2; // skip filler valued <= 2, mirroring shopCardNode
+  let best = -1, bestVal = profile.shopBuyBar; // skip filler, mirroring shopCardNode
   run.nodeContent.offers.forEach((o, i) => {
-    const v = cardBuyValue(run, o.cardId);
+    const v = cardBuyValue(run, o.cardId, profile);
     if (v > bestVal) { bestVal = v; best = i; }
   });
   return best;
@@ -628,13 +771,13 @@ function mostInjuredSlot(run: Run): number {
 
 // Reliquary: buy the single best-value affordable relic (run-long payoff), and
 // skip the card-removal service (the policy's deck stays lean by buying little).
-function shopReliquary(run: Run): void {
+function shopReliquary(run: Run, profile: SkillProfile = STICK): void {
   if (run.nodeContent?.type !== 'reliquary') return;
   const offers = run.nodeContent.offers;
   let best = -1, bestVal = 3; // don't burn 50g+ on bottom-value relics
   offers.forEach((o, i) => {
     if (o.price > run.gold) return;
-    const v = RELIC_VALUE[o.relicId] ?? 0;
+    const v = relicBuyValue(o.relicId, profile);
     if (v > bestVal) { bestVal = v; best = i; }
   });
   if (best >= 0) run.buyRelicOffer(best);
@@ -676,14 +819,15 @@ function memberValue(p: { member?: MemberId; injuries: number }): number {
 
 // Draft pick: take the strongest offered member, but prioritise a striker while the
 // roster still lacks one (a comp with no poison/bolt loses the F8 race — #38).
-export function draftPick(run: Run): void {
+export function draftPick(run: Run, profile: SkillProfile = STICK): void {
   if (run.location.kind !== 'draft' || run.nodeContent?.type !== 'draft') return;
   const opts = run.nodeContent.options;
   if (opts.length === 0) return;
   const needStriker = !run.roster.some((p) => p.member && CONVENTIONAL_STRIKERS.has(p.member));
   let best = opts[0], bestScore = -Infinity;
   for (const id of opts) {
-    const score = (DRAFT_RATING[id] ?? 0) + (needStriker && CONVENTIONAL_STRIKERS.has(id) ? 10 : 0);
+    const bonus = needStriker && CONVENTIONAL_STRIKERS.has(id) ? profile.strikerPriorityBonus : 0;
+    const score = (DRAFT_RATING[id] ?? 0) + bonus;
     if (score > bestScore) { bestScore = score; best = id; }
   }
   run.chooseDraftMember(best);
@@ -691,10 +835,10 @@ export function draftPick(run: Run): void {
 
 // Recruit node: the good player grows the roster (bodies + replacements after a
 // permanent death), taking the strongest offered member up to a sensible cap.
-export function recruitPick(run: Run): void {
+export function recruitPick(run: Run, profile: SkillProfile = STICK): void {
   if (run.nodeContent?.type !== 'recruit' || run.nodeContent.done) return;
   const opts = run.nodeContent.options;
-  if (opts.length === 0 || run.roster.length >= 6) return;
+  if (opts.length === 0 || run.roster.length >= profile.recruitCap) return;
   let best = opts[0], bestScore = -Infinity;
   for (const id of opts) {
     const score = DRAFT_RATING[id] ?? 0;
@@ -703,14 +847,24 @@ export function recruitPick(run: Run): void {
   run.recruitMember(best);
 }
 
-// Deploy: field the best (up to) three roster members by value, seating a taunt
-// member (else the highest-HP body) in the center where the enemy aims most.
-export function deployBest(run: Run): void {
+// Deploy: field the best (up to) `maxDeploy` roster members by value, seating a taunt
+// member (else the highest-HP body) in the center where the enemy aims most. `maxDeploy`
+// defaults to 3 (the full party); the balance-tiers harness lowers it for solo/duo runs.
+// `forcedMember` (solo-Warlock experiment) pins that member to the field if present.
+export function deployBest(run: Run, opts: { maxDeploy?: number; forcedMember?: MemberId } = {}): void {
   if (run.location.kind !== 'deploy') return;
+  const cap = Math.max(1, opts.maxDeploy ?? 3);
   const ranked = run.roster
     .map((p, ri) => ({ ri, p }))
     .sort((a, b) => memberValue(b.p) - memberValue(a.p));
-  const top = ranked.slice(0, 3);
+  // Pin the forced member first (if it's in the roster), then fill the remaining seats
+  // from the ranked order — so a solo run fields exactly the forced member.
+  let ordered = ranked;
+  if (opts.forcedMember) {
+    const forcedIdx = ranked.findIndex((t) => t.p.member === opts.forcedMember);
+    if (forcedIdx >= 0) ordered = [ranked[forcedIdx], ...ranked.filter((_, i) => i !== forcedIdx)];
+  }
+  const top = ordered.slice(0, cap);
   if (top.length === 0) { run.confirmDeployment(run.deployment); return; }
   // Anchor: a taunt member if we have one, else the highest-HP body.
   let anchor = top.findIndex((t) => t.p.member && MEMBER_POOL[t.p.member].ability === 'taunt');
@@ -747,15 +901,15 @@ function infirmaryNode(run: Run): void {
   }
 }
 
-export function resolveNode(run: Run): void {
+export function resolveNode(run: Run, profile: SkillProfile = STICK): void {
   switch (run.nodeContent?.type) {
-    case 'cardShop': shopCardNode(run); break;
+    case 'cardShop': shopCardNode(run, profile); break;
     case 'healerUpgrade': shopHealerNode(run); break;
     case 'partyUpgrade': shopPartyNode(run); break;
     case 'cardUpgrade': shopModifierNode(run); break;
     case 'event': resolveEvent(run); break;
-    case 'reliquary': shopReliquary(run); break;
-    case 'recruit': recruitPick(run); break;
+    case 'reliquary': shopReliquary(run, profile); break;
+    case 'recruit': recruitPick(run, profile); break;
     case 'infirmary': infirmaryNode(run); break;
     default: break;
   }
