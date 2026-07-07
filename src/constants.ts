@@ -1668,7 +1668,11 @@ export type RelicId =
   // --- small-party relics (#42): reward fielding fewer bodies ----------------
   | 'loneWolf'       // while fielding <=2, fielded members deal +2 damage
   | 'focusStone'     // while fielding <=2, +2 max MP (fewer bodies to heal)
-  | 'warband';       // fielded members gain +3 max HP per empty deploy seat
+  | 'warband'        // fielded members gain +3 max HP per empty deploy seat
+  // --- card-type synergy relics (#63): read card type on play ----------------
+  | 'reliquaryOfLight' // Holy cards heal +1
+  | 'shadowSigil'      // after you play a Shadow card, deal +1 to the enemy
+  | 'ironWard';        // the first Iron card each turn costs 1 less (min 0)
 
 export interface RelicDef {
   id: RelicId;
@@ -1720,6 +1724,12 @@ export const CRACKED_HOURGLASS_ENRAGE = 9; // enrage turn under the Hourglass
 export const HOURGLASS_POWER_BONUS = 2;    // Poison & Bolt power under the Hourglass
 export const RUSTY_CROWN_ATTACK = 1;   // enemy attack bonus under the Crown
 export const RUSTY_CROWN_GOLD = 15;    // extra gold per fight win under the Crown
+// Card-type synergy relics (#63). Magnitudes are tunable — a later balance pass
+// owns the numbers; this issue ships the mechanics. Each reads a card's type on
+// play (via the per-type counters / cardType), so all three share one source.
+export const HOLY_RELIC_HEAL = 1;       // Reliquary of Light: Holy cards heal +this
+export const SHADOW_RELIC_DMG = 1;      // Shadow Sigil: +this to the enemy after a Shadow card
+export const IRON_RELIC_DISCOUNT = 1;   // Iron Ward: the first Iron card each turn costs this less
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -1766,6 +1776,13 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `While fielding ${SMALL_PARTY_MAX} or fewer members, +${FOCUS_STONE_MP} max MP (fewer bodies to tend).` },
   warband: { id: 'warband', name: 'Warband Standard', rarity: 'rare', icon: '⚔️',
     desc: `Fielded members gain +${WARBAND_HP_PER_SEAT} max HP for each empty deploy seat.` },
+  // --- card-type synergy relics (#63) ----------------------------------------
+  reliquaryOfLight: { id: 'reliquaryOfLight', name: 'Reliquary of Light', rarity: 'uncommon', icon: '✨',
+    desc: `Holy cards heal +${HOLY_RELIC_HEAL}.` },
+  shadowSigil: { id: 'shadowSigil', name: 'Shadow Sigil', rarity: 'uncommon', icon: '🌑',
+    desc: `After you play a Shadow card, deal +${SHADOW_RELIC_DMG} to the enemy.` },
+  ironWard: { id: 'ironWard', name: 'Iron Ward', rarity: 'uncommon', icon: '🛡',
+    desc: `The first Iron card you play each turn costs ${IRON_RELIC_DISCOUNT} less (min 0).` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

@@ -8,6 +8,7 @@ import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EM
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
+import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
 
 let passed = 0;
@@ -3412,6 +3413,67 @@ function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
   g.playCard(giveCard(g, 'doom'));
   eq('Doom applies its computed damage', before - g.enemy.hp, expected);
   eq('Doom does not perturb the telegraph', JSON.stringify(g.attackTargets()), tgBefore);
+}
+
+// --- Per-type counters (#63) ------------------------------------------------
+{
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+  g.playCard(giveCard(g, 'shadowBolt'));         // Shadow
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // Holy
+  eq('shadow per-turn counter increments', g.typePlayedThisTurn.shadow, 1);
+  eq('holy per-turn counter increments', g.typePlayedThisTurn.holy, 1);
+  eq('no bleed into an unplayed type', g.typePlayedThisTurn.iron, 0);
+  eq('per-fight counter mirrors the play', g.typePlayedThisFight.shadow, 1);
+  g.endTurn(); // resolve the enemy phase and start a fresh player phase
+  eq('per-turn counter resets next turn', g.typePlayedThisTurn.shadow, 0);
+  check('per-fight counter persists across the turn', g.typePlayedThisFight.shadow === 1);
+  // Per-fight counters do not bleed across fights: a fresh Game (a new fight) is zero.
+  eq('a fresh fight starts at zero', new Game(2, defaultBattleConfig()).typePlayedThisFight.shadow, 0);
+}
+
+// --- Card-type synergy relics (#63) -----------------------------------------
+{
+  // Reliquary of Light: Holy cards heal +1; off = base; non-Holy heals untouched.
+  const cfg = defaultBattleConfig(); cfg.relics = ['reliquaryOfLight'];
+  const g = new Game(1, cfg); g.start(); g.mp = 10;
+  const m = g.members[SLOT.CENTER]; m.hp = 1;
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+  eq('Reliquary of Light: Holy heal +1', m.hp - 1, (CARDS.lowHeal.heal ?? 0) + HOLY_RELIC_HEAL);
+  const g2 = new Game(1, defaultBattleConfig()); g2.start(); g2.mp = 10;
+  const m2 = g2.members[SLOT.CENTER]; m2.hp = 1;
+  g2.playCard(giveCard(g2, 'lowHeal'), SLOT.CENTER);
+  eq('without the relic: base heal', m2.hp - 1, CARDS.lowHeal.heal ?? 0);
+}
+{
+  // Shadow Sigil: +1 to the enemy after a Shadow card; telegraph intact; Holy ignored.
+  const cfg = defaultBattleConfig(); cfg.relics = ['shadowSigil'];
+  const g = new Game(1, cfg); g.start(); g.mp = 10; g.enemy.hp = 999;
+  const tgBefore = JSON.stringify(g.attackTargets());
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'shadowBolt'));
+  eq('Shadow Sigil: +1 after a Shadow card', before - g.enemy.hp, SHADOW_BOLT_DMG + SHADOW_RELIC_DMG);
+  eq('Shadow Sigil keeps telegraph == applied', JSON.stringify(g.attackTargets()), tgBefore);
+  const before2 = g.enemy.hp;
+  g.members[SLOT.CENTER].hp = 1;
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+  eq('Shadow Sigil ignores non-Shadow cards', before2 - g.enemy.hp, 0);
+}
+{
+  // Iron Ward: the FIRST Iron card each turn costs 1 less; later Iron cards pay full;
+  // resets next turn.
+  const cfg = defaultBattleConfig(); cfg.relics = ['ironWard'];
+  const g = new Game(1, cfg); g.start(); g.mp = 10;
+  const i1 = giveCard(g, 'shield'); // Iron, cost 3
+  eq('Iron Ward: first Iron card cheaper', g.effectiveCost(resolveCard(g.hand[i1])), CARDS.shield.cost - IRON_RELIC_DISCOUNT);
+  g.playCard(i1, SLOT.CENTER);
+  const i2 = giveCard(g, 'brace'); // second Iron card this turn -> full price
+  eq('Iron Ward: later Iron cards pay full', g.effectiveCost(resolveCard(g.hand[i2])), CARDS.brace.cost);
+  g.endTurn();
+  const i3 = giveCard(g, 'shield');
+  eq('Iron Ward resets each turn', g.effectiveCost(resolveCard(g.hand[i3])), CARDS.shield.cost - IRON_RELIC_DISCOUNT);
+  // A non-Iron card is never discounted by the Ward.
+  const i4 = giveCard(g, 'lowHeal');
+  eq('Iron Ward ignores non-Iron cards', g.effectiveCost(resolveCard(g.hand[i4])), CARDS.lowHeal.cost);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

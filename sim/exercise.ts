@@ -27,6 +27,7 @@ import {
   POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, injuryRecordCap,
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
   MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
+  SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -310,6 +311,22 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const g = smallProbeGame(['warband']); g.start();
     // A solo deploy leaves 2 empty seats -> +WARBAND_HP_PER_SEAT * 2 max HP.
     return g.members[0].maxHP === MEMBER_POOL.ranger.maxHP + WARBAND_HP_PER_SEAT * 2;
+  },
+  // --- card-type synergy relics (#63) -------------------------------------------
+  reliquaryOfLight: () => {
+    const g = probeGame(['reliquaryOfLight']); g.start(); g.tank.hp = 1;
+    const before = g.tank.hp; g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // Holy heal
+    return g.tank.hp - before === (CARDS.lowHeal.heal ?? 0) + HOLY_RELIC_HEAL;
+  },
+  shadowSigil: () => {
+    const g = probeGame(['shadowSigil']); g.start(); g.enemy.hp = 999;
+    const before = g.enemy.hp; g.playCard(give(g, 'shadowBolt')); // Shadow card
+    return before - g.enemy.hp === SHADOW_BOLT_DMG + SHADOW_RELIC_DMG;
+  },
+  ironWard: () => {
+    const g = probeGame(['ironWard']); g.start();
+    const i = give(g, 'shield'); // Iron, cost 3 -> the first Iron card is cheaper
+    return g.effectiveCost(resolveCard(g.hand[i])) === CARDS.shield.cost - IRON_RELIC_DISCOUNT;
   },
 };
 

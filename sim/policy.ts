@@ -579,6 +579,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Small-party relics (#42): the best-3 policy never fields small, so it can't use
   // these — value 0 (they're a human undermanned-build reward, exercised via #42's gate).
   loneWolf: 0, focusStone: 0, warband: 0,
+  // Card-type synergy relics (#63): the best-3 policy has no type-themed line (it never
+  // banks the Shadow/Iron cards, and its heal spam already tops off), so value 0.
+  reliquaryOfLight: 0, shadowSigil: 0, ironWard: 0,
 };
 
 // Spoils are free: always take the best-valued offer.

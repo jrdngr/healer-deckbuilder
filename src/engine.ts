@@ -29,6 +29,7 @@ import {
   EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS,
   SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
+  HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
@@ -241,6 +242,12 @@ export class Game {
   phase: Phase;
   status: Status;
   cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +1 at 1)
+  // Per-type cards-played counters (#63): both feed the type-synergy relics and the
+  // count-based cards from one source. `ThisTurn` resets each player phase (Iron Ward's
+  // first-Iron discount, the Arcane count card's per-turn cost scaling); `ThisFight`
+  // resets only at fight start (the Shadow count card's per-fight damage scaling).
+  typePlayedThisTurn: Record<CardType, number>;
+  typePlayedThisFight: Record<CardType, number>;
   telegraph: Telegraph | null;
   rotationIndex: number; // index into a rotation enemy's fixed attack cycle (see EnemyDef.rotation)
   phaseTriggered: boolean; // whether the enemy's HP-threshold phase has fired (edge-detect, #14)
@@ -354,6 +361,8 @@ export class Game {
     this.phase = 'idle';     // 'idle' | 'player' | 'over'
     this.status = 'playing'; // 'playing' | 'win' | 'loss'
     this.cardsPlayedThisPhase = 0;
+    this.typePlayedThisTurn = Game._zeroTypeCounts();
+    this.typePlayedThisFight = Game._zeroTypeCounts();
     this.telegraph = null;   // upcoming attack (the one that lands next enemy phase)
     this.rotationIndex = 0;  // advances each time a rotation enemy issues an attack
     this.phaseTriggered = false; // no phase transition has fired yet
@@ -388,6 +397,11 @@ export class Game {
   tauntingMember(): Member | null { return this.members.find((m) => m.alive && m.taunt > 0) ?? null; }
 
   hasRelic(id: RelicId): boolean { return this.relics.has(id); }
+
+  // A fresh zeroed per-type counter (#63).
+  static _zeroTypeCounts(): Record<CardType, number> {
+    return { holy: 0, nature: 0, shadow: 0, blood: 0, arcane: 0, iron: 0 };
+  }
 
   // Per-member attack damage — the single seam for party-phase damage modifiers.
   // Battle Hymn (#16) adds its bonus here for the phase it was sung in;
@@ -884,6 +898,13 @@ export class Game {
     const m = this.livingMembers()[0];
     if (m) this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(amount), enemyHp: this.enemy.hp });
     if (killed) this._emit({ kind: 'defeatEnemy' });
+  }
+
+  // Reliquary of Light (#63): a flat bonus to healing from Holy cards. Read per heal
+  // CARD (not per _healMember call) so only Holy card heals are boosted — a ticking
+  // Regen (Nature) or a Blood card's spillover heal is untouched.
+  _holyHealBonus(card: ResolvedCard): number {
+    return this.hasRelic('reliquaryOfLight') && cardType(card.id) === 'holy' ? HOLY_RELIC_HEAL : 0;
   }
 
   // Central heal path for every healing source (direct heal cards AND the Regen
@@ -1384,6 +1405,7 @@ export class Game {
     this._drawTo(Math.max(1, this.handSize - (this.taperFired ? 1 : 0)));
     this.taperFired = false;
     this.cardsPlayedThisPhase = 0;
+    this.typePlayedThisTurn = Game._zeroTypeCounts(); // per-turn type counters reset (#63)
     this.phase = 'player';
   }
 
@@ -1418,11 +1440,18 @@ export class Game {
   // affordability check reads this too.
   effectiveCost(card: ResolvedCard): number {
     if (this.surgePending) return 0;
+    let cost = card.cost;
     if (this.hasRelic('firstLightTaper') && this.cardsPlayedThisPhase === 0
-        && card.cost <= TAPER_MAX_COST && !isEngineCard(card.id)) {
-      return Math.max(0, card.cost - TAPER_DISCOUNT);
+        && cost <= TAPER_MAX_COST && !isEngineCard(card.id)) {
+      cost = Math.max(0, cost - TAPER_DISCOUNT);
     }
-    return card.cost;
+    // Iron Ward (#63): the FIRST Iron card each turn costs less. "First" reads the
+    // per-turn Iron counter (0 until an Iron card is played), so later Iron cards
+    // pay full price. effectiveCost runs before the counter is bumped in playCard.
+    if (this.hasRelic('ironWard') && cardType(card.id) === 'iron' && this.typePlayedThisTurn.iron === 0) {
+      cost = Math.max(0, cost - IRON_RELIC_DISCOUNT);
+    }
+    return cost;
   }
 
   // Validate whether a hand card can currently be played. Returns null if ok,
@@ -1491,6 +1520,21 @@ export class Game {
 
     this._applyCard(card, target);
 
+    // Per-type cards-played counters (#63): tally AFTER the effect resolves, so a
+    // count-based card reads only the plays BEFORE it (e.g. the Arcane cost card
+    // already had its discount read in effectiveCost). Ability cards count too —
+    // the Warlock's Hex reads as a Shadow play for these synergies.
+    const ct = cardType(card.id);
+    this.typePlayedThisTurn[ct] += 1;
+    this.typePlayedThisFight[ct] += 1;
+
+    // Shadow Sigil (#63): after a Shadow card resolves, chip the enemy. Party->enemy
+    // damage through _damageEnemy (Vulnerability applies; no enemy telegraph touched).
+    if (this.status === 'playing' && ct === 'shadow' && this.hasRelic('shadowSigil')) {
+      const killed = this._damageEnemy(SHADOW_RELIC_DMG, 'Shadow Sigil');
+      this._emitEnemyNuke(SHADOW_RELIC_DMG, killed);
+    }
+
     // Echo Locket (#21): once per fight, the first Poison or Bolt ability card cast
     // (#44: Imbue Venom / Unleash) returns to hand (its MP was paid; a replay pays again).
     if (!this.echoUsed && this.hasRelic('echoLocket') && (card.ability === 'poison' || card.ability === 'bolt')) {
@@ -1534,14 +1578,14 @@ export class Game {
       case 'lowHeal':
       case 'highHeal': {
         const m = this.members[target as number];
-        const healed = this._healMember(m, card.heal ?? 0, true);
+        const healed = this._healMember(m, (card.heal ?? 0) + this._holyHealBonus(card), true);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         break;
       }
       case 'aoeHeal': {
         for (const m of this.livingMembers()) {
-          const healed = this._healMember(m, card.heal ?? 0, true);
+          const healed = this._healMember(m, (card.heal ?? 0) + this._holyHealBonus(card), true);
           this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         }
         this._log(`Group Heal: all living members heal up to ${card.heal}.`, 'heal');
@@ -1777,7 +1821,7 @@ export class Game {
       case 'focus': {
         // A concentrated heal: more efficient when there are fewer bodies to spread across.
         const m = this.members[target as number];
-        const amount = (card.heal ?? FOCUS_HEAL) + (this.fieldedPartySize() <= SMALL_PARTY_MAX ? FOCUS_SMALL_BONUS : 0);
+        const amount = (card.heal ?? FOCUS_HEAL) + (this.fieldedPartySize() <= SMALL_PARTY_MAX ? FOCUS_SMALL_BONUS : 0) + this._holyHealBonus(card);
         const healed = this._healMember(m, amount, true);
         this._log(`Focus: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
