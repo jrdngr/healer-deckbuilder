@@ -221,6 +221,36 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('every other stop stays open', run.nodeAvailable('event') && run.nodeAvailable('cardShop'));
 }
 
+// --- branch hub: an un-openable stop is swapped, never left blank ---------------
+{
+  const run = new Run(32);
+  startRun(run);
+  run.winFight();
+  run.skipCardReward(); // #57
+  // A branch that would otherwise present a Recruiter the full roster can't open (the
+  // recruiter cadence can force one) — the hub must not show a blank/missing stop.
+  run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  run.roster = partyFromMembers(DRAFT_POOL); // full roster: the recruit stop can't open
+  run.chooseBranch(0);
+  const nodes = run.map[0].branches[0].nodes;
+  check('the un-openable recruit stop is swapped away', nodes[0].type !== 'recruit');
+  check('the swap keeps the branch stops distinct', nodes[0].type !== nodes[1].type);
+  check('every stop on the chosen branch is now openable', nodes.every((n) => run.nodeAvailable(n.type)));
+}
+
+// --- branch hub: an openable stop is left untouched ----------------------------
+{
+  const run = new Run(32);
+  startRun(run);
+  run.winFight();
+  run.skipCardReward(); // #57
+  run.roster = partyFromMembers(['ranger', 'tank']); // room to recruit -> the stop stays
+  run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  run.chooseBranch(0);
+  const nodes = run.map[0].branches[0].nodes;
+  check('an openable recruit stop survives untouched', nodes[0].type === 'recruit' && nodes[1].type === 'event');
+}
+
 // --- branch hub: a mid-branch save/resume keeps the cached stops ---------------
 {
   const run = new Run(33);

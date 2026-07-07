@@ -693,9 +693,30 @@ export class Run {
   chooseBranch(branch: number): void {
     if (this.location.kind !== 'forkChoice') return;
     const forkIndex = this.location.forkIndex;
+    // Never land on a hub with a blank/missing stop: swap any node that isn't
+    // enterable right now for an available one (below) before committing.
+    this._resolveBranchAvailability(forkIndex, branch);
     this.location = { kind: 'branch', forkIndex, branch };
     this.nodeContent = null;
     this.branchContent = this.map[forkIndex].branches[branch].nodes.map(() => null);
+  }
+
+  // Ensure every stop on the chosen branch is enterable right now. A node whose
+  // type is currently unavailable — a Recruiter with a full roster (the recruiter
+  // cadence can force one onto a branch), an Infirmary with nobody hurt — is
+  // swapped in place for an available, weighted node type not already on the
+  // branch, so the hub never presents a blank/missing stop. Deterministic in the
+  // run rng and done once, on entry, so revisits stay stable. If no valid type can
+  // be swapped in, the node is left as-is (the hub then simply hides it, as before).
+  _resolveBranchAvailability(forkIndex: number, branch: number): void {
+    const nodes = this.map[forkIndex].branches[branch].nodes;
+    for (let i = 0; i < nodes.length; i++) {
+      if (this.nodeAvailable(nodes[i].type)) continue;
+      const used = new Set(nodes.map((n) => n.type));
+      const pool = NODE_TYPE_WEIGHTS.filter(([t]) => !used.has(t) && this.nodeAvailable(t));
+      if (pool.length === 0) continue;
+      nodes[i] = { type: weightedPick(pool.map(([t, w]): [NodeType, number] => [t, w]), this.rng) };
+    }
   }
 
   // Whether a node of this type can be visited right now. The Recruit node is hidden

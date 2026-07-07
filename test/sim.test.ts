@@ -149,7 +149,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // 23.3% ±2.6; bosses 68.4 / 71.2 / 66.0%), back in the roster-campaign band. The
   // per-fight vector rose broadly: F2 89->133, F3/F4 88/87->124/111, F5 47->75, F6/F7
   // 46->70/65, F8 14->45. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 195, 133, 124, 111, 75, 70, 65, 45]));
+  // 2026-07-07: the branch hub now SWAPS an un-openable stop (a forced Recruiter on a
+  // full roster, an Infirmary with nobody hurt) for an available one instead of leaving
+  // it blank. The swap consumes an rng draw when it fires, nudging the deterministic
+  // stream, so the vector shifts slightly: F2 133->138, F3/F4 124/111->130/119, F5
+  // 75->76, F6/F7 70/65->72/66, F8 45->47 (F0/F1 unchanged). A stream perturbation, not
+  // a balance move; all the band/CI gates below still hold. Re-pinned on the new numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([198, 195, 138, 130, 119, 76, 72, 66, 47]));
   // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
   // not a hard threshold, so subsample noise can't fail a healthy build while a real
   // drift still trips it.

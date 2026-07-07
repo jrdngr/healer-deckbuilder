@@ -283,32 +283,45 @@ async function render(el: React.ReactElement): Promise<string> {
 
 // --- BranchScreen: the hub lists open stops and leads to the fight --------------
 {
-  const hubRun = new Run(22);
-  hubRun._enterDeploy(0); // default trio -> deploy step
-  hubRun.confirmDeployment(hubRun.deployment); // pass the pre-fight deploy step
-  hubRun.winFight();
-  hubRun.skipCardReward(); // #57: clear the post-win card reward to reach the fork
+  // Reach a fork from a fresh run so a branch can be hand-set, then chosen.
+  const toFork = (seed: number): Run => {
+    const r = new Run(seed);
+    r._enterDeploy(0); // default trio -> deploy step
+    r.confirmDeployment(r.deployment); // pass the pre-fight deploy step
+    r.winFight();
+    r.skipCardReward(); // #57: clear the post-win card reward to reach the fork
+    return r;
+  };
+
+  // A stop that isn't enterable right now (a Recruiter with a full roster) must be
+  // SWAPPED for an available one on entry — never left as a blank/missing stop.
+  const hubRun = toFork(22);
   hubRun.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
-  hubRun.roster = partyFromMembers(DRAFT_POOL); // full roster: the recruit stop hides
+  hubRun.roster = partyFromMembers(DRAFT_POOL); // full roster: the recruit stop can't open
   hubRun.chooseBranch(0);
   let entered: number | null = null;
   let fought = false;
   let text = await render(
     <BranchScreen run={hubRun} onEnter={(i) => { entered = i; }} onFight={() => { fought = true; }} />,
   );
-  check('hub hides the full-roster recruit stop', !text.includes('Recruiter'), text);
-  check('hub shows the open stop', text.includes('Event'), text);
+  check('the un-openable recruit stop is swapped away', !text.includes('Recruiter'), text);
+  check('the branch shows a full complement of stops (no blank)', rootEl.querySelectorAll('.branch-stop').length === 2, text);
+  check('the event stop survives the swap', text.includes('Event'), text);
   check('hub offers the way to the fight', text.includes('Onward to the fight'), text);
 
-  const stop = rootEl.querySelector('.branch-stop') as HTMLElement;
-  await act(async () => { stop.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
-  check('clicking the only visible stop enters the event (node 1)', entered === 1, String(entered));
+  const eventStop = rootEl.querySelectorAll('.branch-stop')[1] as HTMLElement;
+  await act(async () => { eventStop.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
+  check('clicking the event stop enters node 1', entered === 1, String(entered));
 
-  hubRun.roster = partyFromMembers(['ranger', 'tank']); // room again: the recruit stop re-opens
+  // A roster with room keeps the recruit stop as-is (it's enterable, so no swap).
+  const roomRun = toFork(22);
+  roomRun.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  roomRun.roster = partyFromMembers(['ranger', 'tank']); // room: the recruit stop stays
+  roomRun.chooseBranch(0);
   text = await render(
-    <BranchScreen run={hubRun} onEnter={() => {}} onFight={() => { fought = true; }} />,
+    <BranchScreen run={roomRun} onEnter={() => {}} onFight={() => { fought = true; }} />,
   );
-  check('a roster with room shows the recruit stop', text.includes('Recruiter'), text);
+  check('a roster with room keeps the recruit stop', text.includes('Recruiter'), text);
 
   const go = rootEl.querySelector('.branch-fight') as HTMLElement;
   await act(async () => { go.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
