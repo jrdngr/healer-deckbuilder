@@ -1,6 +1,6 @@
 # Issue 62 — Hero buff card batch
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards)   **Size:** L
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — "Create some new buff cards. +1 damage reduction on a hero,
@@ -87,6 +87,17 @@ deck-building and reward setup turns.
   fade after N turns; Guard reduces incoming damage and fades; Provoke pulls the telegraph like the
   Tank's Taunt; Double Strike doubles the next auto only; Empower bumps the next ability once;
   Riposte counters exactly once and scales with Vulnerability.
+
+## Resolution note (naming)
+
+The card ids `provoke` and `rally` were already taken by tuned, tested cards that
+resemble but differ from cards #3 and #5 here (the existing `provoke` is a lighter
+*taunt-lite*; the existing `rally` is a one-phase, empty-seat `hymnBonus` buff). To
+avoid two same-named cards in the pool, the two new cards ship under distinct names,
+with the intended behavior:
+- #3 "Provoke" (full Tank Taunt(+Defense) from a card) → **Goad** (`goad`).
+- #5 "Rally" (standing party +1 damage over N turns) → **Embolden** (`embolden`).
+The existing `provoke`/`rally` cards are left unchanged.
 
 ## Out of scope
 

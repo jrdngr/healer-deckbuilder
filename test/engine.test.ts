@@ -4,6 +4,7 @@ import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS,
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
+import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot } from '../src/constants';
 
@@ -3202,6 +3203,134 @@ function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
   let threw = false;
   try { for (let i = 0; i < 6 && g.status === 'playing'; i++) g.endTurn(); } catch { threw = true; }
   check('a two-member deployment runs without throwing', !threw);
+}
+
+// --- hero buff card batch (#62) ---------------------------------------------
+{
+  const empty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
+
+  // All 7 are shop/reward-eligible; Double Strike is the rare of the set.
+  const batch: CardId[] = ['guard', 'sharpen', 'goad', 'doubleStrike', 'embolden', 'empower', 'riposte'];
+  check('all 7 hero-buff cards are shop/reward-eligible', batch.every((id) => CARD_POOL.includes(id)));
+  eq('Double Strike is the rare of the set', CARD_RARITY.doubleStrike, 'rare');
+
+  // Sharpen: +SHARPEN_BONUS to the hero's auto, feeding memberDamage(), then it
+  // fades after SHARPEN_TURNS enemy turns.
+  {
+    const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10;
+    const ranger = g.members[0];
+    const base = g.memberDamage(ranger);
+    g.playCard(giveCard(g, 'sharpen'), 0);
+    eq('Sharpen raises the auto by its bonus', g.memberDamage(ranger), base + SHARPEN_BONUS);
+    check('Sharpen buffs only the chosen hero', g.memberDamage(g.members[1]) === g.members[1].damage);
+    for (let i = 0; i < SHARPEN_TURNS; i++) g._decayBuffs();
+    eq('Sharpen fades after its turns', g.memberDamage(ranger), base);
+  }
+
+  // Embolden: +EMBOLDEN_BONUS to EVERY fielded hero, fading after EMBOLDEN_TURNS.
+  {
+    const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10;
+    const bases = g.members.map((m) => g.memberDamage(m));
+    g.playCard(giveCard(g, 'embolden'));
+    check('Embolden buffs every fielded hero', g.members.every((m, i) => g.memberDamage(m) === bases[i] + EMBOLDEN_BONUS));
+    for (let i = 0; i < EMBOLDEN_TURNS; i++) g._decayBuffs();
+    check('Embolden fades after its turns', g.members.every((m, i) => g.memberDamage(m) === bases[i]));
+  }
+
+  // Guard: -GUARD_DR incoming per hit; stacks with Defense but NOT with itself; fades.
+  {
+    const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10;
+    const tank = g.members[1];
+    g.playCard(giveCard(g, 'guard'), 1);
+    eq('Guard reduces incoming damage', g._effectiveDamage(tank, 5), 5 - GUARD_DR);
+    // A second Guard refreshes the timer but does not add a second -1.
+    g.mp = 10;
+    g.playCard(giveCard(g, 'guard'), 1);
+    eq('Guard does not stack with itself', g._effectiveDamage(tank, 5), 5 - GUARD_DR);
+    // Stacks with a standing Defense (e.g. Bulwark / Taunt).
+    tank.defense = 2; tank.defenseAmount = DEFENSE_AMOUNT;
+    eq('Guard stacks with Defense', g._effectiveDamage(tank, 5), 5 - GUARD_DR - DEFENSE_AMOUNT);
+    tank.defense = 0; tank.defenseAmount = 0;
+    // Telegraph preview equals applied damage through the Guard reduction.
+    g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [1], enraged: false, forTurn: g.turn };
+    const preview = g.attackTargets().find((s) => s.slot === 1)?.damage;
+    const hpBefore = tank.hp; g._resolveAttack();
+    eq('Guard: telegraph preview equals applied damage', hpBefore - tank.hp, preview);
+    for (let i = 0; i < GUARD_TURNS; i++) g._decayBuffs();
+    eq('Guard fades after its turns', g._effectiveDamage(tank, 5), 5);
+  }
+
+  // Goad: the SAME Taunt(+Defense) the Tank's ability grants, from a card on any hero.
+  {
+    const cfg = defaultBattleConfig();
+    cfg.party = partyFromMembers(['ranger', 'mage', 'graveAugur']); // taunt-less draft
+    const g = new Game(1, cfg); g.start(); g.mp = 10;
+    const augur = g.members[2];
+    g.playCard(giveCard(g, 'goad'), 2);
+    eq('Goad grants the full Taunt duration', augur.taunt, TAUNT_TURNS);
+    eq('Goad bundles the Tank ability\'s Defense', augur.defense, DEFENSE_TURNS);
+    eq('Goad bundles Defense strength', augur.defenseAmount, DEFENSE_AMOUNT);
+    check('the goaded member holds the party Taunt', g.tauntingMember()?.slot === 2);
+    const tg = g._generateTelegraph(g.turn + 1);
+    check('the enemy aims a single at the goaded member', tg.type !== 'single' || tg.targets.includes(2));
+  }
+
+  // Double Strike: doubles exactly the next basic auto, consumed on use.
+  {
+    const cfg = defaultBattleConfig();
+    cfg.party = [partyFromMembers(['mage'])[0], empty(), empty()]; // solo mage isolates the auto
+    const g = new Game(3, cfg); g.start(); g.mp = 10; g.enemy.hp = 999;
+    const mage = g.members[0];
+    const dmg = g.memberDamage(mage);
+    g.playCard(giveCard(g, 'doubleStrike'), 0);
+    check('Double Strike primes the hero', mage.drumPrimed);
+    const before = g.enemy.hp; g._runPartyPhase();
+    eq('Double Strike doubles the next auto', before - g.enemy.hp, dmg * 2);
+    check('the doubled beat is spent', !mage.drumPrimed);
+    const before2 = g.enemy.hp; g._runPartyPhase();
+    eq('the following auto is back to normal', before2 - g.enemy.hp, dmg);
+  }
+
+  // Empower: +EMPOWER_BONUS ability power on the next ability, consumed once, and the
+  // hero's persistent ability power is unchanged after.
+  {
+    const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10;
+    const ranger = g.members[0];
+    g.playCard(giveCard(g, 'empower'), 0);
+    eq('Empower is pending on the hero', ranger.empowerBonus, EMPOWER_BONUS);
+    g._fireAbility(ranger);
+    eq('Empower bumps the next ability once', g.enemy.poison, POISON_BASE + EMPOWER_BONUS);
+    eq('Empower is consumed', ranger.empowerBonus, 0);
+    eq('the hero\'s base ability power is unchanged', ranger.abilityPower, 0);
+    g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+    g._fireAbility(ranger);
+    eq('the following ability is back to base strength', g.enemy.poison, POISON_BASE);
+  }
+
+  // Riposte: counters exactly once, on the next hit that connects, scaling with Vulnerability.
+  {
+    const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+    const tank = g.members[1];
+    g.playCard(giveCard(g, 'riposte'), 1);
+    check('Riposte is armed', tank.riposte);
+    g.telegraph = { type: 'single', hidden: false, damage: 3, targets: [1], enraged: false, forTurn: g.turn };
+    const before = g.enemy.hp; g._resolveAttack();
+    eq('Riposte counters for the hero\'s damage', before - g.enemy.hp, g.memberDamage(tank));
+    check('Riposte is consumed', !tank.riposte);
+    g.telegraph = { type: 'single', hidden: false, damage: 3, targets: [1], enraged: false, forTurn: g.turn };
+    const before2 = g.enemy.hp; g._resolveAttack();
+    eq('Riposte does not fire a second time', before2 - g.enemy.hp, 0);
+  }
+  {
+    // The counter respects Vulnerability like every other party source.
+    const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+    const tank = g.members[1];
+    g.enemy.vulnerable = 1.0; g.enemy.vulnerableTurns = 3; // +100% party damage
+    g.playCard(giveCard(g, 'riposte'), 1);
+    g.telegraph = { type: 'single', hidden: false, damage: 3, targets: [1], enraged: false, forTurn: g.turn };
+    const before = g.enemy.hp; g._resolveAttack();
+    eq('Riposte scales with Vulnerability', before - g.enemy.hp, g.vulnerableAmount(g.memberDamage(tank)));
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -54,6 +54,8 @@ const EXERCISE_DECK: CardId[] = [
   'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
   'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
   'rally', 'focus', 'channel', 'holdTheLine',
+  // Hero buff card batch (#62).
+  'guard', 'sharpen', 'goad', 'doubleStrike', 'embolden', 'empower', 'riposte',
 ];
 
 // A generous healer + a high-HP, low-threat enemy, so a fight lasts long enough

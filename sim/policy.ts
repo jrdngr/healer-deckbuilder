@@ -467,6 +467,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // Small-party cards (#42): the best-3 policy never fields small, so it has no
   // tactic for them — low buy value (they're for a human's undermanned build).
   rally: 1, focus: 1, channel: 1, holdTheLine: 1,
+  // Hero buff card batch (#62): the best-3 sim policy has no tactic for proactive
+  // hero buffs (they're for a human's setup turns), so they stay dead-deck weight.
+  guard: 1, sharpen: 1, goad: 1, doubleStrike: 1, embolden: 1, empower: 1, riposte: 1,
   // Ability cards (#44) — inserted per-fight, never bought.
   imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, hush: 0, beckon: 0, stagger: 0,
 };

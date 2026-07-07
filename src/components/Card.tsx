@@ -14,6 +14,9 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   phalanx: 'ward', brace: 'ward', provoke: 'ward',
   // Small-party cards (#42).
   rally: 'power', focus: 'heal', channel: 'mana', holdTheLine: 'ward',
+  // Hero buff card batch (#62): defensive buffs gold, offensive buffs red-purple.
+  guard: 'ward', sharpen: 'power', goad: 'ward', doubleStrike: 'power',
+  embolden: 'power', empower: 'power', riposte: 'power',
   // Per-member ability cards (#44): the healer enabling an aggressive move — power.
   imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
   conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward', stagger: 'ward',

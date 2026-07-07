@@ -161,7 +161,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // Sentinel), shifting the vector: F0/F1 198/195->194/193, F2 138->133, F3/F4 130/119->
   // 126/112, F5 76->83, F6/F7 72/66->75/69, F8 unchanged at 47. A pool/stream change, not
   // a balance move; all the band/CI/boss gates below still hold. Re-pinned on the new numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 133, 126, 112, 83, 75, 69, 47]));
+  // 2026-07-07 (#62): the hero buff card batch adds 7 shop-eligible cards to CARD_POOL,
+  // so every shop's weighted card offer draws from a larger pool — a pure rng-stream
+  // perturbation (the best-3 policy has no tactic for the buffs, buy value 1, so it never
+  // banks them). The vector shifts: F1 193->194, F2 133->142, F3/F4 126/112->127/120, F5
+  // 83->100, F6/F7 75/69->91/84, F8 47->56 (F0 unchanged). All band/CI/boss gates below
+  // still hold; re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 194, 142, 127, 120, 100, 91, 84, 56]));
   // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
   // not a hard threshold, so subsample noise can't fail a healthy build while a real
   // drift still trips it.

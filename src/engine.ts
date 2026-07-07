@@ -25,6 +25,8 @@ import {
   POISON_BASE, POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
+  GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
+  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
@@ -70,7 +72,13 @@ export interface Member {
   defense: number; // Defense turns remaining: incoming hits reduced by defenseAmount
   defenseAmount: number; // per-member Defense strength while defense > 0 (#17)
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
-  drumPrimed: boolean; // War Drum relic (#21): next auto deals double (consumed)
+  drumPrimed: boolean; // War Drum relic (#21) / Double Strike card (#62): next auto deals double (consumed)
+  strikeBonus: number; // Sharpen / Embolden (#62): +auto damage while strikeTurns > 0
+  strikeTurns: number; // enemy turns strikeBonus lasts before it decays
+  guardDR: number;     // Guard (#62): incoming damage reduced by this while guardTurns > 0
+  guardTurns: number;  // enemy turns guardDR lasts before it decays
+  empowerBonus: number; // Empower (#62): +abilityPower on the next ability this hero fires (one-shot)
+  riposte: boolean;    // Riposte (#62): counter the next attack that hits this hero (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
   boarHp: number;   // Beast Warden (#29): standing Boar's HP (0 = no Boar); it soaks whole hits
   boarTurns: number; // Beast Warden (#29): enemy turns the Boar has left before it returns to the wild
@@ -285,7 +293,11 @@ export class Game {
         defense: 0,    // Defense turns remaining
         defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
-        drumPrimed: false, // no War Drum beat pending
+        drumPrimed: false, // no War Drum / Double Strike beat pending
+        strikeBonus: 0, strikeTurns: 0, // no Sharpen/Embolden buff (#62)
+        guardDR: 0, guardTurns: 0,       // no Guard buff (#62)
+        empowerBonus: 0, // no Empower pending (#62)
+        riposte: false,  // no Riposte pending (#62)
         ward: 0,       // no Aegis Ward standing
         boarHp: 0,     // no Boar summoned yet (#29)
         boarTurns: 0,
@@ -400,7 +412,9 @@ export class Game {
     }
     // Lone Wolf Totem (#42): a small fielded party hits harder per body.
     const lone = this.hasRelic('loneWolf') && this.fieldedPartySize() <= SMALL_PARTY_MAX ? LONE_WOLF_DMG : 0;
-    return base + this.hymnBonus + banner + lone;
+    // Sharpen / Embolden (#62): a standing +damage buff on this hero, decays in _decayBuffs.
+    const strike = m.strikeTurns > 0 ? m.strikeBonus : 0;
+    return base + this.hymnBonus + banner + lone + strike;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -796,6 +810,9 @@ export class Game {
     m.defenseAmount = 0;
     m.charge = 0;
     m.drumPrimed = false;
+    m.strikeBonus = 0; m.strikeTurns = 0; // death drops the hero-buff batch (#62)
+    m.guardDR = 0; m.guardTurns = 0;
+    m.empowerBonus = 0; m.riposte = false;
     m.ward = 0;
     m.boarHp = 0;    // the Boar has no summoner left (#29)
     m.boarTurns = 0;
@@ -921,7 +938,14 @@ export class Game {
   // is per-member (#17): Taunt grants DEFENSE_AMOUNT + the caster's abilityPower,
   // Phalanx grants PHALANX_DEFENSE — whatever was set is what reduces here.
   _effectiveDamage(m: Member, raw: number, ignoreDefense = false): number {
-    return m.defense > 0 && !ignoreDefense ? Math.max(0, raw - m.defenseAmount) : raw;
+    if (ignoreDefense) return raw; // Piercing-Bolt-style hits bypass Defense AND Guard
+    let dmg = raw;
+    if (m.defense > 0) dmg = Math.max(0, dmg - m.defenseAmount);
+    // Guard (#62): its own DR field, so it stacks with Defense (Bulwark, Taunt) but
+    // not with itself (a second Guard just refreshes the timer). A pure read, so
+    // attackTargets() previews it exactly (telegraph == applied).
+    if (m.guardTurns > 0) dmg = Math.max(0, dmg - m.guardDR);
+    return dmg;
   }
 
   // The full defensive pipeline for one attack instance on one member (#17):
@@ -1081,6 +1105,9 @@ export class Game {
       }
       this._resolveAttack();
       if (this._checkWipe()) return;
+      // A Riposte (#62) can finish the enemy during its own attack — stop the phase
+      // cleanly rather than telegraphing a fresh attack for a defeated enemy.
+      if (this.status === 'win') return;
     }
 
     // 3) decay per-turn buffs now that this enemy turn's attack has resolved.
@@ -1108,6 +1135,22 @@ export class Game {
         if (m.defense === 0) {
           m.defenseAmount = 0;
           this._log(`Defense fades from ${m.name}.`, 'status');
+        }
+      }
+      // Sharpen / Embolden (#62): the standing +damage buff decays after its turns.
+      if (m.alive && m.strikeTurns > 0) {
+        m.strikeTurns -= 1;
+        if (m.strikeTurns === 0) {
+          m.strikeBonus = 0;
+          this._log(`${m.name}'s edge dulls.`, 'status');
+        }
+      }
+      // Guard (#62): the standing +DR buff decays after its turns.
+      if (m.alive && m.guardTurns > 0) {
+        m.guardTurns -= 1;
+        if (m.guardTurns === 0) {
+          m.guardDR = 0;
+          this._log(`Guard fades from ${m.name}.`, 'status');
         }
       }
       // An unused Shield fades after SHIELD_TURNS enemy turns (it is consumed —
@@ -1254,6 +1297,18 @@ export class Game {
       let killed = m.hp <= 0;
       if (killed) killed = this._killMember(m);
       this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden, attackType: t.type });
+      // Riposte (#62): the first attack that actually connects with a buffed, still-
+      // living hero draws a counter for their damage. Consumed once; routed through
+      // _damageEnemy so the counter respects Vulnerability like every party source.
+      if (w.dmg > 0 && !killed && m.alive && m.riposte) {
+        m.riposte = false;
+        const counter = this.memberDamage(m);
+        if (counter > 0) {
+          const defeated = this._damageEnemy(counter, `${m.name} (Riposte)`);
+          this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(counter), enemyHp: this.enemy.hp });
+          if (defeated) { this._emit({ kind: 'defeatEnemy' }); return; }
+        }
+      }
       // Tithe Candle (#21): post-mitigation enemy damage tithes 1 MP back
       // (a 0-damage hit gives nothing; capped at max mana AND per fight — every
       // MP engine in this game is bounded, the flaw-#7 law).
@@ -1497,6 +1552,8 @@ export class Game {
         m.brace = false; m.braceTurns = 0;
         m.regen = 0; m.bloomBurst = 0;
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
+        m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
+        m.empowerBonus = 0; m.riposte = false;
         // Reworked (#18): the revive comes back behind a fresh Shield so the
         // standing telegraph can't immediately undo the 4 MP investment.
         m.shield = true; m.shieldTurns = SHIELD_TURNS;
@@ -1702,6 +1759,77 @@ export class Game {
         }
         break;
       }
+      // --- hero buff card batch (#62) ------------------------------------------
+      case 'guard': {
+        // +GUARD_DR damage reduction on a hero. Its own DR field (adds to Defense),
+        // no self-stack — re-casting just refreshes the timer, no second +1.
+        const m = this.members[target as number];
+        m.guardDR = GUARD_DR;
+        m.guardTurns = GUARD_TURNS;
+        this._log(`Guard on ${m.name}: -${GUARD_DR} damage per hit for ${GUARD_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'defenseApplied', slot: m.slot, amount: GUARD_DR });
+        break;
+      }
+      case 'sharpen': {
+        // +SHARPEN_BONUS auto damage on a hero; feeds memberDamage() until it decays.
+        // Shares the strikeBonus field with Embolden (keep the stronger, refresh timer).
+        const m = this.members[target as number];
+        m.strikeBonus = Math.max(m.strikeTurns > 0 ? m.strikeBonus : 0, SHARPEN_BONUS);
+        m.strikeTurns = SHARPEN_TURNS;
+        this._log(`Sharpen on ${m.name}: +${SHARPEN_BONUS} damage for ${SHARPEN_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'hymn', bonus: SHARPEN_BONUS });
+        break;
+      }
+      case 'embolden': {
+        // +EMBOLDEN_BONUS auto damage to EVERY fielded hero, decaying over N turns.
+        // A standing party buff (unlike the one-phase `rally` card's hymnBonus).
+        for (const m of this.livingMembers()) {
+          m.strikeBonus = Math.max(m.strikeTurns > 0 ? m.strikeBonus : 0, EMBOLDEN_BONUS);
+          m.strikeTurns = EMBOLDEN_TURNS;
+        }
+        this._log(`Embolden: every fielded hero deals +${EMBOLDEN_BONUS} for ${EMBOLDEN_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'hymn', bonus: EMBOLDEN_BONUS });
+        break;
+      }
+      case 'goad': {
+        // The same Taunt(+Defense) the Tank's ability grants, from a card on any hero.
+        // Defense strength scales on the target's abilityPower and keeps a stronger
+        // Defense already standing (floored at 0, mirroring the taunt ability).
+        const m = this.members[target as number];
+        const strength = Math.max(0, DEFENSE_AMOUNT + m.abilityPower);
+        m.defenseAmount = m.defense > 0 ? Math.max(m.defenseAmount, strength) : strength;
+        m.taunt = TAUNT_TURNS;
+        m.defense = DEFENSE_TURNS;
+        this._log(`${m.name} is Goaded to the front — Taunt and Defense ${strength} for ${TAUNT_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_TURNS });
+        break;
+      }
+      case 'doubleStrike': {
+        // Prime the hero's next basic auto to double (reuses the War Drum beat, spent
+        // in _runPartyPhase). Only the basic auto — abilities don't read drumPrimed.
+        const m = this.members[target as number];
+        m.drumPrimed = true;
+        this._log(`${m.name} readies a Double Strike — their next attack lands doubled.`, 'status');
+        break;
+      }
+      case 'empower': {
+        // A one-shot +EMPOWER_BONUS abilityPower on the hero's next ability, consumed
+        // in _fireAbility. Refreshing keeps a single pending charge (no stack).
+        const m = this.members[target as number];
+        m.empowerBonus = EMPOWER_BONUS;
+        this._log(`Empower on ${m.name}: their next ability fires at +${EMPOWER_BONUS} power.`, 'status');
+        this._emit({ kind: 'hymn', bonus: EMPOWER_BONUS });
+        break;
+      }
+      case 'riposte': {
+        // Arm a counter on the next attack that connects with the hero (see
+        // _resolveAttack). Consumed once; refreshing just re-arms the single flag.
+        const m = this.members[target as number];
+        m.riposte = true;
+        this._log(`${m.name} sets a Riposte — the next hit will be answered in kind.`, 'status');
+        this._emit({ kind: 'braceApplied', slot: m.slot });
+        break;
+      }
       case 'cleanse': {
         // Removes the Hexweaver's party-wide Hex (#13). Always playable; a no-op if
         // nothing is Wounded (the animator still gets an event to acknowledge it).
@@ -1719,6 +1847,15 @@ export class Game {
   _fireAbility(m: Member): void {
     // War Drum (#21): any Ability cast primes the caster's next auto to double.
     if (this.hasRelic('warDrum')) m.drumPrimed = true;
+    // Empower (#62): a one-shot +abilityPower on this ability. Every case reads
+    // m.abilityPower synchronously inside the switch, so temporarily bump it here
+    // and restore below — the bonus is consumed exactly once.
+    const empower = m.empowerBonus;
+    if (empower > 0) {
+      m.abilityPower += empower;
+      m.empowerBonus = 0;
+      this._log(`${m.name} is Empowered — this ability fires at +${empower} power.`, 'status');
+    }
     switch (m.ability) {
       case 'poison': {
         const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
@@ -1856,6 +1993,9 @@ export class Game {
       default:
         break;
     }
+    // Restore the base abilityPower after an Empowered cast (#62) — the bonus was
+    // spent by the ability above; the member's persistent power is unchanged.
+    if (empower > 0) m.abilityPower -= empower;
   }
 
   // Decaying Rest (flaw #5): you may still Rest after playing a single card, but
@@ -1937,11 +2077,14 @@ export class Game {
     for (const m of this.members) {
       let dmg = this.memberDamage(m);
       if (!m.alive || dmg <= 0) continue;
-      // War Drum (#21): the primed member's auto lands double, then the beat is spent.
+      // War Drum (#21) / Double Strike card (#62): the primed member's auto lands
+      // double, then the beat is spent.
       if (m.drumPrimed) {
         dmg *= 2;
         m.drumPrimed = false;
-        this._log(`The War Drum beats — ${m.name}'s strike doubles!`, 'status');
+        this._log(this.hasRelic('warDrum')
+          ? `The War Drum beats — ${m.name}'s strike doubles!`
+          : `${m.name}'s strike lands doubled!`, 'status');
       }
       const killed = this._damageEnemy(dmg, `${m.name}`);
       this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });

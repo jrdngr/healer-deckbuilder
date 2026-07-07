@@ -30,6 +30,12 @@ export type CardId =
   | 'phalanx' | 'brace' | 'provoke'
   // Small-party cards (#42): stronger the fewer members you field.
   | 'rally' | 'focus' | 'channel' | 'holdTheLine'
+  // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
+  // Sharpen, Embolden, Goad) decay over N enemy turns; the one-shots (Double
+  // Strike, Empower, Riposte) are consumed on use. (Goad = a full Taunt from a
+  // card, Embolden = a standing party damage buff — named apart from the existing
+  // `provoke`/`rally` cards they resemble, which stay their tuned selves.)
+  | 'guard' | 'sharpen' | 'goad' | 'doubleStrike' | 'embolden' | 'empower' | 'riposte'
   // Per-member ability cards (#44): one bound card per member, inserted into the
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
@@ -611,6 +617,19 @@ export const SHIELD_TURNS = 3;   // enemy turns a raised Shield lasts before fad
 export const TAUNT_LITE_TURNS = 2;   // enemy turns the provoked member holds Taunt
 export const TAUNT_LITE_DEFENSE = 1; // bundled Defense strength while provoked
 
+// Hero buff card batch (#62): proactive per-hero buffs. The standing buffs decay
+// over N enemy turns in _decayBuffs; the one-shots are consumed on use. Costs,
+// magnitudes, and turn counts are tunable — a later balance pass owns the numbers;
+// this issue ships the mechanics. Goad reuses the Tank ability's TAUNT_TURNS /
+// DEFENSE_TURNS / DEFENSE_AMOUNT so it grants the same Taunt(+Defense) from a card.
+export const GUARD_DR = 1;         // Guard: +damage reduction on a chosen hero
+export const GUARD_TURNS = 3;      // enemy turns Guard lasts before it decays
+export const SHARPEN_BONUS = 1;    // Sharpen: +auto damage on a chosen hero
+export const SHARPEN_TURNS = 3;    // enemy turns Sharpen lasts
+export const EMBOLDEN_BONUS = 1;   // Embolden (issue "Rally"): +auto damage to every fielded hero
+export const EMBOLDEN_TURNS = 3;   // enemy turns Embolden lasts
+export const EMPOWER_BONUS = 1;    // Empower: +abilityPower on a hero's next ability (one-shot)
+
 // Short flavor of each member's ability — name + one-liner. Shown on the live
 // MemberCard AND the draft card (#37), so it lives here rather than in a component
 // (the draft must not leak raw ability ids like `graveChill`). Keyed by MemberId.
@@ -778,6 +797,26 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: `Restore ${CHANNEL_MP} MP, +1 more per empty deploy seat.` },
   holdTheLine: { id: 'holdTheLine', name: 'Hold the Line', cost: 3, target: 'all',
     desc: `While fielding ${SMALL_PARTY_MAX} or fewer, every living member gains a Shield.` },
+  // --- hero buff card batch (#62): proactive per-hero buffs -------------------
+  guard: { id: 'guard', name: 'Guard', cost: 1, target: 'single',
+    desc: `A hero takes ${GUARD_DR} less damage per hit for ${GUARD_TURNS} enemy turns. Stacks with Defense, not with itself.` },
+  sharpen: { id: 'sharpen', name: 'Sharpen', cost: 1, target: 'single',
+    desc: `A hero's attacks deal +${SHARPEN_BONUS} for ${SHARPEN_TURNS} enemy turns.` },
+  // Goad grants the SAME Taunt(+Defense) the Tank's ability does, castable on any
+  // hero from the deck (the existing `provoke` card is a lighter taunt-lite).
+  goad: { id: 'goad', name: 'Goad', cost: 1, target: 'single',
+    desc: `A hero Taunts (enemy aims at them) and braces (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} enemy turns.` },
+  // Double Strike (rare): doubles the chosen hero's next basic auto (not an ability).
+  doubleStrike: { id: 'doubleStrike', name: 'Double Strike', cost: 2, target: 'single',
+    desc: 'A hero\'s next basic attack lands doubled, then is spent.' },
+  // Embolden (issue "Rally"): a standing party damage buff (the existing `rally`
+  // card is a one-phase, empty-seat buff via hymnBonus — kept as-is).
+  embolden: { id: 'embolden', name: 'Embolden', cost: 2, target: 'all',
+    desc: `Every fielded hero's attacks deal +${EMBOLDEN_BONUS} for ${EMBOLDEN_TURNS} enemy turns.` },
+  empower: { id: 'empower', name: 'Empower', cost: 1, target: 'single',
+    desc: `A hero's next ability fires at +${EMPOWER_BONUS} ability power, then is spent.` },
+  riposte: { id: 'riposte', name: 'Riposte', cost: 2, target: 'single',
+    desc: 'The next attack that hits a hero, they counterattack for their damage.' },
 };
 
 // The fixed 6-card core starting deck: the heal-only six (#51) —
@@ -1313,6 +1352,9 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   grimHarvest: 'rare',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
+  // Hero buff card batch (#62): Double Strike is the rare of the set.
+  guard: 'common', sharpen: 'common', goad: 'uncommon', doubleStrike: 'rare',
+  embolden: 'uncommon', empower: 'uncommon', riposte: 'uncommon',
   // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',

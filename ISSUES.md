@@ -51,6 +51,5 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 62 | 📋 Open | [Hero buff card batch](issues/62-hero-buff-card-batch.md) | content (cards) | — | intake 2026-07-07 (buff cards) |
 | 63 | 📋 Open | [Card types (Holy/Nature/Shadow/Blood/Arcane/Iron)](issues/63-card-types.md) | systems (cards) | — | intake 2026-07-07 (card types) |
 | 64 | 📋 Open | [Channeled cards](issues/64-channeled-cards.md) | systems (cards) | #63 (soft) | intake 2026-07-07 (channeled cards) |
