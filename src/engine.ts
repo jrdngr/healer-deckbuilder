@@ -267,8 +267,10 @@ export class Game {
         ability: d.ability, abilityPower: p.abilityPower,
         // An incapacitated member ('incapacitate' injury mode) or an empty slot starts
         // the fight dead; diedThisFight stays false (no NEW scar for a fight they never
-        // stood in).
-        hp: down ? 0 : maxHP, alive: !down,
+        // stood in). Otherwise HP persists across fights (#58): seat at the config's
+        // carried HP, clamped to this fight's max (which includes the Warband bonus and
+        // already folds the injury penalty); absent HP means full (quick-play/standalone).
+        hp: down ? 0 : Math.min(maxHP, p.hp ?? maxHP), alive: !down,
         shield: false, // pending shield (blocks the next damaging instance)
         shieldTurns: 0,
         brace: false,  // pending Brace (one-shot damage reduction)
@@ -1922,6 +1924,14 @@ export class Game {
   // run layer reads this after a win to record persistent injuries.
   diedThisFightSlots(): Slot[] {
     return this.members.filter((m) => m.diedThisFight).map((m) => m.slot);
+  }
+
+  // Each battle slot's current HP at the end of a fight (#58): the number the run
+  // layer carries back onto the deployed roster member (0 for a dead member, which
+  // the between-fight heal then resurrects to the recovered amount). An empty slot
+  // (no member deployed) reports null. Indexed by battle slot, length 3.
+  memberHPBySlot(): (number | null)[] {
+    return this.members.map((m) => (m.absent ? null : m.hp));
   }
 
   // ---- dev / cheats --------------------------------------------------------

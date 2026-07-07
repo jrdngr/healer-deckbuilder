@@ -12,7 +12,8 @@ import {
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
-  GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, SHOP_SIZE, CARD_REWARD_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
+  GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, HEAL_TUNING, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
+  SHOP_SIZE, CARD_REWARD_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
@@ -68,7 +69,8 @@ export type NodeContent =
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
   | { type: 'draft'; options: MemberId[] }                            // pick-one member draft (2026-07)
-  | { type: 'recruit'; options: MemberId[]; done: boolean };          // Recruit node: add one member, once
+  | { type: 'recruit'; options: MemberId[]; done: boolean }           // Recruit node: add one member, once
+  | { type: 'infirmary' };                                            // heal HP / shed a scar for gold (#58)
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
@@ -83,8 +85,12 @@ export type NodeContent =
 // hold a post:'boss' draft location or a pre-cadence map are discarded.
 // v12: card reward after every won fight (#57) — a new 'cardReward' location +
 // {type:'cardReward'} node content sit between a win and the fork/spoils, so old
-// saves that predate the reward step are discarded rather than skipping it.)
-export const RUN_SAVE_VERSION = 12;
+// saves that predate the reward step are discarded rather than skipping it.
+// v13: HP persists across fights (#58) — roster members carry a current-HP field and
+// heal only HERO_HEAL_PCT between fights; the Infirmary node returns ({type:'infirmary'}
+// content). Old saves lack per-member HP and can hold a map with no Infirmary, so
+// they are discarded rather than resumed at full HP with no top-up stop.)
+export const RUN_SAVE_VERSION = 13;
 
 export interface RunSnapshot {
   version: number;
@@ -209,7 +215,7 @@ export class Run {
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
-    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0 }));
+    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0, hp: p.hp ?? p.maxHP }));
     run.deployment = [...(snap.deployment ?? [0, 1, 2])];
     run.graveyard = [...(snap.graveyard ?? [])];
     run.healer = { ...snap.healer };
@@ -450,8 +456,13 @@ export class Run {
     const party = this.deployment.map((ri): PartyMemberConfig => {
       const p = ri == null ? undefined : this.roster[ri];
       if (!p) return { maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true };
+      // HP persists across fights (#58): seat the member at their carried HP, clamped
+      // to this fight's injury-adjusted max (a fresh scar can lower the cap below the
+      // carried value). The engine clamps again for the Warband bonus.
+      const effMaxHP = Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries));
       return {
-        maxHP: Math.max(1, p.maxHP - injuryMaxHPPenalty(p.injuries)),
+        maxHP: effMaxHP,
+        hp: Math.min(effMaxHP, p.hp ?? effMaxHP),
         damage: Math.max(0, p.damage - injuryDamagePenalty(p.injuries)),
         abilityPower: p.abilityPower - injuryAbilityPenalty(p.injuries),
         injuries: p.injuries,
@@ -500,11 +511,46 @@ export class Run {
     return this.deployment.filter((ri) => ri == null).length;
   }
 
-  winFight(): void {
+  // Carry each surviving deployed member's ending HP back onto the roster (#58).
+  // `hpBySlot` is indexed by BATTLE slot (Game.memberHPBySlot): a number for a
+  // seated member (0 if they died), null for an empty slot. Safe to call after
+  // recordInjuries — a permadeath nulls that slot's deployment entry, so the
+  // survivor→roster mapping still holds.
+  _captureFightHP(hpBySlot: (number | null)[]): void {
+    for (let s = 0; s < this.deployment.length; s++) {
+      const ri = this.deployment[s];
+      if (ri == null) continue;
+      const p = this.roster[ri];
+      if (!p) continue;
+      const h = hpBySlot[s];
+      if (h != null) p.hp = Math.min(p.maxHP, h);
+    }
+  }
+
+  // Between-fight heal (#58): every roster member recovers HERO_HEAL_PCT of their
+  // max HP, clamped to max — the only healing between fights now that HP persists
+  // (no free full re-seed). A member left at 0 HP (dead at the end of a won fight)
+  // is thereby RESURRECTED to the recovered amount, not to full and not to the
+  // in-fight Resurrect card's 50%. Applied to the whole roster (benched members
+  // rest too).
+  _healBetweenFights(): void {
+    const heal = (max: number): number => Math.round(max * HEAL_TUNING.pct);
+    for (const p of this.roster) {
+      const cur = p.hp ?? p.maxHP;
+      p.hp = Math.min(p.maxHP, cur + heal(p.maxHP));
+    }
+  }
+
+  winFight(hpBySlot?: (number | null)[]): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
     this.fightsWon += 1;
+    // Carry HP back onto the roster before the between-fight heal (#58). Deployed
+    // survivors keep their ending HP; the heal below tops everyone up and revives
+    // the dead-at-end to the recovered amount.
+    if (hpBySlot) this._captureFightHP(hpBySlot);
     if (fi >= FIGHT_COUNT - 1) { this.status = 'won'; return; }
+    this._healBetweenFights();
     // "Field fewer, keep more" (#42): the base bounty scales UP with empty deploy
     // seats, so an undermanned win pays a premium. The Rusty Crown (#22) bonus is
     // added after (a flat reward for a harder fight, not scaled by seats).
@@ -653,10 +699,17 @@ export class Run {
   }
 
   // Whether a node of this type can be visited right now. The Recruit node is hidden
-  // once the roster holds everyone (nothing left to offer); all others are always open.
+  // once the roster holds everyone (nothing left to offer); the Infirmary hides when
+  // nobody is hurt or injured (nothing to heal); all others are always open.
   nodeAvailable(type: NodeType): boolean {
     if (type === 'recruit') return this.availableMembers().length > 0;
+    if (type === 'infirmary') return this.anyoneNeedsInfirmary();
     return true;
+  }
+
+  // A roster member the Infirmary could help: below full HP, or carrying a scar (#58).
+  anyoneNeedsInfirmary(): boolean {
+    return this.roster.some((p) => (p.hp ?? p.maxHP) < p.maxHP || p.injuries > 0);
   }
 
   // Recruit node (2026-07): add the chosen member to the roster, once. Ignores an
@@ -705,6 +758,7 @@ export class Run {
       case 'healerUpgrade': return { type: 'healerUpgrade', offers: this.rollHealerShop() };
       case 'event': return { type: 'event', event: this.rollEvent(), done: false };
       case 'recruit': return { type: 'recruit', options: this._rollMemberOffer(this.availableMembers(), RECRUIT_OFFER_SIZE), done: false };
+      case 'infirmary': return { type: 'infirmary' };
       case 'reliquary': return { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
       default: return null;
     }
@@ -1043,6 +1097,34 @@ export class Run {
   healInjury(slot: Slot): boolean {
     const p = this.party[slot];
     if (!p || p.injuries <= 0) return false;
+    p.injuries -= 1;
+    return true;
+  }
+
+  // ---- Infirmary node (#58) -------------------------------------------------
+  // Paid HP/scar top-ups, the counterweight to persistent HP + the small
+  // between-fight heal. Both operate on a ROSTER index (not a battle slot) and
+  // charge gold up front; a member the price can't help (already full / unscarred)
+  // or an unaffordable price fails without charging.
+
+  // Restore a chosen roster member to full HP for INFIRMARY_HP_PRICE gold.
+  infirmaryHealHP(index: number): boolean {
+    if (this.nodeContent?.type !== 'infirmary') return false;
+    const p = this.roster[index];
+    if (!p || (p.hp ?? p.maxHP) >= p.maxHP || this.gold < INFIRMARY_HP_PRICE) return false;
+    this.gold -= INFIRMARY_HP_PRICE;
+    p.hp = p.maxHP;
+    return true;
+  }
+
+  // Shed one death-scar off a chosen roster member for INFIRMARY_INJURY_PRICE gold
+  // (a much larger price than an HP top-up). Restoring the scar also lifts the
+  // injury's max-HP penalty, so top the member's HP up to the new (higher) cap.
+  infirmaryHealInjury(index: number): boolean {
+    if (this.nodeContent?.type !== 'infirmary') return false;
+    const p = this.roster[index];
+    if (!p || p.injuries <= 0 || this.gold < INFIRMARY_INJURY_PRICE) return false;
+    this.gold -= INFIRMARY_INJURY_PRICE;
     p.injuries -= 1;
     return true;
   }

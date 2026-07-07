@@ -49,7 +49,7 @@ export function runRelicLine(relic: RelicId | null, n: number, firstSeed = 1): R
           run.markRelicsSpent(game.spentRelicIds());
           const died = game.diedThisFightSlots();
           const win = game.status === 'win';
-          if (win) { run.recordInjuries(died); run.winFight(); } else run.loseFight();
+          if (win) { run.recordInjuries(died); run.winFight(game.memberHPBySlot()); } else run.loseFight();
           // Inject at the fight-2 boundary: active from fight 3 on.
           if (win && fi === INJECT_AFTER_FIGHT && relic) run.addRelic(relic);
           break;

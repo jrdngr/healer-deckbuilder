@@ -132,7 +132,7 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
 export function partyFromMembers(ids: MemberId[]): PartyMemberConfig[] {
   return ids.map((id): PartyMemberConfig => {
     const d = MEMBER_POOL[id];
-    return { maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, upgrades: 0, member: id };
+    return { maxHP: d.maxHP, hp: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, upgrades: 0, member: id };
   });
 }
 
@@ -822,6 +822,13 @@ export interface DeckCard {
 
 export interface PartyMemberConfig {
   maxHP: number;
+  // Current HP (#58). On a ROSTER member this persists across fights: a member ends
+  // a fight hurt and carries that HP forward (healed only HERO_HEAL_PCT between
+  // fights). Absent means "full" — a fresh member, and the standalone/quick-play
+  // battle party that has no run layer to persist it. Threaded into the fight via
+  // Run.toBattleConfig (clamped to the injury-adjusted max) and read back out on a
+  // win (Run.winFight). Never set on the length-3 battle party's empty slots.
+  hp?: number;
   damage: number;
   abilityPower: number; // bonus added to the member's base ability strength
   // Persistent death-scars (DR1). A member accrues one each time it dies in a
@@ -1143,20 +1150,23 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
 export type NodeType =
   | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade'
   | 'recruit'   // add a member to the roster (2026-07) — a weighted node; hidden when the roster is full
+  | 'infirmary' // heal HP / shed a scar for gold (#58) — hidden when nobody is hurt or injured
   | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
-// The non-fight node types that fill the branches between fights. (The Infirmary
-// was retired with the 2026-07 injury rework: injuries are permanent now.)
+// The non-fight node types that fill the branches between fights. The Infirmary is
+// back (#58): HP persists across fights now, so a paid HP/scar top-up is a real
+// attrition-economy stop again (it hides at runtime when the party is healthy).
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'recruit', 'reliquary',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'recruit', 'infirmary', 'reliquary',
 ];
 
 // Weights for placing non-fight node types on the map. The Recruit node (2026-07)
 // grows the roster past the pick-one drafts; it is a real roll (you must find one)
-// and is hidden once the roster already holds every member.
+// and is hidden once the roster already holds every member. The Infirmary (#58) is
+// the paid HP/scar top-up; it too hides at runtime when the party is healthy.
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
-  ['recruit', 20],
+  ['recruit', 20], ['infirmary', 20],
 ];
 
 // A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks
@@ -1176,6 +1186,29 @@ export const GOLD_PER_FIGHT = 100;   // awarded for winning a (non-final) fight 
 // deploy seats, so an undermanned win pays a premium on top of the wages it saves.
 // Each empty seat adds this fraction of the base bounty (2 empty = solo = +60%).
 export const EMPTY_SEAT_GOLD_BONUS = 0.30;
+
+// ---------------------------------------------------------------------------
+// Between-fight healing (#58). HP now PERSISTS across fights (a member ends a
+// fight hurt and starts the next deploy step still hurt); between fights each
+// member recovers only this fraction of their max HP, clamped to max — no longer
+// a free full re-seed. A member dead at the end of a WON fight is resurrected to
+// the same recovered amount (round(HERO_HEAL_PCT × maxHP)), not to full and not
+// to the in-fight Resurrect card's 50% (which stays a battlefield-only revive).
+// The Infirmary node (below) is the paid way to top HP back up / shed a scar.
+// Chosen from the N=1000 sweep in sim/heal-exp.ts (#58 balance pass).
+// ---------------------------------------------------------------------------
+export const HERO_HEAL_PCT = 0.40;
+
+// The active between-fight heal fraction. Reads HERO_HEAL_PCT by default; kept in a
+// mutable holder ONLY so the sweep (sim/heal-exp.ts) can vary it without a rebuild,
+// exactly like INJURY_RULES. Runtime + tests use the HERO_HEAL_PCT default.
+export const HEAL_TUNING = { pct: HERO_HEAL_PCT };
+
+// Infirmary node (#58, re-added): pay gold to fully restore one member's HP, or a
+// much larger price to shed one lasting injury (scar). Both gold-clamped; the node
+// hides when nobody is hurt or injured. Prices are sim-tuned in the balance pass.
+export const INFIRMARY_HP_PRICE = 15;      // restore a chosen member to full HP
+export const INFIRMARY_INJURY_PRICE = 45;  // shed one death-scar from a chosen member
 
 // ---------------------------------------------------------------------------
 // Member salaries (2026-07): after each won fight, every DEPLOYED member is paid
@@ -1217,9 +1250,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // small roster — far less party DPS/bodies than the old fixed trio. HP drops across
 // the board; act 1 especially. Sim-tuned against the campaign policy.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  14, 20, 90,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#42 richer economy)
-  70, 88, 208,    // Act 2: duo/trio normals + Hexweaver (#42 re-anchor)
-  102, 108, 216,  // Act 3: small-roster normals + Devourer (#42 re-anchor)
+  14, 20, 64,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#58 re-anchor)
+  58, 72, 174,    // Act 2: duo/trio normals + Hexweaver (#58 re-anchor)
+  94, 100, 172,   // Act 3: small-roster normals + Devourer (#58 re-anchor)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.

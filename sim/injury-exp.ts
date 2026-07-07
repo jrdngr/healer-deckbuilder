@@ -73,7 +73,7 @@ function runMode(mode: InjuryMode, n: number, firstSeed = 1, healScars = true): 
             r.bossAttempts[bossIndex[fi]]++;
             if (win) r.bossWins[bossIndex[fi]]++;
           }
-          if (win) { run.recordInjuries(died); run.winFight(); } else run.loseFight();
+          if (win) { run.recordInjuries(died); run.winFight(game.memberHPBySlot()); } else run.loseFight();
           for (const [s, p] of run.party.entries()) {
             r.maxScarSeen = Math.max(r.maxScarSeen, p.injuries);
             if (p.injuries >= MAX_INJURIES) cappedThisRun = true;

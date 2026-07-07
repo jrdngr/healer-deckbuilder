@@ -61,7 +61,7 @@ function runCampaign(seed: number, opts: Options = {}): RunResult {
         if (win) {
           wonByFight[fi] = true;
           run.recordInjuries(game.diedThisFightSlots());
-          run.winFight();
+          run.winFight(game.memberHPBySlot()); // carry ending HP back onto the roster (#58)
         } else run.loseFight();
         break;
       }

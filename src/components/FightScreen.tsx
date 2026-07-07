@@ -7,7 +7,9 @@ import { BattleScreen } from './BattleScreen';
 
 interface FightScreenProps {
   run: Run;
-  onWin: () => void;
+  // Win handler — receives each battle slot's ending HP (#58) so the run can carry
+  // it back onto the deployed roster members.
+  onWin: (hpBySlot: (number | null)[]) => void;
   onLose: () => void;
   onSpent: (ids: RelicId[]) => void;
   // Slots of members that died this fight (DR1) — recorded as persistent scars.
@@ -46,7 +48,9 @@ export function FightScreen({ run, onWin, onLose, onSpent, onInjuries, onControl
       // Record scars (DR1) BEFORE winFight, so a post-victory scar-clearing relic
       // (Mending Totem) sees this fight's injuries.
       onInjuries(ctrl.game.diedThisFightSlots());
-      onWin();
+      // Carry ending HP back onto the roster (#58). Safe after recordInjuries: a
+      // permadeath nulls that slot's deployment, so the survivor mapping still holds.
+      onWin(ctrl.game.memberHPBySlot());
     } else onLose();
   };
 

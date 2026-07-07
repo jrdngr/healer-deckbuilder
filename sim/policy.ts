@@ -16,6 +16,7 @@ import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
   DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
+  INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
 
@@ -710,6 +711,27 @@ export function deployBest(run: Run): void {
   run.confirmDeployment(deploy);
 }
 
+// Infirmary node (#58): the good player mends injuries (a persistent stat penalty)
+// on the members worth fielding, then tops up the HP of anyone badly hurt — while
+// keeping a gold reserve so the deck/relic economy isn't starved. Injuries come
+// first (they compound across fights); HP is cheap insurance before the next wall.
+const INFIRMARY_RESERVE = 30; // keep at least this much gold for shops/relics
+function infirmaryNode(run: Run): void {
+  if (run.nodeContent?.type !== 'infirmary') return;
+  const ranked = run.roster.map((p, i) => ({ p, i })).sort((a, b) => memberValue(b.p) - memberValue(a.p));
+  // Mend scars on the top members while gold stays above the reserve.
+  for (const { p, i } of ranked.slice(0, 3)) {
+    while (p.injuries > 0 && run.gold - INFIRMARY_INJURY_PRICE >= INFIRMARY_RESERVE) {
+      if (!run.infirmaryHealInjury(i)) break;
+    }
+  }
+  // Top up HP for anyone below half (cheap; direct survival) above the reserve.
+  for (const { p, i } of ranked) {
+    const hp = p.hp ?? p.maxHP;
+    if (hp < p.maxHP * 0.5 && run.gold - INFIRMARY_HP_PRICE >= INFIRMARY_RESERVE) run.infirmaryHealHP(i);
+  }
+}
+
 export function resolveNode(run: Run): void {
   switch (run.nodeContent?.type) {
     case 'cardShop': shopCardNode(run); break;
@@ -719,6 +741,7 @@ export function resolveNode(run: Run): void {
     case 'event': resolveEvent(run); break;
     case 'reliquary': shopReliquary(run); break;
     case 'recruit': recruitPick(run); break;
+    case 'infirmary': infirmaryNode(run); break;
     default: break;
   }
 }
@@ -726,7 +749,7 @@ export function resolveNode(run: Run): void {
 // Score a branch by the permanent power its nodes offer, so the policy walks the
 // stronger path through each fork.
 const NODE_DESIRABILITY: Record<string, number> = {
-  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, recruit: 4, cardUpgrade: 4, cardShop: 3, event: 2, fight: 0,
+  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, recruit: 4, cardUpgrade: 4, infirmary: 3, cardShop: 3, event: 2, fight: 0,
 };
 
 // Walk the chosen branch's hub one step per driver tick: enter the first

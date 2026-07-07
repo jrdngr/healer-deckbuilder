@@ -248,6 +248,25 @@
 //     act-3 normals also eased (F6/F7 ~99%). NOTE for the maintainer: this HP re-anchor
 //     again shifts the #22 per-relic gate baseline (last measured at Devourer 198 /
 //     Hexweaver 146) — re-run that battery before leaning on its deltas.
+//   after #58 (BETWEEN-FIGHT HEALING REWORK + THE BALANCE PASS):  full-run 23.3 %
+//     ±2.6 at N=1000.
+//     F0 98.4 | F1 99.3 | F2 A1boss 68.4 | F3 91.8 | F4 90.5 | F5 A2boss 71.2 | F6 93.7 | F7 95.4 | F8 A3boss 66.0
+//     HP now PERSISTS across fights (roster carries current HP; the engine seats each
+//     member at it) and members heal only HERO_HEAL_PCT of max HP between fights — no
+//     more free full re-seed. A member dead at the end of a WON fight resurrects to that
+//     recovered amount (not full, not the in-fight 50%). The Infirmary node is back
+//     (heal HP / shed a scar for gold; hides when healthy). Persistent HP is a systemic
+//     NERF (damage carries forward), and this pass OWNED the ~7% deferred regression left
+//     by #45-#57 + enemy-first — so it re-anchored the whole enemy-HP curve DOWN and
+//     chose HERO_HEAL_PCT from the sim/heal-exp.ts sweep. Landed levers: HERO_HEAL_PCT
+//     0.40 (sweep at the settled HP: 0.20->6%, 0.30->13%, 0.40->22%, 0.50->27%, N=300);
+//     ENEMY_HP_BY_FIGHT Gatewarden 90->64, Hexweaver 208->174, Devourer 216->172, and
+//     the act-2/3 normals eased (F3 70->58, F4 88->72, F6 102->94, F7 108->100). The
+//     three bosses now cluster ~66-71% and full-run sits at the roster-campaign band
+//     (~22-23%). deaths/won-fight fell on the eased Gatewarden (F2 ~0.25) but the act-2/3
+//     walls still cost ~0.7 each; ~1.0 residual scar/run. Sub-max deployment got HARDER
+//     (persistent HP concentrates attrition on fewer bodies): fielding 2 no longer
+//     out-winrates fielding 3, though the small-party build still lifts field-2 off 0%.
 // (#03 priced the Taunt retarget. #04 forced the turn-1 blow to single. #05's
 //  decaying Rest (+2 MP even after a card) fixes the documented MP bottleneck and
 //  the hidden-magnitude reveal lets good play react precisely — the run is now
@@ -310,7 +329,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void): RunOutco
         fights.push({ fightIndex: fi, win, turns: game.turn, deaths: died.length });
         if (win) {
           run.recordInjuries(died); // scars accrue before winFight (mirrors the driver)
-          run.winFight();
+          run.winFight(game.memberHPBySlot()); // carry ending HP back onto the roster (#58)
         } else run.loseFight();
         break;
       }

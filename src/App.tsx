@@ -73,7 +73,7 @@ export function App() {
       <FightScreen
         key={`fight-${run.location.fightIndex}-${run.seed}`}
         run={run}
-        onWin={() => act((r) => r.winFight())}
+        onWin={(hpBySlot) => act((r) => r.winFight(hpBySlot))}
         onLose={() => act((r) => r.loseFight())}
         onSpent={(ids) => act((r) => r.markRelicsSpent(ids))}
         onInjuries={(slots) => act((r) => r.recordInjuries(slots))}

@@ -16,6 +16,7 @@ import {
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
+  HERO_HEAL_PCT, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
 } from '../src/constants';
 import type { RunLocation } from '../src/run';
 import { emptyStats, recordRunEnd } from '../src/stats';
@@ -1302,7 +1303,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('gold never goes negative after salary', broke.gold >= 0);
 }
 
-// --- Field Hospital heals free; Infirmary + Mending Totem are retired -----------
+// --- Field Hospital heals free; Infirmary is back (#58); Mending Totem retired ---
 {
   // Field Hospital event: heal one scar free (top of the ladder), no-op if unharmed.
   const fh = new Run(13);
@@ -1312,8 +1313,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('the free tend costs nothing', fh.gold, 0);
   check('tending an unharmed member does nothing', !fh.healInjury(1 as Slot));
 
-  // The scar-for-gold Infirmary node and the Mending Totem relic are gone (2026-07).
-  check('infirmary is no longer a placeable node type', !NODE_TYPE_WEIGHTS.some(([t]) => (t as string) === 'infirmary'));
+  // The Infirmary node is placeable again (#58 — HP persists, so paid HP/scar
+  // top-ups are a real economy stop); the Mending Totem relic stays retired.
+  check('infirmary is a placeable node type again (#58)', NODE_TYPE_WEIGHTS.some(([t]) => (t as string) === 'infirmary'));
   check('Mending Totem is no longer a relic', !RELIC_IDS.includes('mendingTotem' as never));
 }
 
@@ -1490,6 +1492,119 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   inc.healInjury(2 as Slot);
   check('healing a scar un-incapacitates', inc.toBattleConfig().party[2].incapacitated === false);
   INJURY_RULES.mode = 'death'; // restore the module default for every later test
+}
+
+// --- #58: HP persists across fights, heals a percentage between, resurrects ------
+{
+  // A member ends a fight hurt and carries that HP forward. winFight captures the
+  // battle slots' ending HP, then the between-fight heal tops everyone up.
+  const run = new Run(101);
+  startRun(run); // trio at a fight, deployment [0,1,2]
+  const max0 = run.roster[0].maxHP;
+  // Battle slot 0 ended at 3 HP, slots 1/2 unhurt (full). winFight carries it back.
+  run.winFight([3, run.roster[1].maxHP, run.roster[2].maxHP]);
+  const healed = Math.round(max0 * HERO_HEAL_PCT);
+  eq('hurt member carries HP forward + the between-fight heal', run.roster[0].hp, Math.min(max0, 3 + healed));
+  check('the carried-forward member is still hurt (not full)', (run.roster[0].hp ?? max0) < max0);
+  eq('an unhurt member stays clamped at full', run.roster[1].hp, run.roster[1].maxHP);
+
+  // That persisted HP threads into the NEXT fight's config, clamped to max.
+  crossBranch(run);
+  deployAll(run);
+  const cfg = run.toBattleConfig();
+  eq('the next fight seats the member at the carried HP', cfg.party[0].hp, run.roster[0].hp);
+}
+{
+  // The between-fight heal is HERO_HEAL_PCT of MAX, clamped to max, on the whole roster.
+  const run = new Run(102);
+  startRun(run);
+  for (const p of run.roster) p.hp = 1;
+  run.winFight([1, 1, 1]);
+  for (let i = 0; i < run.roster.length; i++) {
+    const p = run.roster[i];
+    eq(`member ${i} heals exactly the pct of max`, p.hp, Math.min(p.maxHP, 1 + Math.round(p.maxHP * HERO_HEAL_PCT)));
+  }
+  // A near-full member clamps at max rather than overshooting.
+  const near = new Run(103);
+  startRun(near);
+  near.roster[0].hp = near.roster[0].maxHP - 1;
+  near.winFight([near.roster[0].maxHP - 1, near.roster[1].maxHP, near.roster[2].maxHP]);
+  eq('a near-full member clamps at max', near.roster[0].hp, near.roster[0].maxHP);
+}
+{
+  // A member DEAD at the end of a won fight (0 HP) is resurrected to the recovered
+  // amount — the same pct heal — not to full and not to the in-fight 50%.
+  const run = new Run(104);
+  startRun(run);
+  const max = run.roster[0].maxHP;
+  run.winFight([0, run.roster[1].maxHP, run.roster[2].maxHP]); // slot 0 died this fight
+  eq('the dead-at-end member returns at the recovered amount', run.roster[0].hp, Math.round(max * HERO_HEAL_PCT));
+  check('the resurrect is NOT to full', (run.roster[0].hp ?? max) < max);
+}
+{
+  // HP round-trips through save/resume (v13).
+  const run = new Run(105);
+  startRun(run);
+  run.winFight([2, run.roster[1].maxHP, run.roster[2].maxHP]);
+  const carried = run.roster[0].hp;
+  const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  eq('save version is 13', run.toJSON().version, 13);
+  eq('resumed run keeps each member current HP', resumed.roster[0].hp, carried);
+  // An old snapshot without hp reconciles to full (maxHP), not undefined.
+  const legacy = run.toJSON();
+  for (const p of legacy.roster) delete (p as { hp?: number }).hp;
+  const rebuilt = Run.fromJSON(legacy);
+  eq('a legacy member with no hp reconciles to full', rebuilt.roster[0].hp, rebuilt.roster[0].maxHP);
+}
+
+// --- #58: the Infirmary node heals HP / injuries for gold ------------------------
+{
+  // Infirmary content is rollable and gated: hidden when the party is healthy,
+  // shown when someone is hurt or scarred.
+  const run = new Run(106);
+  startRun(run);
+  check('a full, unscarred roster hides the Infirmary', !run.nodeAvailable('infirmary'));
+  run.roster[0].hp = 1;
+  check('a hurt roster shows the Infirmary', run.nodeAvailable('infirmary'));
+  run.roster[0].hp = run.roster[0].maxHP;
+  run.roster[1].injuries = 1;
+  check('a scarred roster shows the Infirmary', run.nodeAvailable('infirmary'));
+}
+{
+  // Heal HP: restore a member to full for INFIRMARY_HP_PRICE gold; gold-clamped.
+  const run = new Run(107);
+  startRun(run);
+  run.nodeContent = { type: 'infirmary' }; // stand at the node so the actions fire
+  run.roster[0].hp = 1;
+  const max = run.roster[0].maxHP;
+  run.gold = INFIRMARY_HP_PRICE - 1;
+  check('unaffordable HP heal fails without charging', !run.infirmaryHealHP(0));
+  eq('gold untouched on a failed heal', run.gold, INFIRMARY_HP_PRICE - 1);
+  run.gold = INFIRMARY_HP_PRICE + 5;
+  check('affordable HP heal succeeds', run.infirmaryHealHP(0));
+  eq('the member is restored to full', run.roster[0].hp, max);
+  eq('the HP price was charged', run.gold, 5);
+  check('healing an already-full member fails (no waste)', !run.infirmaryHealHP(0));
+}
+{
+  // Mend injury: shed one scar for the larger INFIRMARY_INJURY_PRICE; gold-clamped.
+  const run = new Run(108);
+  startRun(run);
+  run.nodeContent = { type: 'infirmary' };
+  run.roster[0].injuries = 2;
+  run.gold = INFIRMARY_INJURY_PRICE - 1;
+  check('unaffordable mend fails without charging', !run.infirmaryHealInjury(0));
+  eq('gold untouched on a failed mend', run.gold, INFIRMARY_INJURY_PRICE - 1);
+  run.gold = INFIRMARY_INJURY_PRICE;
+  check('affordable mend succeeds', run.infirmaryHealInjury(0));
+  eq('one scar shed', run.roster[0].injuries, 1);
+  eq('the (larger) injury price was charged', run.gold, 0);
+  check('mending an unscarred member fails', !run.infirmaryHealInjury(1));
+  check('the injury price is larger than the HP price', INFIRMARY_INJURY_PRICE > INFIRMARY_HP_PRICE);
+  // The actions refuse to fire away from an Infirmary node (a crude UI can't wedge it).
+  run.nodeContent = null;
+  run.roster[0].hp = 1;
+  check('HP heal refuses off an Infirmary node', !run.infirmaryHealHP(0));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
