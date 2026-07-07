@@ -1,6 +1,6 @@
 # Issue 63 — Card types (Holy / Nature / Shadow / Blood / Arcane / Iron)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** systems (cards)   **Size:** XL
 - **Depends on:** —   **Blocks:** future type-synergy content (relics, cards, events)
 - **Addresses:** intake 2026-07-07 — "Add types to cards; go back and type every existing card;

@@ -1154,8 +1154,52 @@ export function defaultParty(): PartyMemberConfig[] {
 
 // The 6-card core deck as concrete instances (uid = position). Member ability
 // cards are added on top per-fight (abilityCardsForParty), not stored here.
+// This is the Preserver preset (#63) — the run/sim/quick-play default opener.
 export function defaultDeck(): DeckCard[] {
   return DECK_LIST.map((id, i) => makeDeckCard(id, i));
+}
+
+// ---------------------------------------------------------------------------
+// Themed preset starter decks (#63, Part C). The player picks one at run start;
+// each is ~6-8 cards weighted toward its 1-2 types, drawn only from shoppable,
+// non-ability cards (ability cards are still injected per deployed member). The
+// lists/names are tunable — a later balance pass owns deep starter tuning.
+// ---------------------------------------------------------------------------
+export type StarterDeckId = 'preserver' | 'reaper' | 'warden';
+export interface StarterDeckDef {
+  id: StarterDeckId;
+  name: string;
+  desc: string;
+  types: CardType[];  // the 1-2 types the preset leans on (for the picker UI)
+  list: CardId[];
+}
+export const DEFAULT_STARTER_DECK: StarterDeckId = 'preserver';
+export const STARTER_DECK_IDS: StarterDeckId[] = ['preserver', 'reaper', 'warden'];
+export const STARTER_DECKS: Record<StarterDeckId, StarterDeckDef> = {
+  // Preserver — the current heal-lean opener (today's default), Holy/Nature.
+  preserver: {
+    id: 'preserver', name: 'Preserver', types: ['holy', 'nature'],
+    desc: 'Holy & Nature — a heal-lean opener that keeps the party standing.',
+    list: DECK_LIST,
+  },
+  // Reaper — damage + sacrifice tempo, Shadow/Blood.
+  reaper: {
+    id: 'reaper', name: 'Reaper', types: ['shadow', 'blood'],
+    desc: 'Shadow & Blood — burn the enemy down and pay in blood.',
+    list: ['shadowBolt', 'shadowBolt', 'siphonLife', 'grimHarvest', 'bloodTithe', 'lowHeal', 'highHeal'],
+  },
+  // Warden — protection + economy, Iron/Arcane.
+  warden: {
+    id: 'warden', name: 'Warden', types: ['iron', 'arcane'],
+    desc: 'Iron & Arcane — shields and mana to outlast the fight.',
+    list: ['shield', 'brace', 'phalanx', 'refresh', 'channel', 'lowHeal', 'highHeal'],
+  },
+};
+
+// Build a starter deck as concrete DeckCard instances (uid = position). The chosen
+// preset replaces defaultDeck() at run start; quick-play/sim keep the Preserver default.
+export function buildStarterDeck(id: StarterDeckId): DeckCard[] {
+  return STARTER_DECKS[id].list.map((cid, i) => makeDeckCard(cid, i));
 }
 
 // The per-fight ability cards for a battle party (#44): one bound card per seated

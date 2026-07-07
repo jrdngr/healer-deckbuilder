@@ -17,6 +17,7 @@ import {
   INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   HERO_HEAL_PCT, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
+  STARTER_DECKS, STARTER_DECK_IDS, DEFAULT_STARTER_DECK, buildStarterDeck,
 } from '../src/constants';
 import type { RunLocation } from '../src/run';
 import { emptyStats, recordRunEnd } from '../src/stats';
@@ -1597,7 +1598,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   run.winFight([2, run.roster[1].maxHP, run.roster[2].maxHP]);
   const carried = run.roster[0].hp;
   const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
-  eq('save version is 13', run.toJSON().version, 13);
+  eq('save version is 14', run.toJSON().version, 14);
   eq('resumed run keeps each member current HP', resumed.roster[0].hp, carried);
   // An old snapshot without hp reconciles to full (maxHP), not undefined.
   const legacy = run.toJSON();
@@ -1654,6 +1655,46 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   run.nodeContent = null;
   run.roster[0].hp = 1;
   check('HP heal refuses off an Infirmary node', !run.infirmaryHealHP(0));
+}
+
+// --- preset starter decks (#63, Part C) -------------------------------------
+{
+  // Each preset builds exactly its declared card list (in order).
+  for (const id of STARTER_DECK_IDS) {
+    const built = buildStarterDeck(id).map((c) => c.id);
+    eq(`${id} builds its declared list`, JSON.stringify(built), JSON.stringify(STARTER_DECKS[id].list));
+  }
+  // Default path (no picker): a fresh Run defaults to Preserver and its deck.
+  const fresh = new Run(7);
+  eq('a fresh run defaults to Preserver', fresh.starterDeck, DEFAULT_STARTER_DECK);
+  eq('the default deck is the Preserver list',
+    JSON.stringify(fresh.deck.map((c) => c.id)), JSON.stringify(STARTER_DECKS.preserver.list));
+
+  // The picker: start -> starterDeck -> choose builds that deck, then enters the draft.
+  const run = new Run(7);
+  run.beginStarterDeck();
+  eq('beginStarterDeck opens the picker', run.location.kind, 'starterDeck');
+  run.chooseStarterDeck('reaper');
+  eq('choosing a preset records it', run.starterDeck, 'reaper');
+  eq('choosing a preset builds its deck',
+    JSON.stringify(run.deck.map((c) => c.id)), JSON.stringify(STARTER_DECKS.reaper.list));
+  eq('choosing a preset moves on to the draft', run.location.kind, 'draft');
+
+  // The chosen preset round-trips through save/resume.
+  const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  eq('starter preset survives save/resume', resumed.starterDeck, 'reaper');
+
+  // An old save with no starterDeck field loads as Preserver.
+  const legacy = run.toJSON();
+  delete (legacy as { starterDeck?: string }).starterDeck;
+  const rebuilt = Run.fromJSON(legacy);
+  eq('an old save with no preset loads as Preserver', rebuilt.starterDeck, DEFAULT_STARTER_DECK);
+
+  // Quick-play/sim path: beginDraft() straight from 'start' keeps the Preserver default.
+  const sim = new Run(7);
+  sim.beginDraft();
+  eq('beginDraft from start keeps Preserver', sim.starterDeck, DEFAULT_STARTER_DECK);
+  eq('beginDraft from start still enters the draft', sim.location.kind, 'draft');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

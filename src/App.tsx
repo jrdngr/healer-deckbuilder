@@ -9,6 +9,7 @@ import { GoldFx, GOLD_FX_TOTAL_MS } from './components/GoldFx';
 import type { GoldFxJob, GoldFxTarget } from './components/GoldFx';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
+import { StarterDeckScreen } from './components/StarterDeckScreen';
 import { DraftScreen } from './components/DraftScreen';
 import { DeployScreen } from './components/DeployScreen';
 import { FightScreen } from './components/FightScreen';
@@ -27,6 +28,7 @@ function progressLabel(run: Run): string {
   if (run.status === 'lost') return 'Run over';
   const loc = run.location;
   if (loc.kind === 'start') return 'The journey begins';
+  if (loc.kind === 'starterDeck') return 'Choose a starting deck';
   if (loc.kind === 'draft') return 'Recruit your first hero';
   if (loc.kind === 'deploy') return 'Deploy your party';
   if (loc.kind === 'fight') {
@@ -144,12 +146,14 @@ export function App() {
   } else if (run.location.kind === 'start') {
     screen = (
       <StartScreen
-        onBegin={() => act((r) => r.beginDraft())}
+        onBegin={() => act((r) => r.beginStarterDeck())}
         hasSave={hasSave}
         savedFightIndex={savedFightIndex}
         onContinue={onContinue}
       />
     );
+  } else if (run.location.kind === 'starterDeck') {
+    screen = <StarterDeckScreen run={run} act={act} />;
   } else if (run.location.kind === 'draft') {
     screen = <DraftScreen run={run} act={act} />;
   } else if (run.location.kind === 'deploy') {

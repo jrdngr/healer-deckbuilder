@@ -9,6 +9,7 @@
 import {
   ENEMY_HP_BY_FIGHT, ENEMY_ATTACK_BONUS, ENEMY_ENRAGE_TURN_BY_FIGHT, isActBoss, actOfFight,
   ENEMY_MAX_HP, ENRAGE_TURN, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard, abilityCardsForParty,
+  DEFAULT_STARTER_DECK, buildStarterDeck,
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
@@ -30,6 +31,7 @@ import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
   NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId,
   CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer, RelicOffer,
+  StarterDeckId,
 } from './constants';
 import { makeRng, weightedPick, shuffle } from './rng';
 import type { Rng } from './rng';
@@ -44,6 +46,9 @@ export type RunStatus = 'playing' | 'won' | 'lost';
 // from which the player manually enters the first fight.
 export type RunLocation =
   | { kind: 'start' }
+  // Preset starter-deck picker (#63): shown once at run start, between the opening
+  // screen and the first-hero draft. Interactive runs only; quick-play/sim skip it.
+  | { kind: 'starterDeck' }
   // Pick-one member draft: at run start only ('start'). The post-boss draft was
   // removed with #56 (recruitment now lives solely in the guaranteed Recruit node),
   // so `post` is always 'start'; fightIndex is the fight the draft leads into (0).
@@ -90,7 +95,10 @@ export type NodeContent =
 // heal only HERO_HEAL_PCT between fights; the Infirmary node returns ({type:'infirmary'}
 // content). Old saves lack per-member HP and can hold a map with no Infirmary, so
 // they are discarded rather than resumed at full HP with no top-up stop.)
-export const RUN_SAVE_VERSION = 13;
+// v14: preset starter decks (#63) — the run records the chosen preset (starterDeck)
+// and a 'starterDeck' picker location sits between 'start' and the first draft. Old
+// saves lack the field (they default to Preserver) and predate the picker location.
+export const RUN_SAVE_VERSION = 14;
 
 export interface RunSnapshot {
   version: number;
@@ -98,6 +106,7 @@ export interface RunSnapshot {
   rngState: number;
   nextUid: number;
   gold: number;
+  starterDeck: StarterDeckId; // the preset chosen at run start (#63)
   deck: DeckCard[];
   roster: PartyMemberConfig[];
   deployment: (number | null)[];
@@ -118,6 +127,9 @@ export class Run {
   seed: number;
   rng: Rng;
   gold: number;
+  // The themed preset the player chose at run start (#63). Defaults to Preserver so
+  // quick-play and the sim have a deck without going through the picker.
+  starterDeck: StarterDeckId;
   deck: DeckCard[];
   // The collected members (the roster). Unique by `member` id; grows as the player
   // drafts/recruits, shrinks on permanent death. The BATTLE party the engine fights
@@ -149,6 +161,7 @@ export class Run {
     this.seed = seed >>> 0;
     this.rng = makeRng(this.seed);
     this.gold = 0;
+    this.starterDeck = DEFAULT_STARTER_DECK; // Preserver until the picker sets it (#63)
     this.deck = defaultDeck();
     // Default roster: the classic trio (with member identities), so quick-play and
     // the sim have a party without drafting. The pick-one draft (beginDraft) clears
@@ -190,6 +203,7 @@ export class Run {
       rngState: this.rng.getState(),
       nextUid: this.nextUid,
       gold: this.gold,
+      starterDeck: this.starterDeck,
       deck: this.deck,
       roster: this.roster,
       deployment: this.deployment,
@@ -214,6 +228,7 @@ export class Run {
     run.rng.setState(snap.rngState); // continue the saved stream, not a fresh one
     run.nextUid = snap.nextUid;
     run.gold = snap.gold;
+    run.starterDeck = snap.starterDeck ?? DEFAULT_STARTER_DECK; // older saves default to Preserver
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
     run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0, hp: p.hp ?? p.maxHP }));
     run.deployment = [...(snap.deployment ?? [0, 1, 2])];
@@ -269,8 +284,28 @@ export class Run {
   // Pick-one draft at run start (2026-07; #55): clear the default roster and offer
   // three heroes sampled from the FULL member pool (any hero can start — no longer a
   // fixed striker trio). The player picks one, then deploys into the solo fight 0.
-  beginDraft(): void {
+  // Open the preset starter-deck picker (#63). Interactive-run only: from 'start',
+  // before drafting the first hero. Quick-play/sim call beginDraft() directly and keep
+  // the Preserver default, so no caller is forced through the picker.
+  beginStarterDeck(): void {
     if (this.location.kind !== 'start') return;
+    this.location = { kind: 'starterDeck' };
+  }
+
+  // Lock in the chosen preset and build its deck, then move on to the first-hero draft.
+  // Ignores an unknown id / wrong location so a crude UI can't wedge the run.
+  chooseStarterDeck(id: StarterDeckId): void {
+    if (this.location.kind !== 'starterDeck') return;
+    this.starterDeck = id;
+    this.deck = buildStarterDeck(id);
+    this.nextUid = this.deck.length; // continue the uid sequence past the new deck
+    this.beginDraft();
+  }
+
+  beginDraft(): void {
+    // Reachable from the opening screen directly (quick-play/sim) or via the starter-
+    // deck picker (interactive runs, #63).
+    if (this.location.kind !== 'start' && this.location.kind !== 'starterDeck') return;
     this.roster = [];
     this.deployment = [null, null, null];
     this.location = { kind: 'draft', post: 'start', fightIndex: 0 };
