@@ -633,7 +633,7 @@ export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defens
 // fielded party size (index by size 1/2/3), so it is strongest solo — where it
 // amplifies his own low damage enough to carry act 1 — and modest in a full party.
 export const HEX_TURNS = 3;
-export const HEX_VULN_BY_SIZE = [0, 1.0, 0.55, 0.35]; // [unused, solo, duo, trio+]
+export const HEX_VULN_BY_SIZE = [0, 2.2, 0.55, 0.35]; // [unused, solo, duo, trio+]
 export const HEX_VULN_PER_POWER = 0.05; // each point of abilityPower adds this much vuln
 export const SKALD_DMG_PER_CARD = 2; // Skald strike: damage per card played this phase
 export const SKALD_DMG_CAP = 8;      // Skald strike: cap on the cards-played bonus
@@ -772,9 +772,9 @@ export const HAND_SIZE = 3;
 // Warlock's fewer-allies Hex). "Small" means a fielded party of SMALL_PARTY_MAX or
 // fewer; per-seat effects scale on empty deploy seats (3 − fielded).
 export const SMALL_PARTY_MAX = 2;
-export const LONE_WOLF_DMG = 2;        // loneWolf relic: +damage per fielded member while small
+export const LONE_WOLF_DMG = 4;        // loneWolf relic: +damage per fielded member while small
 export const FOCUS_STONE_MP = 2;       // focusStone relic: +max MP while small
-export const WARBAND_HP_PER_SEAT = 3;  // warband relic: +max HP per empty deploy seat
+export const WARBAND_HP_PER_SEAT = 8;  // warband relic: +max HP per empty deploy seat
 export const RALLY_DMG_PER_SEAT = 2;   // Rally card: +auto damage this turn per empty seat
 export const FOCUS_HEAL = 3;           // Focus card: base single-target heal
 export const FOCUS_SMALL_BONUS = 4;    // Focus card: extra heal while fielding small
@@ -1510,10 +1510,16 @@ export const isActBoss = (fightIndex: number): boolean =>
 // the run, so act 1 is fought SOLO/duo (F0 is a forced solo) and later acts with a
 // small roster — far less party DPS/bodies than the old fixed trio. HP drops across
 // the board; act 1 especially. Sim-tuned against the campaign policy.
+// 2026-07-07 SKILL-TIER PASS: re-anchored DOWN again so the FLAWLESS good-player line
+// (the sim's optimal tier) hits the ~75% full-run target, with the difficulty gradient
+// carried by play-quality tiers on identical content (see sim/profile.ts + balance-
+// tiers.ts): average ~30%, poor <1%. Bosses stay the walls but are answerable. MP economy
+// and healing were left untouched per the maintainer constraint — this pass is HP + gold +
+// solo-only levers only.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  14, 20, 64,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#58 re-anchor)
-  58, 72, 174,    // Act 2: duo/trio normals + Hexweaver (#58 re-anchor)
-  94, 100, 172,   // Act 3: small-roster normals + Devourer (#58 re-anchor)
+  10, 15, 35,     // Act 1: solo F0, ~solo F1, duo Gatewarden (2026-07-07 skill-tier pass)
+  40, 50, 120,    // Act 2: duo/trio normals + Hexweaver (2026-07-07 skill-tier pass)
+  65, 75, 120,    // Act 3: small-roster normals + Devourer (2026-07-07 skill-tier pass)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.

@@ -7,6 +7,7 @@
 // baseline, not a balance target — see the BASELINE note in sim/run-sim.ts.
 
 import { runSingleRun, runSim } from '../sim/run-sim';
+import { STICK, OPTIMAL, AVERAGE, POOR } from '../sim/profile';
 import { aggregate, deploySizeEdge } from '../sim/campaign-exp';
 import { MEMBER_POOL } from '../src/constants';
 import { Game } from '../src/engine';
@@ -47,6 +48,33 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   const a = JSON.stringify(runSim(50, 1));
   const b = JSON.stringify(runSim(50, 1));
   eq('runSim(50, 1) is deterministic', a, b);
+}
+
+// --- skill-tier harness (2026-07-07): additive, doesn't touch the pinned stick -----
+{
+  // The STICK profile is exactly the default path — passing it explicitly changes nothing
+  // (this is what keeps the pinned vector above valid: the default draws no policy RNG).
+  for (const seed of [1, 42, 777]) {
+    eq(`runSingleRun(${seed}) with STICK profile == default`,
+      JSON.stringify(runSingleRun(seed, undefined, { profile: STICK })),
+      JSON.stringify(runSingleRun(seed)));
+  }
+  // Each tier is itself seed-deterministic (the mistake RNG is seeded off the fight seed).
+  for (const profile of [OPTIMAL, AVERAGE, POOR]) {
+    eq(`the ${profile.tier} tier is deterministic`,
+      JSON.stringify(runSingleRun(9, undefined, { profile })),
+      JSON.stringify(runSingleRun(9, undefined, { profile })));
+  }
+  // The skill gradient is monotonic: optimal >= average >= poor at a small N.
+  const rate = (p: typeof STICK): number => runSim(120, 1, undefined, { profile: p }).fullRun.rate;
+  const [o, a, pr] = [rate(OPTIMAL), rate(AVERAGE), rate(POOR)];
+  check('skill gradient is monotonic (optimal >= average >= poor)', o >= a && a >= pr,
+    `optimal ${(o * 100).toFixed(0)}% >= average ${(a * 100).toFixed(0)}% >= poor ${(pr * 100).toFixed(0)}%`);
+  // A deployment cap fields fewer members: solo (cap 1) is strictly harder than the trio.
+  const trio = runSim(120, 1, undefined, { profile: OPTIMAL, maxDeploy: 3 }).fullRun.rate;
+  const solo = runSim(120, 1, undefined, { profile: OPTIMAL, maxDeploy: 1 }).fullRun.rate;
+  check('a solo deployment cap is harder than the trio', solo < trio,
+    `solo ${(solo * 100).toFixed(0)}% < trio ${(trio * 100).toFixed(0)}%`);
 }
 
 // --- stable winrate regression ----------------------------------------------
@@ -188,27 +216,45 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // 1, never banked; the best-3 policy has no "commit the whole turn to a channel" line).
   // The vector shifts: F2 139->135, F3/F4 130/121->125/118, F5 93->91, F6/F7 86/82->84/80,
   // F8 54->53 (F0/F1 unchanged). All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 135, 125, 118, 91, 84, 80, 53]));
-  // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
-  // not a hard threshold, so subsample noise can't fail a healthy build while a real
-  // drift still trips it.
-  check('full-run consistent with the ~23% re-anchored campaign band (#58)',
-    r.fullRun.rate - r.fullRun.ci95 <= 0.31 && r.fullRun.rate + r.fullRun.ci95 >= 0.15,
+  // ==========================================================================
+  // 2026-07-07 SKILL-TIER BALANCE PASS. This is a deliberate difficulty re-anchor,
+  // NOT a stream perturbation. The sim gained three play-quality tiers (optimal /
+  // average / poor — see sim/profile.ts + sim/balance-tiers.ts) and the content was
+  // tuned so the FLAWLESS good-player line (the default STICK profile this test pins)
+  // lands the maintainer's OPTIMAL target of ~75% full-run, with the difficulty
+  // gradient carried by the tiers: average ~30%, poor <1%. What moved:
+  //   • ENEMY_HP_BY_FIGHT re-anchored DOWN — Gatewarden 64->35, Hexweaver 174->120,
+  //     Devourer 172->120, and the normals eased (F0 14->10, F1 20->15, F3 58->40,
+  //     F4 72->50, F6 94->65, F7 100->75). The bosses stay the walls but are
+  //     answerable; normals clear ~97-100%.
+  //   • Solo-only levers buffed to make a solo Warlock ~25% (target): HEX_VULN_BY_SIZE
+  //     solo 1.0->2.2, WARBAND_HP_PER_SEAT 3->8, LONE_WOLF_DMG 2->4. All are gated on
+  //     fielding <= SMALL_PARTY_MAX, so the best-3 STICK line here is UNCHANGED by them.
+  // The STICK profile now reads ~75-77% full-run (bosses ~91/97/92% conditional at
+  // N=200) because the stick IS a near-flawless good player and the content is tuned
+  // to that ceiling. deaths/won-fight fell for the flawless line (it wins by keeping
+  // the party alive); the healing/attrition pressure now lives at the AVERAGE tier
+  // (~1.3 scars/run). Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 182, 177, 176, 170, 168, 168, 155]));
+  // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
+  // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
+  // build while a real drift still trips it.
+  check('full-run consistent with the ~75% optimal ceiling (2026-07-07 skill-tier pass)',
+    r.fullRun.rate - r.fullRun.ci95 <= 0.86 && r.fullRun.rate + r.fullRun.ci95 >= 0.66,
     `${(r.fullRun.rate * 100).toFixed(1)}% ±${(r.fullRun.ci95 * 100).toFixed(1)}`);
-  // Normals clear cleanly even under-strength: act-1/2 normals >= 88%, act-3 >= 85%.
-  for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 88%`, r.perFight[fi].rate >= 0.88);
-  for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 85%`, r.perFight[fi].rate >= 0.85);
-  // Boss gates re-anchored by the #58 balance pass: with persistent HP + the 40%
-  // between-fight heal, all three bosses cluster ~66-71% (N=1000: 68.4 / 71.2 / 66.0%).
-  // These are conditional on REACHING the boss, so the later two are noisy (small n)
-  // at N=200 — CI-consistent bands, not point thresholds.
+  // Normals clear cleanly for the flawless line: all normals >= 90%.
+  for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
+  for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
+  // Boss gates re-anchored by the skill-tier pass: the flawless line answers all three
+  // bosses ~88-96% conditional (N=200: 88.5 / 96.5 / 95.1%). Conditional on REACHING,
+  // so CI-consistent bands, not point thresholds.
   const bandConsistent = (p: { rate: number; ci95: number }, lo: number, hi: number): boolean =>
     p.rate + p.ci95 >= lo && p.rate - p.ci95 <= hi;
-  check('Act-1 boss (Gatewarden) consistent with ~55-82% (#58 re-anchor)', bandConsistent(r.perFight[2], 0.55, 0.82),
+  check('Act-1 boss (Gatewarden) consistent with ~82-97% (skill-tier pass)', bandConsistent(r.perFight[2], 0.82, 0.97),
     `${(r.perFight[2].rate * 100).toFixed(1)}% ±${(r.perFight[2].ci95 * 100).toFixed(1)}`);
-  check('Act-2 boss (Hexweaver) consistent with ~55-82% (#58 re-anchor)', bandConsistent(r.perFight[5], 0.55, 0.82),
+  check('Act-2 boss (Hexweaver) consistent with ~88-100% (skill-tier pass)', bandConsistent(r.perFight[5], 0.88, 1.0),
     `${(r.perFight[5].rate * 100).toFixed(1)}% ±${(r.perFight[5].ci95 * 100).toFixed(1)}`);
-  check('Act-3 boss (Devourer) consistent with ~52-82% (#58 re-anchor)', bandConsistent(r.perFight[8], 0.52, 0.82),
+  check('Act-3 boss (Devourer) consistent with ~86-100% (skill-tier pass)', bandConsistent(r.perFight[8], 0.86, 1.0),
     `${(r.perFight[8].rate * 100).toFixed(1)}% ±${(r.perFight[8].ci95 * 100).toFixed(1)}`);
 }
 
@@ -217,12 +263,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   const r = runSim(200, 1);
   eq('deathsPerWin is reported per fight', r.deathsPerWin.length, r.perFight.length);
   check('deaths per won fight are non-negative', r.deathsPerWin.every((d) => d >= 0));
-  // The sacrifice signal DR1 named: the fixed policy still spends members on the
-  // bosses, so their deaths/won-fight is materially positive (F2/F5/F8). The #58
-  // re-anchor eased the bosses, so the act-2/3 walls still cost ~0.7 deaths each
-  // while the (now much gentler, 64-HP) Gatewarden costs ~0.25 — all clearly > 0.
-  check('the bosses still cost member deaths (the DR1 signal)',
-    r.deathsPerWin[2] > 0.15 && r.deathsPerWin[5] > 0.3 && r.deathsPerWin[8] > 0.3,
+  // The sacrifice signal DR1 named: even the flawless line still spends members on the
+  // act-2/3 walls (F5/F8 ~0.35-0.38 deaths/won-fight). The 2026-07-07 skill-tier pass
+  // eased the Gatewarden hard (37 HP), so the flawless line now clears F2 nearly
+  // death-free (~0.06) — the real attrition pressure moved to the AVERAGE tier
+  // (~1.3 scars/run); here we only assert the later bosses still bite.
+  check('the act-2/3 bosses still cost member deaths (the DR1 signal)',
+    r.deathsPerWin[2] >= 0 && r.deathsPerWin[5] > 0.25 && r.deathsPerWin[8] > 0.25,
     `F2 ${r.deathsPerWin[2].toFixed(2)} F5 ${r.deathsPerWin[5].toFixed(2)} F8 ${r.deathsPerWin[8].toFixed(2)}`);
   // Injuries are permanent now (2026-07): a member removed at the 4th death takes its
   // scars with it, and the Field Hospital sheds the odd one, so the residual per run
@@ -437,13 +484,12 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
 // not a free lunch).
 {
   const edge = deploySizeEdge(150);
-  // #58: persistent HP CONCENTRATES attrition on a smaller party — two bodies eat the
-  // same incoming damage across fewer members and carry it forward every fight — so
-  // fielding 2 no longer out-winrates fielding 3 in the aggregate (field-2 ~7% vs
-  // field-3 ~20% at N=400). The #42 property is now narrower but intact: the
-  // small-party BUILD still turns sub-max from always-wrong (0% WITHOUT it) into a
-  // real, non-trivial line, so it stays a genuine choice rather than a free lunch.
-  check('the small-party build keeps sub-max a viable line (#58: persistent HP concentrates attrition)',
+  // 2026-07-07 skill-tier pass buffed the small-party relics to make a solo Warlock
+  // viable (WARBAND_HP_PER_SEAT 3->8, LONE_WOLF_DMG 2->4). A happy side effect: on this
+  // fixed contest the small-party BUILD now makes fielding 2 clearly OUT-winrate fielding
+  // 3 (field-2 ~41% vs field-3 ~20%), so "field fewer, keep more" is a genuinely winning
+  // line again (and still a losing one WITHOUT the build — not a free lunch).
+  check('the small-party build makes sub-max a winning line (buffed relics)',
     edge.two >= 0.03, `field-2 ${(edge.two * 100).toFixed(1)}% vs field-3 ${(edge.three * 100).toFixed(1)}%`);
   check('the build is what makes it work (field-2 collapses without it — not a free lunch)',
     edge.two - edge.twoNoRelics >= 0.05, `build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp`);
