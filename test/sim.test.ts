@@ -178,7 +178,11 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // from a larger pool — a pure rng-stream perturbation (the best-3 policy values them
   // 0 and never banks one). The vector shifts: F3/F4 126/115->124/117, F5 89->88, F6/F7
   // 82/78->81/76, F8 59->51 (F0-F2 unchanged). All gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 137, 124, 117, 88, 81, 76, 51]));
+  // 2026-07-07 (#63 count cards): 2 more shop-eligible cards (Cascade, Nightfall) join
+  // CARD_POOL — another pure rng-stream perturbation (buy value 1, never banked). The
+  // vector shifts: F2 137->139, F3/F4 124/117->130/121, F5 88->93, F6/F7 81/76->86/82,
+  // F8 51->54 (F0/F1 unchanged). All gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 139, 130, 121, 93, 86, 82, 54]));
   // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
   // not a hard threshold, so subsample noise can't fail a healthy build while a real
   // drift still trips it.

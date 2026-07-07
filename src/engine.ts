@@ -30,6 +30,7 @@ import {
   SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
+  CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
@@ -1451,6 +1452,12 @@ export class Game {
     if (this.hasRelic('ironWard') && cardType(card.id) === 'iron' && this.typePlayedThisTurn.iron === 0) {
       cost = Math.max(0, cost - IRON_RELIC_DISCOUNT);
     }
+    // Cascade (#63): 1 MP cheaper per Arcane card already played this turn (floor 0).
+    // The per-turn Arcane counter is bumped after a card resolves, so it reflects the
+    // prior Arcane plays this turn — not Cascade itself.
+    if (card.id === 'cascade') {
+      cost = Math.max(0, cost - CASCADE_DISCOUNT_PER_ARCANE * this.typePlayedThisTurn.arcane);
+    }
     return cost;
   }
 
@@ -1674,7 +1681,10 @@ export class Game {
         this._endRegenBurst(m);
         break;
       }
-      case 'inspiration': {
+      // Cascade (#63) shares Inspiration's draw effect; its Arcane count payoff is a
+      // cost discount, resolved in effectiveCost (the counter is read there).
+      case 'inspiration':
+      case 'cascade': {
         const before = this.hand.length;
         for (let i = 0; i < (card.draw ?? 0); i++) {
           const c = this._drawOne();
@@ -1682,8 +1692,16 @@ export class Game {
           this.hand.push(c);
         }
         const drawn = this.hand.length - before;
-        this._log(`Inspiration: drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
+        this._log(`${card.name}: drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
         this._emit({ kind: 'draw', count: drawn });
+        break;
+      }
+      case 'nightfall': {
+        // A Shadow nuke that grows with Shadow cards played THIS FIGHT (the per-fight
+        // counter is bumped after this resolves, so it reads the plays before it), capped.
+        const dmg = Math.min(NIGHTFALL_CAP, NIGHTFALL_BASE + NIGHTFALL_PER_SHADOW * this.typePlayedThisFight.shadow);
+        const killed = this._damageEnemy(dmg, 'Nightfall');
+        this._emitEnemyNuke(dmg, killed);
         break;
       }
       case 'lifebloom': {

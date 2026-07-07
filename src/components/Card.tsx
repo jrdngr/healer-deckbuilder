@@ -14,6 +14,8 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   phalanx: 'ward', brace: 'ward', provoke: 'ward',
   // Shadow cards (#63): direct damage / debuff plays.
   shadowBolt: 'power', siphonLife: 'power', doom: 'power',
+  // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
+  cascade: 'mana', nightfall: 'power',
   // Small-party cards (#42).
   rally: 'power', focus: 'heal', channel: 'mana', holdTheLine: 'ward',
   // Hero buff card batch (#62): defensive buffs gold, offensive buffs red-purple.

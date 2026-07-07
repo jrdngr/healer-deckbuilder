@@ -40,6 +40,8 @@ export type CardId =
   | 'phalanx' | 'brace' | 'provoke'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
+  // Count-based payoff cards (#63, Part B): scale with the per-type counters.
+  | 'cascade' | 'nightfall'
   // Small-party cards (#42): stronger the fewer members you field.
   | 'rally' | 'focus' | 'channel' | 'holdTheLine'
   // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
@@ -658,6 +660,14 @@ export const DOOM_PER_DEBUFF = 3;   // Doom: +damage per active enemy debuff (Vu
 export const DOOM_PER_VULN = 8;     // Doom: +floor(vuln x this) extra while the enemy is Vulnerable
 export const DOOM_CAP = 18;         // Doom: hard cap on the pre-Vulnerability computed damage
 
+// Count-based payoff cards (#63, Part B): each scales with the per-type counters,
+// capped/floored as designed. Magnitudes are tunable — a later balance pass owns them.
+export const CASCADE_DRAW = 2;                 // Cascade (Arcane): cards drawn
+export const CASCADE_DISCOUNT_PER_ARCANE = 1;  // Cascade: MP off per Arcane card already played this turn (floor 0)
+export const NIGHTFALL_BASE = 3;               // Nightfall (Shadow): base enemy damage
+export const NIGHTFALL_PER_SHADOW = 2;         // Nightfall: +damage per Shadow card played THIS FIGHT (before it)
+export const NIGHTFALL_CAP = 14;               // Nightfall: hard cap on the computed damage
+
 // Short flavor of each member's ability — name + one-liner. Shown on the live
 // MemberCard AND the draft card (#37), so it lives here rather than in a component
 // (the draft must not leak raw ability ids like `graveChill`). Keyed by MemberId.
@@ -829,6 +839,11 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // debuff-first Shadow line (Hex's Vulnerability, Poison). Capped.
   doom: { id: 'doom', name: 'Doom', cost: 4, target: 'none',
     desc: `Deal ${DOOM_BASE} damage, +${DOOM_PER_DEBUFF} per active enemy debuff and more the more Vulnerable it is (cap ${DOOM_CAP}).` },
+  // --- count-based payoff cards (#63, Part B) --------------------------------
+  cascade: { id: 'cascade', name: 'Cascade', cost: 2, target: 'none', draw: CASCADE_DRAW, engine: true,
+    desc: `Draw ${CASCADE_DRAW}. Costs ${CASCADE_DISCOUNT_PER_ARCANE} less per Arcane card already played this turn (min 0).` },
+  nightfall: { id: 'nightfall', name: 'Nightfall', cost: 3, target: 'none',
+    desc: `Deal ${NIGHTFALL_BASE} damage, +${NIGHTFALL_PER_SHADOW} per Shadow card played this fight (cap ${NIGHTFALL_CAP}).` },
   // --- small-party cards (#42): reward fielding fewer bodies -------------------
   rally: { id: 'rally', name: 'Rally', cost: 1, target: 'none',
     desc: `Every living member's attack this turn deals +${RALLY_DMG_PER_SEAT} per empty deploy seat.` },
@@ -877,12 +892,12 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   sharpen: 'nature', doubleStrike: 'nature', embolden: 'nature', empower: 'nature', riposte: 'nature',
   // Shadow — enemy debuffs and direct damage to the enemy.
   unleash: 'shadow', hex: 'shadow', hush: 'shadow', stagger: 'shadow', /* Stun: enemy control */
-  shadowBolt: 'shadow', siphonLife: 'shadow', doom: 'shadow',
+  shadowBolt: 'shadow', siphonLife: 'shadow', doom: 'shadow', nightfall: 'shadow',
   // Blood — sacrifice something (usually HP) to gain something.
   bloodTithe: 'blood', martyrsGift: 'blood', grimHarvest: 'blood',
   incite: 'blood', /* outlier: HP-cost doubled strike */
   // Arcane — the mana / card-draw economy.
-  refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane',
+  refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane', cascade: 'arcane',
   // Iron — protection: shields, Defense, Taunt/Provoke, braces.
   shield: 'iron', barrier: 'iron', phalanx: 'iron', brace: 'iron', provoke: 'iron', holdTheLine: 'iron',
   bolster: 'iron', guard: 'iron', goad: 'iron',
@@ -1442,6 +1457,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   grimHarvest: 'rare',
   // Shadow cards (#63): Doom is the rare of the set.
   shadowBolt: 'common', siphonLife: 'uncommon', doom: 'rare',
+  // Count-based payoff cards (#63).
+  cascade: 'uncommon', nightfall: 'uncommon',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.

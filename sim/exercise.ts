@@ -56,6 +56,8 @@ const EXERCISE_DECK: CardId[] = [
   'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
+  // Count-based payoff cards (#63).
+  'cascade', 'nightfall',
   'rally', 'focus', 'channel', 'holdTheLine',
   // Hero buff card batch (#62).
   'guard', 'sharpen', 'goad', 'doubleStrike', 'embolden', 'empower', 'riposte',

@@ -9,6 +9,7 @@ import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constan
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
+import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
 
 let passed = 0;
@@ -3474,6 +3475,50 @@ function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
   // A non-Iron card is never discounted by the Ward.
   const i4 = giveCard(g, 'lowHeal');
   eq('Iron Ward ignores non-Iron cards', g.effectiveCost(resolveCard(g.hand[i4])), CARDS.lowHeal.cost);
+}
+
+// --- Count-based payoff cards (#63, Part B) ----------------------------------
+{
+  // Cascade (Arcane): draws its cards, and costs 1 less per Arcane card already
+  // played this turn (floor 0).
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+  const i0 = giveCard(g, 'cascade');
+  eq('Cascade full cost with no prior Arcane play', g.effectiveCost(resolveCard(g.hand[i0])), CARDS.cascade.cost);
+  g.playCard(giveCard(g, 'channel')); // Arcane
+  g.playCard(giveCard(g, 'refresh')); // Arcane
+  const i1 = giveCard(g, 'cascade');
+  eq('Cascade discounts per Arcane card this turn',
+    g.effectiveCost(resolveCard(g.hand[i1])),
+    Math.max(0, CARDS.cascade.cost - CASCADE_DISCOUNT_PER_ARCANE * 2));
+}
+{
+  // Cascade actually draws CASCADE_DRAW cards.
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10;
+  const handBefore = g.hand.length;
+  g.playCard(giveCard(g, 'cascade'));
+  eq('Cascade draws its cards', g.hand.length, handBefore + CASCADE_DRAW);
+}
+{
+  // Nightfall (Shadow): base with no prior Shadow plays; scales with Shadow cards
+  // played this fight; caps; leaves the enemy telegraph untouched.
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 20; g.enemy.hp = 999;
+  const tgBefore = JSON.stringify(g.attackTargets());
+  const b0 = g.enemy.hp; g.playCard(giveCard(g, 'nightfall'));
+  eq('Nightfall base with no prior Shadow plays', b0 - g.enemy.hp, NIGHTFALL_BASE);
+  eq('Nightfall keeps telegraph == applied', JSON.stringify(g.attackTargets()), tgBefore);
+  // Now 3 Shadow cards have been played this fight (the first Nightfall + 2 bolts).
+  g.playCard(giveCard(g, 'shadowBolt'));
+  g.playCard(giveCard(g, 'shadowBolt'));
+  const b1 = g.enemy.hp; g.playCard(giveCard(g, 'nightfall'));
+  eq('Nightfall scales with Shadow cards played this fight',
+    b1 - g.enemy.hp, Math.min(NIGHTFALL_CAP, NIGHTFALL_BASE + NIGHTFALL_PER_SHADOW * 3));
+}
+{
+  // Nightfall caps its damage.
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+  g.typePlayedThisFight.shadow = 100; // saturate the scaling
+  const before = g.enemy.hp; g.playCard(giveCard(g, 'nightfall'));
+  eq('Nightfall caps its damage', before - g.enemy.hp, NIGHTFALL_CAP);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
