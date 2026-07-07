@@ -464,6 +464,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
   lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
   phalanx: 2, brace: 2, provoke: 2,
+  // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
+  // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
+  shadowBolt: 2, siphonLife: 2, doom: 1,
   // Small-party cards (#42): the best-3 policy never fields small, so it has no
   // tactic for them — low buy value (they're for a human's undermanned build).
   rally: 1, focus: 1, channel: 1, holdTheLine: 1,

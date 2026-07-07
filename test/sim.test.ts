@@ -167,7 +167,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // banks them). The vector shifts: F1 193->194, F2 133->142, F3/F4 126/112->127/120, F5
   // 83->100, F6/F7 75/69->91/84, F8 47->56 (F0 unchanged). All band/CI/boss gates below
   // still hold; re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 194, 142, 127, 120, 100, 91, 84, 56]));
+  // 2026-07-07 (#63): the 3 shoppable Shadow cards (Shadow Bolt, Siphon Life, Doom)
+  // join CARD_POOL, so every shop's weighted card offer draws from a larger pool — a
+  // pure rng-stream perturbation (the best-3 policy has no debuff-first tactic, low buy
+  // value, so it never banks them). The vector shifts: F1 194->193, F2 142->137, F3/F4
+  // 127/120->126/115, F5 100->89, F6/F7 91/84->82/78, F8 56->59 (F0 unchanged). All
+  // band/CI/boss gates below still hold; re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 137, 126, 115, 89, 82, 78, 59]));
   // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
   // not a hard threshold, so subsample noise can't fail a healthy build while a real
   // drift still trips it.

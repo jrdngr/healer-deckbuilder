@@ -53,6 +53,8 @@ const EXERCISE_DECK: CardId[] = [
   'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'refresh', 'cleanse',
   'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
   'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
+  // Shadow cards (#63).
+  'shadowBolt', 'siphonLife', 'doom',
   'rally', 'focus', 'channel', 'holdTheLine',
   // Hero buff card batch (#62).
   'guard', 'sharpen', 'goad', 'doubleStrike', 'embolden', 'empower', 'riposte',

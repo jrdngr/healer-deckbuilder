@@ -6,7 +6,9 @@ import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_D
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constants';
-import type { CardId, ModifierId, RelicId, Slot } from '../src/constants';
+import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
+import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
+import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -3331,6 +3333,85 @@ function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
     const before = g.enemy.hp; g._resolveAttack();
     eq('Riposte scales with Vulnerability', before - g.enemy.hp, g.vulnerableAmount(g.memberDamage(tank)));
   }
+}
+
+// --- Card types (#63): taxonomy ---------------------------------------------
+{
+  const ALL = Object.keys(CARDS) as CardId[];
+  check('every card carries a type', ALL.every((id) => CARD_TYPE[id] != null && CARDS[id].type === CARD_TYPE[id]));
+  const has = (type: CardType, id: CardId): boolean => CARDS_BY_TYPE[type].includes(id);
+  check('Holy holds the heal core',
+    (['lowHeal', 'highHeal', 'aoeHeal', 'resurrect', 'cleanse', 'focus'] as CardId[]).every((id) => has('holy', id)));
+  check('Nature holds the regen family + buffs',
+    (['regen', 'overgrowth', 'cultivate', 'bloom', 'lifebloom', 'battleHymn', 'rally', 'imbuePoison', 'beckon'] as CardId[]).every((id) => has('nature', id)));
+  check('Shadow holds debuffs/damage + the new cards',
+    (['unleash', 'hex', 'hush', 'shadowBolt', 'siphonLife', 'doom'] as CardId[]).every((id) => has('shadow', id)));
+  check('Blood holds the sacrifice cards',
+    (['bloodTithe', 'martyrsGift', 'grimHarvest', 'incite'] as CardId[]).every((id) => has('blood', id)));
+  check('Arcane holds the economy cards',
+    (['refresh', 'fontOfMana', 'inspiration', 'surge', 'channel', 'conduct'] as CardId[]).every((id) => has('arcane', id)));
+  check('Iron holds the protection cards',
+    (['shield', 'barrier', 'phalanx', 'brace', 'provoke', 'holdTheLine', 'bolster'] as CardId[]).every((id) => has('iron', id)));
+  // The six buckets partition every card (each card in exactly one type).
+  const total = (['holy', 'nature', 'shadow', 'blood', 'arcane', 'iron'] as CardType[])
+    .reduce((s, t) => s + CARDS_BY_TYPE[t].length, 0);
+  eq('types partition every card', total, ALL.length);
+  // Ability cards' type counts for synergies (the Warlock's Hex reads as Shadow).
+  eq('cardType(hex) is shadow', cardType('hex'), 'shadow');
+  eq('cardsOfType(shadow) includes Shadow Bolt', cardsOfType('shadow').includes('shadowBolt'), true);
+}
+
+// --- Shadow cards (#63, Part A′) ---------------------------------------------
+{
+  // Shadow Bolt: deals its damage and leaves the enemy telegraph untouched.
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+  const before = g.enemy.hp;
+  const tgBefore = JSON.stringify(g.attackTargets());
+  g.playCard(giveCard(g, 'shadowBolt'));
+  eq('Shadow Bolt deals its damage', before - g.enemy.hp, SHADOW_BOLT_DMG);
+  eq('Shadow Bolt does not perturb the telegraph', JSON.stringify(g.attackTargets()), tgBefore);
+}
+{
+  // Shadow Bolt obeys Vulnerability (routes through _damageEnemy).
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+  g.enemy.vulnerable = 1.0; g.enemy.vulnerableTurns = 3; // +100% party damage
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'shadowBolt'));
+  eq('Shadow Bolt scales with Vulnerability', before - g.enemy.hp, g.vulnerableAmount(SHADOW_BOLT_DMG));
+}
+{
+  // Siphon Life: damages the enemy AND heals its target by the designed split.
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 999;
+  const m = g.members[SLOT.CENTER];
+  m.hp = 1; // room to heal
+  const tgBefore = JSON.stringify(g.attackTargets());
+  const eBefore = g.enemy.hp;
+  g.playCard(giveCard(g, 'siphonLife'), SLOT.CENTER);
+  eq('Siphon Life damages the enemy', eBefore - g.enemy.hp, SIPHON_LIFE_DMG);
+  eq('Siphon Life heals its target', m.hp, 1 + SIPHON_LIFE_HEAL);
+  eq('Siphon Life does not perturb the telegraph', JSON.stringify(g.attackTargets()), tgBefore);
+}
+{
+  // Doom: its computed damage rises with enemy debuffs/Vulnerability and caps.
+  const g = new Game(1, defaultBattleConfig()); g.start();
+  eq('Doom base with no debuffs', g._doomDamage(), DOOM_BASE);
+  g.enemy.vulnerable = 0.5; g.enemy.vulnerableTurns = 3;
+  eq('Doom adds per-debuff + vuln scaling', g._doomDamage(), DOOM_BASE + DOOM_PER_DEBUFF + Math.floor(0.5 * DOOM_PER_VULN));
+  g.enemy.poison = 5; g.enemy.poisonTurns = 5;
+  eq('Doom counts a second active debuff', g._doomDamage(), DOOM_BASE + 2 * DOOM_PER_DEBUFF + Math.floor(0.5 * DOOM_PER_VULN));
+  g.enemy.vulnerable = 10; // saturate the vuln scaling
+  eq('Doom caps its base roll', g._doomDamage(), DOOM_CAP);
+}
+{
+  // Doom applies its computed damage through the Vulnerability pipeline, telegraph intact.
+  const g = new Game(1, defaultBattleConfig()); g.start(); g.mp = 10; g.enemy.hp = 9999;
+  g.enemy.vulnerable = 1.0; g.enemy.vulnerableTurns = 3;
+  const expected = g.vulnerableAmount(g._doomDamage());
+  const tgBefore = JSON.stringify(g.attackTargets());
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'doom'));
+  eq('Doom applies its computed damage', before - g.enemy.hp, expected);
+  eq('Doom does not perturb the telegraph', JSON.stringify(g.attackTargets()), tgBefore);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

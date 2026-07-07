@@ -27,6 +27,8 @@ import {
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
   EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS,
+  SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
+  DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
@@ -43,7 +45,7 @@ import {
 } from './constants';
 import type {
   Slot, AttackType, MemberId, AbilityId, BattleConfig, DeckCard, ResolvedCard, CardId,
-  TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind, RelicId,
+  TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind, RelicId, CardType,
 } from './constants';
 import { makeRng, shuffle, weightedPick } from './rng';
 import type { Rng } from './rng';
@@ -862,6 +864,26 @@ export class Game {
     if (phase.enrageTurn != null) this.enrageTurn = Math.min(this.enrageTurn, phase.enrageTurn);
     this._log(`${this.enemyDef.name}: ${phase.beat}`, 'system');
     this._emit({ kind: 'phaseChange', beat: phase.beat });
+  }
+
+  // Doom (#63): a nuke that scales with how debuffed the enemy is — +per active
+  // enemy debuff (Vulnerability / Poison) and more the deeper its Vulnerability —
+  // capped. The global Vulnerability multiplier in _damageEnemy still applies ON
+  // TOP (a debuff-first line pays off twice), so the cap bounds only the base roll.
+  _doomDamage(): number {
+    const vulnActive = this.enemy.vulnerableTurns > 0;
+    const poisonActive = this.enemy.poisonTurns > 0;
+    const debuffs = (vulnActive ? 1 : 0) + (poisonActive ? 1 : 0);
+    const vulnBonus = vulnActive ? Math.floor(this.enemy.vulnerable * DOOM_PER_VULN) : 0;
+    return Math.min(DOOM_CAP, DOOM_BASE + DOOM_PER_DEBUFF * debuffs + vulnBonus);
+  }
+
+  // A healer-cast enemy nuke (Shadow Bolt / Doom) has no member source; attribute
+  // the visual flourish to the first living member so the animator has an origin.
+  _emitEnemyNuke(amount: number, killed: boolean): void {
+    const m = this.livingMembers()[0];
+    if (m) this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(amount), enemyHp: this.enemy.hp });
+    if (killed) this._emit({ kind: 'defeatEnemy' });
   }
 
   // Central heal path for every healing source (direct heal cards AND the Regen
@@ -1684,6 +1706,31 @@ export class Game {
         const killed = this._damageEnemy(GRIM_HARVEST_DMG, 'Grim Harvest');
         this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(GRIM_HARVEST_DMG), enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
+        break;
+      }
+      // --- Shadow cards (#63): party->enemy damage through _damageEnemy, so
+      // Vulnerability applies and no enemy telegraph is perturbed. ---------------
+      case 'shadowBolt': {
+        const killed = this._damageEnemy(SHADOW_BOLT_DMG, 'Shadow Bolt');
+        this._emitEnemyNuke(SHADOW_BOLT_DMG, killed);
+        break;
+      }
+      case 'siphonLife': {
+        const m = this.members[target as number];
+        // Damage routes through the enemy pipeline (Vulnerability applies); the heal
+        // routes through the heal pipeline (Field Triage / Hex etc. apply).
+        const killed = this._damageEnemy(SIPHON_LIFE_DMG, 'Siphon Life');
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(SIPHON_LIFE_DMG), enemyHp: this.enemy.hp });
+        const healed = this._healMember(m, SIPHON_LIFE_HEAL, true);
+        this._log(`Siphon Life: ${m.name} drains ${healed} HP from the enemy.`, 'heal');
+        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        if (killed) this._emit({ kind: 'defeatEnemy' });
+        break;
+      }
+      case 'doom': {
+        const dmg = this._doomDamage();
+        const killed = this._damageEnemy(dmg, 'Doom');
+        this._emitEnemyNuke(dmg, killed);
         break;
       }
       case 'phalanx': {

@@ -8,6 +8,16 @@ export type Slot = 0 | 1 | 2;
 // Hex/Siphon, the Devourer's Consume) whose resolution runs game logic, not a hit.
 export type AttackType = 'single' | 'two' | 'aoe' | 'hidden' | 'heavy' | 'sweep' | 'cast';
 export type CardTarget = 'single' | 'dead' | 'all' | 'none';
+// Card types (#63): every card carries exactly one primary type — a readable
+// identity axis synergy relics/cards and themed starter decks build on.
+//   holy   — one-shot heals, resurrect, purify
+//   nature — regen family and buffs generally (incl. combat buffs)
+//   shadow — enemy debuffs and direct damage to the enemy
+//   blood  — sacrifice something (usually HP) to gain something
+//   arcane — the mana / card-draw economy
+//   iron   — protection: shields, Defense, Taunt/Provoke, braces
+// A type is a THEME, not a rulebook — a few outliers per type are intended.
+export type CardType = 'holy' | 'nature' | 'shadow' | 'blood' | 'arcane' | 'iron';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
 export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel';
@@ -28,6 +38,8 @@ export type CardId =
   | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
   | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
   | 'phalanx' | 'brace' | 'provoke'
+  // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
+  | 'shadowBolt' | 'siphonLife' | 'doom'
   // Small-party cards (#42): stronger the fewer members you field.
   | 'rally' | 'focus' | 'channel' | 'holdTheLine'
   // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
@@ -61,6 +73,10 @@ export interface CardDef {
   name: string;
   cost: number;
   target: CardTarget;
+  // Primary card type (#63) — REQUIRED, so every card in CARDS declares one. There
+  // is no runtime "untyped" fallback; a missing type is a compile error (CARD_TYPE
+  // below is the exhaustive Record that supplies it when CARDS is assembled).
+  type: CardType;
   desc: string;
   heal?: number;
   regen?: number;
@@ -630,6 +646,18 @@ export const EMBOLDEN_BONUS = 1;   // Embolden (issue "Rally"): +auto damage to 
 export const EMBOLDEN_TURNS = 3;   // enemy turns Embolden lasts
 export const EMPOWER_BONUS = 1;    // Empower: +abilityPower on a hero's next ability (one-shot)
 
+// Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
+// Costs and magnitudes are tunable — a later balance pass owns the numbers; this
+// issue ships the mechanics. All three deal party->enemy damage (routed through
+// _damageEnemy, so Vulnerability applies) and never touch an enemy telegraph.
+export const SHADOW_BOLT_DMG = 4;   // Shadow Bolt: cheap direct nuke to the enemy
+export const SIPHON_LIFE_DMG = 3;   // Siphon Life: damage dealt to the enemy
+export const SIPHON_LIFE_HEAL = 2;  // Siphon Life: HP healed on the chosen member (lifesteal)
+export const DOOM_BASE = 6;         // Doom: base nuke damage
+export const DOOM_PER_DEBUFF = 3;   // Doom: +damage per active enemy debuff (Vulnerability / Poison)
+export const DOOM_PER_VULN = 8;     // Doom: +floor(vuln x this) extra while the enemy is Vulnerable
+export const DOOM_CAP = 18;         // Doom: hard cap on the pre-Vulnerability computed damage
+
 // Short flavor of each member's ability — name + one-liner. Shown on the live
 // MemberCard AND the draft card (#37), so it lives here rather than in a component
 // (the draft must not leak raw ability ids like `graveChill`). Keyed by MemberId.
@@ -707,7 +735,11 @@ export const CHANNEL_MP = 2;           // Channel card: base MP gained (+1 per e
 //   'single' -> one living member, 'all' -> no pick, 'dead' -> one dead member,
 //   'none'   -> no pick. Per-member ability cards (#44) are 'none' + an `ability`
 //   binding: they auto-resolve on the deployed member who carries that ability.
-export const CARDS: Record<CardId, CardDef> = {
+//
+// These raw defs omit `type`; CARDS (below the table) folds in each card's type
+// from the exhaustive CARD_TYPE map, so the taxonomy lives in one legible place
+// while CardDef.type stays a required field on the assembled table.
+const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // --- per-member ability cards (#44): the healer enables the member's move ----
   // One is inserted into the battle deck for each deployed member; cost mirrors the
   // old generic Ability card (2 MP). Unplayable while the bound member is down.
@@ -788,6 +820,15 @@ export const CARDS: Record<CardId, CardDef> = {
   // redirection tool, so the Tank isn't mandatory in every party.
   provoke: { id: 'provoke', name: 'Provoke', cost: 1, target: 'single',
     desc: 'The target Taunts (enemy aims at them) and braces (Defense 1) for 2 enemy turns.' },
+  // --- Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff --
+  shadowBolt: { id: 'shadowBolt', name: 'Shadow Bolt', cost: 1, target: 'none',
+    desc: `Deal ${SHADOW_BOLT_DMG} damage to the enemy.` },
+  siphonLife: { id: 'siphonLife', name: 'Siphon Life', cost: 2, target: 'single',
+    desc: `Deal ${SIPHON_LIFE_DMG} to the enemy and heal a member for ${SIPHON_LIFE_HEAL}.` },
+  // Doom (rare): a big nuke that scales with how debuffed the enemy is — reward for a
+  // debuff-first Shadow line (Hex's Vulnerability, Poison). Capped.
+  doom: { id: 'doom', name: 'Doom', cost: 4, target: 'none',
+    desc: `Deal ${DOOM_BASE} damage, +${DOOM_PER_DEBUFF} per active enemy debuff and more the more Vulnerable it is (cap ${DOOM_CAP}).` },
   // --- small-party cards (#42): reward fielding fewer bodies -------------------
   rally: { id: 'rally', name: 'Rally', cost: 1, target: 'none',
     desc: `Every living member's attack this turn deals +${RALLY_DMG_PER_SEAT} per empty deploy seat.` },
@@ -817,6 +858,55 @@ export const CARDS: Record<CardId, CardDef> = {
     desc: `A hero's next ability fires at +${EMPOWER_BONUS} ability power, then is spent.` },
   riposte: { id: 'riposte', name: 'Riposte', cost: 2, target: 'single',
     desc: 'The next attack that hits a hero, they counterattack for their damage.' },
+};
+
+// ---------------------------------------------------------------------------
+// Card types (#63): the exhaustive taxonomy. This map IS the mapping table — it
+// mirrors the design doc's per-type list, and being a Record<CardId, CardType>
+// it is typecheck-exhaustive: every card must appear (a missing one is a compile
+// error), and CARDS folds each type onto its def below. A type is a THEME, not a
+// rulebook — the outliers are called out inline.
+// ---------------------------------------------------------------------------
+export const CARD_TYPE: Record<CardId, CardType> = {
+  // Holy — one-shot heals, resurrect, purify (the current starter core).
+  lowHeal: 'holy', highHeal: 'holy', aoeHeal: 'holy', resurrect: 'holy', cleanse: 'holy', focus: 'holy',
+  // Nature — the regen family, and buffs generally (incl. combat buffs).
+  regen: 'nature', overgrowth: 'nature', cultivate: 'nature', bloom: 'nature', lifebloom: 'nature',
+  battleHymn: 'nature', /* outlier: offense buff */ rally: 'nature', /* outlier: offense buff */
+  imbuePoison: 'nature', /* outlier: venom/toxin DoT */ beckon: 'nature', /* outlier: summon */
+  sharpen: 'nature', doubleStrike: 'nature', embolden: 'nature', empower: 'nature', riposte: 'nature',
+  // Shadow — enemy debuffs and direct damage to the enemy.
+  unleash: 'shadow', hex: 'shadow', hush: 'shadow', stagger: 'shadow', /* Stun: enemy control */
+  shadowBolt: 'shadow', siphonLife: 'shadow', doom: 'shadow',
+  // Blood — sacrifice something (usually HP) to gain something.
+  bloodTithe: 'blood', martyrsGift: 'blood', grimHarvest: 'blood',
+  incite: 'blood', /* outlier: HP-cost doubled strike */
+  // Arcane — the mana / card-draw economy.
+  refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane',
+  // Iron — protection: shields, Defense, Taunt/Provoke, braces.
+  shield: 'iron', barrier: 'iron', phalanx: 'iron', brace: 'iron', provoke: 'iron', holdTheLine: 'iron',
+  bolster: 'iron', guard: 'iron', goad: 'iron',
+};
+
+// The assembled card table: each raw def with its type folded in. Every card in
+// CARDS therefore carries a type (typecheck-enforced by CARD_TYPE's exhaustiveness).
+export const CARDS: Record<CardId, CardDef> = Object.fromEntries(
+  (Object.keys(CARD_DEFS) as CardId[]).map((id) => [id, { ...CARD_DEFS[id], type: CARD_TYPE[id] }]),
+) as Record<CardId, CardDef>;
+
+// A card's primary type (#63). Single source read by pools, starter decks, and the
+// engine's per-type synergy counters.
+export const cardType = (id: CardId): CardType => CARD_TYPE[id];
+
+// The card ids of a given type (ability cards included — their type counts for
+// in-fight synergies even though they are excluded from shop/starter pools).
+export const cardsOfType = (type: CardType): CardId[] =>
+  (Object.keys(CARD_TYPE) as CardId[]).filter((id) => CARD_TYPE[id] === type);
+
+// Per-type grouping (built once) for pool building and tests.
+export const CARDS_BY_TYPE: Record<CardType, CardId[]> = {
+  holy: cardsOfType('holy'), nature: cardsOfType('nature'), shadow: cardsOfType('shadow'),
+  blood: cardsOfType('blood'), arcane: cardsOfType('arcane'), iron: cardsOfType('iron'),
 };
 
 // The fixed 6-card core starting deck: the heal-only six (#51) —
@@ -1350,6 +1440,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   fontOfMana: 'rare',
   barrier: 'rare',
   grimHarvest: 'rare',
+  // Shadow cards (#63): Doom is the rare of the set.
+  shadowBolt: 'common', siphonLife: 'uncommon', doom: 'rare',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
