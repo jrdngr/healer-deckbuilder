@@ -16,6 +16,8 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   shadowBolt: 'power', siphonLife: 'power', doom: 'power',
   // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
   cascade: 'mana', nightfall: 'power',
+  // Channeled cards (#64): Drain/Sap are aggressive, Mending Stream a heal, Fortify a ward.
+  drain: 'power', sap: 'power', mendingStream: 'heal', fortify: 'ward',
   // Small-party cards (#42).
   rally: 'power', focus: 'heal', channel: 'mana', holdTheLine: 'ward',
   // Hero buff card batch (#62): defensive buffs gold, offensive buffs red-purple.

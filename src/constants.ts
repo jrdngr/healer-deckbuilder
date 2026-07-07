@@ -42,6 +42,10 @@ export type CardId =
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
   | 'cascade' | 'nightfall'
+  // Channeled cards (#64): hold an effect across turns while you play nothing else
+  // (Refresh, below, is reworked into one). Drain/Sap read Shadow, Mending Stream
+  // Holy, Fortify Iron.
+  | 'drain' | 'mendingStream' | 'sap' | 'fortify'
   // Small-party cards (#42): stronger the fewer members you field.
   | 'rally' | 'focus' | 'channel' | 'holdTheLine'
   // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
@@ -68,6 +72,19 @@ export interface MemberDef {
   maxHP: number;
   damage: number;
   ability: AbilityId;
+}
+
+// Channeled cards (#64): a card whose effect repeats each turn for as long as the
+// player plays nothing else. The engine holds one active channel (card + target +
+// ticks remaining) per fight; the per-tick effect is applied by the engine, keyed
+// by card id. The first tick lands on the cast turn; playing any card cancels it,
+// and it ends on its own after `maxTurns` ticks. While a channel runs the player
+// gains no passive/over-time MP — only what the channel itself returns.
+// (Named apart from EnemyDef.ChannelDef, which is the enemy's channelled attack.)
+export interface CardChannelDef {
+  maxTurns: number;  // ticks before the channel ends on its own (first tick on cast)
+  single?: boolean;  // a single-target channel that remembers its target and ends
+                     // early if that member dies (Mending Stream, Fortify)
 }
 
 export interface CardDef {
@@ -111,6 +128,10 @@ export interface CardDef {
   // ability on the deployed living member who carries it (no member pick). The
   // card is unplayable while that member is dead/absent.
   ability?: AbilityId;
+  // Channeled card (#64): when set, playing this card starts a channel (see
+  // CardChannelDef) instead of a one-shot effect. Its per-tick payoff is applied by
+  // the engine, keyed by card id.
+  channel?: CardChannelDef;
 }
 
 export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 } as const;
@@ -668,6 +689,24 @@ export const NIGHTFALL_BASE = 3;               // Nightfall (Shadow): base enemy
 export const NIGHTFALL_PER_SHADOW = 2;         // Nightfall: +damage per Shadow card played THIS FIGHT (before it)
 export const NIGHTFALL_CAP = 14;               // Nightfall: hard cap on the computed damage
 
+// Channeled cards (#64): each holds an effect across turns while the player plays
+// nothing else, trading away MP recovery (all passive/over-time income is suppressed
+// while channeling). Magnitudes and turn caps are tunable — a later balance pass owns
+// the numbers; this issue ships the mechanic. The first tick lands on the cast turn.
+export const DRAIN_DMG = 4;               // Drain: per-tick direct damage to the enemy
+export const DRAIN_MP_MIN = 1;            // Drain: min MP returned when a tick dealt damage
+export const DRAIN_MP_MAX = 2;            // Drain: max MP returned when a tick dealt damage
+export const DRAIN_MAX_TURNS = 4;         // Drain: ticks before it ends on its own
+export const REFRESH_CHANNEL_MP = 3;      // Refresh (reworked): MP restored per tick
+export const REFRESH_CHANNEL_MAX_TURNS = 3; // Refresh: ticks before it ends on its own
+export const MENDING_STREAM_HEAL = 3;     // Mending Stream: per-tick heal on the remembered member
+export const MENDING_STREAM_MAX_TURNS = 4;// Mending Stream: ticks before it ends on its own
+export const SAP_VULN_PER_TICK = 0.25;    // Sap: Vulnerability added to the enemy each tick
+export const SAP_VULN_CAP = 0.75;         // Sap: cap on the stacked Vulnerability from Sap
+export const SAP_VULN_TURNS = 3;          // Sap: enemy turns each tick keeps the Vulnerability alive
+export const SAP_MAX_TURNS = 4;           // Sap: ticks before it ends on its own
+export const FORTIFY_MAX_TURNS = 3;       // Fortify: ticks before it ends on its own (Shield/tick)
+
 // Short flavor of each member's ability — name + one-liner. Shown on the live
 // MemberCard AND the draft card (#37), so it lives here rather than in a component
 // (the draft must not leak raw ability ids like `graveChill`). Keyed by MemberId.
@@ -789,8 +828,12 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // telegraph — worth casting against bosses where deaths are rare but brutal.
   resurrect: { id: 'resurrect', name: 'Resurrect', cost: 4, target: 'dead',
     desc: 'Revive a dead member to 50% max HP behind a Shield.' },
-  refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', refresh: 2, engine: true,
-    desc: 'Refresh 2: restore 2 MP per turn for 3 enemy turns.' },
+  // Refresh reworked to a channel (#64): instead of a fire-and-forget MP-over-time
+  // buff, it now restores MP each turn only while you keep channeling (play no other
+  // card). Font of Mana (below) stays the buff-style MP engine.
+  refresh: { id: 'refresh', name: 'Refresh', cost: 3, target: 'none', engine: true,
+    channel: { maxTurns: REFRESH_CHANNEL_MAX_TURNS },
+    desc: `Channel: restore ${REFRESH_CHANNEL_MP} MP each turn for up to ${REFRESH_CHANNEL_MAX_TURNS} turns. Playing any card ends it.` },
   cleanse: { id: 'cleanse', name: 'Cleanse', cost: 1, target: 'none',
     desc: 'Remove Hex (the healing-reduction curse) from the party.' },
   // --- card set phase A (#15): shop-only cards on existing engine state ------
@@ -844,6 +887,19 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
     desc: `Draw ${CASCADE_DRAW}. Costs ${CASCADE_DISCOUNT_PER_ARCANE} less per Arcane card already played this turn (min 0).` },
   nightfall: { id: 'nightfall', name: 'Nightfall', cost: 3, target: 'none',
     desc: `Deal ${NIGHTFALL_BASE} damage, +${NIGHTFALL_PER_SHADOW} per Shadow card played this fight (cap ${NIGHTFALL_CAP}).` },
+  // --- channeled cards (#64): sustained effects that end when you play a card ------
+  drain: { id: 'drain', name: 'Drain', cost: 2, target: 'none',
+    channel: { maxTurns: DRAIN_MAX_TURNS },
+    desc: `Channel: each turn deal ${DRAIN_DMG} to the enemy and, if it dealt damage, return ${DRAIN_MP_MIN}-${DRAIN_MP_MAX} MP (up to ${DRAIN_MAX_TURNS} turns). Playing any card ends it.` },
+  mendingStream: { id: 'mendingStream', name: 'Mending Stream', cost: 2, target: 'single',
+    channel: { maxTurns: MENDING_STREAM_MAX_TURNS, single: true },
+    desc: `Channel: heal a member for ${MENDING_STREAM_HEAL} each turn (up to ${MENDING_STREAM_MAX_TURNS} turns). Ends if they die or you play a card.` },
+  sap: { id: 'sap', name: 'Sap', cost: 2, target: 'none',
+    channel: { maxTurns: SAP_MAX_TURNS },
+    desc: `Channel: each turn make the enemy more Vulnerable (+${Math.round(SAP_VULN_PER_TICK * 100)}% up to +${Math.round(SAP_VULN_CAP * 100)}%), for up to ${SAP_MAX_TURNS} turns. Playing any card ends it.` },
+  fortify: { id: 'fortify', name: 'Fortify', cost: 2, target: 'single',
+    channel: { maxTurns: FORTIFY_MAX_TURNS, single: true },
+    desc: `Channel: grant a member a Shield each turn (up to ${FORTIFY_MAX_TURNS} turns). Ends if they die or you play a card.` },
   // --- small-party cards (#42): reward fielding fewer bodies -------------------
   rally: { id: 'rally', name: 'Rally', cost: 1, target: 'none',
     desc: `Every living member's attack this turn deals +${RALLY_DMG_PER_SEAT} per empty deploy seat.` },
@@ -885,6 +941,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
 export const CARD_TYPE: Record<CardId, CardType> = {
   // Holy — one-shot heals, resurrect, purify (the current starter core).
   lowHeal: 'holy', highHeal: 'holy', aoeHeal: 'holy', resurrect: 'holy', cleanse: 'holy', focus: 'holy',
+  mendingStream: 'holy', /* channeled Holy heal (#64) */
   // Nature — the regen family, and buffs generally (incl. combat buffs).
   regen: 'nature', overgrowth: 'nature', cultivate: 'nature', bloom: 'nature', lifebloom: 'nature',
   battleHymn: 'nature', /* outlier: offense buff */ rally: 'nature', /* outlier: offense buff */
@@ -893,6 +950,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   // Shadow — enemy debuffs and direct damage to the enemy.
   unleash: 'shadow', hex: 'shadow', hush: 'shadow', stagger: 'shadow', /* Stun: enemy control */
   shadowBolt: 'shadow', siphonLife: 'shadow', doom: 'shadow', nightfall: 'shadow',
+  drain: 'shadow', sap: 'shadow', /* channeled Shadow (#64) */
   // Blood — sacrifice something (usually HP) to gain something.
   bloodTithe: 'blood', martyrsGift: 'blood', grimHarvest: 'blood',
   incite: 'blood', /* outlier: HP-cost doubled strike */
@@ -901,6 +959,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   // Iron — protection: shields, Defense, Taunt/Provoke, braces.
   shield: 'iron', barrier: 'iron', phalanx: 'iron', brace: 'iron', provoke: 'iron', holdTheLine: 'iron',
   bolster: 'iron', guard: 'iron', goad: 'iron',
+  fortify: 'iron', /* channeled Iron shield (#64) */
 };
 
 // The assembled card table: each raw def with its type folded in. Every card in
@@ -1252,6 +1311,7 @@ export interface ResolvedCard {
   noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
   noTaunt: boolean;   // Phalanx targeting gate: not the taunting member
   ability?: AbilityId; // per-member ability card (#44): fires the bound member's move
+  channel?: CardChannelDef; // channeled card (#64): starts a channel instead of a one-shot
   // Regen has no separate duration (#52): `regen` is the applied magnitude, which
   // is also its number of ticks. Lingering folds into `regen` (see resolveCard).
   refreshTurns: number;
@@ -1503,6 +1563,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   shadowBolt: 'common', siphonLife: 'uncommon', doom: 'rare',
   // Count-based payoff cards (#63).
   cascade: 'uncommon', nightfall: 'uncommon',
+  // Channeled cards (#64).
+  drain: 'uncommon', mendingStream: 'uncommon', sap: 'uncommon', fortify: 'uncommon',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1906,6 +1968,7 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     noDefense: base.noDefense === true,
     noTaunt: base.noTaunt === true,
     ability: base.ability,
+    channel: base.channel,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
     retain,
     upgrades: card.upgrades,

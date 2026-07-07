@@ -1,6 +1,6 @@
 # Issue 64 — Channeled cards
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** systems (cards)   **Size:** L
 - **Depends on:** #63 (soft — channeled cards carry a `type`; Sap→Doom pairs with #63's Doom)   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — "A channeled card holds its effect across turns but is cancelled

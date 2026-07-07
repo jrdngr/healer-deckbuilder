@@ -51,4 +51,3 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 64 | 📋 Open | [Channeled cards](issues/64-channeled-cards.md) | systems (cards) | #63 (soft) | intake 2026-07-07 (channeled cards) |

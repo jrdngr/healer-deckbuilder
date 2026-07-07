@@ -182,7 +182,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // CARD_POOL — another pure rng-stream perturbation (buy value 1, never banked). The
   // vector shifts: F2 137->139, F3/F4 124/117->130/121, F5 88->93, F6/F7 81/76->86/82,
   // F8 51->54 (F0/F1 unchanged). All gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 139, 130, 121, 93, 86, 82, 54]));
+  // 2026-07-07 (#64 channeled cards): 4 more shop-eligible cards (Drain, Mending Stream,
+  // Sap, Fortify) join CARD_POOL, and Refresh is reworked from an MP-over-time buff into
+  // a channel — another pure rng-stream perturbation (all channeled cards carry buy value
+  // 1, never banked; the best-3 policy has no "commit the whole turn to a channel" line).
+  // The vector shifts: F2 139->135, F3/F4 130/121->125/118, F5 93->91, F6/F7 86/82->84/80,
+  // F8 54->53 (F0/F1 unchanged). All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 193, 135, 125, 118, 91, 84, 80, 53]));
   // Full-run gate around the re-anchored ~23% campaign band (#58). CI-consistency,
   // not a hard threshold, so subsample noise can't fail a healthy build while a real
   // drift still trips it.

@@ -470,6 +470,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // Count-based payoff cards (#63): the best-3 policy has no type-count line, so both
   // stay dead-deck weight.
   cascade: 1, nightfall: 1,
+  // Channeled cards (#64): the best-3 sim policy has no "commit the whole turn to a
+  // channel" line, so these stay dead-deck weight (Refresh below keeps its own value).
+  drain: 1, mendingStream: 1, sap: 1, fortify: 1,
   // Small-party cards (#42): the best-3 policy never fields small, so it has no
   // tactic for them — low buy value (they're for a human's undermanned build).
   rally: 1, focus: 1, channel: 1, holdTheLine: 1,

@@ -58,6 +58,8 @@ const EXERCISE_DECK: CardId[] = [
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
   'cascade', 'nightfall',
+  // Channeled cards (#64): Refresh (above) is reworked into one; these are the four new.
+  'drain', 'mendingStream', 'sap', 'fortify',
   'rally', 'focus', 'channel', 'holdTheLine',
   // Hero buff card batch (#62).
   'guard', 'sharpen', 'goad', 'doubleStrike', 'embolden', 'empower', 'riposte',

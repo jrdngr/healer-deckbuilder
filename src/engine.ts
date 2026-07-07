@@ -31,6 +31,9 @@ import {
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
   CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP,
+  CARDS,
+  DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, REFRESH_CHANNEL_MP, MENDING_STREAM_HEAL,
+  SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_VULN_TURNS,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
   SKIP_REGEN_DECAYED, REFRESH_MP_CAP,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
@@ -181,6 +184,11 @@ export type GameEvent =
   | { kind: 'braceApplied'; slot: Slot }                   // Brace (#17)
   | { kind: 'resurrect'; slot: Slot; hp: number }
   | { kind: 'refreshPrimed'; stack: number }
+  // Player-cast channels (#64): start / per-turn tick / broken-by-a-card / natural end.
+  | { kind: 'channelStart'; card: CardId; slot: Slot | null; turns: number }
+  | { kind: 'channelPulse'; card: CardId; turnsLeft: number }
+  | { kind: 'channelCancel'; card: CardId }
+  | { kind: 'channelEnd'; card: CardId }
   | { kind: 'draw'; count: number }
   | { kind: 'surge' }                                      // next card this turn costs 0 (#16)
   | { kind: 'wardApplied'; slot: Slot; amount: number }    // Aegis Font ward gained (#22)
@@ -225,7 +233,12 @@ export class Game {
   refresh: number;        // Refresh strength: MP restored per turn while active
   refreshTurns: number;   // enemy turns of Refresh remaining
   refreshRestored: number; // MP the current Refresh cast has restored so far (capped at refreshCap)
-  refreshCap: number;     // per-cast lifetime MP cap of the active cast (Refresh 6 / Font of Mana 9)
+  refreshCap: number;     // per-cast lifetime MP cap of the active cast (Font of Mana 9)
+  // Channeled card (#64): one active channel per fight — the card, its remembered
+  // target (single-target channels), and ticks remaining. Per-fight, never serialized.
+  channelCard: CardId | null;
+  channelTarget: number | null;
+  channelTurns: number;
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
   surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
@@ -336,6 +349,9 @@ export class Game {
     this.refreshTurns = 0;  // Refresh turns remaining
     this.refreshRestored = 0;
     this.refreshCap = REFRESH_MP_CAP;
+    this.channelCard = null;   // no channel running at fight start (#64)
+    this.channelTarget = null;
+    this.channelTurns = 0;
     this.woundTurns = 0;    // no Hex active at fight start
     this.surgePending = false;
     this.hymnBonus = 0;
@@ -398,6 +414,10 @@ export class Game {
   tauntingMember(): Member | null { return this.members.find((m) => m.alive && m.taunt > 0) ?? null; }
 
   hasRelic(id: RelicId): boolean { return this.relics.has(id); }
+
+  // Whether a player-cast channel (#64) is currently running (a card is channeling
+  // with ticks still to come). Read by the MP-suppression gates and the UI badge.
+  channelActive(): boolean { return this.channelCard != null && this.channelTurns > 0; }
 
   // A fresh zeroed per-type counter (#63).
   static _zeroTypeCounts(): Record<CardType, number> {
@@ -901,6 +921,113 @@ export class Game {
     if (killed) this._emit({ kind: 'defeatEnemy' });
   }
 
+  // ---- channeled cards (#64) ----------------------------------------------
+  // A channel holds an effect across turns while the player plays nothing else. The
+  // first tick lands on the cast turn (here); subsequent ticks fire at the start of
+  // each enemy phase (in _runEnemyPhase) as long as no card was played, until the
+  // channel is cancelled by a card play or ends after its maxTurns ticks. While a
+  // channel runs, all passive/over-time MP income is suppressed (channelActive gates).
+
+  // Start a channel from a played channeled card. Cancels any running channel first
+  // (this card play is itself the cancel), then applies the immediate first tick.
+  _startChannel(card: ResolvedCard, target: number | null): void {
+    const ch = CARDS[card.id].channel;
+    if (!ch) return;
+    if (this.channelActive()) this._cancelChannel(); // starting a new one ends the old
+    this.channelCard = card.id;
+    this.channelTarget = ch.single ? target : null;
+    this.channelTurns = ch.maxTurns;
+    this._log(`${card.name} begins channeling (up to ${ch.maxTurns} turns).`, 'status');
+    this._emit({ kind: 'channelStart', card: card.id, slot: (ch.single ? target : null) as Slot | null, turns: ch.maxTurns });
+    this._tickChannel(); // first tick is immediate, like a cast
+  }
+
+  // Cancel the active channel because the player played a card. It does NOT tick.
+  _cancelChannel(): void {
+    if (this.channelCard == null) return;
+    const id = this.channelCard;
+    this._log(`The ${CARDS[id].name} channel is broken.`, 'status');
+    this._emit({ kind: 'channelCancel', card: id });
+    this.channelCard = null; this.channelTarget = null; this.channelTurns = 0;
+  }
+
+  // End the active channel on its own terms (ticks spent, or a single-target
+  // channel's remembered member has died).
+  _endChannel(reason: string): void {
+    if (this.channelCard == null) return;
+    const id = this.channelCard;
+    this._log(`The ${CARDS[id].name} channel ends (${reason}).`, 'status');
+    this._emit({ kind: 'channelEnd', card: id });
+    this.channelCard = null; this.channelTarget = null; this.channelTurns = 0;
+  }
+
+  // Apply one tick of the active channel (its per-turn payoff, keyed by card id),
+  // then decrement the tick counter and end the channel if it is spent.
+  _tickChannel(): void {
+    const id = this.channelCard;
+    if (id == null || this.channelTurns <= 0) return;
+    const ch = CARDS[id].channel;
+    if (!ch) return;
+    // Single-target channels end early if their remembered target has died.
+    if (ch.single) {
+      const m = this.members[this.channelTarget as number];
+      if (!m || !m.alive) { this._endChannel('target down'); return; }
+    }
+    switch (id) {
+      case 'drain': {
+        // Deal direct damage; if the tick actually dealt damage, return 1-2 MP —
+        // the only MP a channeling player receives.
+        const before = this.enemy.hp;
+        const killed = this._damageEnemy(DRAIN_DMG, 'Drain');
+        this._emitEnemyNuke(DRAIN_DMG, killed);
+        if (before - this.enemy.hp > 0 && this.mp < this.maxMana) {
+          const roll = DRAIN_MP_MIN + Math.floor(this.rng() * (DRAIN_MP_MAX - DRAIN_MP_MIN + 1));
+          const gained = Math.min(roll, this.maxMana - this.mp);
+          this.mp += gained;
+          this._log(`Drain returns ${gained} MP. (MP ${this.mp})`, 'mp');
+          this._emit({ kind: 'refreshTick', amount: gained, mp: this.mp });
+        }
+        break;
+      }
+      case 'refresh': {
+        const before = this.mp;
+        this.mp = Math.min(this.maxMana, this.mp + REFRESH_CHANNEL_MP);
+        const gained = this.mp - before;
+        this._log(`Refresh restores ${gained} MP. (MP ${this.mp})`, 'mp');
+        this._emit({ kind: 'refreshTick', amount: gained, mp: this.mp });
+        break;
+      }
+      case 'mendingStream': {
+        const m = this.members[this.channelTarget as number];
+        const healed = this._healMember(m, MENDING_STREAM_HEAL, true);
+        this._log(`Mending Stream heals ${m.name} ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
+        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        break;
+      }
+      case 'sap': {
+        // Stack Vulnerability up to its cap and keep it alive a few enemy turns (so it
+        // persists to feed Doom / party damage). Amplifies every party source via the
+        // same enemy.vulnerable path Hex uses — it never touches an enemy telegraph.
+        this.enemy.vulnerable = Math.min(SAP_VULN_CAP, this.enemy.vulnerable + SAP_VULN_PER_TICK);
+        this.enemy.vulnerableTurns = Math.max(this.enemy.vulnerableTurns, SAP_VULN_TURNS);
+        this._log(`Sap deepens the enemy's Vulnerability (+${Math.round(this.enemy.vulnerable * 100)}% damage taken).`, 'status');
+        break;
+      }
+      case 'fortify': {
+        const m = this.members[this.channelTarget as number];
+        m.shield = true; m.shieldTurns = SHIELD_TURNS;
+        m.brace = false; m.braceTurns = 0; // a member holds Shield OR Brace (#17)
+        this._log(`Fortify shields ${m.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
+        this._emit({ kind: 'shieldApplied', slot: m.slot });
+        break;
+      }
+      default: break;
+    }
+    this.channelTurns -= 1;
+    this._emit({ kind: 'channelPulse', card: id, turnsLeft: this.channelTurns });
+    if (this.channelTurns <= 0) this._endChannel('spent');
+  }
+
   // Reliquary of Light (#63): a flat bonus to healing from Holy cards. Read per heal
   // CARD (not per _healMember call) so only Holy card heals are boosted — a ticking
   // Regen (Nature) or a Blood card's spillover heal is untouched.
@@ -1063,9 +1190,11 @@ export class Game {
         this._log('The Hex fades; the enemy is no longer Vulnerable.', 'status');
       }
     }
-    if (this.refreshTurns > 0) {
+    // A channel (#64) suppresses all passive/over-time MP income — including Font of
+    // Mana's refresh tick — while it runs; the ticks are paused, not consumed.
+    if (this.refreshTurns > 0 && !this.channelActive()) {
       // A single Refresh-slot cast restores at most its refreshCap MP over its
-      // lifetime (Refresh 6 / Font of Mana 9), so Potent/Lingering can't turn it
+      // lifetime (Font of Mana 9), so Potent/Lingering can't turn it
       // into an unbounded MP engine (flaw #7).
       const capRoom = Math.max(0, this.refreshCap - this.refreshRestored);
       const before = this.mp;
@@ -1087,6 +1216,14 @@ export class Game {
     if (this.woundTurns > 0) {
       this.woundTurns -= 1;
       if (this.woundTurns === 0) this._log('The Hex fades; healing is restored.', 'status');
+    }
+    // Channeled card (#64): tick here as long as the player HELD this turn (played no
+    // card — a card play cancels the channel). The first tick already landed on the
+    // cast turn in playCard, where cardsPlayedThisPhase >= 1 skips this. Placed after
+    // the Vulnerability decay so Sap's fresh Vulnerability survives its own tick turn.
+    if (this.channelActive() && this.cardsPlayedThisPhase === 0) {
+      this._tickChannel();
+      if (this.status === 'win') return; // a Drain tick can finish the enemy
     }
 
     // 2) resolve the standing telegraph — unless it is a channel still winding up,
@@ -1389,8 +1526,10 @@ export class Game {
     // restrained previous turn (#53): gated on the same ≤1-cards signal the Rest
     // gate uses, read here BEFORE cardsPlayedThisPhase is reset below. On the very
     // first player phase the count is still its 0 init, so the opening turn grants.
+    // Channeling (#64) suppresses passive MP income too — the channel's own return
+    // is the only MP a channeling player gets.
     const passive = this.passiveMp + (this.hasRelic('pactOfSilence') ? PACT_PASSIVE_MP : 0);
-    if (passive > 0 && this.cardsPlayedThisPhase <= 1 && this.mp < this.maxMana) {
+    if (passive > 0 && this.cardsPlayedThisPhase <= 1 && this.mp < this.maxMana && !this.channelActive()) {
       const before = this.mp;
       this.mp = Math.min(this.maxMana, this.mp + passive);
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
@@ -1416,8 +1555,9 @@ export class Game {
       this.drawPile = shuffle(this.discardPile, this.rng);
       this.discardPile = [];
       this._log('Reshuffled discard into draw pile.', 'system');
-      // Prayer Beads (#21): every reshuffle restores MP.
-      if (this.hasRelic('prayerBeads') && this.mp < this.maxMana) {
+      // Prayer Beads (#21): every reshuffle restores MP — but not while channeling
+      // (#64), which suppresses all passive/over-time MP income.
+      if (this.hasRelic('prayerBeads') && this.mp < this.maxMana && !this.channelActive()) {
         const before = this.mp;
         this.mp = Math.min(this.maxMana, this.mp + PRAYER_BEADS_MP);
         this._log(`The Prayer Beads turn: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
@@ -1525,6 +1665,14 @@ export class Game {
     this.discardPile.push(dc);
     this.cardsPlayedThisPhase += 1;
 
+    // Channeled cards (#64): playing ANY other card breaks a running channel — it
+    // does not tick this turn (the enemy-phase tick is also gated on 0 cards played).
+    // A channeled card instead starts a new channel, which cancels the old one inside
+    // _startChannel, so only cancel here for non-channel plays.
+    if (this.channelActive() && CARDS[card.id].channel == null) {
+      this._cancelChannel();
+    }
+
     this._applyCard(card, target);
 
     // Per-type cards-played counters (#63): tally AFTER the effect resolves, so a
@@ -1581,6 +1729,13 @@ export class Game {
       if (m) this._fireAbility(m);
       return;
     }
+    // Channeled cards (#64): start a channel (first tick immediate) rather than a
+    // one-shot effect. Playing this card already cancelled any prior channel in
+    // playCard; _startChannel additionally replaces a still-running one.
+    if (CARDS[card.id].channel != null) {
+      this._startChannel(card, target);
+      return;
+    }
     switch (card.id) {
       case 'lowHeal':
       case 'highHeal': {
@@ -1635,12 +1790,11 @@ export class Game {
         this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
       }
-      case 'refresh':
       case 'fontOfMana': {
-        // Refresh and Font of Mana (#15) share one status slot. Re-applying
-        // refreshes the duration and keeps the stronger value (no stacking), and
-        // resets the per-cast MP total; the cap is the JUST-CAST card's designed
-        // lifetime, so no cast can ever restore more than its own card allows.
+        // Font of Mana (#15) is the buff-style MP engine (Refresh is now a channel,
+        // #64). Re-applying refreshes the duration and keeps the stronger value (no
+        // stacking), and resets the per-cast MP total; the cap is the JUST-CAST card's
+        // designed lifetime, so no cast can ever restore more than its own card allows.
         this.refresh = Math.max(this.refresh, card.refresh ?? 0);
         this.refreshTurns = card.refreshTurns;
         this.refreshRestored = 0;
@@ -2117,6 +2271,8 @@ export class Game {
   // Raw MP a Rest would grant right now before the cap: full restRegen if no card
   // was played, the decayed amount if exactly one was.
   restRegenNow(): number {
+    // Channeling (#64) suppresses Rest MP too — holding a channel is not a Rest.
+    if (this.channelActive()) return 0;
     return this.cardsPlayedThisPhase === 0 ? this.restRegen : SKIP_REGEN_DECAYED;
   }
 

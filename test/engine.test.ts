@@ -10,6 +10,7 @@ import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constant
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
+import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
 
 let passed = 0;
@@ -65,7 +66,9 @@ eq('Quick Heal heals 2', CARDS.lowHeal.heal, 2);
 eq('Heal heals 4', CARDS.highHeal.heal, 4);
 eq('Group Heal heals 2', CARDS.aoeHeal.heal, 2);
 eq('Regen card applies +2 (#52)', CARDS.regen.regen, 2);
-eq('Refresh strength 2', CARDS.refresh.refresh, 2);
+// Refresh is reworked to a channel (#64); Font of Mana stays the buff-style engine.
+eq('Refresh is a channel', CARDS.refresh.channel?.maxTurns, REFRESH_CHANNEL_MAX_TURNS);
+eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
 
 // --- enrage damage rounds up ------------------------------------------------
 {
@@ -617,22 +620,23 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   eq('rested +1 MP after one card', g.mp, before + SKIP_REGEN_DECAYED);
 }
 
-// --- Refresh cannot exceed its per-cast MP cap (flaw #7) --------------------
+// --- Font of Mana cannot exceed its per-cast MP cap (flaw #7) ---------------
+// (Refresh moved to a channel in #64; Font of Mana keeps the capped MP-over-time buff.)
 {
   const g = new Game(23);
   g.start();
-  // A heavily-upgraded Refresh (Potent + Lingering) would be 3 MP/turn for 4 turns
-  // = 12, but the per-cast cap holds total restored to REFRESH_MP_CAP.
-  g.playCard(giveCard(g, 'refresh', ['potent', 'lingering']), null);
+  // A heavily-upgraded Font of Mana (Potent + Lingering) would be 4 MP/turn for 4
+  // turns = 16, but the per-cast cap holds total restored to FONT_MP_CAP.
+  g.playCard(giveCard(g, 'fontOfMana', ['potent', 'lingering']), null);
   let restored = 0;
   for (let i = 0; i < 6 && g.status === 'playing'; i++) {
     g.mp = 0;            // drain each turn so the cap, not MP_MAX, is what binds
     g._runEnemyPhase();  // applies one refresh tick (among other things)
     restored += g.mp;    // all MP present now came from this phase's refresh tick
   }
-  check('Refresh never restores more than its per-cast cap', restored <= REFRESH_MP_CAP,
-    `restored=${restored} cap=${REFRESH_MP_CAP}`);
-  eq('Refresh ends once the cap is spent', g.refreshTurns, 0);
+  check('Font never restores more than its per-cast cap', restored <= FONT_MP_CAP,
+    `restored=${restored} cap=${FONT_MP_CAP}`);
+  eq('Font ends once the cap is spent', g.refreshTurns, 0);
 }
 
 // --- MP is capped at MP_MAX ------------------------------------------------
@@ -948,7 +952,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   check('regen event emitted', g.events.some((e) => e.kind === 'regenApplied'));
 
   g.mp = 10;
-  idx = giveCard(g, 'refresh');
+  idx = giveCard(g, 'fontOfMana');
   g.events = [];
   g.playCard(idx, null);
   check('refresh event emitted', g.events.some((e) => e.kind === 'refreshPrimed'));
@@ -1193,7 +1197,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
   // Potent: +1 to the present strength stat; stacks.
   eq('potent +heal', resolveCard(makeDeckCard('highHeal', 1, ['potent'])).heal, (CARDS.highHeal.heal ?? 0) + 1);
   eq('potent +regen', resolveCard(makeDeckCard('regen', 1, ['potent'])).regen, (CARDS.regen.regen ?? 0) + 1);
-  eq('potent +refresh', resolveCard(makeDeckCard('refresh', 1, ['potent'])).refresh, (CARDS.refresh.refresh ?? 0) + 1);
+  eq('potent +refresh (Font)', resolveCard(makeDeckCard('fontOfMana', 1, ['potent'])).refresh, (CARDS.fontOfMana.refresh ?? 0) + 1);
   eq('potent stacks', resolveCard(makeDeckCard('highHeal', 1, ['potent', 'potent'])).heal, (CARDS.highHeal.heal ?? 0) + 2);
 }
 {
@@ -1206,7 +1210,7 @@ eq('Refresh strength 2', CARDS.refresh.refresh, 2);
 {
   // Eligibility gating and slot limits.
   check('potent ineligible on shield', !MODIFIERS.potent.eligible('shield'));
-  check('potent eligible on refresh', MODIFIERS.potent.eligible('refresh'));
+  check('potent eligible on Font of Mana', MODIFIERS.potent.eligible('fontOfMana'));
   check('lingering ineligible on highHeal', !MODIFIERS.lingering.eligible('highHeal'));
   check('lingering eligible on regen', MODIFIERS.lingering.eligible('regen'));
   // Retain gating (issue 03): refuses the always-on Ability card and engine cards.
@@ -1841,7 +1845,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
 {
   const g = new Game(1); g.start();
   g.devPlayCard('refresh');
-  check('devPlayCard refresh primes MP regen', g.refreshTurns > 0 && g.refresh > 0);
+  check('devPlayCard refresh starts a channel', g.channelActive() && g.channelCard === 'refresh');
 }
 
 // --- card set phase A: Overgrowth / Cultivate / Bloom / Font of Mana / Inspiration (issue 15) ---
@@ -1924,20 +1928,15 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Potent does not raise the Font cap', resolveCard(makeDeckCard('fontOfMana', -90, ['potent'])).refreshCap, FONT_MP_CAP);
 }
 {
-  // Refresh <-> Font share one status slot: keep-stronger strength, and each
-  // cast carries ITS OWN card's cap (no chaining past a cast's designed total).
-  const g = new Game(64); g.start();
-  g.playCard(giveCard(g, 'fontOfMana'), null);
-  g.mp = MP_MAX;
-  g.playCard(giveCard(g, 'refresh'), null);
-  eq('Refresh over Font keeps the stronger strength', g.refresh, 3);
-  eq('Refresh over Font uses the Refresh cap', g.refreshCap, REFRESH_MP_CAP);
+  // Recasting Font of Mana resets its per-cast restored counter (each cast carries
+  // its own designed lifetime). (Refresh moved to a channel in #64, so the old
+  // Refresh<->Font shared-slot test is gone; channel behavior is covered below.)
   const g2 = new Game(65); g2.start();
-  g2.playCard(giveCard(g2, 'refresh'), null);
+  g2.playCard(giveCard(g2, 'fontOfMana'), null);
   g2.mp = MP_MAX;
   g2.playCard(giveCard(g2, 'fontOfMana'), null);
-  eq('Font over Refresh keeps strength 3', g2.refresh, 3);
-  eq('Font over Refresh carries the Font cap', g2.refreshCap, FONT_MP_CAP);
+  eq('Font recast keeps strength 3', g2.refresh, 3);
+  eq('Font recast carries the Font cap', g2.refreshCap, FONT_MP_CAP);
   eq('recasting resets the restored counter', g2.refreshRestored, 0);
 }
 {
@@ -3519,6 +3518,211 @@ function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
   g.typePlayedThisFight.shadow = 100; // saturate the scaling
   const before = g.enemy.hp; g.playCard(giveCard(g, 'nightfall'));
   eq('Nightfall caps its damage', before - g.enemy.hp, NIGHTFALL_CAP);
+}
+
+// --- channeled cards (#64) -------------------------------------------------
+// A benign fight so channels can run for their full length: sturdy party, a huge
+// enemy that won't die to autos, no enrage, and roomy MP.
+function channelGame(seed: number): Game {
+  const g = new Game(seed, defaultBattleConfig()); g.start();
+  g.members.forEach((m) => { m.maxHP = 100; m.hp = 100; m.alive = true; m.shield = false; m.shieldTurns = 0; });
+  g.enemy.maxHP = 100000; g.enemy.hp = 100000;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 0;
+  g.maxMana = 30; g.mp = 30; g.passiveMp = 0; g.enrageTurn = 9999;
+  return g;
+}
+function countPulses(g: Game): number {
+  return g.events.filter((e) => e.kind === 'channelPulse').length;
+}
+
+{
+  // A channel ticks each turn while nothing else is played, and ends exactly at
+  // maxTurns (first tick lands on the cast turn).
+  const g = channelGame(200);
+  const hp0 = g.enemy.hp;
+  g.playCard(giveCard(g, 'drain'), null);
+  check('Drain starts a channel', g.channelActive() && g.channelCard === 'drain');
+  eq('Drain first tick lands on the cast turn (damage)', hp0 - g.enemy.hp, DRAIN_DMG);
+  eq('Drain ticks remaining after the cast tick', g.channelTurns, DRAIN_MAX_TURNS - 1);
+  let pulses = countPulses(g); // the immediate first tick
+  for (let i = 0; i < DRAIN_MAX_TURNS + 3 && g.channelActive(); i++) {
+    g.endTurn();               // hold — play no card, so it ticks at the enemy phase
+    pulses += countPulses(g);
+  }
+  eq('Drain channels exactly maxTurns ticks', pulses, DRAIN_MAX_TURNS);
+  check('Drain channel ends on its own at the cap', !g.channelActive());
+}
+
+{
+  // Drain damages each tick and obeys Vulnerability (routes through _damageEnemy).
+  const g = channelGame(201);
+  g.enemy.vulnerable = 0.5; g.enemy.vulnerableTurns = 9;
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'drain'), null);
+  eq('Drain tick obeys Vulnerability', before - g.enemy.hp, DRAIN_DMG + Math.floor(DRAIN_DMG * 0.5));
+}
+
+{
+  // Drain's per-tick MP return is 1-2, only when there is room, and is the ONLY MP a
+  // channeling player gets (passive income is suppressed).
+  const g = channelGame(202);
+  g.passiveMp = 2;
+  g.mp = CARDS.drain.cost; // exactly the cost, so we see just the return
+  g.playCard(giveCard(g, 'drain'), null);
+  check('Drain returns 1-2 MP on a damaging tick', g.mp >= DRAIN_MP_MIN && g.mp <= DRAIN_MP_MAX);
+  g.endTurn(); // close the cast turn (a card was played, so it does not tick)
+  // Hold with 0 MP: the only income is Drain's return (no passive while channeling).
+  g.mp = 0;
+  g.endTurn();
+  check('Only Drain\'s return funds a channeling turn (no passive)', g.mp >= DRAIN_MP_MIN && g.mp <= DRAIN_MP_MAX);
+  // At full MP the tick still damages but returns nothing (no room).
+  g.mp = g.maxMana;
+  const hp0 = g.enemy.hp;
+  g.endTurn();
+  eq('Drain returns no MP when MP is full', g.mp, g.maxMana);
+  check('Drain still damages the enemy at full MP', g.enemy.hp < hp0);
+}
+
+{
+  // Passive/over-time MP income is suppressed while a channel runs; the reworked
+  // Refresh restores its own MP per tick, up to its cap.
+  const g = channelGame(203);
+  g.passiveMp = 2; g.restRegen = 5;
+  g.mp = CARDS.refresh.cost;
+  g.playCard(giveCard(g, 'refresh'), null);
+  check('Refresh starts a channel', g.channelActive() && g.channelCard === 'refresh');
+  eq('Rest MP is suppressed while channeling', g.restRegenNow(), 0);
+  g.endTurn(); // close the cast turn (a card was played, so it does not tick)
+  g.mp = 0;
+  g.endTurn(); // hold — channel ticks +REFRESH_CHANNEL_MP, no passive, no rest
+  eq('Only the channel\'s own MP is granted while channeling', g.mp, REFRESH_CHANNEL_MP);
+}
+
+{
+  // Reworked Refresh restores MP each tick and cancels the instant another card is played.
+  const g = channelGame(204);
+  g.mp = 20;
+  g.playCard(giveCard(g, 'refresh'), null);
+  const mpAfterCast = g.mp;
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // any card ends the channel
+  check('Refresh channel cancels on a card play', !g.channelActive() && g.channelCard === null);
+  eq('Cancelling Refresh grants no extra MP that play', g.mp, mpAfterCast - CARDS.lowHeal.cost);
+}
+
+{
+  // Playing any card mid-channel cancels it and it does NOT tick that turn.
+  const g = channelGame(205);
+  g.playCard(giveCard(g, 'drain'), null);
+  g.endTurn(); // cast-turn end: no tick (a card was played this phase)
+  check('channel survives the cast-turn end', g.channelActive());
+  g.events = [];
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // cancels — no tick
+  eq('a card play emits no channel tick', countPulses(g), 0);
+  check('a card play emits a channelCancel', g.events.some((e) => e.kind === 'channelCancel'));
+  g.endTurn();
+  eq('no channel tick on the enemy phase after a cancel', countPulses(g), 0);
+  check('channel is gone after the cancel', !g.channelActive());
+}
+
+{
+  // Starting a second channel cancels the first.
+  const g = channelGame(206);
+  g.playCard(giveCard(g, 'drain'), null);
+  check('Drain active', g.channelCard === 'drain');
+  g.events = [];
+  g.playCard(giveCard(g, 'sap'), null);
+  check('the new channel replaced the old', g.channelCard === 'sap' && g.channelActive());
+  check('the old channel emitted a cancel', g.events.some((e) => e.kind === 'channelCancel'));
+  check('the new channel emitted a start', g.events.some((e) => e.kind === 'channelStart'));
+}
+
+{
+  // Mending Stream heals its remembered target each tick and ends if that member dies.
+  const g = channelGame(207);
+  const m = g.members[SLOT.LEFT];
+  m.hp = 1;
+  g.playCard(giveCard(g, 'mendingStream'), m.slot);
+  check('Mending Stream remembers its target', g.channelActive() && g.channelTarget === m.slot);
+  eq('Mending Stream heals on the cast tick', m.hp, 1 + MENDING_STREAM_HEAL);
+  g.endTurn(); // close the cast turn (a card was played, so it does not tick)
+  g._killMember(m);
+  g.endTurn(); // hold — the tick sees the dead target and ends the channel
+  check('Mending Stream ends when its target dies', !g.channelActive());
+}
+
+{
+  // Fortify grants a Shield each tick (verified via the immediate cast tick and a
+  // held turn whose enemy blow is aimed elsewhere so the fresh Shield survives).
+  const g = channelGame(208);
+  const m = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'fortify'), m.slot);
+  check('Fortify shields the target on the cast tick', m.shield === true);
+  g.endTurn(); // close the cast turn (a card was played, so it does not tick)
+  m.shield = false; m.shieldTurns = 0; // consume the Shield
+  // Aim the standing blow at RIGHT so the re-shield on LEFT is not spent this turn.
+  g.telegraph = { type: 'single', hidden: false, damage: 1, targets: [SLOT.RIGHT], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+  g.endTurn(); // hold — Fortify re-shields LEFT before the blow lands on RIGHT
+  check('Fortify re-shields the target on a held tick', g.members[SLOT.LEFT].shield === true);
+}
+
+{
+  // Sap stacks Vulnerability up to its cap.
+  const g = channelGame(209);
+  g.playCard(giveCard(g, 'sap'), null);
+  eq('Sap adds Vulnerability on the cast tick', g.enemy.vulnerable, SAP_VULN_PER_TICK);
+  for (let i = 0; i < SAP_MAX_TURNS + 2 && g.channelActive(); i++) g.endTurn();
+  check('Sap never exceeds its Vulnerability cap', g.enemy.vulnerable <= SAP_VULN_CAP + 1e-9);
+  eq('Sap stacks to its cap over the channel', g.enemy.vulnerable,
+    Math.min(SAP_VULN_CAP, SAP_MAX_TURNS * SAP_VULN_PER_TICK));
+}
+
+{
+  // Sap -> Doom (#63): Sap's stacked Vulnerability raises Doom's damage.
+  const V = SAP_VULN_PER_TICK; // one Sap tick
+  const doomPre = Math.min(DOOM_CAP, DOOM_BASE + DOOM_PER_DEBUFF * 1 + Math.floor(V * DOOM_PER_VULN));
+  const doomWithSap = doomPre + Math.floor(doomPre * V); // _damageEnemy Vulnerability multiplier
+  const g = channelGame(210);
+  g.playCard(giveCard(g, 'sap'), null); // vulnerable = V, vulnerableTurns > 0
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'doom'), null); // cancels Sap, then reads the Vulnerability
+  eq('Doom damage rises with Sap\'s Vulnerability', before - g.enemy.hp, doomWithSap);
+  // Baseline: Doom with no debuff on the enemy.
+  const g2 = channelGame(211);
+  const b2 = g2.enemy.hp;
+  g2.playCard(giveCard(g2, 'doom'), null);
+  eq('Doom base with no debuffs', b2 - g2.enemy.hp, DOOM_BASE);
+  check('Sap made Doom hit harder', doomWithSap > DOOM_BASE);
+}
+
+{
+  // No channeled damage/debuff card changes the enemy's telegraph preview
+  // (attackTargets == applied): Drain and Sap only touch party->enemy state.
+  const g = channelGame(212);
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+  const preview = JSON.stringify(g.attackTargets());
+  g.playCard(giveCard(g, 'sap'), null);
+  eq('Sap does not change the telegraph preview', JSON.stringify(g.attackTargets()), preview);
+  g.playCard(giveCard(g, 'drain'), null); // cancels Sap
+  eq('Drain does not change the telegraph preview', JSON.stringify(g.attackTargets()), preview);
+}
+
+// Definitions / typing sanity for the five channeled cards (#64).
+{
+  eq('Drain is Shadow', cardType('drain'), 'shadow');
+  eq('Sap is Shadow', cardType('sap'), 'shadow');
+  eq('Mending Stream is Holy', cardType('mendingStream'), 'holy');
+  eq('Fortify is Iron', cardType('fortify'), 'iron');
+  eq('Refresh is Arcane', cardType('refresh'), 'arcane');
+  check('Mending Stream / Fortify are single-target channels',
+    CARDS.mendingStream.channel?.single === true && CARDS.fortify.channel?.single === true);
+  check('Drain / Sap / Refresh are no-target channels',
+    !CARDS.drain.channel?.single && !CARDS.sap.channel?.single && !CARDS.refresh.channel?.single);
+  eq('Drain caps at DRAIN_MAX_TURNS', CARDS.drain.channel?.maxTurns, DRAIN_MAX_TURNS);
+  eq('Fortify caps at FORTIFY_MAX_TURNS', CARDS.fortify.channel?.maxTurns, FORTIFY_MAX_TURNS);
+  eq('Mending Stream caps at MENDING_STREAM_MAX_TURNS', CARDS.mendingStream.channel?.maxTurns, MENDING_STREAM_MAX_TURNS);
+  // Font of Mana stays the buff-style MP engine (not a channel).
+  check('Font of Mana is not a channel', CARDS.fontOfMana.channel == null);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
