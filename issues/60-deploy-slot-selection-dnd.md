@@ -1,6 +1,6 @@
 # Issue 60 — Deploy screen: smart slot selection + drag-and-drop
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** ux (deploy)   **Size:** M
 - **Depends on:** #50 (remembers seating between fights) — soft   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — "The first empty slot from the left should always be selected

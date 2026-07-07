@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, INJURY_NAMES, memberSalary, GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS } from '../constants';
+import { firstEmptySlot, nextEmptySlot, reduceDeploy, type Deployment, type DragSource } from '../deploy';
 
 interface DeployScreenProps {
   run: Run;
@@ -15,21 +16,46 @@ const SLOT_NAMES = ['Left', 'Center', 'Right'];
 // Fielding fewer than three is allowed (and, once salaries land, cheaper).
 export function DeployScreen({ run, act }: DeployScreenProps) {
   const loc = run.location;
-  const [deploy, setDeploy] = useState<(number | null)[]>(() => [...run.deployment]);
-  const [activeSlot, setActiveSlot] = useState(0);
+  const [deploy, setDeploy] = useState<Deployment>(() => [...run.deployment]);
+  // Active slot starts on the first empty slot from the left (Left if all full).
+  const [activeSlot, setActiveSlot] = useState(() => firstEmptySlot(run.deployment));
+  // Source of an in-flight drag (native HTML5 DnD). A ref, not state, so starting
+  // a drag doesn't re-render.
+  const dragSrc = useRef<DragSource | null>(null);
   if (loc.kind !== 'deploy') return null;
   const enemy = run.peekEncounter(loc.fightIndex);
 
+  // Click a roster hero: toggle them into the active slot, then auto-advance the
+  // active slot to the next empty one from the left so three clicks fill L/C/R.
   const assign = (ri: number): void => {
-    const next = [...deploy];
-    for (let i = 0; i < next.length; i++) if (next[i] === ri) next[i] = null; // one slot per hero
-    next[activeSlot] = deploy[activeSlot] === ri ? null : ri;                 // toggle in the active slot
+    const next = reduceDeploy(deploy, { type: 'seat', roster: ri, slot: activeSlot });
     setDeploy(next);
+    setActiveSlot((cur) => nextEmptySlot(next, cur));
   };
   const clearSlot = (i: number): void => {
-    const next = [...deploy];
-    next[i] = null;
+    setDeploy(reduceDeploy(deploy, { type: 'clear', slot: i }));
+  };
+  // Resolve a drop landing on slot `i` from whatever is being dragged.
+  const dropOnSlot = (i: number): void => {
+    const src = dragSrc.current;
+    dragSrc.current = null;
+    if (!src) return;
+    const next = src.kind === 'slot'
+      ? reduceDeploy(deploy, { type: 'dropSlotToSlot', from: src.index, to: i })
+      : reduceDeploy(deploy, { type: 'dropRosterToSlot', roster: src.index, slot: i });
     setDeploy(next);
+    setActiveSlot((cur) => nextEmptySlot(next, cur));
+  };
+  // A seated hero dragged back onto the roster list: unseat them.
+  const dropOnRoster = (): void => {
+    const src = dragSrc.current;
+    dragSrc.current = null;
+    if (!src || src.kind !== 'slot') return;
+    const ri = deploy[src.index];
+    if (ri == null) return;
+    const next = reduceDeploy(deploy, { type: 'unseat', roster: ri });
+    setDeploy(next);
+    setActiveSlot((cur) => nextEmptySlot(next, cur));
   };
   const seatedCount = deploy.filter((x) => x != null).length;
   // Salary owed if this deployment fights: paid out of the win, so fielding fewer keeps more.
@@ -60,7 +86,11 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
           const m = ri != null && run.roster[ri]?.member ? MEMBER_POOL[run.roster[ri].member!] : null;
           return (
             <button key={i} className={`deploy-slot${i === activeSlot ? ' active' : ''}${m ? ' filled' : ''}`}
-              onClick={() => setActiveSlot(i)} aria-pressed={i === activeSlot}>
+              onClick={() => setActiveSlot(i)} aria-pressed={i === activeSlot}
+              draggable={m != null}
+              onDragStart={(e) => { dragSrc.current = { kind: 'slot', index: i }; e.dataTransfer.effectAllowed = 'move'; }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => { e.preventDefault(); dropOnSlot(i); }}>
               <span className="deploy-slot-label">{name}</span>
               <span className="deploy-slot-name">{m ? m.name : 'Empty'}</span>
               {m && <span className="deploy-slot-clear" role="button" onClick={(e) => { e.stopPropagation(); clearSlot(i); }}>✕</span>}
@@ -69,7 +99,9 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
         })}
       </div>
 
-      <div className="shop-offers deploy-roster">
+      <div className="shop-offers deploy-roster"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); dropOnRoster(); }}>
         {run.roster.map((p, ri) => {
           const id = p.member!;
           const dm = MEMBER_POOL[id];
@@ -77,7 +109,9 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
           const scar = p.injuries > 0 ? ` · ${INJURY_NAMES[Math.min(p.injuries, INJURY_NAMES.length) - 1]}` : '';
           return (
             <button key={ri} className={`draft-member${inSlot >= 0 ? ' chosen' : ''}`}
-              onClick={() => assign(ri)} aria-pressed={inSlot >= 0} title={MEMBER_ABILITY_FLAVOR[id]}>
+              onClick={() => assign(ri)} aria-pressed={inSlot >= 0} title={MEMBER_ABILITY_FLAVOR[id]}
+              draggable
+              onDragStart={(e) => { dragSrc.current = { kind: 'roster', index: ri }; e.dataTransfer.effectAllowed = 'move'; }}>
               <span className="draft-member-name">{dm.name}{inSlot >= 0 ? ` — ${SLOT_NAMES[inSlot]}` : ''}</span>
               <span className="draft-member-stats">HP {p.maxHP} · DMG {p.damage} · {memberSalary(p)}g/fight{scar}</span>
               <span className="draft-member-ability">{MEMBER_ABILITY_FLAVOR[id]}</span>
