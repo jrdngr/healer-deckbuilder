@@ -241,7 +241,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // line; the cards carry buy value 1 and the relics value 0, so it never banks them).
   // The vector shifts: F2 182->181, F4 176->175, F5 170->167, F6 168->164, F7 168->161,
   // F8 155->153 (F0/F1/F3 unchanged). All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 181, 177, 175, 167, 164, 161, 153]));
+  // 2026-07-08 (#66 Regen conversions): 2 more shop-eligible Nature cards (Thornskin,
+  // Sporeburst) join CARD_POOL and 2 relics (Deep Roots, Ossuary Bell) join the relic
+  // pool — the same pure rng-stream perturbation (the best-3 policy has no Regen-currency
+  // line; the cards carry buy value 1 and the relics value 0, so it never banks them).
+  // The vector shifts: F2 181->179, F4 175->174, F5 167->166, F7 161->160, F8 153->150
+  // (F0/F1/F3/F6 unchanged). All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 179, 176, 174, 166, 164, 160, 150]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

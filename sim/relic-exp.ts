@@ -77,6 +77,8 @@ const BATTERY: RelicId[] = [
   'pactOfSilence', 'crackedHourglass', 'rustyCrown',
   // Iron mitigation web relics (#65) — gated ≤ +9pp.
   'whetstone', 'bulwarkCore',
+  // Regen conversions relics (#66) — gated ≤ +9pp.
+  'deepRoots', 'ossuaryBell',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

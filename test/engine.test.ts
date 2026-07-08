@@ -10,6 +10,7 @@ import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constant
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
 import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS } from '../src/constants';
+import { THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
@@ -3852,6 +3853,168 @@ function countPulses(g: Game): number {
   check('all three new cards are shop/reward-eligible', (['feint', 'anvilStance', 'interlock'] as CardId[]).every((id) => CARD_POOL.includes(id)));
   check('the three new cards carry a rarity', (['feint', 'anvilStance', 'interlock'] as CardId[]).every((id) => CARD_RARITY[id] != null));
   check('Whetstone / Bulwark Core are real relics', (['whetstone', 'bulwarkCore'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
+}
+
+// --- Regen conversions (#66) -----------------------------------------------
+{
+  // Thornskin: -1 per hit while the target's Regen runs; the preview predicts the
+  // reduced number exactly (preview == applied).
+  const g = new Game(660); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.hp = tank.maxHP; tank.shield = false; tank.brace = false; tank.defense = 0;
+  tank.regen = 3;
+  g.playCard(giveCard(g, 'thornskin'), SLOT.CENTER);
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  const shown = g.attackTargets().find((s) => s.slot === SLOT.CENTER)?.damage;
+  eq('Thornskin: preview reduced by 1 while Regen runs', shown, 5 - THORNSKIN_REDUCTION);
+  const before = tank.hp;
+  g._resolveAttack();
+  eq('Thornskin: applied -1 while Regen runs', before - tank.hp, 5 - THORNSKIN_REDUCTION);
+}
+{
+  // Cultivate extends the Regen, and Thornskin rides the extension — the reduction
+  // survives a tick that would have expired the un-cultivated Regen.
+  const g = new Game(661); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.hp = tank.maxHP - 5; tank.shield = false; tank.brace = false; tank.defense = 0;
+  tank.regen = 1; // one tick left without Cultivate
+  g.playCard(giveCard(g, 'thornskin'), SLOT.CENTER);
+  g.playCard(giveCard(g, 'cultivate'), SLOT.CENTER);
+  eq('Cultivate extended the Regen', tank.regen, 1 + CULTIVATE_STRENGTH);
+  g._startPlayerPhase(); // one tick: the un-cultivated Regen would be gone here
+  check('Thornskin still armed while the extended Regen runs', tank.thornskin && tank.regen > 0);
+  eq('Thornskin still reduces after the tick', g._effectiveDamage(tank, 4), 4 - THORNSKIN_REDUCTION);
+}
+{
+  // Bloom-consume ends the Regen and clears the mark mid-fight; a fresh Regen does
+  // NOT resume the reduction (the mark was consumed) — recast re-arms it.
+  const g = new Game(662); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.hp = 5; tank.shield = false; tank.brace = false; tank.defense = 0;
+  tank.regen = 3;
+  g.playCard(giveCard(g, 'thornskin'), SLOT.CENTER);
+  eq('Thornskin reduces while armed', g._effectiveDamage(tank, 4), 4 - THORNSKIN_REDUCTION);
+  g.playCard(giveCard(g, 'bloom'), SLOT.CENTER); // consume the Regen -> ends it
+  check('Bloom-consume cleared the Thornskin mark', !tank.thornskin);
+  eq('Regen gone after Bloom', tank.regen, 0);
+  tank.regen = 2; // regains Regen WITHOUT a recast
+  eq('Thornskin does NOT resume on new Regen without a recast', g._effectiveDamage(tank, 4), 4);
+  g.playCard(giveCard(g, 'thornskin'), SLOT.CENTER); // recast re-arms
+  check('Thornskin re-armed after recast', tank.thornskin);
+  eq('Thornskin reduces again after re-arm', g._effectiveDamage(tank, 4), 4 - THORNSKIN_REDUCTION);
+}
+{
+  // Sporeburst on Regen 3 -> enemy poisoned SPOREBURST_POISON/turn for 3 turns; the
+  // whole Regen is consumed.
+  const g = new Game(663); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.regen = 3;
+  eq('enemy starts unpoisoned', g.enemy.poisonTurns, 0);
+  g.playCard(giveCard(g, 'sporeburst'), SLOT.CENTER);
+  eq('Sporeburst: poison turns == ticks consumed', g.enemy.poisonTurns, 3);
+  eq('Sporeburst: poison per turn', g.enemy.poison, SPOREBURST_POISON);
+  eq('Sporeburst consumed the whole Regen', tank.regen, 0);
+}
+{
+  // Wave stacking rule: on an already-poisoned enemy the per-turn ADDS and the
+  // duration takes the MAX (existing 5 > new 3).
+  const g = new Game(664); g.start(); g.mp = g.maxMana;
+  g.enemy.poison = 2; g.enemy.poisonTurns = 5;
+  g.tank.regen = 3;
+  g.playCard(giveCard(g, 'sporeburst'), SLOT.CENTER);
+  eq('poison per-turn adds', g.enemy.poison, 2 + SPOREBURST_POISON);
+  eq('poison duration takes the longer window (max)', g.enemy.poisonTurns, 5);
+}
+{
+  // Max the other way: existing shorter window is replaced by the longer new one.
+  const g = new Game(665); g.start(); g.mp = g.maxMana;
+  g.enemy.poison = 1; g.enemy.poisonTurns = 2;
+  g.tank.regen = 4;
+  g.playCard(giveCard(g, 'sporeburst'), SLOT.CENTER);
+  eq('poison duration extends to the longer new window', g.enemy.poisonTurns, 4);
+  eq('poison per-turn still adds', g.enemy.poison, 1 + SPOREBURST_POISON);
+}
+{
+  // Deep Roots: Brace 2 on NATURAL expiry.
+  const cfg = defaultBattleConfig(); cfg.relics = ['deepRoots'];
+  const g = new Game(666, cfg); g.start();
+  const tank = g.tank; tank.hp = tank.maxHP; tank.shield = false; tank.brace = false;
+  tank.regen = 1; // expires next tick
+  g._startPlayerPhase(); // Regen 1 -> 0: natural expiry
+  check('Deep Roots: Brace on natural expiry', tank.brace);
+  eq('Deep Roots: standard Brace duration', tank.braceTurns, BRACE_TURNS);
+}
+{
+  // Deep Roots: Brace on Bloom-consume, and on Sporeburst-consume.
+  const cfg = defaultBattleConfig(); cfg.relics = ['deepRoots'];
+  const g = new Game(667, cfg); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.hp = 5; tank.shield = false; tank.brace = false; tank.regen = 3;
+  g.playCard(giveCard(g, 'bloom'), SLOT.CENTER);
+  check('Deep Roots: Brace on Bloom-consume', tank.brace);
+  tank.brace = false; tank.regen = 2;
+  g.playCard(giveCard(g, 'sporeburst'), SLOT.CENTER);
+  check('Deep Roots: Brace on Sporeburst-consume', tank.brace);
+}
+{
+  // Deep Roots + Lifebloom burst both fire on expiry (intended double-dip).
+  const cfg = defaultBattleConfig(); cfg.relics = ['deepRoots'];
+  const g = new Game(670, cfg); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.hp = 5; tank.shield = false; tank.brace = false;
+  g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER); // Regen 2 (= 2 ticks) + burst pending
+  const hpBeforeExpiry = tank.hp;
+  for (let i = 0; i < 2; i++) g._startPlayerPhase(); // tick to expiry
+  eq('Lifebloom Regen expired', tank.regen, 0);
+  check('Double-dip: Deep Roots Brace on Lifebloom expiry', tank.brace);
+  check('Double-dip: Lifebloom burst also healed on expiry', tank.hp > hpBeforeExpiry + LIFEBLOOM_BURST - 1);
+}
+{
+  // Deep Roots inert without the relic: an expiring Regen leaves no Brace.
+  const g = new Game(669); g.start();
+  const tank = g.tank; tank.shield = false; tank.brace = false; tank.regen = 1;
+  g._startPlayerPhase();
+  check('Deep Roots inert: no Brace without the relic', !tank.brace);
+}
+{
+  // Ossuary Bell: two separate downward crossings of 50% in one fight -> two Regen
+  // grants (every crossing retriggers; no per-fight cap).
+  const cfg = defaultBattleConfig(); cfg.relics = ['ossuaryBell'];
+  const g = new Game(671, cfg); g.start();
+  const tank = g.tank; tank.shield = false; tank.brace = false; tank.defense = 0; tank.regen = 0;
+  const bigHit = tank.maxHP - 1; // full -> 1 HP: below any threshold, still alive (non-lethal)
+  tank.hp = tank.maxHP;
+  g.telegraph = { type: 'single', hidden: false, damage: bigHit, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  check('Ossuary Bell: first crossing grants Regen', tank.alive && tank.regen >= OSSUARY_REGEN);
+  const afterFirst = tank.regen;
+  tank.hp = tank.maxHP; // healed back above half
+  g.telegraph = { type: 'single', hidden: false, damage: bigHit, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  check('Ossuary Bell: second crossing grants Regen again', tank.regen >= afterFirst + OSSUARY_REGEN);
+}
+{
+  // Ossuary Bell inert without the relic.
+  const g = new Game(672); g.start();
+  const tank = g.tank; tank.shield = false; tank.brace = false; tank.defense = 0; tank.regen = 0;
+  tank.hp = tank.maxHP;
+  g.telegraph = { type: 'single', hidden: false, damage: tank.maxHP - 1, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  eq('Ossuary Bell inert: no Regen without the relic', tank.regen, 0);
+}
+{
+  // Thornskin composes with Brace in the pipeline and preview still equals applied.
+  const g = new Game(673); g.start(); g.mp = g.maxMana;
+  const tank = g.tank; tank.hp = tank.maxHP; tank.shield = false; tank.defense = 0;
+  tank.regen = 2; tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  g.playCard(giveCard(g, 'thornskin'), SLOT.CENTER);
+  g.telegraph = { type: 'single', hidden: false, damage: 6, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  const shown = g.attackTargets().find((s) => s.slot === SLOT.CENTER)?.damage;
+  const before = tank.hp;
+  g._resolveAttack();
+  eq('Thornskin + Brace: preview equals applied', shown, before - tank.hp);
+}
+{
+  // Definitions / typing sanity for the two new Nature cards and two relics (#66).
+  check('Thornskin / Sporeburst are Nature', (['thornskin', 'sporeburst'] as CardId[]).every((id) => cardType(id) === 'nature'));
+  check('both new cards are shop/reward-eligible', (['thornskin', 'sporeburst'] as CardId[]).every((id) => CARD_POOL.includes(id)));
+  check('both new cards carry a rarity', (['thornskin', 'sporeburst'] as CardId[]).every((id) => CARD_RARITY[id] != null));
+  check('both new cards use the needsRegen gate', (['thornskin', 'sporeburst'] as CardId[]).every((id) => CARDS[id].needsRegen === true));
+  check('Deep Roots / Ossuary Bell are real relics', (['deepRoots', 'ossuaryBell'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

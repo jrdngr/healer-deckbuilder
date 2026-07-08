@@ -1,6 +1,6 @@
 # Issue 66 — Regen as convertible currency
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards + relics)   **Size:** M
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: deepen Regen beyond "heal over time";
@@ -90,6 +90,16 @@ rows; `CARD_TYPE` entries; N=1000 sim gates (25–35% band, ≤ +9pp per relic).
 - Deep Roots: Brace 2 appears on natural expiry AND on Bloom/Sporeburst consume; no relic → no Brace.
 - Ossuary Bell: two separate crossings in one fight → two Regen grants.
 - Preview property test stays green with Thornskin active on a telegraphed target.
+
+## Balance note (landed 2026-07-08)
+
+Ossuary Bell shipped at **Regen 1, threshold 25%** — not the issue's 50% / Regen 2. Free
+per-crossing Regen is strong in this MP-starved game: at 50% / Regen 2 the N=1000 gate
+read **+17.3pp**, and even Regen 1 (the integer floor of the magnitude lever) at 50%
+stayed **+11.6pp**. With the magnitude floored, the trigger *threshold* — a design knob,
+**not** the forbidden per-fight trigger cap — dropped to 25%; every crossing still
+retriggers (no cap) and it lands at **+7.3pp**, in band. Deep Roots shipped as specified
+(Brace 2, +4.9pp). Magnitudes are named constants for a later balance pass.
 
 ## Out of scope
 

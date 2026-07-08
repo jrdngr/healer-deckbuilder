@@ -40,6 +40,8 @@ export type CardId =
   | 'phalanx' | 'brace' | 'provoke'
   // Iron mitigation web (#65): steer telegraphed hits, get paid for blocking.
   | 'feint' | 'anvilStance' | 'interlock'
+  // Regen conversions (#66): turn Regen into damage reduction / enemy Poison.
+  | 'thornskin' | 'sporeburst'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
@@ -760,6 +762,12 @@ export const INTERLOCK_GUARD_DR = 1;     // Interlock: Guard DR granted to every
 export const INTERLOCK_GUARD_TURNS = 2;  // Interlock: enemy turns each Guard grant lasts (stacks freely)
 export const BULWARK_BRACE_TURNS = 2;    // Bulwark Core: enemy turns the granted Brace lasts after a full Shield block
 
+// Regen conversions (#66): Regen becomes a currency that converts across domains —
+// into damage reduction while it runs (Thornskin), into enemy Poison when spent
+// (Sporeburst). Magnitudes are tunable — a later balance pass owns the numbers.
+export const THORNSKIN_REDUCTION = 1;    // Thornskin: incoming damage reduced per hit while the marked member's Regen lasts
+export const SPOREBURST_POISON = 2;      // Sporeburst: enemy Poison per turn applied when the Regen is consumed (duration == ticks consumed)
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -899,6 +907,16 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // decays on its own timer — the one place Guard's no-self-stack rule is relaxed.
   interlock: { id: 'interlock', name: 'Interlock', cost: 2, target: 'all',
     desc: `Every living member gains Guard ${INTERLOCK_GUARD_DR} for ${INTERLOCK_GUARD_TURNS} enemy turns (stacks with any Guard).` },
+  // --- Regen conversions (#66): spend Regen across domains --------------------
+  // Thornskin has no timer of its own — its duration IS the target's Regen. While
+  // that Regen lasts the member takes 1 less per hit; extending the Regen (Cultivate)
+  // extends the reduction, consuming it (Bloom/Sporeburst) ends it. needsRegen-gated.
+  thornskin: { id: 'thornskin', name: 'Thornskin', cost: 1, target: 'single', needsRegen: true,
+    desc: `While the target's Regen lasts, they take ${THORNSKIN_REDUCTION} less from each hit.` },
+  // Sporeburst consumes the whole remaining Regen and converts every consumed tick
+  // into a turn of enemy Poison (via the wave-wide poison stacking rule). needsRegen-gated.
+  sporeburst: { id: 'sporeburst', name: 'Sporeburst', cost: 2, target: 'single', needsRegen: true,
+    desc: `Consume the target's Regen; Poison the enemy ${SPOREBURST_POISON}/turn for as many turns as ticks consumed.` },
   // --- Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff --
   shadowBolt: { id: 'shadowBolt', name: 'Shadow Bolt', cost: 1, target: 'none',
     desc: `Deal ${SHADOW_BOLT_DMG} damage to the enemy.` },
@@ -970,6 +988,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   mendingStream: 'holy', /* channeled Holy heal (#64) */
   // Nature — the regen family, and buffs generally (incl. combat buffs).
   regen: 'nature', overgrowth: 'nature', cultivate: 'nature', bloom: 'nature', lifebloom: 'nature',
+  thornskin: 'nature', sporeburst: 'nature', /* Regen conversions (#66) */
   battleHymn: 'nature', /* outlier: offense buff */ rally: 'nature', /* outlier: offense buff */
   imbuePoison: 'nature', /* outlier: venom/toxin DoT */ beckon: 'nature', /* outlier: summon */
   sharpen: 'nature', doubleStrike: 'nature', embolden: 'nature', empower: 'nature', riposte: 'nature',
@@ -1600,6 +1619,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   drain: 'uncommon', mendingStream: 'uncommon', sap: 'uncommon', fortify: 'uncommon',
   // Iron mitigation web (#65).
   feint: 'uncommon', anvilStance: 'uncommon', interlock: 'uncommon',
+  // Regen conversions (#66).
+  thornskin: 'common', sporeburst: 'uncommon',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1833,7 +1854,10 @@ export type RelicId =
   | 'ironWard'         // the first Iron card each turn costs 1 less (min 0)
   // --- Iron mitigation web relics (#65): get paid for blocking well ----------
   | 'whetstone'        // members untouched last enemy phase deal +1 on their auto
-  | 'bulwarkCore';     // a full Shield block leaves the member Braced
+  | 'bulwarkCore'      // a full Shield block leaves the member Braced
+  // --- Regen conversions relics (#66): pay out when Regen ends / HP drops -----
+  | 'deepRoots'        // a member's Regen ending (expired or consumed) leaves Brace 2
+  | 'ossuaryBell';     // a member dropping below 50% max HP gains Regen 2 (every crossing)
 
 export interface RelicDef {
   id: RelicId;
@@ -1893,6 +1917,14 @@ export const SHADOW_RELIC_DMG = 1;      // Shadow Sigil: +this to the enemy afte
 export const IRON_RELIC_DISCOUNT = 1;   // Iron Ward: the first Iron card each turn costs this less
 // Iron mitigation web relics (#65). Magnitudes tunable; a later balance pass owns them.
 export const WHETSTONE_BONUS = 1;       // Whetstone: +auto damage for a member untouched last enemy phase
+// Regen conversions relics (#66). Magnitudes tunable; a later balance pass owns them.
+// Ossuary Bell tuning (N=1000, ≤ +9pp gate): free per-crossing Regen is strong in an
+// MP-starved game — at the issue's 50% / Regen 2 it read +17.3pp, and even Regen 1 (the
+// integer floor of the magnitude lever) at 50% stayed +11.6pp. With the magnitude floored,
+// the trigger THRESHOLD (a design knob, NOT the forbidden per-fight trigger cap) drops to
+// 25%: every crossing still retriggers, but the deeper line lands it at +7.3pp, in band.
+export const OSSUARY_REGEN = 1;          // Ossuary Bell: Regen granted each time a member crosses below the threshold
+export const OSSUARY_THRESHOLD = 0.25;   // Ossuary Bell: fires on a downward crossing of this fraction of max HP
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -1951,6 +1983,11 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Members who took no damage during the last enemy phase deal +${WHETSTONE_BONUS} on their auto this turn.` },
   bulwarkCore: { id: 'bulwarkCore', name: 'Bulwark Core', rarity: 'rare', icon: '🧱',
     desc: `When a Shield fully blocks a hit, the member keeps Brace ${BRACE_AMOUNT} afterward.` },
+  // --- Regen conversions relics (#66) ----------------------------------------
+  deepRoots: { id: 'deepRoots', name: 'Deep Roots', rarity: 'uncommon', icon: '🌿',
+    desc: `When a member's Regen ends — expired or consumed — they gain Brace ${BRACE_AMOUNT}.` },
+  ossuaryBell: { id: 'ossuaryBell', name: 'Ossuary Bell', rarity: 'uncommon', icon: '🔔',
+    desc: `Whenever a member drops below ${OSSUARY_THRESHOLD * 100}% max HP, they gain Regen ${OSSUARY_REGEN}.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

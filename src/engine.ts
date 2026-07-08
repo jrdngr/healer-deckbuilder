@@ -40,6 +40,7 @@ import {
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS,
+  THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
@@ -97,6 +98,11 @@ export interface Member {
   // last enemy phase. Set in the damage pipeline, cleared at enemy-phase start; a
   // fully-blocked (Shield/Ward) hit deals 0 and leaves it false ("untouched").
   tookDamageLastEnemyPhase: boolean;
+  // Thornskin (#66): a mark with NO timer of its own — its lifetime IS the member's
+  // current Regen. While set AND regen > 0, incoming hits take THORNSKIN_REDUCTION
+  // less; the mark is cleared the moment that Regen ends (_onRegenEnded), so one
+  // Thornskin arms one Regen lifetime (recast to re-arm on a fresh Regen).
+  thornskin: boolean;
   empowerBonus: number; // Empower (#62): +abilityPower on the next ability this hero fires (one-shot)
   riposte: boolean;    // Riposte (#62): counter the next attack that hits this hero (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
@@ -333,6 +339,7 @@ export class Game {
         strikeBonus: 0, strikeTurns: 0, // no Sharpen/Embolden buff (#62)
         guardDR: 0, guardTurns: 0,       // no Guard buff (#62)
         interlockGuardTurns: [], anvilStance: false, tookDamageLastEnemyPhase: false, // Iron mitigation web (#65)
+        thornskin: false, // no Thornskin mark armed (#66)
         empowerBonus: 0, // no Empower pending (#62)
         riposte: false,  // no Riposte pending (#62)
         ward: 0,       // no Aegis Ward standing
@@ -862,6 +869,7 @@ export class Game {
     m.braceTurns = 0;
     m.regen = 0;
     m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
+    m.thornskin = false; // death drops the Thornskin mark (#66) — no Regen left to ride
     m.taunt = 0;
     m.defense = 0;
     m.defenseAmount = 0;
@@ -1103,6 +1111,39 @@ export class Game {
     this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
   }
 
+  // Central "a member's Regen just ended" hook (#66). Both end paths route here:
+  // natural expiry (consumed=false, from _startPlayerPhase) and consumption
+  // (consumed=true, from Bloom / Sporeburst). It pays any pending Lifebloom burst,
+  // clears the Thornskin mark (it lived only for THIS Regen — recast to re-arm), and
+  // — with Deep Roots — leaves the member Braced. The Lifebloom burst and Deep Roots
+  // both fire on expiry: intended double-dip. Death does NOT route here (the kill
+  // path zeroes Regen directly), so a dead member never triggers Deep Roots.
+  _onRegenEnded(m: Member, consumed: boolean): void {
+    this._endRegenBurst(m); // a pending Lifebloom burst rides any end path
+    m.thornskin = false;    // one Thornskin per Regen lifetime — recast on a fresh Regen
+    if (m.alive && this.hasRelic('deepRoots')) {
+      // Brace 2, respecting the Shield-OR-Brace replacement rule (#17): the fresh
+      // Brace replaces any standing Shield.
+      m.brace = true;
+      m.braceTurns = BRACE_TURNS;
+      m.shield = false;
+      m.shieldTurns = 0;
+      const how = consumed ? 'spent' : 'faded';
+      this._log(`Deep Roots: ${m.name}'s ${how} Regen hardens into Brace ${BRACE_AMOUNT}.`, 'status');
+      this._emit({ kind: 'braceApplied', slot: m.slot });
+    }
+  }
+
+  // Wave-wide poison stacking rule (#66, shared with #67/#72). The enemy has a SINGLE
+  // poison track: applying poison ADDS to the per-turn damage and takes the LONGER of
+  // the existing and new durations. Vulnerability does not multiply poison ticks (the
+  // tick pipeline owns that), matching existing poison behavior.
+  _applyPoison(perTurn: number, turns: number): void {
+    if (perTurn <= 0 || turns <= 0) return;
+    this.enemy.poison += perTurn;
+    this.enemy.poisonTurns = Math.max(this.enemy.poisonTurns, turns);
+  }
+
   // A Blood card's HP cost (#16). canPlay gates on hp > cost, and the payment
   // itself clamps to leave 1 HP (the dev panel bypasses canPlay) — Blood
   // self-damage is never lethal, so playCard opens no new death path.
@@ -1140,6 +1181,10 @@ export class Game {
     // with the Guard card, with itself, and with Defense. A pure read, so it previews.
     const interlock = m.interlockGuardTurns.filter((t) => t > 0).length * INTERLOCK_GUARD_DR;
     if (interlock > 0) dmg = Math.max(0, dmg - interlock);
+    // Thornskin (#66): while the mark is armed AND the member still has Regen running,
+    // each hit takes THORNSKIN_REDUCTION less — its duration is the Regen itself, not a
+    // timer. A pure read of regen (stable across the enemy phase), so it previews exactly.
+    if (m.thornskin && m.regen > 0) dmg = Math.max(0, dmg - THORNSKIN_REDUCTION);
     return dmg;
   }
 
@@ -1517,6 +1562,7 @@ export class Game {
         m.ward -= w.wardSpent;
         this._log(`${m.name}'s Ward absorbs ${w.wardSpent}. (Ward ${m.ward})`, 'shield');
       }
+      const hpBefore = m.hp; // Ossuary Bell (#66): the 50% crossing is measured across this hit
       m.hp = Math.max(0, m.hp - w.dmg);
       // Whetstone of the Patient (#65): only a hit that deals real damage marks the
       // member as touched this enemy phase — a 0-damage (fully blocked/absorbed) hit
@@ -1528,6 +1574,16 @@ export class Game {
       let killed = m.hp <= 0;
       if (killed) killed = this._killMember(m);
       this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden, attackType: t.type });
+      // Ossuary Bell (#66): a member surviving a downward crossing of OSSUARY_THRESHOLD
+      // of max HP gains Regen. Every crossing retriggers (Regen heals above → drop below
+      // again → grants anew) — no per-fight cap; magnitude + threshold are the levers. A
+      // Martyr-saved member (still alive at 1 HP) has crossed and qualifies.
+      const half = m.maxHP * OSSUARY_THRESHOLD;
+      if (m.alive && this.hasRelic('ossuaryBell') && hpBefore >= half && m.hp < half) {
+        m.regen += OSSUARY_REGEN;
+        this._log(`The Ossuary Bell tolls for ${m.name} — Regen ${m.regen}.`, 'status');
+        this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
+      }
       // Riposte (#62): the first attack that actually connects with a buffed, still-
       // living hero draws a counter for their damage. Consumed once; routed through
       // _damageEnemy so the counter respects Vulnerability like every party source.
@@ -1567,7 +1623,7 @@ export class Game {
         this._emit({ kind: 'regenTick', slot: m.slot, amount: healed, hp: m.hp });
         m.regen -= 1;
         if (m.regen === 0) {
-          this._endRegenBurst(m); // natural expiry pays a pending Lifebloom burst
+          this._onRegenEnded(m, false); // natural expiry: Lifebloom burst + Deep Roots + Thornskin cleanup (#66)
         }
       }
     }
@@ -1828,7 +1884,7 @@ export class Game {
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
         m.brace = false; m.braceTurns = 0;
-        m.regen = 0; m.bloomBurst = 0;
+        m.regen = 0; m.bloomBurst = 0; m.thornskin = false; // #66 mark cleared on revive
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
         m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
         m.interlockGuardTurns = []; m.anvilStance = false; // #65 buffs/marks cleared on revive
@@ -1882,8 +1938,9 @@ export class Game {
         m.regen = 0;
         this._log(`Bloom consumes ${m.name}'s Regen: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        // Consuming a Lifebloom Regen is one of its end conditions: burst too.
-        this._endRegenBurst(m);
+        // Consuming the Regen is one of its end conditions: Lifebloom burst + Deep
+        // Roots fire, and the Thornskin mark is cleared (#66).
+        this._onRegenEnded(m, true);
         break;
       }
       // Cascade (#63) shares Inspiration's draw effect; its Arcane count payoff is a
@@ -2069,6 +2126,32 @@ export class Game {
           this._emit({ kind: 'defenseApplied', slot: m.slot, amount: INTERLOCK_GUARD_DR });
         }
         this._log(`Interlock: every living member gains Guard ${INTERLOCK_GUARD_DR} for ${INTERLOCK_GUARD_TURNS} enemy turns.`, 'status');
+        break;
+      }
+      // --- Regen conversions (#66) ---------------------------------------------
+      case 'thornskin': {
+        // Arm the Thornskin mark on the target (canPlay's needsRegen gate guarantees
+        // an active Regen). The reduction has no timer of its own — it rides the Regen
+        // and is checked in _effectiveDamage; _onRegenEnded clears the mark when the
+        // Regen ends. A recast onto the same Regen is a harmless no-op (already armed).
+        const m = this.members[target as number];
+        m.thornskin = true;
+        this._log(`${m.name}'s skin hardens like bark — ${THORNSKIN_REDUCTION} less from each hit while their Regen lasts.`, 'status');
+        this._emit({ kind: 'braceApplied', slot: m.slot });
+        break;
+      }
+      case 'sporeburst': {
+        // Consume the full remaining Regen (canPlay's needsRegen gate guarantees > 0)
+        // and convert every consumed tick into a turn of enemy Poison via the wave-wide
+        // stacking rule. Consuming the Regen is an end path (Lifebloom burst + Deep Roots
+        // + Thornskin cleanup), routed through _onRegenEnded AFTER the poison is applied.
+        const m = this.members[target as number];
+        const ticks = m.regen;
+        m.regen = 0;
+        this._applyPoison(SPOREBURST_POISON, ticks);
+        this._log(`Sporeburst consumes ${m.name}'s Regen — the enemy is poisoned ${SPOREBURST_POISON}/turn for ${ticks} turn${ticks === 1 ? '' : 's'}. (${this.enemy.poison}/turn for ${this.enemy.poisonTurns})`, 'status');
+        this._emit({ kind: 'poisonApplied', slot: m.slot, amount: SPOREBURST_POISON, poison: this.enemy.poison });
+        this._onRegenEnded(m, true);
         break;
       }
       // --- small-party cards (#42) ---------------------------------------------

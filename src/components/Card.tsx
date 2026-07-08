@@ -15,6 +15,9 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   // Iron mitigation web (#65): Feint steers (ward), Anvil Stance turns blocking into
   // offense (power), Interlock blankets the party in Guard (ward).
   feint: 'ward', anvilStance: 'power', interlock: 'ward',
+  // Regen conversions (#66): Thornskin turns Regen into mitigation (ward), Sporeburst
+  // spends it into enemy Poison (power).
+  thornskin: 'ward', sporeburst: 'power',
   // Shadow cards (#63): direct damage / debuff plays.
   shadowBolt: 'power', siphonLife: 'power', doom: 'power',
   // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.

@@ -600,6 +600,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // Iron mitigation web (#65): the best-3 sim policy has no steer-and-block line, so
   // these stay dead-deck weight (they are for a human's Iron mitigation build).
   feint: 1, anvilStance: 1, interlock: 1,
+  // Regen conversions (#66): the best-3 sim policy has no Regen-currency line, so these
+  // stay dead-deck weight (they are for a human's Regen-conversion build).
+  thornskin: 1, sporeburst: 1,
   // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
   // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
   shadowBolt: 2, siphonLife: 2, doom: 1,
@@ -729,6 +732,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Iron mitigation web relics (#65): the best-3 policy has no steer-and-block line, so
   // it can't leverage these — value 0 (they're a human Iron-build reward).
   whetstone: 0, bulwarkCore: 0,
+  // Regen conversions relics (#66): the best-3 policy has no Regen-currency line, so it
+  // can't leverage these — value 0 (they're a human Regen-conversion reward).
+  deepRoots: 0, ossuaryBell: 0,
 };
 
 // Relic buy-value, letting a tier value relics the stick treats as inert (the #63

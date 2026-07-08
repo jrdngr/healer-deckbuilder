@@ -28,7 +28,7 @@ import {
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
   MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
   SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
-  WHETSTONE_BONUS,
+  WHETSTONE_BONUS, OSSUARY_REGEN,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -57,6 +57,8 @@ const EXERCISE_DECK: CardId[] = [
   'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
   // Iron mitigation web (#65).
   'feint', 'anvilStance', 'interlock',
+  // Regen conversions (#66): both consume/read an active Regen (the seeded Regen fodder above).
+  'thornskin', 'sporeburst',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
@@ -349,6 +351,21 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     g.telegraph = single(4, SLOT.CENTER); // fully blocked by the Shield
     g._resolveAttack();
     return !g.tank.shield && g.tank.brace; // Shield consumed -> Brace left behind
+  },
+  // --- Regen conversions relics (#66) -------------------------------------------
+  deepRoots: () => {
+    const g = probeGame(['deepRoots']); g.start();
+    g.tank.regen = 1; // a one-tick Regen that expires next player phase
+    g._startPlayerPhase(); // ticks Regen to 0 -> _onRegenEnded fires Deep Roots
+    return g.tank.brace; // the spent Regen hardened into Brace
+  },
+  ossuaryBell: () => {
+    const g = probeGame(['ossuaryBell']); g.start();
+    // Start full behind no ward so the hit is a clean downward crossing of the threshold.
+    g.tank.hp = g.tank.maxHP; g.tank.shield = false; g.tank.brace = false; g.tank.defense = 0;
+    g.telegraph = single(g.tank.maxHP - 1, SLOT.CENTER); // full -> 1 HP: below the threshold, non-lethal
+    g._resolveAttack();
+    return g.tank.alive && g.tank.regen >= OSSUARY_REGEN;
   },
 };
 
