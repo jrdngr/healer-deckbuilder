@@ -39,6 +39,7 @@ import {
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
+  ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
@@ -84,6 +85,18 @@ export interface Member {
   strikeTurns: number; // enemy turns strikeBonus lasts before it decays
   guardDR: number;     // Guard (#62): incoming damage reduced by this while guardTurns > 0
   guardTurns: number;  // enemy turns guardDR lasts before it decays
+  // Interlock (#65): Guard grants that stack FREELY (relaxing Guard's no-self-stack
+  // rule). Each element is one grant's remaining enemy turns; the total extra DR is
+  // (number of live grants × INTERLOCK_GUARD_DR), and each timer decays on its own.
+  interlockGuardTurns: number[];
+  // Anvil Stance (#65): a persistent (fight-long) mark; while set AND the member holds
+  // a Shield or Brace, their autos deal +ANVIL_STANCE_BONUS. The condition, not a timer,
+  // gates the bonus — dropping/regaining the hold toggles it.
+  anvilStance: boolean;
+  // Whetstone of the Patient (#65): true if this member took real damage during the
+  // last enemy phase. Set in the damage pipeline, cleared at enemy-phase start; a
+  // fully-blocked (Shield/Ward) hit deals 0 and leaves it false ("untouched").
+  tookDamageLastEnemyPhase: boolean;
   empowerBonus: number; // Empower (#62): +abilityPower on the next ability this hero fires (one-shot)
   riposte: boolean;    // Riposte (#62): counter the next attack that hits this hero (consumed)
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
@@ -319,6 +332,7 @@ export class Game {
         drumPrimed: false, // no War Drum / Double Strike beat pending
         strikeBonus: 0, strikeTurns: 0, // no Sharpen/Embolden buff (#62)
         guardDR: 0, guardTurns: 0,       // no Guard buff (#62)
+        interlockGuardTurns: [], anvilStance: false, tookDamageLastEnemyPhase: false, // Iron mitigation web (#65)
         empowerBonus: 0, // no Empower pending (#62)
         riposte: false,  // no Riposte pending (#62)
         ward: 0,       // no Aegis Ward standing
@@ -451,7 +465,13 @@ export class Game {
     const lone = this.hasRelic('loneWolf') && this.fieldedPartySize() <= SMALL_PARTY_MAX ? LONE_WOLF_DMG : 0;
     // Sharpen / Embolden (#62): a standing +damage buff on this hero, decays in _decayBuffs.
     const strike = m.strikeTurns > 0 ? m.strikeBonus : 0;
-    return base + this.hymnBonus + banner + lone + strike;
+    // Anvil Stance (#65): while marked AND holding a Shield or Brace, autos hit harder.
+    // Stateful-conditional — the hold, not a timer, gates it (Fortify/Rootbind extending
+    // the Shield extends the payoff; losing the hold drops it, regaining it restores it).
+    const anvil = m.anvilStance && (m.shield || m.brace) ? ANVIL_STANCE_BONUS : 0;
+    // Whetstone of the Patient (#65): a member untouched last enemy phase strikes +1.
+    const whet = this.hasRelic('whetstone') && !m.tookDamageLastEnemyPhase ? WHETSTONE_BONUS : 0;
+    return base + this.hymnBonus + banner + lone + strike + anvil + whet;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -1116,6 +1136,10 @@ export class Game {
     // not with itself (a second Guard just refreshes the timer). A pure read, so
     // attackTargets() previews it exactly (telegraph == applied).
     if (m.guardTurns > 0) dmg = Math.max(0, dmg - m.guardDR);
+    // Interlock (#65): each live Guard grant adds its own DR on top — freely stacking
+    // with the Guard card, with itself, and with Defense. A pure read, so it previews.
+    const interlock = m.interlockGuardTurns.filter((t) => t > 0).length * INTERLOCK_GUARD_DR;
+    if (interlock > 0) dmg = Math.max(0, dmg - interlock);
     return dmg;
   }
 
@@ -1164,6 +1188,10 @@ export class Game {
 
   _runEnemyPhase(): void {
     this._emit({ kind: 'enemyPhase' });
+    // Whetstone of the Patient (#65): reset the per-member "took damage" flags at the
+    // START of the enemy phase, so this phase's hits set a fresh reading that the NEXT
+    // party phase's autos read (a member untouched here strikes +1 next turn).
+    for (const m of this.members) m.tookDamageLastEnemyPhase = false;
     if (this.turn === this.enrageTurn && !this.enemy.enraged) {
       this.enemy.enraged = true;
       this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');
@@ -1334,6 +1362,15 @@ export class Game {
           this._log(`Guard fades from ${m.name}.`, 'status');
         }
       }
+      // Interlock (#65): each stacked Guard grant counts down on its own timer, so
+      // grants from different turns expire independently.
+      if (m.alive && m.interlockGuardTurns.length > 0) {
+        const before = m.interlockGuardTurns.length;
+        m.interlockGuardTurns = m.interlockGuardTurns.map((t) => t - 1).filter((t) => t > 0);
+        if (m.interlockGuardTurns.length === 0 && before > 0) {
+          this._log(`The Interlock lets go of ${m.name}.`, 'status');
+        }
+      }
       // An unused Shield fades after SHIELD_TURNS enemy turns (it is consumed —
       // not decayed — the moment it blocks a damaging hit).
       if (m.alive && m.shield && m.shieldTurns > 0) {
@@ -1459,6 +1496,15 @@ export class Game {
         m.shield = false;
         m.shieldTurns = 0;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
+        // Bulwark Core (#65): a FULL Shield block leaves the member Braced (the Shield
+        // was just consumed, so this cleanly replaces it). Only full blocks trigger it —
+        // a Brace/Guard/Defense-reduced hit takes the ordinary-damage path below.
+        if (this.hasRelic('bulwarkCore')) {
+          m.brace = true;
+          m.braceTurns = BULWARK_BRACE_TURNS;
+          this._log(`The Bulwark Core holds — ${m.name} braces (${BRACE_AMOUNT}).`, 'shield');
+          this._emit({ kind: 'braceApplied', slot: m.slot });
+        }
         this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
         continue;
       }
@@ -1472,6 +1518,10 @@ export class Game {
         this._log(`${m.name}'s Ward absorbs ${w.wardSpent}. (Ward ${m.ward})`, 'shield');
       }
       m.hp = Math.max(0, m.hp - w.dmg);
+      // Whetstone of the Patient (#65): only a hit that deals real damage marks the
+      // member as touched this enemy phase — a 0-damage (fully blocked/absorbed) hit
+      // never reaches here, so blocking well keeps the +1 auto.
+      if (w.dmg > 0) m.tookDamageLastEnemyPhase = true;
       this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       // The Martyr's Icon (#22) may veto the death — resolve that BEFORE the
       // event is emitted so the animator never stages a death that didn't happen.
@@ -1781,6 +1831,7 @@ export class Game {
         m.regen = 0; m.bloomBurst = 0;
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
         m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
+        m.interlockGuardTurns = []; m.anvilStance = false; // #65 buffs/marks cleared on revive
         m.empowerBonus = 0; m.riposte = false;
         // Reworked (#18): the revive comes back behind a fresh Shield so the
         // standing telegraph can't immediately undo the 4 MP investment.
@@ -1978,6 +2029,46 @@ export class Game {
         m.defenseAmount = Math.max(m.defense > 0 ? m.defenseAmount : 0, TAUNT_LITE_DEFENSE);
         this._log(`${m.name} Provokes — the enemy turns to them (Defense ${TAUNT_LITE_DEFENSE}) for ${TAUNT_LITE_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_LITE_TURNS });
+        break;
+      }
+      // --- Iron mitigation web (#65) -------------------------------------------
+      case 'feint': {
+        // Redirect EVERY hit of the standing telegraph onto the chosen member (a
+        // multi-hit blow stacks all its hits on them). Reuses the taunt-retarget path,
+        // but as a card — no MP surcharge (the cost is the price). No-op on a 'cast',
+        // a hidden telegraph (no readable geometry), or a Piercing-Bolt-style hit that
+        // ignores Taunt by design; modifies the telegraph in place, so attackTargets()
+        // previews the new target immediately.
+        const m = this.members[target as number];
+        const t = this.telegraph;
+        if (t && !t.cast && !t.hidden && !t.ignoreTaunt && t.targets.length > 0) {
+          t.targets = t.targets.map(() => m.slot);
+          this._log(`${m.name} Feints — the ${this.telegraphIntent() ?? 'attack'} is drawn fully onto them.`, 'status');
+          this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_LITE_TURNS });
+        } else {
+          this._log(`${m.name} Feints, but there is no attack to steer.`, 'status');
+        }
+        break;
+      }
+      case 'anvilStance': {
+        // Mark the member: while they hold a Shield or Brace, their autos deal
+        // +ANVIL_STANCE_BONUS. The mark persists for the fight — the CONDITION gates it,
+        // checked at auto time in memberDamage.
+        const m = this.members[target as number];
+        m.anvilStance = true;
+        this._log(`${m.name} takes an Anvil Stance — +${ANVIL_STANCE_BONUS} damage while holding a Shield or Brace.`, 'status');
+        this._emit({ kind: 'braceApplied', slot: m.slot });
+        break;
+      }
+      case 'interlock': {
+        // Grant every living member a Guard that stacks FREELY (relaxing Guard's
+        // no-self-stack rule): push one grant with its own timer, so repeat casts and
+        // pre-existing Guard all add up and each expires independently.
+        for (const m of this.livingMembers()) {
+          m.interlockGuardTurns = [...m.interlockGuardTurns, INTERLOCK_GUARD_TURNS];
+          this._emit({ kind: 'defenseApplied', slot: m.slot, amount: INTERLOCK_GUARD_DR });
+        }
+        this._log(`Interlock: every living member gains Guard ${INTERLOCK_GUARD_DR} for ${INTERLOCK_GUARD_TURNS} enemy turns.`, 'status');
         break;
       }
       // --- small-party cards (#42) ---------------------------------------------

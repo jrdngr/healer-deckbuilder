@@ -38,6 +38,8 @@ export type CardId =
   | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
   | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
   | 'phalanx' | 'brace' | 'provoke'
+  // Iron mitigation web (#65): steer telegraphed hits, get paid for blocking.
+  | 'feint' | 'anvilStance' | 'interlock'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
@@ -749,6 +751,15 @@ export const PHALANX_TURNS = 2;       // enemy turns Phalanx's Defense lasts
 export const BRACE_AMOUNT = 2;        // one-shot reduction Brace applies to the next damaging hit
 export const BRACE_TURNS = 3;         // enemy turns an unused Brace lasts before fading (mirrors Shield)
 
+// Iron mitigation web (#65): steer telegraphed hits into prepared members, and turn
+// blocking into offense/more mitigation. Magnitudes are tunable — a later balance
+// pass owns the numbers; this issue ships the mechanics.
+//   Feint carries no magnitude (it retargets the standing telegraph; its cost is its price).
+export const ANVIL_STANCE_BONUS = 2;     // Anvil Stance: +auto damage while the marked member holds Shield/Brace
+export const INTERLOCK_GUARD_DR = 1;     // Interlock: Guard DR granted to every living member
+export const INTERLOCK_GUARD_TURNS = 2;  // Interlock: enemy turns each Guard grant lasts (stacks freely)
+export const BULWARK_BRACE_TURNS = 2;    // Bulwark Core: enemy turns the granted Brace lasts after a full Shield block
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -873,6 +884,21 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // redirection tool, so the Tank isn't mandatory in every party.
   provoke: { id: 'provoke', name: 'Provoke', cost: 1, target: 'single',
     desc: 'The target Taunts (enemy aims at them) and braces (Defense 1) for 2 enemy turns.' },
+  // --- Iron mitigation web (#65): steer hits, get paid for blocking ----------
+  // Feint redirects EVERY hit of the standing telegraph onto one member (a
+  // multi-hit blow stacks all its hits on them) — reuses the taunt-retarget path,
+  // but as a card effect with no MP surcharge (the card's cost is the price).
+  feint: { id: 'feint', name: 'Feint', cost: 1, target: 'single',
+    desc: 'Redirect every hit of the standing telegraph onto the target member.' },
+  // Anvil Stance is stateful-conditional: the +damage is checked at auto time
+  // against the member's CURRENT Shield/Brace hold, and the mark persists for the
+  // fight (the condition — not a timer — gates the bonus).
+  anvilStance: { id: 'anvilStance', name: 'Anvil Stance', cost: 2, target: 'single',
+    desc: `While the target holds a Shield or Brace, their attacks deal +${ANVIL_STANCE_BONUS}.` },
+  // Interlock blankets the party in Guard; its grants stack freely (no cap) and each
+  // decays on its own timer — the one place Guard's no-self-stack rule is relaxed.
+  interlock: { id: 'interlock', name: 'Interlock', cost: 2, target: 'all',
+    desc: `Every living member gains Guard ${INTERLOCK_GUARD_DR} for ${INTERLOCK_GUARD_TURNS} enemy turns (stacks with any Guard).` },
   // --- Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff --
   shadowBolt: { id: 'shadowBolt', name: 'Shadow Bolt', cost: 1, target: 'none',
     desc: `Deal ${SHADOW_BOLT_DMG} damage to the enemy.` },
@@ -960,6 +986,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   shield: 'iron', barrier: 'iron', phalanx: 'iron', brace: 'iron', provoke: 'iron', holdTheLine: 'iron',
   bolster: 'iron', guard: 'iron', goad: 'iron',
   fortify: 'iron', /* channeled Iron shield (#64) */
+  feint: 'iron', anvilStance: 'iron', interlock: 'iron', /* Iron mitigation web (#65) */
 };
 
 // The assembled card table: each raw def with its type folded in. Every card in
@@ -1571,6 +1598,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   cascade: 'uncommon', nightfall: 'uncommon',
   // Channeled cards (#64).
   drain: 'uncommon', mendingStream: 'uncommon', sap: 'uncommon', fortify: 'uncommon',
+  // Iron mitigation web (#65).
+  feint: 'uncommon', anvilStance: 'uncommon', interlock: 'uncommon',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1801,7 +1830,10 @@ export type RelicId =
   // --- card-type synergy relics (#63): read card type on play ----------------
   | 'reliquaryOfLight' // Holy cards heal +1
   | 'shadowSigil'      // after you play a Shadow card, deal +1 to the enemy
-  | 'ironWard';        // the first Iron card each turn costs 1 less (min 0)
+  | 'ironWard'         // the first Iron card each turn costs 1 less (min 0)
+  // --- Iron mitigation web relics (#65): get paid for blocking well ----------
+  | 'whetstone'        // members untouched last enemy phase deal +1 on their auto
+  | 'bulwarkCore';     // a full Shield block leaves the member Braced
 
 export interface RelicDef {
   id: RelicId;
@@ -1859,6 +1891,8 @@ export const RUSTY_CROWN_GOLD = 15;    // extra gold per fight win under the Cro
 export const HOLY_RELIC_HEAL = 1;       // Reliquary of Light: Holy cards heal +this
 export const SHADOW_RELIC_DMG = 1;      // Shadow Sigil: +this to the enemy after a Shadow card
 export const IRON_RELIC_DISCOUNT = 1;   // Iron Ward: the first Iron card each turn costs this less
+// Iron mitigation web relics (#65). Magnitudes tunable; a later balance pass owns them.
+export const WHETSTONE_BONUS = 1;       // Whetstone: +auto damage for a member untouched last enemy phase
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -1912,6 +1946,11 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `After you play a Shadow card, deal +${SHADOW_RELIC_DMG} to the enemy.` },
   ironWard: { id: 'ironWard', name: 'Iron Ward', rarity: 'uncommon', icon: '🛡',
     desc: `The first Iron card you play each turn costs ${IRON_RELIC_DISCOUNT} less (min 0).` },
+  // --- Iron mitigation web relics (#65) --------------------------------------
+  whetstone: { id: 'whetstone', name: 'Whetstone of the Patient', rarity: 'common', icon: '🪨',
+    desc: `Members who took no damage during the last enemy phase deal +${WHETSTONE_BONUS} on their auto this turn.` },
+  bulwarkCore: { id: 'bulwarkCore', name: 'Bulwark Core', rarity: 'rare', icon: '🧱',
+    desc: `When a Shield fully blocks a hit, the member keeps Brace ${BRACE_AMOUNT} afterward.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

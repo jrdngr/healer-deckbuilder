@@ -597,6 +597,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
   lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
   phalanx: 2, brace: 2, provoke: 2,
+  // Iron mitigation web (#65): the best-3 sim policy has no steer-and-block line, so
+  // these stay dead-deck weight (they are for a human's Iron mitigation build).
+  feint: 1, anvilStance: 1, interlock: 1,
   // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
   // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
   shadowBolt: 2, siphonLife: 2, doom: 1,
@@ -723,6 +726,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Card-type synergy relics (#63): the best-3 policy has no type-themed line (it never
   // banks the Shadow/Iron cards, and its heal spam already tops off), so value 0.
   reliquaryOfLight: 0, shadowSigil: 0, ironWard: 0,
+  // Iron mitigation web relics (#65): the best-3 policy has no steer-and-block line, so
+  // it can't leverage these — value 0 (they're a human Iron-build reward).
+  whetstone: 0, bulwarkCore: 0,
 };
 
 // Relic buy-value, letting a tier value relics the stick treats as inert (the #63

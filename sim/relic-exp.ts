@@ -75,6 +75,8 @@ export function runRelicLine(relic: RelicId | null, n: number, firstSeed = 1): R
 const BATTERY: RelicId[] = [
   'aegisFont', 'firstLightTaper', 'duskChime', 'martyrsIcon',
   'pactOfSilence', 'crackedHourglass', 'rustyCrown',
+  // Iron mitigation web relics (#65) — gated ≤ +9pp.
+  'whetstone', 'bulwarkCore',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

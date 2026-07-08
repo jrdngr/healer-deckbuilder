@@ -9,6 +9,7 @@ import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constan
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
+import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
@@ -3723,6 +3724,134 @@ function countPulses(g: Game): number {
   eq('Mending Stream caps at MENDING_STREAM_MAX_TURNS', CARDS.mendingStream.channel?.maxTurns, MENDING_STREAM_MAX_TURNS);
   // Font of Mana stays the buff-style MP engine (not a channel).
   check('Font of Mana is not a channel', CARDS.fontOfMana.channel == null);
+}
+
+// --- Iron mitigation web (#65) ---------------------------------------------
+{
+  // Feint redirects EVERY hit of a multi-hit telegraph onto one member; the
+  // preview predicts exactly that before resolution (preview == applied).
+  const g = new Game(650); g.start();
+  const tank = g.tank; tank.hp = tank.maxHP;
+  // A two-target blow aimed at the EDGES (not the tank).
+  g.telegraph = { type: 'two', hidden: false, damage: 3, targets: [SLOT.LEFT, SLOT.RIGHT], enraged: false, forTurn: 2 };
+  g.playCard(giveCard(g, 'feint'), SLOT.CENTER); // steer it all onto the tank
+  const preview = g.attackTargets();
+  eq('Feint: both hits previewed', preview.length, 2);
+  check('Feint: every previewed hit lands on the tank', preview.every((s) => s.slot === SLOT.CENTER));
+  const before = tank.hp;
+  g._resolveAttack();
+  eq('Feint: applied == both hits stacked on the tank', before - tank.hp, 3 + 3);
+}
+{
+  // Feint is inert against a Piercing-Bolt-style ignoreTaunt hit (boss tech stays
+  // un-steerable) — the target set is unchanged.
+  const g = new Game(651); g.start();
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.LEFT], enraged: false, forTurn: 2, ignoreTaunt: true, targetLowest: true };
+  g.playCard(giveCard(g, 'feint'), SLOT.CENTER);
+  eq('Feint: an ignoreTaunt hit is not steered', g.telegraph?.targets[0], SLOT.LEFT);
+}
+{
+  // Anvil Stance: the +bonus is condition-gated on a live Shield/Brace hold — it
+  // toggles as the hold is gained, lost, and regained (via a Fortify tick).
+  const g = new Game(652); g.start();
+  const tank = g.tank; tank.hp = tank.maxHP;
+  const base = g.memberDamage(tank);
+  g.playCard(giveCard(g, 'anvilStance'), SLOT.CENTER);
+  eq('Anvil Stance: no bonus without a hold', g.memberDamage(tank), base);
+  g.playCard(giveCard(g, 'shield'), SLOT.CENTER);
+  eq('Anvil Stance: +bonus while holding a Shield', g.memberDamage(tank), base + ANVIL_STANCE_BONUS);
+  tank.shield = false; tank.shieldTurns = 0; // lose the hold
+  eq('Anvil Stance: bonus drops with the hold', g.memberDamage(tank), base);
+  g.playCard(giveCard(g, 'fortify'), SLOT.CENTER); // channel: first tick re-grants a Shield
+  check('Anvil Stance: Fortify re-grants a Shield', tank.shield);
+  eq('Anvil Stance: bonus restored when the hold returns', g.memberDamage(tank), base + ANVIL_STANCE_BONUS);
+  // Brace also satisfies the condition.
+  tank.shield = false; tank.shieldTurns = 0;
+  tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  eq('Anvil Stance: a Brace hold also grants the bonus', g.memberDamage(tank), base + ANVIL_STANCE_BONUS);
+}
+{
+  // Interlock: Guard 1 on every living member, stacking freely (two casts -> -2 per
+  // hit), additive with Defense, and the grants expire on independent timers.
+  const g = new Game(653); g.start();
+  const tank = g.tank; tank.hp = tank.maxHP;
+  g.playCard(giveCard(g, 'interlock'), null);
+  for (const m of g.livingMembers()) check(`Interlock grants ${m.name} a guard`, m.interlockGuardTurns.length === 1);
+  // Second cast a turn later stacks a second grant with a fresher timer.
+  g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
+  g.endTurn(); // party + enemy phase: the first grant ticks 2 -> 1
+  g.playCard(giveCard(g, 'interlock'), null);
+  eq('Interlock: two grants stacked on the tank', tank.interlockGuardTurns.length, 2);
+  // A 5-damage single now takes -2 (two Guard 1 grants), additive on top of Defense.
+  tank.defense = 4; tank.defenseAmount = 1; // +1 Defense
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn + 1 };
+  eq('Interlock: -2 guard stacks with -1 Defense on the preview', g.attackTargets()[0]?.damage, 5 - 1 - 2 * INTERLOCK_GUARD_DR);
+  // Expire independently: the older grant (1 turn left) fades first, leaving one.
+  g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
+  g._runEnemyPhase();
+  eq('Interlock: the older grant expired, one remains', tank.interlockGuardTurns.length, 1);
+  eq('Interlock: grants last INTERLOCK_GUARD_TURNS', CARDS.interlock.target, 'all');
+  check('Interlock: guard turns constant is positive', INTERLOCK_GUARD_TURNS > 0);
+}
+{
+  // Whetstone of the Patient: a member untouched last enemy phase strikes +1; a
+  // member that took real damage does not; a fully Shield-blocked member counts as
+  // untouched.
+  const g = new Game(654, ((): any => { const c = defaultBattleConfig(); c.relics = ['whetstone']; return c; })());
+  g.start();
+  const [ranger, tank, mage] = g.members;
+  for (const m of g.members) { m.hp = m.maxHP; m.tookDamageLastEnemyPhase = false; }
+  // Ranger takes a real hit; tank is Shield-blocked (untouched); mage untargeted.
+  tank.shield = true; tank.shieldTurns = SHIELD_TURNS;
+  g.telegraph = { type: 'two', hidden: false, damage: 2, targets: [SLOT.LEFT, SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  check('Whetstone: a hit member is marked touched', ranger.tookDamageLastEnemyPhase);
+  check('Whetstone: a fully Shield-blocked member stays untouched', !tank.tookDamageLastEnemyPhase);
+  eq('Whetstone: touched member gets no bonus', g.memberDamage(ranger), ranger.damage);
+  eq('Whetstone: fully-blocked member gets the bonus', g.memberDamage(tank), tank.damage + WHETSTONE_BONUS);
+  eq('Whetstone: untouched member gets the bonus', g.memberDamage(mage), mage.damage + WHETSTONE_BONUS);
+}
+{
+  // Whetstone is inert with no relic owned (no code path fires).
+  const g = new Game(655); g.start();
+  const tank = g.tank; tank.hp = tank.maxHP; tank.tookDamageLastEnemyPhase = false;
+  eq('Whetstone inert without the relic', g.memberDamage(tank), tank.damage);
+}
+{
+  // Bulwark Core: a FULL Shield block leaves the member Braced; a Brace-reduced
+  // (still-damaging) hit does not trigger it. Inert with no relic.
+  const g = new Game(656, ((): any => { const c = defaultBattleConfig(); c.relics = ['bulwarkCore']; return c; })());
+  g.start();
+  const tank = g.tank; tank.hp = tank.maxHP;
+  tank.shield = true; tank.shieldTurns = SHIELD_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  check('Bulwark Core: full block consumes the Shield', !tank.shield);
+  check('Bulwark Core: full block leaves a Brace', tank.brace);
+  eq('Bulwark Core: the granted Brace carries its fuse', tank.braceTurns, BULWARK_BRACE_TURNS);
+  // A Brace-reduced but still-damaging hit must NOT re-trigger Bulwark (it stays a
+  // one-shot Brace, consumed, not refreshed into another).
+  const mage = g.mage; mage.hp = mage.maxHP;
+  mage.brace = true; mage.braceTurns = BRACE_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.RIGHT], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  check('Bulwark Core: a partial (Brace) block does not re-grant Brace', !mage.brace);
+}
+{
+  // Bulwark Core inert without the relic: a Shield block leaves no Brace behind.
+  const g = new Game(657); g.start();
+  const tank = g.tank; tank.hp = tank.maxHP;
+  tank.shield = true; tank.shieldTurns = SHIELD_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  check('Bulwark Core inert: Shield block leaves no Brace', !tank.brace);
+}
+{
+  // Definitions / typing sanity for the three new Iron cards and two relics (#65).
+  check('Feint / Anvil Stance / Interlock are Iron', (['feint', 'anvilStance', 'interlock'] as CardId[]).every((id) => cardType(id) === 'iron'));
+  check('all three new cards are shop/reward-eligible', (['feint', 'anvilStance', 'interlock'] as CardId[]).every((id) => CARD_POOL.includes(id)));
+  check('the three new cards carry a rarity', (['feint', 'anvilStance', 'interlock'] as CardId[]).every((id) => CARD_RARITY[id] != null));
+  check('Whetstone / Bulwark Core are real relics', (['whetstone', 'bulwarkCore'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

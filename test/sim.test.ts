@@ -235,7 +235,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // to that ceiling. deaths/won-fight fell for the flawless line (it wins by keeping
   // the party alive); the healing/attrition pressure now lives at the AVERAGE tier
   // (~1.3 scars/run). Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 182, 177, 176, 170, 168, 168, 155]));
+  // 2026-07-08 (#65 Iron mitigation web): 3 shop-eligible Iron cards (Feint, Anvil
+  // Stance, Interlock) join CARD_POOL and 2 relics (Whetstone, Bulwark Core) join the
+  // relic pool — a pure rng-stream perturbation (the best-3 policy has no steer-and-block
+  // line; the cards carry buy value 1 and the relics value 0, so it never banks them).
+  // The vector shifts: F2 182->181, F4 176->175, F5 170->167, F6 168->164, F7 168->161,
+  // F8 155->153 (F0/F1/F3 unchanged). All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 181, 177, 175, 167, 164, 161, 153]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

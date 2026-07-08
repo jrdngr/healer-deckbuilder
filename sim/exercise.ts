@@ -28,6 +28,7 @@ import {
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
   MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
   SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
+  WHETSTONE_BONUS,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -54,6 +55,8 @@ const EXERCISE_DECK: CardId[] = [
   'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'refresh', 'cleanse',
   'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
   'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
+  // Iron mitigation web (#65).
+  'feint', 'anvilStance', 'interlock',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
@@ -331,6 +334,21 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const g = probeGame(['ironWard']); g.start();
     const i = give(g, 'shield'); // Iron, cost 3 -> the first Iron card is cheaper
     return g.effectiveCost(resolveCard(g.hand[i])) === CARDS.shield.cost - IRON_RELIC_DISCOUNT;
+  },
+  // --- Iron mitigation web relics (#65) -----------------------------------------
+  whetstone: () => {
+    const g = probeGame(['whetstone']); g.start();
+    // A member untouched last enemy phase strikes +1 (the opener may have marked
+    // some; clear the flag to observe the bonus on an untouched member).
+    g.tank.tookDamageLastEnemyPhase = false;
+    return g.memberDamage(g.tank) === g.tank.damage + WHETSTONE_BONUS;
+  },
+  bulwarkCore: () => {
+    const g = probeGame(['bulwarkCore']); g.start();
+    g.tank.shield = true; g.tank.shieldTurns = 3;
+    g.telegraph = single(4, SLOT.CENTER); // fully blocked by the Shield
+    g._resolveAttack();
+    return !g.tank.shield && g.tank.brace; // Shield consumed -> Brace left behind
   },
 };
 

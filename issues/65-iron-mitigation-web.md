@@ -1,6 +1,6 @@
 # Issue 65 — Iron mitigation web: steer hits, get paid for blocking
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards + relics)   **Size:** L
 - **Depends on:** —   **Blocks:** #74 (Duelist pays off this web)
 - **Addresses:** intake 2026-07-07 — new-content wave: synergies must be systemic (combined
