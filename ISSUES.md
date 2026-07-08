@@ -23,6 +23,22 @@ When an issue lands:
    the [Issues table](#issues-implementation-order) below. The issue file stays in [`issues/`](./issues/)
    as the historical archive — the table only ever shows what is still open.
 
+## Implementing all open issues
+
+When I say **"implement all open issues"** (or anything like it), work through every open issue in
+the [Issues table](#issues-implementation-order) below:
+
+1. **One subagent per issue, fresh context.** Implement each issue by dispatching a subagent (the
+   Agent tool) whose entire job is that single issue. Each issue gets its own clean context — do not
+   carry one issue's working context into the next.
+2. **Sequential, not parallel.** Implement issues in table order (which is dependency order). Launch
+   the next issue's subagent only **after** the previous one has fully finished. Never run issue
+   subagents concurrently.
+3. **Each subagent completes the issue end to end** per `CLAUDE.md` and the "Completing an issue"
+   rules above: implement the change, add tests, run `npm test` and `npm run typecheck`, flip the
+   issue file's `- **Status:**` line to `✅ Complete`, remove its row from the table, and land its
+   own `jj` commit.
+
 ## Legend
 
 - **Phase** — the roadmap milestone the issue belongs to.
