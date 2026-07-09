@@ -337,6 +337,20 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return impact + 220;
   },
+  lightkeeper: (ev, push, t) => {
+    // A soft mote of holy light lobbed at the enemy — she is a healer, not a striker (#76).
+    const c = '#ffe9a8';
+    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 240 }] });
+    push({ at: t + 120, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 0.85, dur: 260 },
+    ] });
+    const impact = t + 120 + 260;
+    push({ at: impact, shake: 3, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'burst', at: 'enemy', color: c, count: 10, spread: 44 },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 200;
+  },
 };
 
 // Resolve one enemy-attack target at `at`: a whiff, a block, a hit, or a kill

@@ -47,6 +47,7 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   liturgy: 'mana', // channel-economy ability card (#73)
   enGarde: 'ward', // Duelist's Iron counter-stance (#74)
   penance: 'power', // Flagellant pays HP for a party-wide +auto (#75)
+  radiance: 'heal', // Lightkeeper's party heal that hardens overheal into Brace (#76)
 };
 
 interface CardProps {

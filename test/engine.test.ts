@@ -4,7 +4,7 @@ import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS,
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
-import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SANGUINE_PACT_THRESHOLD } from '../src/constants';
+import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SANGUINE_PACT_THRESHOLD, RADIANCE_HEAL } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
@@ -5371,6 +5371,149 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   check('penanceBonus is live this phase', g.penanceBonus === PENANCE_STRIKE_BONUS);
   g._runPartyPhase();
   check('the buff resets after the party autos resolve (one-phase, like Hymn)', g.penanceBonus === 0);
+}
+
+// --- Lightkeeper + Radiance (#76): overheal-as-mitigation --------------------
+// A fight with a Lightkeeper fielded so her Radiance ability card is playable.
+// Lightkeeper seats LEFT (slot 0); tank CENTER, mage RIGHT. Enemy HP is huge and
+// enrage disabled so nothing interferes; per-test HP is set on the members directly.
+function lightkeeperGame(seed: number, relics: RelicId[] = []): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['lightkeeper', 'tank', 'mage']);
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  cfg.relics = relics;
+  const g = new Game(seed, cfg); g.start();
+  g.members.forEach((m) => { m.shield = false; m.shieldTurns = 0; m.brace = false; m.braceAmount = 0; m.braceTurns = 0; });
+  g.enemy.maxHP = 100000; g.enemy.hp = 100000;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 0;
+  g.maxMana = 40; g.mp = 40; g.passiveMp = 0; g.enrageTurn = 9999;
+  return g;
+}
+{
+  // Definitions / typing sanity for the member and the ability card (#76).
+  eq('Lightkeeper is in MEMBER_POOL', MEMBER_POOL.lightkeeper?.id, 'lightkeeper');
+  eq('Lightkeeper maxHP 11', MEMBER_POOL.lightkeeper.maxHP, 11);
+  eq('Lightkeeper damage 2 (support body)', MEMBER_POOL.lightkeeper.damage, 2);
+  eq('Lightkeeper ability is radiance', MEMBER_POOL.lightkeeper.ability, 'radiance');
+  eq('Lightkeeper base salary 15', MEMBER_BASE_SALARY.lightkeeper, 15);
+  check('Lightkeeper is in the draft pool', DRAFT_POOL.includes('lightkeeper'));
+  check('Lightkeeper has an ability flavor mentioning Radiance', /Radiance/.test(MEMBER_ABILITY_FLAVOR.lightkeeper ?? ''));
+  eq('radiance is the Lightkeeper\'s bound ability card', ABILITY_CARD.radiance, 'radiance');
+  eq('Radiance is Holy', cardType('radiance'), 'holy');
+  check('Radiance counts toward the holy bucket (Reliquary applies)', cardsOfType('holy').includes('radiance'));
+  eq('Radiance costs 2', CARDS.radiance.cost, 2);
+  eq('Radiance targets none', CARDS.radiance.target, 'none');
+  eq('Radiance is uncommon', CARD_RARITY.radiance, 'uncommon');
+  check('Radiance is an ability card (never shopped)', isAbilityCard('radiance') && !CARD_POOL.includes('radiance'));
+}
+{
+  // Full topped party: heal lands as pure overheal, so every member gains Brace equal
+  // to RADIANCE_HEAL and no HP changes. Casting again STACKS (Brace 2 -> 4) — the
+  // additive carve-out (#76) from the Brace card's newest-replaces rule.
+  const g = lightkeeperGame(760);
+  g.members.forEach((m) => { m.hp = m.maxHP; });
+  const hpBefore = g.members.map((m) => m.hp);
+  g.playCard(giveCard(g, 'radiance'), null);
+  check('no member changed HP (all were topped)', g.members.every((m, i) => m.hp === hpBefore[i]));
+  check('every living member is braced', g.livingMembers().every((m) => m.brace));
+  check('each Brace equals RADIANCE_HEAL', g.livingMembers().every((m) => m.braceAmount === RADIANCE_HEAL));
+  check('brace timer set to the standard fade', g.livingMembers().every((m) => m.braceTurns === BRACE_TURNS));
+  g.playCard(giveCard(g, 'radiance'), null);
+  check('a repeat cast STACKS Brace without limit (2 -> 4)', g.livingMembers().every((m) => m.braceAmount === 2 * RADIANCE_HEAL));
+  check('brace timer refreshed on the addition', g.livingMembers().every((m) => m.braceTurns === BRACE_TURNS));
+}
+{
+  // Mixed party: a deeply wounded member just heals (no overheal, no Brace); a member
+  // exactly 1 below max gains +1 HP and Brace 1 (the 1 point of overheal).
+  const g = lightkeeperGame(761);
+  const lk = g.members[SLOT.LEFT], tank = g.members[SLOT.CENTER], mage = g.members[SLOT.RIGHT];
+  tank.hp = tank.maxHP - 5;       // deeply wounded: 2 heal, no overheal
+  mage.hp = mage.maxHP - 1;       // one below max: +1 HP, overheal 1
+  lk.hp = lk.maxHP;               // topped: pure overheal 2
+  g.playCard(giveCard(g, 'radiance'), null);
+  eq('wounded tank healed RADIANCE_HEAL', tank.hp, tank.maxHP - 5 + RADIANCE_HEAL);
+  check('wounded tank gained NO Brace (no overheal)', !tank.brace && tank.braceAmount === 0);
+  eq('the 1-below member reached full', mage.hp, mage.maxHP);
+  check('the 1-below member gained Brace 1 (the single overheal point)', mage.brace && mage.braceAmount === 1);
+  check('the topped Lightkeeper gained Brace RADIANCE_HEAL', lk.brace && lk.braceAmount === RADIANCE_HEAL);
+}
+{
+  // Shield asymmetry (#76): a Shield-holder keeps the Shield — the overheal-to-Brace
+  // conversion is SKIPPED for them (a full block already beats Brace), but the heal
+  // still lands. The one documented exception to Brace's newest-replaces rule.
+  const g = lightkeeperGame(762);
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = tank.maxHP;                       // topped, so the heal is pure overheal
+  tank.shield = true; tank.shieldTurns = SHIELD_TURNS;
+  g.playCard(giveCard(g, 'radiance'), null);
+  check('the Shield is preserved (not overwritten)', tank.shield && tank.shieldTurns === SHIELD_TURNS);
+  check('no Brace granted to the Shield-holder', !tank.brace && tank.braceAmount === 0);
+  // Meanwhile a non-shield topped member DID convert — the skip is per-member.
+  const lk = g.members[SLOT.LEFT];
+  check('the non-shield member still braced on overheal', lk.brace && lk.braceAmount === RADIANCE_HEAL);
+}
+{
+  // Reliquary of Light (+1 holy heal) rides Radiance (a holy card): the heal is 3, so a
+  // topped member's overheal — and its Brace — is RADIANCE_HEAL + HOLY_RELIC_HEAL.
+  const g = lightkeeperGame(763, ['reliquaryOfLight']);
+  g.members.forEach((m) => { m.hp = m.maxHP; });
+  g.playCard(giveCard(g, 'radiance'), null);
+  check('topped members gain Brace RADIANCE_HEAL + HOLY_RELIC_HEAL (=3)',
+    g.livingMembers().every((m) => m.braceAmount === RADIANCE_HEAL + HOLY_RELIC_HEAL));
+}
+{
+  // Beacon of the Second Sun (#69): a member healed exactly to full by Radiance draws
+  // a card (reachedFull, even with overheal 0). Set the mage exactly RADIANCE_HEAL
+  // below max so the heal lands on the line with no overheal.
+  const g = lightkeeperGame(764, ['beaconOfSecondSun']);
+  g.members.forEach((m) => { m.hp = m.maxHP; });        // others topped (before==max: no draw)
+  const mage = g.members[SLOT.RIGHT];
+  mage.hp = mage.maxHP - RADIANCE_HEAL;                  // heals exactly to full, overheal 0
+  const handBefore = g.hand.length;                     // snapshot BEFORE giveCard adds the card
+  g.playCard(giveCard(g, 'radiance'), null);            // radiance nets 0 (added then played), +BEACON_DRAW
+  eq('the on-the-line member reached full', mage.hp, mage.maxHP);
+  check('reaching full did not brace him (overheal 0)', !mage.brace);
+  eq('Beacon drew BEACON_DRAW for the member topped off', g.hand.length, handBefore + BEACON_DRAW);
+}
+{
+  // Aegis Font (#22) does NOT double-convert Radiance's overheal: Radiance captures the
+  // overheal for Brace (captureOverheal), so the Font wells up NO Ward on the converted
+  // members — the #69 ordering rule (card converts first; Font gets no share).
+  const g = lightkeeperGame(765, ['aegisFont']);
+  const lk = g.members[SLOT.LEFT];
+  lk.hp = lk.maxHP; lk.ward = 0;                         // topped -> pure overheal
+  g.playCard(giveCard(g, 'radiance'), null);
+  check('overheal converted to Brace, not Ward', lk.brace && lk.braceAmount === RADIANCE_HEAL);
+  eq('Aegis Font added no Ward (no double-convert)', lk.ward, 0);
+}
+{
+  // Asymmetry pin: Radiance's Brace ADDS to an existing Brace, but the Brace CARD keeps
+  // its newest-replaces rule. Stack Radiance twice to Brace 4, then a Brace card REPLACES
+  // it down to BRACE_AMOUNT — proving the additive carve-out is scoped to Radiance only.
+  const g = lightkeeperGame(766);
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = tank.maxHP;
+  g.playCard(giveCard(g, 'radiance'), null);
+  g.playCard(giveCard(g, 'radiance'), null);
+  eq('two Radiance casts stacked Brace to 4', tank.braceAmount, 2 * RADIANCE_HEAL);
+  g.playCard(giveCard(g, 'brace'), tank.slot);
+  eq('a Brace CARD REPLACES (newest-replaces), not adds', tank.braceAmount, BRACE_AMOUNT);
+  // And the reverse: a standing Brace-card Brace, then Radiance ADDS onto it.
+  const mage = g.members[SLOT.RIGHT];
+  mage.hp = mage.maxHP;
+  g.playCard(giveCard(g, 'brace'), mage.slot);          // Brace 2
+  g.playCard(giveCard(g, 'radiance'), null);            // +2 overheal -> 4
+  eq('Radiance ADDS onto an existing Brace-card Brace', mage.braceAmount, BRACE_AMOUNT + RADIANCE_HEAL);
+}
+{
+  // Unplayable while she is down (#44): a dead Lightkeeper means no ability member, so
+  // Radiance can't be cast.
+  const g = lightkeeperGame(767);
+  const lk = g.members[SLOT.LEFT];
+  lk.alive = false; lk.hp = 0;
+  const res = g.playCard(giveCard(g, 'radiance'), null);
+  check('Radiance is unplayable while the Lightkeeper is down', !res.ok);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

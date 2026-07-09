@@ -67,4 +67,3 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 76 | 📋 Open | [Lightkeeper + Radiance](issues/76-member-lightkeeper.md) | content (roster + ability) | 69 | intake 2026-07-07 new-content wave |

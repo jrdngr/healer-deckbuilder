@@ -326,7 +326,15 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // 158->148, F6 154->145, F7 152->140, F8 146->125. All band/CI/boss gates below still
   // hold (full-run CI-consistent with the ~75% ceiling; bosses in-band). Re-pinned on the
   // new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 178, 172, 166, 148, 145, 140, 125]));
+  //   • #76 Lightkeeper (an 11-HP / 2-dmg support whose Radiance heals the party and
+  //     converts overheal to Brace) joins the start draft and every Recruit, so
+  //     availableMembers() grows and the draft/deploy RNG stream reshuffles again (Radiance
+  //     is a per-fight ability card — nothing enters the shop pool). The best-fit policy has
+  //     no overheal-to-Brace line, so she reads as a plain 2-dmg body; the net effect on
+  //     these seeds is pure stream perturbation, mostly a slight LIFT at the later walls:
+  //     F0/F1 unchanged (199/197), F2 178->181, F3 172->175, F4 166->171, F5 148->159, F6
+  //     145->152, F7 140->152, F8 125->142. All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 181, 175, 171, 159, 152, 152, 142]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

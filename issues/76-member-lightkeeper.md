@@ -1,6 +1,6 @@
 # Issue 76 — Lightkeeper: overheal-as-mitigation and Radiance
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (roster + ability)   **Size:** M
 - **Depends on:** #69 (heal-result struct + overheal capture + topping payoffs)   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: overheal made defensive and stronger

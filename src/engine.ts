@@ -26,7 +26,7 @@ import {
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
-  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS,
+  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, RADIANCE_HEAL,
   SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
@@ -3084,6 +3084,46 @@ export class Game {
           ? `${m.name} spends the last of his blood — Penance is paid. Every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`
           : `${m.name} scourges himself (-${cost} HP) — Penance: every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`, 'status');
         this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died });
+        break;
+      }
+      case 'radiance': {
+        // The Lightkeeper (#76) heals EVERY living member and turns each member's OVERHEAL
+        // into Brace — the wave's "party at full HP" payoff (#69). The heal routes through
+        // the normal pipeline (_applyHeal): Field Triage, Reliquary of Light (via the holy
+        // bonus below), and Beacon's heal-to-full draw all apply, and #69's result struct
+        // (healed/overheal/reachedFull) supplies the overheal — no separate overheal math.
+        // abilityPower (Empower / injury) scales the heal (and therefore the possible Brace),
+        // keeping one lever; it was already bumped by Empower at the top of _fireAbility.
+        //   - ADDITIVE carve-out: Radiance's Brace ADDS to any existing Brace (brace +=
+        //     overheal) and refreshes the single timer — deliberately unlike the Brace card's
+        //     newest-replaces rule, so repeat casts pile it up. No cap.
+        //   - SHIELD asymmetry (the one documented exception): a member holding a Shield keeps
+        //     it — the conversion is SKIPPED for them (a full block already beats Brace 2;
+        //     silently downgrading a Shield would be a feel-bad trap). The heal still lands.
+        // Reliquary of Light: radiance is a holy card, so its +1 holy heal rides the amount —
+        // on topped members that becomes +1 more Brace (intended relic chemistry).
+        const reliquary = this.hasRelic('reliquaryOfLight') ? HOLY_RELIC_HEAL : 0;
+        const amount = Math.max(0, RADIANCE_HEAL + m.abilityPower) + reliquary;
+        let braced = 0;
+        for (const t of this.livingMembers()) {
+          // captureOverheal=true: Radiance claims the overheal for Brace, so Aegis Font
+          // gets NO share of it (the #69 ordering rule — no double-convert), exactly as
+          // Absolution does. Beacon's heal-to-full draw still fires (it ignores the flag).
+          const res = this._applyHeal(t, amount, true, true);
+          this._emit({ kind: 'heal', slot: t.slot, amount: res.healed, hp: t.hp });
+          // Shield-holders skip the conversion (Shield preserved); everyone else's overheal
+          // hardens into additive Brace with the timer refreshed.
+          if (res.overheal > 0 && !t.shield) {
+            t.brace = true;
+            t.braceAmount += res.overheal; // additive carve-out (#76): 0 (no prior) -> overheal, or pile onto existing
+            t.braceTurns = BRACE_TURNS;    // one growing timer, refreshed on each addition
+            braced++;
+            this._emit({ kind: 'braceApplied', slot: t.slot });
+          }
+        }
+        this._log(braced > 0
+          ? `${m.name} calls down Radiance — the party heals ${amount}; ${braced} harden${braced === 1 ? 's' : ''} overheal into Brace.`
+          : `${m.name} calls down Radiance — the party heals ${amount}.`, 'status');
         break;
       }
       default:
