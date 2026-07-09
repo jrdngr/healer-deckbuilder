@@ -41,6 +41,7 @@ import {
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS,
   THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD,
+  UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
@@ -1137,11 +1138,42 @@ export class Game {
   // Wave-wide poison stacking rule (#66, shared with #67/#72). The enemy has a SINGLE
   // poison track: applying poison ADDS to the per-turn damage and takes the LONGER of
   // the existing and new durations. Vulnerability does not multiply poison ticks (the
-  // tick pipeline owns that), matching existing poison behavior.
+  // tick pipeline owns that), matching existing poison behavior. Venom Gland (#67)
+  // extends every application by VENOM_GLAND_BONUS_TURNS at apply time (not
+  // retroactively to a running poison) — the duration bump rides the stacking max.
   _applyPoison(perTurn: number, turns: number): void {
     if (perTurn <= 0 || turns <= 0) return;
+    const dur = turns + (this.hasRelic('venomGland') ? VENOM_GLAND_BONUS_TURNS : 0);
     this.enemy.poison += perTurn;
-    this.enemy.poisonTurns = Math.max(this.enemy.poisonTurns, turns);
+    this.enemy.poisonTurns = Math.max(this.enemy.poisonTurns, dur);
+  }
+
+  // Umbral Feast (#67): the count of active effects in play, read at cast time.
+  // Published inventory (#69's Benediction reuses the per-member buff-count logic):
+  //   party side, per living member — Shield, Brace, Guard, Defense, Taunt, Regen,
+  //   Sharpen/strike bonus, Empower, Riposte, Ward, Boar (each active effect counts 1;
+  //   Guard folds the base Guard and Interlock grants into one);
+  //   enemy side — Poison, Vulnerability.
+  // Anvil Stance / Charge / War-Drum / Lifebloom-burst / Thornskin are NOT on the list
+  // (Enraged is not a debuff, so it is excluded). A pure read — no side effects.
+  _activeEffectCount(): number {
+    let n = 0;
+    for (const m of this.livingMembers()) {
+      if (m.shield) n += 1;
+      if (m.brace) n += 1;
+      if (m.guardTurns > 0 || m.interlockGuardTurns.some((t) => t > 0)) n += 1;
+      if (m.defense > 0) n += 1;
+      if (m.taunt > 0) n += 1;
+      if (m.regen > 0) n += 1;
+      if (m.strikeTurns > 0) n += 1;
+      if (m.empowerBonus > 0) n += 1;
+      if (m.riposte) n += 1;
+      if (m.ward > 0) n += 1;
+      if (m.boarHp > 0) n += 1;
+    }
+    if (this.enemy.poisonTurns > 0) n += 1;
+    if (this.enemy.vulnerableTurns > 0) n += 1;
+    return n;
   }
 
   // A Blood card's HP cost (#16). canPlay gates on hp > cost, and the payment
@@ -1261,6 +1293,16 @@ export class Game {
       if (this.enemy.vulnerableTurns === 0) {
         this.enemy.vulnerable = 0;
         this._log('The Hex fades; the enemy is no longer Vulnerable.', 'status');
+        // Embermark (#67): every natural Vulnerability expiry pays out EMBERMARK_DMG.
+        // This fires only on the timer reaching 0 here — Sap re-upping vulnerableTurns
+        // keeps it > 0, so it never reaches this branch until the window truly closes.
+        // Routed through _damageEnemy AFTER Vulnerability is cleared, so the payout is
+        // not self-amplified (the window that just closed does not multiply it).
+        if (this.hasRelic('embermark')) {
+          const killed = this._damageEnemy(EMBERMARK_DMG, 'Embermark');
+          this._emitEnemyNuke(EMBERMARK_DMG, killed);
+          if (this.status === 'win') return; // the ember can finish the enemy
+        }
       }
     }
     // A channel (#64) suppresses all passive/over-time MP income — including Font of
@@ -1746,6 +1788,9 @@ export class Game {
       default:
         break; // 'all' / 'none' need no target
     }
+    // Hemorrhage (#67): a dead card with no enemy poison to cash out (mirrors
+    // needsRegen's UX, but reads the enemy — no target to point at).
+    if (card.needsPoison && this.enemy.poisonTurns <= 0) return 'the enemy is not Poisoned';
     return null;
   }
 
@@ -2057,6 +2102,44 @@ export class Game {
         this._emitEnemyNuke(dmg, killed);
         break;
       }
+      // --- Status-window management (#67) --------------------------------------
+      case 'hemorrhage': {
+        // Cash the enemy's whole Poison out in one hit: per-turn × turns left. canPlay's
+        // needsPoison gate guarantees an active poison. The consumed ticks stay
+        // unmultiplied (they never tick), but the cash-out routes through _damageEnemy,
+        // so Vulnerability multiplies it like any normal hit. Uncapped by design.
+        const total = this.enemy.poison * this.enemy.poisonTurns;
+        this.enemy.poison = 0;
+        this.enemy.poisonTurns = 0;
+        const killed = this._damageEnemy(total, 'Hemorrhage');
+        this._emitEnemyNuke(total, killed);
+        break;
+      }
+      case 'umbralFeast': {
+        // 1 damage per active effect in play (party buffs + enemy debuffs), counted at
+        // cast time by the published helper. Uncapped. Routes through _damageEnemy so
+        // Vulnerability (itself one of the counted effects) multiplies it.
+        const dmg = this._activeEffectCount() * UMBRAL_FEAST_PER_EFFECT;
+        const killed = this._damageEnemy(dmg, 'Umbral Feast');
+        this._emitEnemyNuke(dmg, killed);
+        break;
+      }
+      case 'dreadWhisper': {
+        // Shave DREAD_WHISPER_REDUCTION damage per target off the standing telegraph
+        // (floor 0), like Grave Chill — stacks with every other reduction. Modifies the
+        // telegraph in place, so attackTargets() previews it immediately. No-op on a
+        // 'cast' (channel wind-up) or an already-zeroed telegraph.
+        const t = this.telegraph;
+        if (t && !t.cast && t.damage > 0) {
+          const before = t.damage;
+          t.damage = Math.max(0, t.damage - DREAD_WHISPER_REDUCTION);
+          this._log(`A dread whisper saps the ${this.telegraphIntent() ?? 'attack'}: ${before} → ${t.damage} per target.`, 'status');
+          this._emit({ kind: 'graveChill', slot: SLOT.CENTER, amount: before - t.damage });
+        } else {
+          this._log('A dread whisper reaches for the telegraph, but there is nothing to sap.', 'status');
+        }
+        break;
+      }
       case 'phalanx': {
         const m = this.members[target as number];
         // canPlay guarantees no active Defense (that is also the no-stack rule).
@@ -2300,8 +2383,10 @@ export class Game {
         // an ability never resolves to 0-or-below damage.
         const strength = Math.max(1, POISON_BASE + m.abilityPower + hourglass);
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
+        // Venom Gland (#67) extends the window by VENOM_GLAND_BONUS_TURNS at apply time,
+        // like every poison application (Sporeburst rides the same bonus in _applyPoison).
         this.enemy.poison = Math.max(this.enemy.poison, strength);
-        this.enemy.poisonTurns = POISON_TURNS;
+        this.enemy.poisonTurns = POISON_TURNS + (this.hasRelic('venomGland') ? VENOM_GLAND_BONUS_TURNS : 0);
         this._log(`${m.name} fires Poison Arrow (${this.enemy.poison}/turn for ${this.enemy.poisonTurns}).`, 'status');
         this._emit({ kind: 'poisonApplied', slot: m.slot, amount: strength, poison: this.enemy.poison });
         break;

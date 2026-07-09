@@ -20,6 +20,9 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   thornskin: 'ward', sporeburst: 'power',
   // Shadow cards (#63): direct damage / debuff plays.
   shadowBolt: 'power', siphonLife: 'power', doom: 'power',
+  // Status-window management (#67): Hemorrhage/Umbral Feast cash out into damage (power),
+  // Dread Whisper shaves the telegraph (ward).
+  hemorrhage: 'power', umbralFeast: 'power', dreadWhisper: 'ward',
   // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
   cascade: 'mana', nightfall: 'power',
   // Channeled cards (#64): Drain/Sap are aggressive, Mending Stream a heal, Fortify a ward.

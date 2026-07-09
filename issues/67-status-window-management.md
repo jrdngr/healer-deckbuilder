@@ -1,6 +1,6 @@
 # Issue 67 — Status-window management: Poison and Vulnerability as managed resources
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards + relics)   **Size:** L
 - **Depends on:** —   **Blocks:** #72 (Ferment builds on the poison helpers)
 - **Addresses:** intake 2026-07-07 — new-content wave: enemy statuses should be a resource you

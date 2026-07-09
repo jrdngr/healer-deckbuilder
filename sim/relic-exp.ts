@@ -79,6 +79,8 @@ const BATTERY: RelicId[] = [
   'whetstone', 'bulwarkCore',
   // Regen conversions relics (#66) — gated ≤ +9pp.
   'deepRoots', 'ossuaryBell',
+  // Status-window management relics (#67) — gated ≤ +9pp.
+  'venomGland', 'embermark',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

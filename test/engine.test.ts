@@ -11,6 +11,7 @@ import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
 import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS } from '../src/constants';
 import { THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD } from '../src/constants';
+import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
@@ -4015,6 +4016,129 @@ function countPulses(g: Game): number {
   check('both new cards carry a rarity', (['thornskin', 'sporeburst'] as CardId[]).every((id) => CARD_RARITY[id] != null));
   check('both new cards use the needsRegen gate', (['thornskin', 'sporeburst'] as CardId[]).every((id) => CARDS[id].needsRegen === true));
   check('Deep Roots / Ossuary Bell are real relics', (['deepRoots', 'ossuaryBell'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
+}
+
+// --- Status-window management (#67) ----------------------------------------
+{
+  // Hemorrhage cashes the enemy's whole Poison out at once: per-turn × turns left.
+  const g = new Game(670); g.start(); g.mp = g.maxMana; g.enemy.hp = 999;
+  g.enemy.poison = 5; g.enemy.poisonTurns = 3; // 15 damage owed
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'hemorrhage'));
+  eq('Hemorrhage deals per-turn × turns at once', before - g.enemy.hp, 5 * 3);
+  eq('Hemorrhage clears the poison strength', g.enemy.poison, 0);
+  eq('Hemorrhage clears the poison duration', g.enemy.poisonTurns, 0);
+}
+{
+  // Hemorrhage routes through _damageEnemy, so Vulnerability multiplies the cash-out.
+  const g = new Game(671); g.start(); g.mp = g.maxMana; g.enemy.hp = 999;
+  g.enemy.poison = 5; g.enemy.poisonTurns = 3; // 15 base
+  g.enemy.vulnerable = 1; g.enemy.vulnerableTurns = 2; // ×2
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'hemorrhage'));
+  eq('Hemorrhage is amplified by Vulnerability', before - g.enemy.hp, (5 * 3) * 2);
+}
+{
+  // Hemorrhage is a dead card while the enemy is not Poisoned (needsPoison gate).
+  const g = new Game(672); g.start(); g.mp = g.maxMana;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  const idx = giveCard(g, 'hemorrhage');
+  check('Hemorrhage is unplayable with no enemy poison', g.canPlay(idx, null) != null);
+  g.enemy.poison = 4; g.enemy.poisonTurns = 2;
+  check('Hemorrhage becomes playable once the enemy is Poisoned', g.canPlay(idx, null) == null);
+}
+{
+  // Umbral Feast: empty board is a 0 baseline; Shield + Regen + Poison + Vuln → 4.
+  const g = new Game(673); g.start(); g.mp = g.maxMana; g.enemy.hp = 999;
+  eq('Umbral Feast: empty-board effect count is 0', g._activeEffectCount(), 0);
+  const before0 = g.enemy.hp;
+  g.playCard(giveCard(g, 'umbralFeast'));
+  eq('Umbral Feast deals 0 on an empty board', before0 - g.enemy.hp, 0);
+  // Arm four active effects: a member Shield + Regen, enemy Poison + Vulnerability.
+  g.tank.shield = true; g.tank.shieldTurns = SHIELD_TURNS;
+  g.tank.regen = 2;
+  g.enemy.poison = 3; g.enemy.poisonTurns = 4;
+  g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 2; // vuln 0% still counts as an active window
+  eq('Umbral Feast: Shield + Regen + Poison + Vuln counts 4', g._activeEffectCount(), 4);
+  g.mp = g.maxMana; g.enemy.hp = 999;
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'umbralFeast'));
+  eq('Umbral Feast deals 1 per active effect', before - g.enemy.hp, 4 * UMBRAL_FEAST_PER_EFFECT);
+}
+{
+  // Dread Whisper shaves 1 per target off the standing sweep — preview drops immediately
+  // and the applied damage matches; it stacks (floors at 0 on a 1-damage sweep).
+  const g = new Game(674); g.start(); g.mp = g.maxMana;
+  g.telegraph = { type: 'sweep', hidden: false, damage: 4, targets: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], enraged: false, forTurn: g.turn };
+  const raw = g.attackTargets().map((s) => s.damage);
+  check('Dread Whisper: sweep previews 4 per target before the shave', raw.every((d) => d === 4));
+  g.playCard(giveCard(g, 'dreadWhisper'));
+  const shaved = g.attackTargets().map((s) => s.damage);
+  check('Dread Whisper: preview drops 1 per target', shaved.every((d) => d === 4 - DREAD_WHISPER_REDUCTION));
+  // Applied matches the preview: each of the three targets takes the shaved number.
+  const hpBefore = g.members.map((m) => m.hp);
+  g._resolveAttack();
+  const applied = g.members.map((m, i) => hpBefore[i] - m.hp);
+  check('Dread Whisper: every target took the previewed (shaved) hit',
+    [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT].every((s) => applied[s] === 4 - DREAD_WHISPER_REDUCTION));
+}
+{
+  // Dread Whisper floors a 1-damage telegraph at 0 (never negative).
+  const g = new Game(675); g.start(); g.mp = g.maxMana;
+  g.telegraph = { type: 'single', hidden: false, damage: 1, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g.playCard(giveCard(g, 'dreadWhisper'));
+  eq('Dread Whisper floors the telegraph at 0', g.attackTargets().find((s) => s.slot === SLOT.CENTER)?.damage, 0);
+}
+{
+  // Venom Gland: every poison application lasts +1 turn — the Ranger's Imbue Venom
+  // lands 5×6 (POISON_BASE × POISON_TURNS+1) and Sporeburst's window is +1 too.
+  const cfg = defaultBattleConfig(); cfg.relics = ['venomGland'];
+  const g = new Game(676, cfg); g.start(); g.mp = g.maxMana;
+  g.playCard(giveAbility(g, SLOT.LEFT)); // Imbue Venom (Ranger poison)
+  eq('Venom Gland: Imbue Venom strength is POISON_BASE', g.enemy.poison, POISON_BASE);
+  eq('Venom Gland: Imbue Venom lasts POISON_TURNS + 1', g.enemy.poisonTurns, POISON_TURNS + VENOM_GLAND_BONUS_TURNS);
+  // Sporeburst consumes a 3-tick Regen → window is 3 + 1 with Venom Gland.
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  g.tank.regen = 3;
+  g.mp = g.maxMana;
+  g.playCard(giveCard(g, 'sporeburst'), SLOT.CENTER);
+  eq('Venom Gland: Sporeburst window is ticks + 1', g.enemy.poisonTurns, 3 + VENOM_GLAND_BONUS_TURNS);
+}
+{
+  // Venom Gland is inert with no relics: Imbue Venom lasts exactly POISON_TURNS.
+  const g = new Game(677); g.start(); g.mp = g.maxMana;
+  g.playCard(giveAbility(g, SLOT.LEFT));
+  eq('Venom Gland inert: Imbue Venom lasts POISON_TURNS', g.enemy.poisonTurns, POISON_TURNS);
+}
+{
+  // Embermark: every natural Vulnerability expiry deals EMBERMARK_DMG; nothing while the
+  // window is still open (Sap re-up keeps vulnerableTurns > 0 → no trigger until it hits 0).
+  const cfg = defaultBattleConfig(); cfg.relics = ['embermark'];
+  const g = new Game(678, cfg); g.start(); g.enemy.hp = 999; g.telegraph = null;
+  g.enemy.vulnerable = 0.5; g.enemy.vulnerableTurns = 2; // will decrement 2 → 1 (no fire), then 1 → 0 (fire)
+  let before = g.enemy.hp;
+  g._runEnemyPhase();
+  eq('Embermark does not fire while the window is still open', before - g.enemy.hp, 0);
+  before = g.enemy.hp;
+  g._runEnemyPhase();
+  eq('Embermark fires EMBERMARK_DMG on the natural expiry', before - g.enemy.hp, EMBERMARK_DMG);
+}
+{
+  // Embermark is inert with no relics: the Vulnerability just expires, no damage.
+  const g = new Game(679); g.start(); g.enemy.hp = 999; g.telegraph = null;
+  g.enemy.vulnerable = 0.5; g.enemy.vulnerableTurns = 1;
+  const before = g.enemy.hp;
+  g._runEnemyPhase();
+  eq('Embermark inert: expiry deals no damage without the relic', before - g.enemy.hp, 0);
+}
+{
+  // Definitions / typing sanity for the three new Shadow cards and two relics (#67).
+  check('the three new cards are Shadow', (['hemorrhage', 'umbralFeast', 'dreadWhisper'] as CardId[]).every((id) => cardType(id) === 'shadow'));
+  check('all three count toward the Shadow type bucket', (['hemorrhage', 'umbralFeast', 'dreadWhisper'] as CardId[]).every((id) => cardsOfType('shadow').includes(id)));
+  check('all three are shop/reward-eligible', (['hemorrhage', 'umbralFeast', 'dreadWhisper'] as CardId[]).every((id) => CARD_POOL.includes(id)));
+  check('all three carry a rarity', (['hemorrhage', 'umbralFeast', 'dreadWhisper'] as CardId[]).every((id) => CARD_RARITY[id] != null));
+  check('Hemorrhage uses the needsPoison gate', CARDS.hemorrhage.needsPoison === true);
+  check('Venom Gland / Embermark are real relics', (['venomGland', 'embermark'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

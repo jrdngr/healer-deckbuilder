@@ -247,7 +247,16 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // line; the cards carry buy value 1 and the relics value 0, so it never banks them).
   // The vector shifts: F2 181->179, F4 175->174, F5 167->166, F7 161->160, F8 153->150
   // (F0/F1/F3/F6 unchanged). All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 179, 176, 174, 166, 164, 160, 150]));
+  // 2026-07-08 (#67 Status-window management): 3 more shop-eligible Shadow cards
+  // (Hemorrhage, Umbral Feast, Dread Whisper) join CARD_POOL and 2 relics (Venom Gland,
+  // Embermark) join the relic pool — the same pure rng-stream perturbation (the best-3
+  // policy has no poison/vuln-window line; the cards carry buy value 1 and the relics
+  // value 0, so it never banks them; Venom Gland's Ranger-poison bonus only fires when
+  // owned, which the policy never does). The reward stream reshuffles downstream and the
+  // vector shifts broadly: F1 199->198, F2 179->184, F3 176->182, F4 174->181, F5 166->172,
+  // F6 164->166, F7 160->166, F8 150->158 (F0 unchanged). All band/CI/boss gates below
+  // still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 198, 184, 182, 181, 172, 166, 166, 158]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

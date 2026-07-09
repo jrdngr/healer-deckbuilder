@@ -28,7 +28,7 @@ import {
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
   MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
   SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
-  WHETSTONE_BONUS, OSSUARY_REGEN,
+  WHETSTONE_BONUS, OSSUARY_REGEN, POISON_TURNS, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -59,6 +59,9 @@ const EXERCISE_DECK: CardId[] = [
   'feint', 'anvilStance', 'interlock',
   // Regen conversions (#66): both consume/read an active Regen (the seeded Regen fodder above).
   'thornskin', 'sporeburst',
+  // Status-window management (#67): Hemorrhage needs enemy poison (imbuePoison seeds it),
+  // Umbral Feast reads the board, Dread Whisper shaves the telegraph.
+  'hemorrhage', 'umbralFeast', 'dreadWhisper',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
@@ -366,6 +369,20 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     g.telegraph = single(g.tank.maxHP - 1, SLOT.CENTER); // full -> 1 HP: below the threshold, non-lethal
     g._resolveAttack();
     return g.tank.alive && g.tank.regen >= OSSUARY_REGEN;
+  },
+  // --- Status-window management relics (#67) ------------------------------------
+  venomGland: () => {
+    const g = probeGame(['venomGland']); g.start();
+    g._applyPoison(POISON_BASE, POISON_TURNS); // an application lasts +1 turn while owned
+    return g.enemy.poisonTurns === POISON_TURNS + VENOM_GLAND_BONUS_TURNS;
+  },
+  embermark: () => {
+    const g = probeGame(['embermark']); g.start();
+    g.enemy.hp = 999; g.telegraph = null; // no incoming blow — isolate the expiry payout
+    g.enemy.vulnerable = 0.5; g.enemy.vulnerableTurns = 1; // expires this enemy phase
+    const before = g.enemy.hp;
+    g._runEnemyPhase();
+    return before - g.enemy.hp === EMBERMARK_DMG; // the ember fired flat on natural expiry
   },
 };
 

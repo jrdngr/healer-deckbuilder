@@ -603,6 +603,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // Regen conversions (#66): the best-3 sim policy has no Regen-currency line, so these
   // stay dead-deck weight (they are for a human's Regen-conversion build).
   thornskin: 1, sporeburst: 1,
+  // Status-window management (#67): the best-3 policy has no poison/vuln-window line, so
+  // these stay dead-deck weight (a human's status-management build).
+  hemorrhage: 1, umbralFeast: 1, dreadWhisper: 1,
   // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
   // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
   shadowBolt: 2, siphonLife: 2, doom: 1,
@@ -735,6 +738,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Regen conversions relics (#66): the best-3 policy has no Regen-currency line, so it
   // can't leverage these — value 0 (they're a human Regen-conversion reward).
   deepRoots: 0, ossuaryBell: 0,
+  // Status-window management relics (#67): the best-3 policy has no poison/vuln-window
+  // line, so it can't leverage these — value 0 (a human status-management reward).
+  venomGland: 0, embermark: 0,
 };
 
 // Relic buy-value, letting a tier value relics the stick treats as inert (the #63

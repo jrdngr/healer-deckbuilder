@@ -42,6 +42,8 @@ export type CardId =
   | 'feint' | 'anvilStance' | 'interlock'
   // Regen conversions (#66): turn Regen into damage reduction / enemy Poison.
   | 'thornskin' | 'sporeburst'
+  // Status-window management (#67): manage enemy Poison / Vulnerability windows.
+  | 'hemorrhage' | 'umbralFeast' | 'dreadWhisper'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
@@ -108,6 +110,9 @@ export interface CardDef {
   // Single-target eligibility gate: the target must carry an active Regen
   // (Cultivate / Bloom are dead cards without one).
   needsRegen?: boolean;
+  // Playability gate (#67): the enemy must be Poisoned (Hemorrhage is a dead card
+  // with no poison to cash out — mirrors needsRegen's UX, but reads the enemy).
+  needsPoison?: boolean;
   // Excluded from the Potent modifier even though it has a strength field
   // (Overgrowth: +1 strength would be x3 members x3 turns for one upgrade).
   noPotent?: boolean;
@@ -768,6 +773,13 @@ export const BULWARK_BRACE_TURNS = 2;    // Bulwark Core: enemy turns the grante
 export const THORNSKIN_REDUCTION = 1;    // Thornskin: incoming damage reduced per hit while the marked member's Regen lasts
 export const SPOREBURST_POISON = 2;      // Sporeburst: enemy Poison per turn applied when the Regen is consumed (duration == ticks consumed)
 
+// Status-window management (#67): enemy Poison / Vulnerability become resources the
+// player amplifies, cashes out, or gets paid on when the window closes. Magnitudes are
+// tunable — a later balance pass owns the numbers. Hemorrhage is deliberately UNCAPPED
+// (its payoff is poison per-turn × turns left), so it has no magnitude constant.
+export const UMBRAL_FEAST_PER_EFFECT = 1; // Umbral Feast: damage per active effect in play (party buffs + enemy debuffs)
+export const DREAD_WHISPER_REDUCTION = 1; // Dread Whisper: per-target damage shaved off the standing telegraph (floor 0)
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -926,6 +938,21 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // debuff-first Shadow line (Hex's Vulnerability, Poison). Capped.
   doom: { id: 'doom', name: 'Doom', cost: 4, target: 'none',
     desc: `Deal ${DOOM_BASE} damage, +${DOOM_PER_DEBUFF} per active enemy debuff and more the more Vulnerable it is (cap ${DOOM_CAP}).` },
+  // --- Status-window management (#67): Poison / Vulnerability as resources -----
+  // Hemorrhage cashes the enemy's whole Poison out in one uncapped hit (per-turn ×
+  // turns left) through _damageEnemy, so Vulnerability multiplies the cash-out (the
+  // poison ticks it consumes stay unmultiplied). needsPoison-gated: a dead card with
+  // no poison to spend (mirrors needsRegen's UX, but reads the enemy).
+  hemorrhage: { id: 'hemorrhage', name: 'Hemorrhage', cost: 3, target: 'none', needsPoison: true,
+    desc: `Consume the enemy's Poison and deal its whole remaining damage (per-turn × turns left) at once.` },
+  // Umbral Feast reads the board: 1 damage per active effect in play — every party
+  // buff and every enemy debuff. Uncapped; the count is taken at cast time.
+  umbralFeast: { id: 'umbralFeast', name: 'Umbral Feast', cost: 2, target: 'none',
+    desc: `Deal ${UMBRAL_FEAST_PER_EFFECT} per active effect in play — every party buff and enemy debuff counts.` },
+  // Dread Whisper shaves the standing telegraph by 1 per target (floor 0), like Grave
+  // Chill — stacks with every other reduction to zero out a sweep.
+  dreadWhisper: { id: 'dreadWhisper', name: 'Dread Whisper', cost: 1, target: 'none',
+    desc: `The standing telegraph deals ${DREAD_WHISPER_REDUCTION} less per target (min 0).` },
   // --- count-based payoff cards (#63, Part B) --------------------------------
   cascade: { id: 'cascade', name: 'Cascade', cost: 2, target: 'none', draw: CASCADE_DRAW, engine: true,
     desc: `Draw ${CASCADE_DRAW}. Costs ${CASCADE_DISCOUNT_PER_ARCANE} less per Arcane card already played this turn (min 0).` },
@@ -996,6 +1023,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   unleash: 'shadow', hex: 'shadow', hush: 'shadow', stagger: 'shadow', /* Stun: enemy control */
   shadowBolt: 'shadow', siphonLife: 'shadow', doom: 'shadow', nightfall: 'shadow',
   drain: 'shadow', sap: 'shadow', /* channeled Shadow (#64) */
+  hemorrhage: 'shadow', umbralFeast: 'shadow', dreadWhisper: 'shadow', /* Status-window management (#67) */
   // Blood — sacrifice something (usually HP) to gain something.
   bloodTithe: 'blood', martyrsGift: 'blood', grimHarvest: 'blood',
   incite: 'blood', /* outlier: HP-cost doubled strike */
@@ -1352,6 +1380,7 @@ export interface ResolvedCard {
   refresh?: number;
   draw?: number;
   needsRegen: boolean;
+  needsPoison: boolean; // Hemorrhage (#67): playable only while the enemy is Poisoned
   refreshCap: number; // per-cast lifetime MP cap for Refresh-slot cards
   selfDamage?: number; // Blood cost the target pays (never bumped by modifiers)
   noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
@@ -1621,6 +1650,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   feint: 'uncommon', anvilStance: 'uncommon', interlock: 'uncommon',
   // Regen conversions (#66).
   thornskin: 'common', sporeburst: 'uncommon',
+  // Status-window management (#67).
+  hemorrhage: 'rare', umbralFeast: 'uncommon', dreadWhisper: 'common',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1857,7 +1888,10 @@ export type RelicId =
   | 'bulwarkCore'      // a full Shield block leaves the member Braced
   // --- Regen conversions relics (#66): pay out when Regen ends / HP drops -----
   | 'deepRoots'        // a member's Regen ending (expired or consumed) leaves Brace 2
-  | 'ossuaryBell';     // a member dropping below 50% max HP gains Regen 2 (every crossing)
+  | 'ossuaryBell'      // a member dropping below 50% max HP gains Regen 2 (every crossing)
+  // --- Status-window management relics (#67): amplify / cash in the windows ---
+  | 'venomGland'       // Poison you apply lasts +1 turn
+  | 'embermark';       // whenever the enemy's Vulnerability expires, deal 4 (every expiry)
 
 export interface RelicDef {
   id: RelicId;
@@ -1925,6 +1959,9 @@ export const WHETSTONE_BONUS = 1;       // Whetstone: +auto damage for a member 
 // 25%: every crossing still retriggers, but the deeper line lands it at +7.3pp, in band.
 export const OSSUARY_REGEN = 1;          // Ossuary Bell: Regen granted each time a member crosses below the threshold
 export const OSSUARY_THRESHOLD = 0.25;   // Ossuary Bell: fires on a downward crossing of this fraction of max HP
+// Status-window management relics (#67). Magnitudes tunable; a later balance pass owns them.
+export const VENOM_GLAND_BONUS_TURNS = 1; // Venom Gland: extra turns on every Poison application while owned
+export const EMBERMARK_DMG = 4;           // Embermark: damage dealt on every natural Vulnerability expiry
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -1988,6 +2025,11 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `When a member's Regen ends — expired or consumed — they gain Brace ${BRACE_AMOUNT}.` },
   ossuaryBell: { id: 'ossuaryBell', name: 'Ossuary Bell', rarity: 'uncommon', icon: '🔔',
     desc: `Whenever a member drops below ${OSSUARY_THRESHOLD * 100}% max HP, they gain Regen ${OSSUARY_REGEN}.` },
+  // --- Status-window management relics (#67) ---------------------------------
+  venomGland: { id: 'venomGland', name: 'Venom Gland', rarity: 'uncommon', icon: '🦂',
+    desc: `Poison you apply lasts +${VENOM_GLAND_BONUS_TURNS} turn.` },
+  embermark: { id: 'embermark', name: 'Embermark', rarity: 'uncommon', icon: '🔥',
+    desc: `Whenever the enemy's Vulnerability expires, deal ${EMBERMARK_DMG}.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];
@@ -2043,6 +2085,7 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     refresh: bump(base.refresh),
     draw: base.draw,
     needsRegen: base.needsRegen === true,
+    needsPoison: base.needsPoison === true,
     // The cap is the BASE card's designed lifetime — Potent/Lingering change the
     // tempo of a Refresh-slot cast, never its total (flaw #7).
     refreshCap: base.refreshCap ?? REFRESH_MP_CAP,
