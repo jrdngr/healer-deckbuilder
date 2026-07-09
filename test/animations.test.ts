@@ -274,6 +274,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     [{ kind: 'refreshPrimed', stack: 2 }],
     [{ kind: 'draw', count: 2 }],
     [{ kind: 'surge' }],
+    [{ kind: 'lensArmed' }],
     [{ kind: 'wardApplied', slot: 0, amount: 3 }],
     [{ kind: 'chime' }],
     [{ kind: 'martyrSave', slot: 1 }],

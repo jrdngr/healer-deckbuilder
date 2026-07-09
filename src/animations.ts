@@ -606,6 +606,16 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'lensArmed': {
+        // Arcane Lens (#70): the next single-target heal will refract to a second ally.
+        push({ at: t, fx: [
+          { type: 'glow', at: 'mp', color: C.mp },
+          { type: 'float', at: 'mp', text: 'HEAL REFRACTED', color: C.mp },
+        ] });
+        t += 380;
+        break;
+      }
+
       case 'hymn': {
         // Battle Hymn (#16): the whole party rallies for this phase's autos.
         push({ at: t, fx: [

@@ -86,6 +86,8 @@ const BATTERY: RelicId[] = [
   'grimoireOfTurning', 'sanguinePact',
   // Holy overheal & board-state relics (#69) — gated ≤ +9pp.
   'beaconOfSecondSun', 'twinCenser',
+  // Channel archetype rescue relic (#70) — gated ≤ +9pp.
+  'chantersIdol',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

@@ -272,7 +272,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // value 0, so it never banks them). The reward stream reshuffles downstream and the
   // vector shifts: F3 181->179, F4 176->178, F5 170->169, F6 170->165, F7 167->161, F8
   // 157->155 (F0/F1/F2 unchanged). All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 185, 179, 178, 169, 165, 161, 155]));
+  // 2026-07-08 (#70 Channel archetype rescue + arcane support): 2 more shop-eligible
+  // Arcane cards (Attunement, Arcane Lens) join CARD_POOL and 1 relic (Chanter's Idol)
+  // joins the relic pool — the same pure rng-stream perturbation (the best-3 policy has
+  // no channel-deck line, so the cards carry buy value 1 and the relic value 0; it never
+  // banks them). The reward stream reshuffles downstream and the vector shifts: F4
+  // 178->177, F5 169->171, F6 165->166, F7 161->164, F8 155->156 (F0/F1/F2/F3 unchanged).
+  // All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 185, 179, 177, 171, 166, 164, 156]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

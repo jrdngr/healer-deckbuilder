@@ -3730,6 +3730,132 @@ function countPulses(g: Game): number {
   check('Font of Mana is not a channel', CARDS.fontOfMana.channel == null);
 }
 
+// --- channel archetype rescue + arcane support (#70) ------------------------
+{
+  // Attunement (no relic): playing it does NOT break a running channel, and neither
+  // does playing the card it DREW; a different card still breaks it.
+  const g = channelGame(300);
+  g.playCard(giveCard(g, 'drain'), null);
+  check('Drain channel is running', g.channelActive() && g.channelCard === 'drain');
+  // Attunement draws a known seeded card so we can play the exact instance next.
+  g.drawPile = [makeDeckCard('lowHeal', 900)];
+  const ai = giveCard(g, 'attunement');
+  const handBefore = g.hand.length; // includes the Attunement about to be played
+  g.playCard(ai, null);
+  check('channel survives Attunement', g.channelActive() && g.channelCard === 'drain');
+  eq('Attunement is net-neutral on hand size (play -1, draw +1)', g.hand.length, handBefore);
+  const drawnIdx = g.hand.findIndex((c) => c.uid === 900);
+  check('Attunement drew the seeded card', drawnIdx >= 0);
+  g.playCard(drawnIdx, SLOT.CENTER); // the drawn card's uid is channel-exempt
+  check('channel survives the card Attunement drew', g.channelActive());
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // a different, unstamped card
+  check('a different card still breaks the channel', !g.channelActive());
+}
+{
+  // The Attunement-stamped exemption persists for the fight and rides the card
+  // INSTANCE (by uid) to a LATER turn — it is not a "this turn only" flag.
+  const g = channelGame(307);
+  g.playCard(giveCard(g, 'drain'), null);
+  g.drawPile = [makeDeckCard('lowHeal', 902)];
+  g.playCard(giveCard(g, 'attunement'), null); // draws + stamps uid 902
+  check('channel running after Attunement', g.channelActive());
+  g.endTurn(); // the hand discards, but the uid-902 stamp persists for the fight
+  check('channel survives into the next turn', g.channelActive());
+  check('the stamp persists across the turn', g.channelExemptUids.has(902));
+  // Play a card carrying the stamped uid a turn later — still channel-exempt.
+  g.hand.push(makeDeckCard('lowHeal', 902));
+  g.playCard(g.hand.length - 1, SLOT.CENTER);
+  check('the stamped card is exempt on a later turn', g.channelActive());
+}
+{
+  // Chanter's Idol: the FIRST card of each turn does not break a running channel; a
+  // SECOND card does. Inert with no relic (covered by the plain-cancel tests above).
+  const g = channelGame(301);
+  g.relics.add('chantersIdol');
+  g.playCard(giveCard(g, 'drain'), null);
+  g.endTurn();
+  check('Idol: channel running into turn 2', g.channelActive());
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // turn 2, first card -> Idol keeps it
+  check('Idol: the first card of turn 2 keeps the channel', g.channelActive());
+  g.endTurn();
+  check('Idol: channel running into turn 3', g.channelActive());
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // turn 3, first card -> Idol keeps it
+  check('Idol: the first card of turn 3 keeps the channel', g.channelActive());
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // turn 3, second card -> breaks
+  check('Idol: the second card of a turn breaks the channel', !g.channelActive());
+}
+{
+  // Composability (Idol + Attunement-first): two plays in one turn keep the channel,
+  // the third breaks it.
+  const g = channelGame(302);
+  g.relics.add('chantersIdol');
+  g.playCard(giveCard(g, 'drain'), null);
+  g.endTurn();
+  check('channel running into the composability turn', g.channelActive());
+  g.drawPile = [makeDeckCard('lowHeal', 901)];
+  g.playCard(giveCard(g, 'attunement'), null); // first play (Idol + self-stamp)
+  check('Idol+Attunement: channel survives the first play', g.channelActive());
+  const idx = g.hand.findIndex((c) => c.uid === 901);
+  g.playCard(idx, SLOT.CENTER); // second play (Attunement-stamped)
+  check('Idol+Attunement: channel survives the second play', g.channelActive());
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // third play
+  check('Idol+Attunement: the third play breaks the channel', !g.channelActive());
+}
+{
+  // An exempt play does not tick the channel (no extra tick) and does not re-enable
+  // Rest / passive MP: the channel is still running, so both stay suppressed.
+  const g = channelGame(303);
+  g.relics.add('chantersIdol');
+  g.restRegen = 5; g.passiveMp = 3;
+  g.playCard(giveCard(g, 'drain'), null); // cast tick
+  g.endTurn();
+  const turnsBefore = g.channelTurns;
+  g.events = [];
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // Idol-exempt first card
+  check('exempt play keeps the channel alive', g.channelActive());
+  eq('exempt play emits no channel tick', g.events.filter((e) => e.kind === 'channelPulse').length, 0);
+  eq('exempt play consumes no channel turn', g.channelTurns, turnsBefore);
+  eq('Rest stays suppressed after an exempt play (channel still running)', g.restRegenNow(), 0);
+}
+{
+  // Arcane Lens: the next single-target heal ALSO heals the most wounded other member
+  // for the full amount, then the flag is spent.
+  const g = channelGame(304);
+  const c = g.members[SLOT.CENTER], l = g.members[SLOT.LEFT], r = g.members[SLOT.RIGHT];
+  c.hp = c.maxHP - 4; l.hp = l.maxHP; r.hp = r.maxHP - 20; // RIGHT is the most wounded OTHER
+  const heal = CARDS.highHeal.heal ?? 0; // 4
+  g.playCard(giveCard(g, 'arcaneLens'), null);
+  check('Arcane Lens arms the turn flag', g.lensArmed);
+  const rBefore = r.hp;
+  g.playCard(giveCard(g, 'highHeal'), SLOT.CENTER); // heals CENTER, refracts full to RIGHT
+  eq('Lens: the primary heal still tops off the target', c.hp, c.maxHP);
+  eq('Lens: the full heal also refracts to the most wounded other', r.hp - rBefore, heal);
+  eq('Lens: an untargeted healthy member is untouched', l.hp, l.maxHP);
+  check('Lens: the flag is spent by the heal', !g.lensArmed);
+}
+{
+  // A non-heal single-target card does NOT consume the Lens; an unconsumed flag
+  // expires at end of turn.
+  const g = channelGame(305);
+  g.playCard(giveCard(g, 'arcaneLens'), null);
+  check('Lens armed', g.lensArmed);
+  g.playCard(giveCard(g, 'shield'), SLOT.CENTER); // single-target, non-heal
+  check('a non-heal single-target card does not consume the Lens', g.lensArmed);
+  g.endTurn();
+  check('an unconsumed Lens flag expires at end of turn', !g.lensArmed);
+}
+{
+  // Definitions / typing sanity for the two new cards + the relic (#70).
+  eq('Attunement is Arcane', cardType('attunement'), 'arcane');
+  eq('Arcane Lens is Arcane', cardType('arcaneLens'), 'arcane');
+  check('Attunement is engine-tagged (Retain/Efficient-ineligible)', CARDS.attunement.engine === true && isEngineCard('attunement'));
+  eq('Attunement is uncommon', CARD_RARITY.attunement, 'uncommon');
+  eq('Arcane Lens is rare', CARD_RARITY.arcaneLens, 'rare');
+  eq("Chanter's Idol is a rare relic", RELICS.chantersIdol.rarity, 'rare');
+  check('the new cards are shoppable (in CARD_POOL)',
+    CARD_POOL.includes('attunement') && CARD_POOL.includes('arcaneLens'));
+}
+
 // --- Iron mitigation web (#65) ---------------------------------------------
 {
   // Feint redirects EVERY hit of a multi-hit telegraph onto one member; the

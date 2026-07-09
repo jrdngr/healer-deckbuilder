@@ -51,6 +51,9 @@ export type CardId =
   // overheal -> mitigation, full HP -> offense, topping off pays cards, buff density
   // is a stat. Rootbind (Nature) is the generic timed-effect duration extender.
   | 'benediction' | 'sunriseVigil' | 'consecration' | 'absolution' | 'rootbind'
+  // Channel archetype rescue + arcane support (#70): keep-alive draw + a splash
+  // enabler so a "channel + cheap cards" deck is a real archetype.
+  | 'attunement' | 'arcaneLens'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
@@ -1033,6 +1036,18 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // fuses, Guard, Defense, strike buffs, Taunt. Makes every timed effect, old and new, worth more.
   rootbind: { id: 'rootbind', name: 'Rootbind', cost: 2, target: 'none',
     desc: `All friendly timed effects (Regen, Shield/Brace, Guard, Defense, strike buffs, Taunt) last +${ROOTBIND_BONUS_TURNS} turn.` },
+  // --- channel archetype rescue + arcane support (#70) -----------------------
+  // Attunement (engine): draw 1, and neither Attunement NOR the card it draws breaks a
+  // running channel (#64). The keep-alive that lets a channel deck run cheap cards. The
+  // draw's channel-exempt stamping is bespoke, so the engine has a dedicated case (the
+  // generic `draw` field is not used here).
+  attunement: { id: 'attunement', name: 'Attunement', cost: 1, target: 'none', engine: true,
+    desc: 'Draw 1. Neither this card nor the card it draws breaks your channel.' },
+  // Arcane Lens: arm a one-shot turn flag — the NEXT single-target heal this turn also
+  // applies its full amount to the most wounded other member (routes through the normal
+  // heal pipeline, so Field Triage / Twin Censer / Beacon all interact). Splash-heal tool.
+  arcaneLens: { id: 'arcaneLens', name: 'Arcane Lens', cost: 2, target: 'none',
+    desc: 'Your next single-target heal this turn also heals the most wounded other member for the same amount.' },
   // --- count-based payoff cards (#63, Part B) --------------------------------
   cascade: { id: 'cascade', name: 'Cascade', cost: 2, target: 'none', draw: CASCADE_DRAW, engine: true,
     desc: `Draw ${CASCADE_DRAW}. Costs ${CASCADE_DISCOUNT_PER_ARCANE} less per Arcane card already played this turn (min 0).` },
@@ -1112,6 +1127,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   crimsonPact: 'blood', scarletWard: 'blood', openVeins: 'blood', transfusion: 'blood', bloodBanner: 'blood', /* Blood + cycling (#68) */
   // Arcane — the mana / card-draw economy.
   refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane', cascade: 'arcane',
+  attunement: 'arcane', arcaneLens: 'arcane', /* channel archetype rescue + arcane support (#70) */
   // Iron — protection: shields, Defense, Taunt/Provoke, braces.
   shield: 'iron', barrier: 'iron', phalanx: 'iron', brace: 'iron', provoke: 'iron', holdTheLine: 'iron',
   bolster: 'iron', guard: 'iron', goad: 'iron',
@@ -1739,6 +1755,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   crimsonPact: 'uncommon', scarletWard: 'uncommon', openVeins: 'common', transfusion: 'uncommon', bloodBanner: 'rare',
   // Holy overheal & board-state payoffs (#69): Consecration / Rootbind are the rares.
   benediction: 'uncommon', sunriseVigil: 'common', consecration: 'rare', absolution: 'uncommon', rootbind: 'rare',
+  // Channel archetype rescue + arcane support (#70): Arcane Lens is the rare.
+  attunement: 'uncommon', arcaneLens: 'rare',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1984,7 +2002,9 @@ export type RelicId =
   | 'sanguinePact'     // curse: Blood-card HP costs +2; while any member < 50% HP, party autos +2
   // --- Holy overheal & board-state relics (#69): pay off a topped-off party -------
   | 'beaconOfSecondSun'// whenever a card heals a member to full, draw 1 (no per-fight cap)
-  | 'twinCenser';      // single-target heal cards also heal the most wounded other member 1
+  | 'twinCenser'       // single-target heal cards also heal the most wounded other member 1
+  // --- Channel archetype rescue relic (#70): a channel keep-alive ----------------
+  | 'chantersIdol';    // the first card you play each turn doesn't break your channel
 
 export interface RelicDef {
   id: RelicId;
@@ -2140,6 +2160,9 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Whenever a card heals a member to full, draw ${BEACON_DRAW}.` },
   twinCenser: { id: 'twinCenser', name: 'Twin Censer', rarity: 'rare', icon: '🪔',
     desc: `Single-target heal cards also heal the most wounded other member ${TWIN_CENSER_SPLASH}.` },
+  // --- Channel archetype rescue relic (#70) ----------------------------------
+  chantersIdol: { id: 'chantersIdol', name: "Chanter's Idol", rarity: 'rare', icon: '🎐',
+    desc: 'The first card you play each turn does not break your channel.' },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

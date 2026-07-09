@@ -69,6 +69,8 @@ const EXERCISE_DECK: CardId[] = [
   // Holy overheal & board-state payoffs (#69): overheal->Brace, full-HP->offense, a
   // delayed party heal, buff-density heal, and the timed-effect duration extender.
   'benediction', 'sunriseVigil', 'consecration', 'absolution', 'rootbind',
+  // Channel archetype rescue + arcane support (#70): a keep-alive draw and a splash enabler.
+  'attunement', 'arcaneLens',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
@@ -442,6 +444,15 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const before = g.mage.hp;
     g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // single-target heal card splashes to the mage
     return g.mage.hp - before === TWIN_CENSER_SPLASH;
+  },
+  // --- Channel archetype rescue relic (#70) -------------------------------------
+  chantersIdol: () => {
+    const g = probeGame(['chantersIdol']); g.start();
+    g.playCard(give(g, 'drain'));       // start a Drain channel (this turn's 1st play)
+    if (!g.channelActive()) return false;
+    g.cardsPlayedThisPhase = 0;         // a fresh turn with the channel still running
+    g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // the turn's FIRST card -> Idol keeps the channel
+    return g.channelActive();           // the channel survived a non-channel play
   },
 };
 

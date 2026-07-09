@@ -234,6 +234,7 @@ export type GameEvent =
   | { kind: 'channelEnd'; card: CardId }
   | { kind: 'draw'; count: number }
   | { kind: 'surge' }                                      // next card this turn costs 0 (#16)
+  | { kind: 'lensArmed' }                                  // Arcane Lens: next single-target heal splashes (#70)
   | { kind: 'wardApplied'; slot: Slot; amount: number }    // Aegis Font ward gained (#22)
   | { kind: 'chime' }                                      // Dusk Chime delays the telegraph (#22)
   | { kind: 'martyrSave'; slot: Slot }                     // Martyr's Icon refuses a death (#22)
@@ -282,8 +283,12 @@ export class Game {
   channelCard: CardId | null;
   channelTarget: number | null;
   channelTurns: number;
+  // Channel keep-alive (#70): card INSTANCE uids whose play is exempt from breaking a
+  // running channel. Attunement stamps its own uid and the card it draws. Per-fight.
+  channelExemptUids: Set<number>;
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
   surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
+  lensArmed: boolean;     // Arcane Lens (#70): the next single-target heal this turn also splashes to the most wounded other
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
   bloodBannerTurns: number; // Blood Banner (#68): enemy turns the party-wide +auto buff lasts
   // Delayed player-phase-start effects (#69): a generic FIFO fired at the START of the
@@ -403,8 +408,10 @@ export class Game {
     this.channelCard = null;   // no channel running at fight start (#64)
     this.channelTarget = null;
     this.channelTurns = 0;
+    this.channelExemptUids = new Set(); // no channel-exempt cards at fight start (#70)
     this.woundTurns = 0;    // no Hex active at fight start
     this.surgePending = false;
+    this.lensArmed = false; // no Arcane Lens armed at fight start (#70)
     this.hymnBonus = 0;
     this.bloodBannerTurns = 0; // no Blood Banner buff at fight start (#68)
     this.delayedStartEffects = []; // no queued delayed effects at fight start (#69)
@@ -995,6 +1002,19 @@ export class Game {
   // channel is cancelled by a card play or ends after its maxTurns ticks. While a
   // channel runs, all passive/over-time MP income is suppressed (channelActive gates).
 
+  // Whether this play is exempt from breaking a running channel (#70). Two sources:
+  //   • Chanter's Idol — the FIRST card of each turn is exempt (cardsPlayedThisPhase was
+  //     just bumped to 1 for this play in playCard);
+  //   • Attunement — stamps card instance uids (itself + the card it draws) into
+  //     channelExemptUids; the exemption rides a stamped uid until the fight ends.
+  // A pure read (no consume) — kept simple and testable per the issue. An exempt play
+  // only SKIPS the cancel step; it never ticks the channel (the enemy-phase tick is
+  // still gated on a fully restrained turn) and never re-enables Rest / passive MP.
+  _channelExempt(dc: DeckCard): boolean {
+    if (this.hasRelic('chantersIdol') && this.cardsPlayedThisPhase === 1) return true;
+    return this.channelExemptUids.has(dc.uid);
+  }
+
   // Start a channel from a played channeled card. Cancels any running channel first
   // (this card play is itself the cancel), then applies the immediate first tick.
   _startChannel(card: ResolvedCard, target: number | null): void {
@@ -1179,6 +1199,24 @@ export class Game {
     const res = this._applyHeal(other, TWIN_CENSER_SPLASH, true);
     if (res.healed > 0) {
       this._log(`The Twin Censer splashes ${res.healed} to ${other.name}. (${other.hp}/${other.maxHP})`, 'heal');
+      this._emit({ kind: 'heal', slot: other.slot, amount: res.healed, hp: other.hp });
+    }
+  }
+
+  // Arcane Lens (#70): while a Lens is armed, the NEXT single-target heal CARD this turn
+  // also applies its FULL heal amount to the most wounded OTHER living member, then the
+  // one-shot flag is spent (whether or not a wounded other exists — the heal that armed
+  // it is what consumes it). Routes through the normal heal pipeline (Field Triage
+  // applies; it can itself trigger Beacon #69). Only single-target heal cards call this;
+  // non-heal single-target cards never consume the flag. Inert when unarmed.
+  _lensSplash(primary: Member, amount: number): void {
+    if (!this.lensArmed) return;
+    this.lensArmed = false; // consumed by this single-target heal
+    const other = this._mostWoundedOther(primary);
+    if (!other) return;
+    const res = this._applyHeal(other, amount, true);
+    if (res.healed > 0) {
+      this._log(`Arcane Lens refracts ${res.healed} to ${other.name}. (${other.hp}/${other.maxHP})`, 'heal');
       this._emit({ kind: 'heal', slot: other.slot, amount: res.healed, hp: other.hp });
     }
   }
@@ -1978,11 +2016,19 @@ export class Game {
     this.discardPile.push(dc);
     this.cardsPlayedThisPhase += 1;
 
+    // Attunement (#70) stamps its OWN instance uid so its play is channel-exempt too —
+    // stamp BEFORE the cancel check (the draw it does, in _applyCard, stamps the drawn
+    // card afterward, for a later play). "neither Attunement nor the card it draws breaks
+    // your channel."
+    if (card.id === 'attunement') this.channelExemptUids.add(dc.uid);
+
     // Channeled cards (#64): playing ANY other card breaks a running channel — it
     // does not tick this turn (the enemy-phase tick is also gated on 0 cards played).
     // A channeled card instead starts a new channel, which cancels the old one inside
-    // _startChannel, so only cancel here for non-channel plays.
-    if (this.channelActive() && CARDS[card.id].channel == null) {
+    // _startChannel, so only cancel here for non-channel plays. Channel-EXEMPT plays
+    // (#70: Chanter's Idol's first card, or an Attunement-stamped card) SKIP the cancel —
+    // the channel does not tick and Rest/passive-MP suppression is unchanged.
+    if (this.channelActive() && CARDS[card.id].channel == null && !this._channelExempt(dc)) {
       this._cancelChannel();
     }
 
@@ -2053,10 +2099,12 @@ export class Game {
       case 'lowHeal':
       case 'highHeal': {
         const m = this.members[target as number];
-        const healed = this._healMember(m, (card.heal ?? 0) + this._holyHealBonus(card), true);
+        const amount = (card.heal ?? 0) + this._holyHealBonus(card);
+        const healed = this._healMember(m, amount, true);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         this._twinCenserSplash(m); // #69: single-target heal card splashes to the most wounded other
+        this._lensSplash(m, amount); // #70: an armed Arcane Lens refracts the full heal to the most wounded other
         break;
       }
       case 'aoeHeal': {
@@ -2078,6 +2126,7 @@ export class Game {
         this._log(`Benediction: ${m.name} heals ${healed} (${buffs} buff${buffs === 1 ? '' : 's'}). (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         this._twinCenserSplash(m);
+        this._lensSplash(m, amount); // #70
         break;
       }
       case 'sunriseVigil': {
@@ -2113,7 +2162,8 @@ export class Game {
         // the Shield-OR-Brace rule, #17). captureOverheal suppresses Aegis Font's own
         // conversion this cast — Absolution converts first, the Font gets nothing.
         const m = this.members[target as number];
-        const res = this._applyHeal(m, ABSOLUTION_HEAL + this._holyHealBonus(card), true, true);
+        const amount = ABSOLUTION_HEAL + this._holyHealBonus(card);
+        const res = this._applyHeal(m, amount, true, true);
         this._emit({ kind: 'heal', slot: m.slot, amount: res.healed, hp: m.hp });
         if (res.overheal > 0) {
           m.brace = true;
@@ -2126,6 +2176,7 @@ export class Game {
           this._log(`Absolution: ${m.name} heals ${res.healed}. (${m.hp}/${m.maxHP})`, 'heal');
         }
         this._twinCenserSplash(m);
+        this._lensSplash(m, amount); // #70
         break;
       }
       case 'rootbind': {
@@ -2245,6 +2296,31 @@ export class Game {
         const drawn = this.hand.length - before;
         this._log(`${card.name}: drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
         this._emit({ kind: 'draw', count: drawn });
+        break;
+      }
+      case 'attunement': {
+        // Draw 1; the drawn instance's uid is stamped channel-exempt so its later play
+        // (this turn or any later turn) won't break a channel either (#70). Attunement's
+        // own uid was already stamped in playCard, before the cancel check. Engine-tagged,
+        // so Retain/Efficient never touch it. When both piles are empty the draw no-ops.
+        const c = this._drawOne();
+        if (c != null) {
+          this.hand.push(c);
+          this.channelExemptUids.add(c.uid);
+          this._log("Attunement: draw 1 (it won't break your channel).", 'status');
+          this._emit({ kind: 'draw', count: 1 });
+        } else {
+          this._log('Attunement: nothing left to draw.', 'status');
+        }
+        break;
+      }
+      case 'arcaneLens': {
+        // Arm a one-shot turn flag (mirrors Surge's next-card flag, #16): the next
+        // single-target heal this turn also heals the most wounded OTHER member for the
+        // full amount (see _lensSplash). Unconsumed, it fizzles at end of turn.
+        this.lensArmed = true;
+        this._log('Arcane Lens: your next single-target heal also refracts to the most wounded ally.', 'status');
+        this._emit({ kind: 'lensArmed' });
         break;
       }
       case 'nightfall': {
@@ -2563,6 +2639,7 @@ export class Game {
         this._log(`Focus: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         this._twinCenserSplash(m); // #69: single-target heal card splashes to the most wounded other
+        this._lensSplash(m, amount); // #70
         break;
       }
       case 'channel': {
@@ -2869,6 +2946,7 @@ export class Game {
 
   _endTurnInternal(): void {
     this.surgePending = false; // Surge is "this turn" only — an unspent one fizzles
+    this.lensArmed = false;    // Arcane Lens (#70) is "this turn" only — an unspent arming fizzles
 
     // Discard the hand from the end (same ordering the prototype used, so existing
     // seeds reshuffle identically), keeping any Retain cards in hand for next phase.

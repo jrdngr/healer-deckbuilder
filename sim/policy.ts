@@ -613,6 +613,9 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // off with heal spam and has no overheal/buff-density line, so these stay dead-deck
   // weight (they are for a human's healthy-party build).
   benediction: 1, sunriseVigil: 1, consecration: 1, absolution: 1, rootbind: 1,
+  // Channel archetype rescue + arcane support (#70): the best-3 policy has no
+  // channel-deck line, so both stay dead-deck weight (a human's channel/arcane build).
+  attunement: 1, arcaneLens: 1,
   // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
   // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
   shadowBolt: 2, siphonLife: 2, doom: 1,
@@ -755,6 +758,9 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // (so Beacon's heal-to-full draw and Twin Censer's splash rarely fire on a healthy
   // party) and has no build for them — value 0 (a human healthy-party reward).
   beaconOfSecondSun: 0, twinCenser: 0,
+  // Channel archetype rescue relic (#70): the best-3 policy never commits to a channel,
+  // so Chanter's Idol has nothing to keep alive — value 0 (a human channel-build reward).
+  chantersIdol: 0,
 };
 
 // Relic buy-value, letting a tier value relics the stick treats as inert (the #63

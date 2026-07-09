@@ -1,6 +1,6 @@
 # Issue 70 — Channel archetype rescue + arcane support
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards + relics)   **Size:** M
 - **Depends on:** —   **Blocks:** #73 (Hierophant anchors this archetype)
 - **Addresses:** intake 2026-07-07 — new-content wave: channels (#64) are currently anti-synergy

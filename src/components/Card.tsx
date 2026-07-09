@@ -29,6 +29,9 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   // Holy overheal & board-state payoffs (#69): the heals are green; Absolution hardens
   // overheal into Brace (ward) and Rootbind extends defensive timers (ward).
   benediction: 'heal', sunriseVigil: 'heal', consecration: 'heal', absolution: 'ward', rootbind: 'ward',
+  // Channel archetype rescue + arcane support (#70): Attunement is card-draw economy
+  // (mana), Arcane Lens turns a single-target heal into a splash heal (heal).
+  attunement: 'mana', arcaneLens: 'heal',
   // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
   cascade: 'mana', nightfall: 'power',
   // Channeled cards (#64): Drain/Sap are aggressive, Mending Stream a heal, Fortify a ward.
