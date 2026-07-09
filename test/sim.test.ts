@@ -334,7 +334,16 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   //     these seeds is pure stream perturbation, mostly a slight LIFT at the later walls:
   //     F0/F1 unchanged (199/197), F2 178->181, F3 172->175, F4 166->171, F5 148->159, F6
   //     145->152, F7 140->152, F8 125->142. All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 181, 175, 171, 159, 152, 152, 142]));
+  //   • 2026-07-09 POST-WAVE RE-ANCHOR: the #65-#76 content wave (~30 cards, ~14 relics, 5
+  //     members) diluted every deck/pool and pulled the whole skill gradient DOWN ~5-7pp
+  //     (optimal 75->70, average 30->23, solo Warlock 25->~21). Re-anchored ENEMY_HP_BY_FIGHT
+  //     (Gatewarden 35->32, Hexweaver 120->108, Devourer 120->110, act-2/3 normals trimmed a
+  //     few HP each) plus the solo-only HEX_VULN_BY_SIZE[1] 2.2->2.8, restoring optimal 76.5 /
+  //     average 29.1 / poor 0.9 / solo Warlock ~26. Lower boss/normal HP = faster clears, so
+  //     the wins vector rises at the walls: F2 181->186, F3 175->180, F4 171->178, F5 159->171,
+  //     F6 152->166, F7 152->164, F8 142->156 (F0/F1 unchanged — act-1 solo/duo HP untouched
+  //     except Gatewarden). All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 186, 180, 178, 171, 166, 164, 156]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

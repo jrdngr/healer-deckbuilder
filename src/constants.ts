@@ -701,7 +701,7 @@ export const DEFENSE_AMOUNT = 1; // incoming damage reduced by this while Defens
 // fielded party size (index by size 1/2/3), so it is strongest solo — where it
 // amplifies his own low damage enough to carry act 1 — and modest in a full party.
 export const HEX_TURNS = 3;
-export const HEX_VULN_BY_SIZE = [0, 2.2, 0.55, 0.35]; // [unused, solo, duo, trio+]
+export const HEX_VULN_BY_SIZE = [0, 2.8, 0.55, 0.35]; // [unused, solo, duo, trio+]
 export const HEX_VULN_PER_POWER = 0.05; // each point of abilityPower adds this much vuln
 export const SKALD_DMG_PER_CARD = 2; // Skald strike: damage per card played this phase
 export const SKALD_DMG_CAP = 8;      // Skald strike: cap on the cards-played bonus
@@ -1795,9 +1795,9 @@ export const isActBoss = (fightIndex: number): boolean =>
 // and healing were left untouched per the maintainer constraint — this pass is HP + gold +
 // solo-only levers only.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  10, 15, 35,     // Act 1: solo F0, ~solo F1, duo Gatewarden (2026-07-07 skill-tier pass)
-  40, 50, 120,    // Act 2: duo/trio normals + Hexweaver (2026-07-07 skill-tier pass)
-  65, 75, 120,    // Act 3: small-roster normals + Devourer (2026-07-07 skill-tier pass)
+  10, 15, 32,     // Act 1: solo F0, ~solo F1, duo Gatewarden (2026-07-09 post-wave re-anchor)
+  38, 47, 108,    // Act 2: duo/trio normals + Hexweaver (2026-07-09 post-wave re-anchor)
+  61, 71, 110,    // Act 3: small-roster normals + Devourer (2026-07-09 post-wave re-anchor)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.
