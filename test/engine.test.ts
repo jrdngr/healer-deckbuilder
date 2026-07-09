@@ -15,7 +15,7 @@ import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TUR
 import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPEN_VEINS_DMG, TRANSFUSION_HP, TRANSFUSION_HEAL, BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS, GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
-import { BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH } from '../src/constants';
+import { BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH, PILGRIM_FLASK_HEAL } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
 
 let passed = 0;
@@ -4681,6 +4681,61 @@ function countPulses(g: Game): number {
   g2.tank.hp = g2.tank.maxHP; g2.mage.hp = g2.mage.maxHP - 3;
   g2.playCard(giveCard(g2, 'lowHeal'), SLOT.CENTER);
   eq('Twin Censer is inert with no relic', g2.mage.hp, g2.mage.maxHP - 3);
+}
+{
+  // Pilgrim's Flask (#71): a zero-card Rest heals the MOST WOUNDED living member and
+  // touches no MP — the +5 zero-card regen is unchanged. (Scoped from all-members to
+  // the single most-wounded to fit the ≤+9pp relic gate; see engine skipTurn.)
+  const cfg = defaultBattleConfig(); cfg.relics = ['pilgrimsFlask'];
+  const g = new Game(710071, cfg); g.start(); g.mp = 0;
+  g.tank.hp = g.tank.maxHP - 1; g.ranger.hp = 2; g.mage.hp = g.mage.maxHP; // ranger is the most wounded
+  eq('zero-card Rest still regens the full amount (Flask adds no MP)', g.restRegenNow(), SKIP_REGEN);
+  g.skipTurn(); // the enemy phase after may re-touch HP, so assert the heal through the log
+  eq('the Rest still granted exactly SKIP_REGEN MP', g.mp, SKIP_REGEN);
+  eq('Flask healed the most wounded member (once)', g.log.filter((e) => e.text.includes("Pilgrim's Flask")).length, 1);
+  check('Flask healed the most wounded member for the flask amount', g.log.some((e) => e.text.includes(`Pilgrim's Flask heals ${g.ranger.name} ${PILGRIM_FLASK_HEAL}.`)));
+}
+{
+  // Decayed Rest (one card played) still fires the Flask, and no MP is added beyond
+  // the decayed +1. Play a cheap card first, then Rest.
+  const cfg = defaultBattleConfig(); cfg.relics = ['pilgrimsFlask'];
+  const g = new Game(710072, cfg); g.start(); g.mp = 5;
+  g.ranger.hp = g.ranger.maxHP - 2; // the only wounded member (the played heal won't top it off)
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // 1 card -> decayed Rest available
+  eq('one-card Rest regens the decayed amount', g.restRegenNow(), SKIP_REGEN_DECAYED);
+  const mpBefore = g.mp;
+  g.skipTurn();
+  eq('decayed Rest adds only the decayed MP (Flask adds none)', g.mp - mpBefore, SKIP_REGEN_DECAYED);
+  check('Flask fired on the decayed Rest', g.log.some((e) => e.text.includes("Pilgrim's Flask")));
+}
+{
+  // Flask heal routes through the pipeline: a member below half gets the Field Triage
+  // boost on the Rest top-off.
+  const cfg = defaultBattleConfig(); cfg.relics = ['pilgrimsFlask', 'fieldTriage'];
+  const g = new Game(710073, cfg); g.start(); g.mp = 0;
+  g.tank.hp = 1; // below half of maxHP and the most wounded -> Field Triage adds to the Flask heal
+  g.ranger.hp = g.ranger.maxHP; g.mage.hp = g.mage.maxHP;
+  g.skipTurn();
+  check('Flask heal is boosted by Field Triage', g.log.some((e) => e.text.includes("Pilgrim's Flask heals") && e.text.includes(String(PILGRIM_FLASK_HEAL + FIELD_TRIAGE_BONUS))));
+}
+{
+  // A fully healthy party: no wounded member, so the Flask no-ops (inert-when-none).
+  const cfg = defaultBattleConfig(); cfg.relics = ['pilgrimsFlask'];
+  const g = new Game(710075, cfg); g.start(); g.mp = 0;
+  g.tank.hp = g.tank.maxHP; g.ranger.hp = g.ranger.maxHP; g.mage.hp = g.mage.maxHP; // undo any opening-strike scratch
+  g.skipTurn();
+  eq('Flask no-ops when nobody is wounded', g.log.filter((e) => e.text.includes("Pilgrim's Flask")).length, 0);
+}
+{
+  // Inert gate: no relic -> a Rest heals nobody and MP behaves exactly as before.
+  const g = new Game(710074); g.start(); g.mp = 0;
+  g.tank.hp = g.tank.maxHP - 3;
+  const hpBefore = g.tank.hp;
+  g.skipTurn();
+  eq('no Flask log with no relic', g.log.filter((e) => e.text.includes("Pilgrim's Flask")).length, 0);
+  check('a member is not healed by a bare Rest (only the enemy phase touches HP)', g.tank.hp <= hpBefore);
+  eq('the bare Rest still grants SKIP_REGEN MP', g.mp, SKIP_REGEN);
+  eq("Pilgrim's Flask is a common, non-curse relic", RELICS.pilgrimsFlask.rarity === 'common' && RELICS.pilgrimsFlask.curse !== true, true);
 }
 {
   // Definitions / typing sanity for the five new cards and two relics (#69).

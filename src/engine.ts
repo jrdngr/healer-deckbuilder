@@ -48,6 +48,7 @@ import {
   BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL,
   CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS,
   ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH,
+  PILGRIM_FLASK_HEAL,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
@@ -2933,6 +2934,29 @@ export class Game {
     this.mp = Math.min(this.maxMana, this.mp + this.restRegenNow());
     this._log(`Rested to regen +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
     this._emit({ kind: 'rest', amount: this.mp - before, mp: this.mp });
+    // Pilgrim's Flask (#71): every Rest also heals the most wounded living member a
+    // little, routed through the normal heal pipeline (Field Triage applies; a top-off
+    // can trigger Beacon of the Second Sun). No MP is touched — Flask heals, that's all.
+    // A "Rest" while channeling grants no MP (restRegenNow() === 0) — it only holds the
+    // channel — so it is not a real Rest and the Flask does not fire on it.
+    // POWER NOTE: the issue proposed healing ALL living members each Rest, but that read
+    // +9.4pp (N=1000, over the ≤+9pp gate) — the heal is at its integer floor (1) and the
+    // wave forbids per-fight caps, so the tuning lever is SCOPE, not magnitude/frequency
+    // (the pattern this repo already uses: Ossuary's threshold, Aegis's Ward cap). Keeping
+    // the "every Rest heals" hook but narrowing to the single most-wounded member lands it
+    // at +8.4pp, in band. See sim/relic-exp.ts.
+    if (this.hasRelic('pilgrimsFlask') && this.restRegenNow() > 0) {
+      const wounded = this.livingMembers()
+        .filter((m) => m.hp < m.maxHP)
+        .sort((a, b) => a.hp / a.maxHP - b.hp / b.maxHP)[0];
+      if (wounded) {
+        const res = this._applyHeal(wounded, PILGRIM_FLASK_HEAL, true);
+        if (res.healed > 0) {
+          this._log(`Pilgrim's Flask heals ${wounded.name} ${res.healed}. (${wounded.hp}/${wounded.maxHP})`, 'heal');
+          this._emit({ kind: 'heal', slot: wounded.slot, amount: res.healed, hp: wounded.hp });
+        }
+      }
+    }
     this._endTurnInternal();
     return { ok: true };
   }

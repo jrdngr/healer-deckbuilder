@@ -2004,7 +2004,11 @@ export type RelicId =
   | 'beaconOfSecondSun'// whenever a card heals a member to full, draw 1 (no per-fight cap)
   | 'twinCenser'       // single-target heal cards also heal the most wounded other member 1
   // --- Channel archetype rescue relic (#70): a channel keep-alive ----------------
-  | 'chantersIdol';    // the first card you play each turn doesn't break your channel
+  | 'chantersIdol'     // the first card you play each turn doesn't break your channel
+  // --- Meta-layer / run-economy relics (#71): touch Rest, recovery, rewards ------
+  | 'pilgrimsFlask'    // every Rest also heals all party members 1
+  | 'surgeonsThread'   // between-fight recovery 40% -> 50% of max HP
+  | 'beggarsBowl';     // curse: card rewards offer 2 instead of 3; +20g per won fight
 
 export interface RelicDef {
   id: RelicId;
@@ -2082,6 +2086,11 @@ export const GRIMOIRE_DMG = 3;               // Grimoire of Turning: damage deal
 export const SANGUINE_PACT_SURCHARGE = 2;    // Sanguine Pact (curse): extra HP every Blood-card cost pays
 export const SANGUINE_PACT_AUTO_BONUS = 2;   // Sanguine Pact (curse): +auto damage while any member is below the threshold
 export const SANGUINE_PACT_THRESHOLD = 0.5;  // Sanguine Pact (curse): "below 50% HP" holds the auto buff open
+// Meta-layer / run-economy relics (#71). Magnitudes tunable; a later balance pass owns them.
+export const PILGRIM_FLASK_HEAL = 1;         // Pilgrim's Flask: HP healed to the most wounded living member on every Rest (scoped from all-members to fit the ≤+9pp gate; see engine skipTurn)
+export const SURGEON_THREAD_HEAL_PCT = 0.5;  // Surgeon's Thread: between-fight recovery fraction while owned (vs HERO_HEAL_PCT)
+export const BEGGARS_BOWL_GOLD = 20;         // Beggar's Bowl (curse): extra gold per won fight
+export const BEGGARS_BOWL_REWARD_SIZE = 2;   // Beggar's Bowl (curse): card-reward offers rolled per won fight
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -2163,6 +2172,13 @@ export const RELICS: Record<RelicId, RelicDef> = {
   // --- Channel archetype rescue relic (#70) ----------------------------------
   chantersIdol: { id: 'chantersIdol', name: "Chanter's Idol", rarity: 'rare', icon: '🎐',
     desc: 'The first card you play each turn does not break your channel.' },
+  // --- Meta-layer / run-economy relics (#71) ---------------------------------
+  pilgrimsFlask: { id: 'pilgrimsFlask', name: "Pilgrim's Flask", rarity: 'common', icon: '🍶',
+    desc: `Every Rest also heals your most wounded member ${PILGRIM_FLASK_HEAL}.` },
+  surgeonsThread: { id: 'surgeonsThread', name: "Surgeon's Thread", rarity: 'common', icon: '🧵',
+    desc: `Between-fight recovery rises to ${SURGEON_THREAD_HEAL_PCT * 100}% of max HP (from ${HERO_HEAL_PCT * 100}%).` },
+  beggarsBowl: { id: 'beggarsBowl', name: "Beggar's Bowl", rarity: 'rare', icon: '🥣', curse: true,
+    desc: `CURSE — card rewards after a won fight offer ${BEGGARS_BOWL_REWARD_SIZE} choices instead of 3; +${BEGGARS_BOWL_GOLD}g per won fight.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

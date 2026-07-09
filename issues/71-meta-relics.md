@@ -1,10 +1,21 @@
 # Issue 71 — Meta-layer relics: Rest, recovery, and the reward economy
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (relics)   **Size:** S
 - **Depends on:** —   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: a few legible relics that touch the run
   layer (Rest action, between-fight recovery, card-reward economy) rather than combat math.
+
+## Shipped note (2026-07-08)
+
+One deviation from the proposal below: **Pilgrim's Flask heals the single most-wounded
+living member each Rest, not all party members.** Healing all living members every Rest
+measured **+9.4pp** (N=1000, over the ≤+9pp gate); the heal is already at its integer floor
+(1) and the wave forbids per-fight caps, so the only lever left is scope. Narrowing to the
+most-wounded member (keeping the "every Rest heals" hook — both the +5 and decayed +1 Rest)
+lands it at **+8.4pp**, in band. Surgeon's Thread **+3.6pp**, Beggar's Bowl **+2.5pp net** (a
+real trade, not a strict trap). See `sim/relic-exp.ts` and the code comments in
+`src/engine.ts` (skipTurn) / `src/constants.ts`.
 
 ## Why
 

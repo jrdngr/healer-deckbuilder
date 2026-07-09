@@ -88,6 +88,9 @@ const BATTERY: RelicId[] = [
   'beaconOfSecondSun', 'twinCenser',
   // Channel archetype rescue relic (#70) — gated ≤ +9pp.
   'chantersIdol',
+  // Meta-layer / run-economy relics (#71) — gated ≤ +9pp (measure the Beggar's Bowl
+  // curse's NET as a trade: the −choice/+gold rider against the deck-dilution relief).
+  'pilgrimsFlask', 'surgeonsThread', 'beggarsBowl',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

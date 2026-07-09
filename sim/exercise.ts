@@ -30,7 +30,7 @@ import {
   SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
   WHETSTONE_BONUS, OSSUARY_REGEN, POISON_TURNS, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
   GRIMOIRE_DMG, OPEN_VEINS_HP, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS,
-  BEACON_DRAW, TWIN_CENSER_SPLASH,
+  BEACON_DRAW, TWIN_CENSER_SPLASH, BEGGARS_BOWL_REWARD_SIZE,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -453,6 +453,26 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     g.cardsPlayedThisPhase = 0;         // a fresh turn with the channel still running
     g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // the turn's FIRST card -> Idol keeps the channel
     return g.channelActive();           // the channel survived a non-channel play
+  },
+  // --- meta-layer / run-economy relics (#71) ------------------------------------
+  pilgrimsFlask: () => {
+    const g = probeGame(['pilgrimsFlask']); g.start();
+    g.ranger.hp = 1;                    // a wounded member to top off
+    g.skipTurn();                       // a Rest heals all living members via the pipeline
+    return g.log.some((e) => e.text.includes("Pilgrim's Flask"));
+  },
+  surgeonsThread: () => {
+    // Run-layer: the between-fight recovery fraction is higher with the relic.
+    const withRelic = new Run(5); withRelic.addRelic('surgeonsThread');
+    const without = new Run(5);
+    withRelic.roster[0].hp = 1; without.roster[0].hp = 1;
+    withRelic._healBetweenFights(); without._healBetweenFights();
+    return withRelic.roster[0].hp > without.roster[0].hp;
+  },
+  beggarsBowl: () => {
+    // Run-layer curse: the card-reward roll shrinks to 2 distinct offers.
+    const run = new Run(5); run.addRelic('beggarsBowl');
+    return run.rollCardReward(0).length === BEGGARS_BOWL_REWARD_SIZE;
   },
 };
 

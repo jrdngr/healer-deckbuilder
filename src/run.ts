@@ -22,6 +22,7 @@ import {
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
   HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
+  SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   injuryRecordCap, injuryIncapacitates, injuryKills,
   partyFromMembers, DRAFT_POOL, CLASSIC_TRIO,
@@ -569,7 +570,10 @@ export class Run {
   // in-fight Resurrect card's 50%. Applied to the whole roster (benched members
   // rest too).
   _healBetweenFights(): void {
-    const heal = (max: number): number => Math.round(max * HEAL_TUNING.pct);
+    // Surgeon's Thread (#71) lifts the recovery fraction from the moment it's owned;
+    // otherwise the run uses the default HEAL_TUNING.pct.
+    const pct = this.hasRelic('surgeonsThread') ? SURGEON_THREAD_HEAL_PCT : HEAL_TUNING.pct;
+    const heal = (max: number): number => Math.round(max * pct);
     for (const p of this.roster) {
       const cur = p.hp ?? p.maxHP;
       p.hp = Math.min(p.maxHP, cur + heal(p.maxHP));
@@ -587,7 +591,9 @@ export class Run {
       return { playerGold: 0, salaries: [] };
     }
     const bounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * this.emptySeats()));
-    const reward = bounty + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
+    const reward = bounty
+      + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
+      + (this.hasRelic('beggarsBowl') ? BEGGARS_BOWL_GOLD : 0);
     const salaries: { slot: number; gold: number }[] = [];
     for (let s = 0; s < this.deployment.length; s++) {
       const ri = this.deployment[s];
@@ -612,7 +618,9 @@ export class Run {
     // seats, so an undermanned win pays a premium. The Rusty Crown (#22) bonus is
     // added after (a flat reward for a harder fight, not scaled by seats).
     const bounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * this.emptySeats()));
-    const reward = bounty + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0);
+    const reward = bounty
+      + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
+      + (this.hasRelic('beggarsBowl') ? BEGGARS_BOWL_GOLD : 0);
     // Pay each DEPLOYED member their salary out of the winnings (2026-07); benched
     // members are free, so fielding fewer keeps more gold. Gold never goes negative.
     this.gold = Math.max(0, this.gold + reward - this.deployedSalary());
@@ -632,9 +640,12 @@ export class Run {
   // nodeContent, so they also survive save/resume mid-choice.
   rollCardReward(fightIndex: number): CardOffer[] {
     const sub = makeRng((this.seed ^ Math.imul(fightIndex + 1, 0x85ebca6b)) >>> 0);
+    // Beggar's Bowl (#71) shrinks the reward roll to 2 distinct offers (skip stays
+    // allowed) — a mild deck-dilution relief traded for the +20g rider above.
+    const size = this.hasRelic('beggarsBowl') ? BEGGARS_BOWL_REWARD_SIZE : CARD_REWARD_SIZE;
     const ids = this._pickDistinct(
       CARD_POOL.map((id): [CardId, number] => [id, RARITY_WEIGHT[CARD_RARITY[id]]]),
-      CARD_REWARD_SIZE,
+      size,
       sub,
     );
     return ids.map((cardId): CardOffer => ({ cardId, rarity: CARD_RARITY[cardId], price: 0 }));

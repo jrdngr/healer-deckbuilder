@@ -279,7 +279,16 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // banks them). The reward stream reshuffles downstream and the vector shifts: F4
   // 178->177, F5 169->171, F6 165->166, F7 161->164, F8 155->156 (F0/F1/F2/F3 unchanged).
   // All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 185, 179, 177, 171, 166, 164, 156]));
+  // 2026-07-08 (#71 meta-layer relics): no new cards this wave — 3 relics join the pool,
+  // of which 2 non-curses (Pilgrim's Flask, Surgeon's Thread) become spoils-eligible and
+  // the Beggar's Bowl curse is bought-only (never in spoils). The extra spoils entries are
+  // a pure rng-stream perturbation (the best-3 policy values all three 0 — see policy.ts —
+  // so it never banks them; each relic's marginal power is gated force-injected by
+  // sim/relic-exp.ts: Flask +8.4 / Thread +3.6 / Bowl +2.5pp net, all ≤ +9pp). The reward
+  // stream reshuffles downstream and the vector shifts: F3 179->180, F4 177->179, F5
+  // 171->172, F6 166->169, F7 164->166, F8 156->159 (F0/F1/F2 unchanged). All band/CI/boss
+  // gates below still hold; re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 185, 180, 179, 172, 169, 166, 159]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

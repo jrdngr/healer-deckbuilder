@@ -67,7 +67,6 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 71 | 📋 Open | [Meta relics](issues/71-meta-relics.md) | content (relics) | — | intake 2026-07-07 new-content wave |
 | 72 | 📋 Open | [Plaguewright + Ferment](issues/72-member-plaguewright.md) | content (roster + ability) | 67 | intake 2026-07-07 new-content wave |
 | 73 | 📋 Open | [Hierophant + Liturgy](issues/73-member-hierophant.md) | content (roster + ability) | 70 | intake 2026-07-07 new-content wave |
 | 74 | 📋 Open | [Duelist + En Garde](issues/74-member-duelist.md) | content (roster + ability) | 65 | intake 2026-07-07 new-content wave |

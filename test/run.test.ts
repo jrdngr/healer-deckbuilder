@@ -17,12 +17,13 @@ import {
   INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   HERO_HEAL_PCT, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
+  SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
   STARTER_DECKS, STARTER_DECK_IDS, DEFAULT_STARTER_DECK, buildStarterDeck,
 } from '../src/constants';
 import type { RunLocation } from '../src/run';
 import { emptyStats, recordRunEnd } from '../src/stats';
 import { groupPile } from '../src/deckView';
-import type { CardId, ModifierId, Slot, MemberId } from '../src/constants';
+import type { CardId, ModifierId, Slot, MemberId, RelicId } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -932,8 +933,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const c2 = run.shrineAcceptCurse();
   const c3 = run.shrineAcceptCurse();
   const c4 = run.shrineAcceptCurse(); // Sanguine Pact (#68) is the fourth curse
-  check('four distinct curses exist', new Set([c1, c2, c3, c4]).size === 4);
-  eq('a fifth burden does not exist', run.shrineAcceptCurse(), null);
+  const c5 = run.shrineAcceptCurse(); // Beggar's Bowl (#71) is the fifth curse
+  check('five distinct curses exist', new Set([c1, c2, c3, c4, c5]).size === 5);
+  eq('a sixth burden does not exist', run.shrineAcceptCurse(), null);
   check('the shrine event offers the burden',
     EVENTS.find((e) => e.id === 'shrine')!.choices.some((c) => c.kind === 'shrineCurse'));
 }
@@ -1696,6 +1698,54 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   sim.beginDraft();
   eq('beginDraft from start keeps Preserver', sim.starterDeck, DEFAULT_STARTER_DECK);
   eq('beginDraft from start still enters the draft', sim.location.kind, 'draft');
+}
+
+// --- #71: meta-layer relics — Surgeon's Thread, Beggar's Bowl -------------------
+{
+  // Surgeon's Thread lifts the between-fight recovery from 40% to 50% of max HP;
+  // a matched run without it recovers the smaller amount from the same start.
+  const withT = new Run(710); startRun(withT); withT.addRelic('surgeonsThread');
+  const without = new Run(710); startRun(without);
+  const maxW = withT.roster[0].maxHP;
+  withT.winFight([1, withT.roster[1].maxHP, withT.roster[2].maxHP]);
+  without.winFight([1, without.roster[1].maxHP, without.roster[2].maxHP]);
+  eq("Surgeon's Thread recovers to the 50% line", withT.roster[0].hp, Math.min(maxW, 1 + Math.round(maxW * SURGEON_THREAD_HEAL_PCT)));
+  eq('without the Thread recovery stays at the 40% line', without.roster[0].hp, Math.min(maxW, 1 + Math.round(maxW * HERO_HEAL_PCT)));
+  check("the Thread's recovery exceeds the default", (withT.roster[0].hp ?? 0) > (without.roster[0].hp ?? 0));
+  check('Surgeon\'s Thread is a common, non-curse relic', RELICS.surgeonsThread.rarity === 'common' && RELICS.surgeonsThread.curse !== true);
+}
+{
+  // Beggar's Bowl: card rewards roll exactly 2 distinct offers, and each won fight
+  // pays +BEGGARS_BOWL_GOLD; it stacks with the Rusty Crown's rider when both are held.
+  const run = new Run(711); run.addRelic('beggarsBowl'); startRun(run);
+  const offers = run.rollCardReward(0);
+  eq("Beggar's Bowl rolls 2 reward offers", offers.length, BEGGARS_BOWL_REWARD_SIZE);
+  check('the two offers are distinct', offers[0].cardId !== offers[1].cardId);
+  run.winFight();
+  eq('the Bowl pays extra gold per win', run.gold, NET_GOLD + BEGGARS_BOWL_GOLD);
+
+  const both = new Run(712); both.addRelic('beggarsBowl'); both.addRelic('rustyCrown'); startRun(both);
+  both.winFight();
+  eq('Bowl + Crown gold riders stack', both.gold, NET_GOLD + BEGGARS_BOWL_GOLD + RUSTY_CROWN_GOLD);
+  check("Beggar's Bowl is a rare curse", RELICS.beggarsBowl.rarity === 'rare' && RELICS.beggarsBowl.curse === true);
+}
+{
+  // Inert gate: with no relics, recovery stays 40%, rewards roll the default size,
+  // and a win pays only the base net gold — no #71 relic changes anything.
+  const run = new Run(713); startRun(run);
+  eq('default reward size with no relics', run.rollCardReward(0).length, CARD_REWARD_SIZE);
+  const max = run.roster[0].maxHP;
+  run.winFight([1, run.roster[1].maxHP, run.roster[2].maxHP]);
+  eq('recovery stays at the default 40% with no relics', run.roster[0].hp, Math.min(max, 1 + Math.round(max * HERO_HEAL_PCT)));
+  eq('no bonus gold with no relics', run.gold, NET_GOLD);
+}
+{
+  // The three #71 relics are real, and the two non-curses flow into the spoils pool.
+  const ids: RelicId[] = ['pilgrimsFlask', 'surgeonsThread', 'beggarsBowl'];
+  check('all three #71 relics exist', ids.every((id) => RELIC_IDS.includes(id)));
+  const spoilsPool = RELIC_IDS.filter((id) => !RELICS[id].curse);
+  check("Pilgrim's Flask and Surgeon's Thread are spoils-eligible", spoilsPool.includes('pilgrimsFlask') && spoilsPool.includes('surgeonsThread'));
+  check("Beggar's Bowl is excluded from the spoils pool", !spoilsPool.includes('beggarsBowl'));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
