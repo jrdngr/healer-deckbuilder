@@ -67,7 +67,6 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 68 | 📋 Open | [Blood + cycling](issues/68-blood-and-cycling.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
 | 69 | 📋 Open | [Holy overheal payoffs](issues/69-holy-overheal-payoffs.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
 | 70 | 📋 Open | [Channel + arcane](issues/70-channel-arcane.md) | content (cards + relics) | — | intake 2026-07-07 new-content wave |
 | 71 | 📋 Open | [Meta relics](issues/71-meta-relics.md) | content (relics) | — | intake 2026-07-07 new-content wave |

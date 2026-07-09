@@ -23,6 +23,9 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   // Status-window management (#67): Hemorrhage/Umbral Feast cash out into damage (power),
   // Dread Whisper shaves the telegraph (ward).
   hemorrhage: 'power', umbralFeast: 'power', dreadWhisper: 'ward',
+  // Blood + cycling (#68): Crimson Pact is draw economy (mana), Scarlet Ward a shield
+  // (ward), Transfusion a redistribution heal (heal), Open Veins / Blood Banner offense.
+  crimsonPact: 'mana', scarletWard: 'ward', openVeins: 'power', transfusion: 'heal', bloodBanner: 'power',
   // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
   cascade: 'mana', nightfall: 'power',
   // Channeled cards (#64): Drain/Sap are aggressive, Mending Stream a heal, Fortify a ward.

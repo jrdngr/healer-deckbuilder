@@ -42,6 +42,9 @@ import {
   ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS,
   THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD,
   UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
+  CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_DMG, TRANSFUSION_HEAL,
+  BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS,
+  GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS, SANGUINE_PACT_THRESHOLD,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
@@ -262,6 +265,7 @@ export class Game {
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
   surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
+  bloodBannerTurns: number; // Blood Banner (#68): enemy turns the party-wide +auto buff lasts
   relics: Set<RelicId>;   // run-long passives (#21); empty set = fully inert
   echoUsed: boolean;      // Echo Locket: its once-per-fight return has fired
   stormglassUsed: boolean;// Stormglass Mirror: its once-per-fight negate has fired
@@ -377,6 +381,7 @@ export class Game {
     this.woundTurns = 0;    // no Hex active at fight start
     this.surgePending = false;
     this.hymnBonus = 0;
+    this.bloodBannerTurns = 0; // no Blood Banner buff at fight start (#68)
     this.relics = new Set(config.relics ?? []);
     this.echoUsed = false;
     this.stormglassUsed = false;
@@ -479,7 +484,14 @@ export class Game {
     const anvil = m.anvilStance && (m.shield || m.brace) ? ANVIL_STANCE_BONUS : 0;
     // Whetstone of the Patient (#65): a member untouched last enemy phase strikes +1.
     const whet = this.hasRelic('whetstone') && !m.tookDamageLastEnemyPhase ? WHETSTONE_BONUS : 0;
-    return base + this.hymnBonus + banner + lone + strike + anvil + whet;
+    // Blood Banner (#68): a party-wide standing +auto buff, additive with Hymn/Embolden.
+    const bloodBanner = this.bloodBannerTurns > 0 ? BLOOD_BANNER_BONUS : 0;
+    // Sanguine Pact (#68 curse): while any living member is below the threshold, the
+    // whole party's autos gain +bonus (the Berserker/Flagellant hold it open naturally).
+    const sanguine = this.hasRelic('sanguinePact')
+      && this.livingMembers().some((x) => x.hp < x.maxHP * SANGUINE_PACT_THRESHOLD)
+      ? SANGUINE_PACT_AUTO_BONUS : 0;
+    return base + this.hymnBonus + banner + lone + strike + anvil + whet + bloodBanner + sanguine;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -1176,6 +1188,36 @@ export class Game {
     return n;
   }
 
+  // Sanguine Pact (#68 curse): every Blood-card HP cost pays +SURCHARGE while owned;
+  // 0 when unowned (the curse is fully inert). Derived, so the ">N HP" gates and the
+  // payment both read the SAME effective cost with no per-card hardcoding.
+  _sanguineSurcharge(): number {
+    return this.hasRelic('sanguinePact') ? SANGUINE_PACT_SURCHARGE : 0;
+  }
+
+  // The EFFECTIVE HP a Blood card's `selfDamage` costs right now: its base plus the
+  // Sanguine Pact surcharge. canPlay gates targets at or below this, and the payment
+  // uses it too — under the Pact, Crimson Pact (base 4) needs >6 HP and takes 6.
+  _bloodCost(card: ResolvedCard): number {
+    if (card.selfDamage == null) return 0;
+    return card.selfDamage + this._sanguineSurcharge();
+  }
+
+  // The most wounded OTHER living member (largest absolute HP deficit), excluding
+  // the payer, with a deterministic tie-break by slot order. Shared selector reused
+  // by #69 (Twin Censer) / #70 (Arcane Lens). Returns undefined when no other member
+  // is alive.
+  _mostWoundedOther(exclude: Member): Member | undefined {
+    let best: Member | undefined;
+    let bestDeficit = -1;
+    for (const m of this.livingMembers()) {
+      if (m.slot === exclude.slot) continue;
+      const deficit = m.maxHP - m.hp;
+      if (deficit > bestDeficit) { bestDeficit = deficit; best = m; }
+    }
+    return best;
+  }
+
   // A Blood card's HP cost (#16). canPlay gates on hp > cost, and the payment
   // itself clamps to leave 1 HP (the dev panel bypasses canPlay) — Blood
   // self-damage is never lethal, so playCard opens no new death path.
@@ -1486,6 +1528,12 @@ export class Game {
         }
       }
     }
+    // Blood Banner (#68): the party-wide +auto buff is engine-level, so it decays once
+    // per enemy turn (outside the per-member loop) after its BLOOD_BANNER_TURNS.
+    if (this.bloodBannerTurns > 0) {
+      this.bloodBannerTurns -= 1;
+      if (this.bloodBannerTurns === 0) this._log('The Blood Banner falls.', 'status');
+    }
   }
 
   // Resolve a scripted 'cast' telegraph (Hexweaver #13 / Devourer #14). These deal
@@ -1711,6 +1759,13 @@ export class Game {
         this._log(`The Prayer Beads turn: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
       }
+      // Grimoire of Turning (#68): every reshuffle deals GRIMOIRE_DMG to the enemy
+      // (uncapped — the reshuffle cadence is itself the throttle). Routes through
+      // _damageEnemy, so Vulnerability applies and a killing blow ends the fight.
+      if (this.hasRelic('grimoireOfTurning') && this.status === 'playing') {
+        const killed = this._damageEnemy(GRIMOIRE_DMG, 'Grimoire of Turning');
+        this._emitEnemyNuke(GRIMOIRE_DMG, killed);
+      }
     }
     return this.drawPile.shift() ?? null;
   }
@@ -1768,8 +1823,13 @@ export class Game {
         if (!m || !m.alive) return 'target must be a living member';
         // Cultivate / Bloom (#15) operate on an existing Regen — dead without one.
         if (card.needsRegen && m.regen <= 0) return 'target must have an active Regen';
-        // Blood cards (#16) demand the target survive the payment outright.
-        if (card.selfDamage != null && m.hp <= card.selfDamage) return `target must have more than ${card.selfDamage} HP`;
+        // Blood cards (#16) demand the target survive the payment outright. The gate
+        // reads the EFFECTIVE cost (base + Sanguine Pact surcharge, #68), so under the
+        // Pact a card's ">N HP" bar rises with its raised cost — derived, not hardcoded.
+        if (card.selfDamage != null) {
+          const cost = this._bloodCost(card);
+          if (m.hp <= cost) return `target must have more than ${cost} HP`;
+        }
         // Bulwark cards (#17) are Defense-exclusive; Phalanx also refuses the
         // taunting member (Taunt's bundled Defense is the tank's lane).
         if (card.noDefense && m.defense > 0) return 'target already has Defense';
@@ -2050,7 +2110,7 @@ export class Game {
       }
       case 'bloodTithe': {
         const m = this.members[target as number];
-        const paid = this._bloodPay(m, card.selfDamage ?? 0);
+        const paid = this._bloodPay(m, this._bloodCost(card));
         const before = this.mp;
         this.mp = Math.min(this.maxMana, this.mp + BLOOD_TITHE_MP);
         this._log(`Blood Tithe: ${m.name} pays ${paid} HP; ${this.mp - before} MP restored. (MP ${this.mp})`, 'mp');
@@ -2059,7 +2119,7 @@ export class Game {
       }
       case 'martyrsGift': {
         const m = this.members[target as number];
-        const paid = this._bloodPay(m, card.selfDamage ?? 0);
+        const paid = this._bloodPay(m, this._bloodCost(card));
         for (const other of this.livingMembers()) {
           if (other.slot === m.slot) continue;
           const healed = this._healMember(other, card.heal ?? 0, true);
@@ -2070,11 +2130,74 @@ export class Game {
       }
       case 'grimHarvest': {
         const m = this.members[target as number];
-        const paid = this._bloodPay(m, card.selfDamage ?? 0);
+        const paid = this._bloodPay(m, this._bloodCost(card));
         this._log(`Grim Harvest: ${m.name} pays ${paid} HP.`, 'status');
         const killed = this._damageEnemy(GRIM_HARVEST_DMG, 'Grim Harvest');
         this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(GRIM_HARVEST_DMG), enemyHp: this.enemy.hp });
         if (killed) this._emit({ kind: 'defeatEnemy' });
+        break;
+      }
+      // --- Blood + cycling (#68): HP as a spendable resource -------------------
+      case 'crimsonPact': {
+        // Pay HP, then draw through the normal draw path — a reshuffle mid-draw fires
+        // Prayer Beads / Grimoire (like Inspiration, but priced in HP).
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, this._bloodCost(card));
+        const before = this.hand.length;
+        for (let i = 0; i < (card.draw ?? CRIMSON_PACT_DRAW); i++) {
+          const c = this._drawOne();
+          if (c == null) break; // draw and discard both empty
+          this.hand.push(c);
+        }
+        const drawn = this.hand.length - before;
+        this._log(`Crimson Pact: ${m.name} pays ${paid} HP; drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
+        this._emit({ kind: 'draw', count: drawn });
+        break;
+      }
+      case 'scarletWard': {
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, this._bloodCost(card));
+        // A normal Shield (replaces Brace, fades in SHIELD_TURNS enemy turns).
+        m.shield = true;
+        m.shieldTurns = SHIELD_TURNS;
+        m.brace = false;
+        m.braceTurns = 0;
+        this._log(`Scarlet Ward: ${m.name} pays ${paid} HP for a Shield (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
+        this._emit({ kind: 'shieldApplied', slot: m.slot });
+        break;
+      }
+      case 'openVeins': {
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, this._bloodCost(card));
+        this._log(`Open Veins: ${m.name} pays ${paid} HP.`, 'status');
+        const killed = this._damageEnemy(OPEN_VEINS_DMG, 'Open Veins');
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(OPEN_VEINS_DMG), enemyHp: this.enemy.hp });
+        if (killed) this._emit({ kind: 'defeatEnemy' });
+        break;
+      }
+      case 'transfusion': {
+        const m = this.members[target as number];
+        const paid = this._bloodPay(m, this._bloodCost(card));
+        // Redistribute the blood to the most wounded OTHER member (never the payer).
+        const other = this._mostWoundedOther(m);
+        if (other) {
+          const healed = this._healMember(other, card.heal ?? TRANSFUSION_HEAL, true);
+          this._log(`Transfusion: ${m.name} pays ${paid} HP; ${other.name} heals ${healed}.`, 'heal');
+          this._emit({ kind: 'heal', slot: other.slot, amount: healed, hp: other.hp });
+        } else {
+          this._log(`Transfusion: ${m.name} pays ${paid} HP, but no other member remains to receive it.`, 'status');
+        }
+        break;
+      }
+      case 'bloodBanner': {
+        // Every living member pays (clamped to 1 HP); the party's autos gain a standing
+        // +bonus for BLOOD_BANNER_TURNS enemy turns. Its own engine-level buff (not the
+        // per-member strike field), so it stacks additively with Battle Hymn / Embolden.
+        const cost = BLOOD_BANNER_HP + this._sanguineSurcharge();
+        for (const m of this.livingMembers()) this._bloodPay(m, cost);
+        this.bloodBannerTurns = BLOOD_BANNER_TURNS;
+        this._log(`Blood Banner: the party bleeds for the standard — autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'hymn', bonus: BLOOD_BANNER_BONUS });
         break;
       }
       // --- Shadow cards (#63): party->enemy damage through _damageEnemy, so

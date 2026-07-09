@@ -81,6 +81,9 @@ const BATTERY: RelicId[] = [
   'deepRoots', 'ossuaryBell',
   // Status-window management relics (#67) — gated ≤ +9pp.
   'venomGland', 'embermark',
+  // Blood + cycling relics (#68) — gated ≤ +9pp (measure the Sanguine Pact curse too:
+  // its net should read as a real trade, not a strict trap).
+  'grimoireOfTurning', 'sanguinePact',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

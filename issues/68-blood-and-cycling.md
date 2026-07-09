@@ -1,6 +1,6 @@
 # Issue 68 — Knife-edge blood + deck cycling
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards + relics)   **Size:** L
 - **Depends on:** —   **Blocks:** #75 (Flagellant deepens this web)
 - **Addresses:** intake 2026-07-07 — new-content wave: HP as a spendable resource with the healer
@@ -55,22 +55,22 @@ mechanic-coverage rows; `CARD_TYPE` entries; N=1000 sim gates (25–35% band, �
 
 ## Acceptance criteria
 
-- [ ] Five `CardId`s in union + `CARDS` + `CARD_TYPE` (`blood`) + `CARD_RARITY` + pools;
+- [x] Five `CardId`s in union + `CARDS` + `CARD_TYPE` (`blood`) + `CARD_RARITY` + pools;
       magnitudes as named constants; `selfDamage` clamps to 1 on all five.
-- [ ] Targeting gates derive from effective HP cost (base + Sanguine Pact) and refuse targets at
+- [x] Targeting gates derive from effective HP cost (base + Sanguine Pact) and refuse targets at
       or below it — except Blood Banner, which has no gate (clamped, `target 'none'`).
-- [ ] Crimson Pact draws 2 through the normal draw path (reshuffle can trigger mid-draw and fires
+- [x] Crimson Pact draws 2 through the normal draw path (reshuffle can trigger mid-draw and fires
       Prayer Beads / Grimoire).
-- [ ] Transfusion picks the most wounded *other* living member (deterministic tie-break by slot
+- [x] Transfusion picks the most wounded *other* living member (deterministic tie-break by slot
       order) — the selector is a shared helper (`_mostWoundedOther`), reused by #69 Twin Censer /
       #70 Arcane Lens.
-- [ ] Blood Banner: +2 autos party-wide for 2 enemy turns, additive with Battle Hymn/Embolden.
-- [ ] Grimoire: 3 damage on every reshuffle while owned; inert with no relics.
-- [ ] Sanguine Pact: registered as `curse: true` (bought-only, never in spoils); both halves work;
+- [x] Blood Banner: +2 autos party-wide for 2 enemy turns, additive with Battle Hymn/Embolden.
+- [x] Grimoire: 3 damage on every reshuffle while owned; inert with no relics.
+- [x] Sanguine Pact: registered as `curse: true` (bought-only, never in spoils); both halves work;
       inert when not owned.
-- [ ] Mechanic-coverage rows; N=1000 band; ≤ +9pp per relic (measure the curse too — its net
+- [x] Mechanic-coverage rows; N=1000 band; ≤ +9pp per relic (measure the curse too — its net
       should read as a real trade, not a strict trap).
-- [ ] `npm test` / `npm run typecheck` clean; own `jj` commit.
+- [x] `npm test` / `npm run typecheck` clean; own `jj` commit.
 
 ## Implementation notes (anchors)
 

@@ -931,8 +931,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('the shrine pays for the burden', run.gold, goldBefore + CURSE_SHRINE_GOLD);
   const c2 = run.shrineAcceptCurse();
   const c3 = run.shrineAcceptCurse();
-  check('three distinct curses exist', new Set([c1, c2, c3]).size === 3);
-  eq('a fourth burden does not exist', run.shrineAcceptCurse(), null);
+  const c4 = run.shrineAcceptCurse(); // Sanguine Pact (#68) is the fourth curse
+  check('four distinct curses exist', new Set([c1, c2, c3, c4]).size === 4);
+  eq('a fifth burden does not exist', run.shrineAcceptCurse(), null);
   check('the shrine event offers the burden',
     EVENTS.find((e) => e.id === 'shrine')!.choices.some((c) => c.kind === 'shrineCurse'));
 }

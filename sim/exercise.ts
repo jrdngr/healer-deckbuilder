@@ -29,6 +29,7 @@ import {
   MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
   SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
   WHETSTONE_BONUS, OSSUARY_REGEN, POISON_TURNS, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
+  GRIMOIRE_DMG, OPEN_VEINS_HP, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -62,6 +63,8 @@ const EXERCISE_DECK: CardId[] = [
   // Status-window management (#67): Hemorrhage needs enemy poison (imbuePoison seeds it),
   // Umbral Feast reads the board, Dread Whisper shaves the telegraph.
   'hemorrhage', 'umbralFeast', 'dreadWhisper',
+  // Blood + cycling (#68): HP-priced draw/shield/damage/redistribution/offense.
+  'crimsonPact', 'scarletWard', 'openVeins', 'transfusion', 'bloodBanner',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
@@ -124,6 +127,14 @@ function exerciseOnePlay(game: Game, cov: Coverage): boolean {
       if (p && game.playCard(i, p.target).ok) { recordPlay(dc, cov); return true; }
     }
   }
+  // Pass 0b — seed enemy Poison. Hemorrhage (#67, needsPoison) is a dead card until the
+  // enemy is Poisoned; the bigger #68 deck can draw it while no poison stands and the
+  // one Imbue Venom is elsewhere. When such a consumer is in hand but stuck for lack of
+  // enemy poison, poison the enemy directly (the harness already pokes state — it tops MP
+  // each turn — to keep coverage decoupled from the economy; a real poison, cashed for real).
+  const stuckPoison = game.hand.some(
+    (dc, i) => !cov.cardsPlayed.has(dc.id) && CARDS[dc.id].needsPoison && legalPlay(game, i) === null);
+  if (stuckPoison && game.enemy.poisonTurns <= 0) game._applyPoison(POISON_BASE, POISON_TURNS);
   // Pass 1 — a not-yet-played card (ability cards self-resolve on their bound member).
   for (let i = 0; i < game.hand.length; i++) {
     const dc = game.hand[i];
@@ -383,6 +394,24 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const before = g.enemy.hp;
     g._runEnemyPhase();
     return before - g.enemy.hp === EMBERMARK_DMG; // the ember fired flat on natural expiry
+  },
+  // --- Blood + cycling relics (#68) ---------------------------------------------
+  grimoireOfTurning: () => {
+    const g = probeGame(['grimoireOfTurning']); g.start(); g.enemy.hp = 999;
+    g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -1)); // force a reshuffle on the next draw
+    const before = g.enemy.hp;
+    g._drawOne();
+    return before - g.enemy.hp === GRIMOIRE_DMG; // the reshuffle dealt its flat damage
+  },
+  sanguinePact: () => {
+    const g = probeGame(['sanguinePact']); g.start();
+    for (const m of g.members) m.hp = m.maxHP; // all full -> no auto bonus
+    const full = g.memberDamage(g.ranger);
+    g.tank.hp = 1; // a member below 50% -> party autos +bonus
+    const wounded = g.memberDamage(g.ranger);
+    // Surcharge half: Open Veins' effective HP cost rises by the surcharge under the Pact.
+    const cost = g._bloodCost(resolveCard(makeDeckCard('openVeins', -1)));
+    return wounded - full === SANGUINE_PACT_AUTO_BONUS && cost === OPEN_VEINS_HP + SANGUINE_PACT_SURCHARGE;
   },
 };
 

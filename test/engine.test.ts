@@ -9,9 +9,10 @@ import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constan
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
-import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS } from '../src/constants';
+import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS, RELICS } from '../src/constants';
 import { THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD } from '../src/constants';
 import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG } from '../src/constants';
+import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPEN_VEINS_DMG, TRANSFUSION_HP, TRANSFUSION_HEAL, BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS, GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
@@ -4139,6 +4140,227 @@ function countPulses(g: Game): number {
   check('all three carry a rarity', (['hemorrhage', 'umbralFeast', 'dreadWhisper'] as CardId[]).every((id) => CARD_RARITY[id] != null));
   check('Hemorrhage uses the needsPoison gate', CARDS.hemorrhage.needsPoison === true);
   check('Venom Gland / Embermark are real relics', (['venomGland', 'embermark'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
+}
+
+// --- Blood + cycling (#68) --------------------------------------------------
+{
+  // Crimson Pact: a member > CRIMSON_PACT_HP pays it and the party draws CRIMSON_PACT_DRAW.
+  const g = new Game(680); g.start(); g.mp = g.maxMana;
+  g.tank.hp = g.tank.maxHP;
+  const hp0 = g.tank.hp;
+  const idx = giveCard(g, 'crimsonPact');
+  const handBefore = g.hand.length; // includes the Pact about to be spent
+  g.playCard(idx, SLOT.CENTER);
+  eq('Crimson Pact pays its HP cost', hp0 - g.tank.hp, CRIMSON_PACT_HP);
+  // The played card leaves the hand; net hand change is the draw minus the one spent.
+  eq('Crimson Pact draws CRIMSON_PACT_DRAW', g.hand.length - handBefore, CRIMSON_PACT_DRAW - 1);
+  eq('Crimson Pact costs 0 MP', CARDS.crimsonPact.cost, 0);
+  check('Crimson Pact is engine-tagged (Retain/Efficient-ineligible like Inspiration)', isEngineCard('crimsonPact'));
+  check('Retain cannot lock in Crimson Pact', !MODIFIERS.retain.eligible('crimsonPact'));
+}
+{
+  // The ">N HP" gate refuses a target at or below the cost; accepts one above it.
+  const g = new Game(681); g.start(); g.mp = g.maxMana;
+  const idx = giveCard(g, 'crimsonPact');
+  g.tank.hp = CRIMSON_PACT_HP; // exactly the cost — must be refused
+  check('Crimson Pact refuses a target at the cost', g.canPlay(idx, SLOT.CENTER) != null);
+  g.tank.hp = CRIMSON_PACT_HP + 1; // one above — allowed
+  check('Crimson Pact accepts a target above the cost', g.canPlay(idx, SLOT.CENTER) == null);
+}
+{
+  // The selfDamage payment clamps to leave 1 HP (never lethal), even when the dev
+  // path bypasses the canPlay gate on a too-poor member.
+  const g = new Game(682); g.start();
+  g.tank.hp = 2; // below the cost — devPlayCard bypasses canPlay
+  g.devPlayCard('crimsonPact', SLOT.CENTER);
+  eq('Crimson Pact clamps the payment to leave 1 HP', g.tank.hp, 1);
+  check('the clamped payment does not kill', g.tank.alive);
+}
+{
+  // Scarlet Ward: pay SCARLET_WARD_HP for a normal Shield (replaces Brace, fades in SHIELD_TURNS).
+  const g = new Game(683); g.start(); g.mp = g.maxMana;
+  g.tank.hp = g.tank.maxHP; g.tank.brace = true; g.tank.braceTurns = 2;
+  const hp0 = g.tank.hp;
+  g.playCard(giveCard(g, 'scarletWard'), SLOT.CENTER);
+  eq('Scarlet Ward pays its HP cost', hp0 - g.tank.hp, SCARLET_WARD_HP);
+  check('Scarlet Ward grants a Shield', g.tank.shield && g.tank.shieldTurns === SHIELD_TURNS);
+  check('Scarlet Ward replaces the Brace', !g.tank.brace);
+}
+{
+  // Open Veins: pay OPEN_VEINS_HP, deal OPEN_VEINS_DMG to the enemy (through _damageEnemy).
+  const g = new Game(684); g.start(); g.mp = g.maxMana; g.enemy.hp = 999;
+  g.ranger.hp = g.ranger.maxHP;
+  const hp0 = g.ranger.hp, ehp0 = g.enemy.hp;
+  g.playCard(giveCard(g, 'openVeins'), SLOT.LEFT);
+  eq('Open Veins pays its HP cost', hp0 - g.ranger.hp, OPEN_VEINS_HP);
+  eq('Open Veins deals its damage to the enemy', ehp0 - g.enemy.hp, OPEN_VEINS_DMG);
+}
+{
+  // Transfusion: pay TRANSFUSION_HP; the most wounded OTHER living member heals — never the payer.
+  const g = new Game(685); g.start(); g.mp = g.maxMana;
+  g.ranger.hp = g.ranger.maxHP;   // payer, full
+  g.tank.hp = g.tank.maxHP - 2;   // wounded by 2
+  g.mage.hp = g.mage.maxHP - 5;   // most wounded (deficit 5)
+  const payerHp0 = g.ranger.hp, mageHp0 = g.mage.hp;
+  g.playCard(giveCard(g, 'transfusion'), SLOT.LEFT);
+  eq('Transfusion pays its HP cost', payerHp0 - g.ranger.hp, TRANSFUSION_HP);
+  eq('Transfusion heals the most wounded other member', g.mage.hp - mageHp0, TRANSFUSION_HEAL);
+  check('Transfusion never heals the payer beyond its own cost', g.ranger.hp === payerHp0 - TRANSFUSION_HP);
+}
+{
+  // Transfusion tie-break: equal deficits resolve to the lowest slot (deterministic).
+  const g = new Game(686); g.start(); g.mp = g.maxMana;
+  g.mage.hp = g.mage.maxHP;       // payer (slot 2), full
+  g.ranger.hp = g.ranger.maxHP - 6; // slot 0, deficit 6 (> heal, so it lands fully)
+  g.tank.hp = g.tank.maxHP - 6;     // slot 1, deficit 6 (tie)
+  const rangerHp0 = g.ranger.hp, tankHp0 = g.tank.hp;
+  g.playCard(giveCard(g, 'transfusion'), SLOT.RIGHT);
+  check('Transfusion tie-break picks the lowest slot', g.ranger.hp - rangerHp0 === TRANSFUSION_HEAL && g.tank.hp === tankHp0);
+}
+{
+  // The _mostWoundedOther selector never returns the excluded payer.
+  const g = new Game(687); g.start();
+  for (const m of g.members) m.hp = m.maxHP;
+  g.tank.hp = 1; // the payer is itself the most wounded
+  const pick = g._mostWoundedOther(g.tank);
+  check('_mostWoundedOther excludes the payer', pick != null && pick.slot !== g.tank.slot);
+}
+{
+  // Blood Banner: every living member pays BLOOD_BANNER_HP (clamped) and the party's
+  // autos gain +BLOOD_BANNER_BONUS for BLOOD_BANNER_TURNS enemy turns.
+  const g = new Game(688); g.start(); g.mp = g.maxMana;
+  for (const m of g.members) m.hp = m.maxHP;
+  const dmg0 = g.members.map((m) => g.memberDamage(m));
+  g.playCard(giveCard(g, 'bloodBanner'));
+  check('Blood Banner bleeds every living member', g.members.every((m) => m.hp === m.maxHP - BLOOD_BANNER_HP));
+  eq('Blood Banner sets its buff timer', g.bloodBannerTurns, BLOOD_BANNER_TURNS);
+  check('Blood Banner raises every member\'s auto by the bonus',
+    g.members.every((m, i) => g.memberDamage(m) === dmg0[i] + BLOOD_BANNER_BONUS));
+}
+{
+  // Blood Banner is additive with Battle Hymn in the same turn (both stack, not max).
+  const g = new Game(689); g.start(); g.mp = g.maxMana;
+  for (const m of g.members) m.hp = m.maxHP;
+  const base = g.memberDamage(g.ranger);
+  g.playCard(giveCard(g, 'battleHymn'));
+  const withHymn = g.memberDamage(g.ranger);
+  g.playCard(giveCard(g, 'bloodBanner'));
+  const withBoth = g.memberDamage(g.ranger);
+  check('Blood Banner stacks additively on top of Battle Hymn',
+    withHymn > base && withBoth === withHymn + BLOOD_BANNER_BONUS);
+}
+{
+  // Blood Banner clamps its own payment to leave 1 HP (never lethal).
+  const g = new Game(690); g.start(); g.mp = g.maxMana;
+  g.mage.hp = 1; // already at the floor
+  g.playCard(giveCard(g, 'bloodBanner'));
+  check('Blood Banner never bleeds a member below 1 HP', g.mage.hp === 1 && g.mage.alive);
+}
+{
+  // Blood Banner's buff decays after BLOOD_BANNER_TURNS enemy turns.
+  const g = new Game(691); g.start(); g.mp = g.maxMana;
+  g.playCard(giveCard(g, 'bloodBanner'));
+  eq('Blood Banner buff starts at BLOOD_BANNER_TURNS', g.bloodBannerTurns, BLOOD_BANNER_TURNS);
+  g._decayBuffs();
+  eq('Blood Banner buff decays one turn', g.bloodBannerTurns, BLOOD_BANNER_TURNS - 1);
+  g._decayBuffs();
+  eq('Blood Banner buff expires after its turns', g.bloodBannerTurns, 0);
+}
+{
+  // Grimoire of Turning: every reshuffle deals GRIMOIRE_DMG to the enemy (through _damageEnemy).
+  const cfg = defaultBattleConfig(); cfg.relics = ['grimoireOfTurning'];
+  const g = new Game(692, cfg); g.start(); g.enemy.hp = 999;
+  g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -1)); // force a reshuffle
+  const before = g.enemy.hp;
+  g._drawOne();
+  eq('Grimoire deals GRIMOIRE_DMG on a reshuffle', before - g.enemy.hp, GRIMOIRE_DMG);
+}
+{
+  // Grimoire is uncapped: two reshuffles deal it twice (no per-fight cap).
+  const cfg = defaultBattleConfig(); cfg.relics = ['grimoireOfTurning'];
+  const g = new Game(693, cfg); g.start(); g.enemy.hp = 999;
+  let before = g.enemy.hp;
+  g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -1)); g._drawOne();
+  eq('Grimoire fires on the first reshuffle', before - g.enemy.hp, GRIMOIRE_DMG);
+  before = g.enemy.hp;
+  g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -2)); g._drawOne();
+  eq('Grimoire fires again on the second reshuffle (uncapped)', before - g.enemy.hp, GRIMOIRE_DMG);
+}
+{
+  // Grimoire is inert with no relics: a reshuffle deals no damage.
+  const g = new Game(694); g.start(); g.enemy.hp = 999;
+  g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -1));
+  const before = g.enemy.hp;
+  g._drawOne();
+  eq('Grimoire inert: a reshuffle deals no damage without the relic', before - g.enemy.hp, 0);
+}
+{
+  // Grimoire rides Crimson Pact's draw: a Pact that triggers a mid-draw reshuffle fires it.
+  const cfg = defaultBattleConfig(); cfg.relics = ['grimoireOfTurning'];
+  const g = new Game(695, cfg); g.start(); g.mp = g.maxMana; g.enemy.hp = 999;
+  g.tank.hp = g.tank.maxHP;
+  // Empty the draw pile and seed the discard so the Pact's second draw reshuffles.
+  g.drawPile = [makeDeckCard('lowHeal', -1)];
+  g.discardPile = [makeDeckCard('lowHeal', -2), makeDeckCard('lowHeal', -3)];
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'crimsonPact'), SLOT.CENTER); // draws 2 -> the 2nd triggers a reshuffle
+  eq('Crimson Pact\'s mid-draw reshuffle fires Grimoire', before - g.enemy.hp, GRIMOIRE_DMG);
+}
+{
+  // Sanguine Pact (curse), cost half: every Blood-card HP cost pays +SURCHARGE, so the
+  // ">N HP" gate rises with it. Open Veins' effective cost = base + surcharge.
+  const cfg = defaultBattleConfig(); cfg.relics = ['sanguinePact'];
+  const g = new Game(696, cfg); g.start(); g.mp = g.maxMana; g.enemy.hp = 999;
+  g.ranger.hp = g.ranger.maxHP;
+  const cost = OPEN_VEINS_HP + SANGUINE_PACT_SURCHARGE;
+  const idx = giveCard(g, 'openVeins');
+  g.ranger.hp = cost; // exactly the raised cost — refused
+  check('Sanguine Pact raises the Blood gate by the surcharge', g.canPlay(idx, SLOT.LEFT) != null);
+  g.ranger.hp = cost + 1; // one above the raised cost — allowed
+  check('Sanguine Pact gate accepts a target above the raised cost', g.canPlay(idx, SLOT.LEFT) == null);
+  const hp0 = g.ranger.hp;
+  g.playCard(idx, SLOT.LEFT);
+  eq('Sanguine Pact makes the payment pay the surcharge too', hp0 - g.ranger.hp, cost);
+}
+{
+  // Sanguine Pact, upside half: while ANY living member is below 50% HP, party autos +bonus.
+  const cfg = defaultBattleConfig(); cfg.relics = ['sanguinePact'];
+  const g = new Game(697, cfg); g.start();
+  for (const m of g.members) m.hp = m.maxHP; // all healthy -> no bonus
+  const healthy = g.memberDamage(g.ranger);
+  g.tank.hp = Math.floor(g.tank.maxHP * 0.4); // one member below 50% -> party-wide +bonus
+  const wounded = g.memberDamage(g.ranger);
+  eq('Sanguine Pact grants +bonus while a member is below 50%', wounded - healthy, SANGUINE_PACT_AUTO_BONUS);
+  g.tank.hp = g.tank.maxHP; // topped back off -> the bonus toggles off
+  eq('Sanguine Pact bonus toggles off once everyone is above 50%', g.memberDamage(g.ranger), healthy);
+}
+{
+  // Sanguine Pact is inert when not owned: no surcharge, no auto bonus.
+  const g = new Game(698); g.start();
+  eq('Sanguine Pact inert: no Blood surcharge', g._sanguineSurcharge(), 0);
+  g.tank.hp = 1; // below 50%, but no relic -> no party auto bonus
+  const dmg = g.memberDamage(g.ranger);
+  for (const m of g.members) m.hp = m.maxHP;
+  eq('Sanguine Pact inert: no auto bonus from a wounded member', g.memberDamage(g.ranger), dmg);
+}
+{
+  // Definitions / typing sanity for the five new Blood cards and two relics (#68).
+  const blood: CardId[] = ['crimsonPact', 'scarletWard', 'openVeins', 'transfusion', 'bloodBanner'];
+  check('the five new cards are Blood', blood.every((id) => cardType(id) === 'blood'));
+  check('all five count toward the Blood type bucket', blood.every((id) => cardsOfType('blood').includes(id)));
+  check('all five are shop/reward-eligible', blood.every((id) => CARD_POOL.includes(id)));
+  check('all five carry a rarity', blood.every((id) => CARD_RARITY[id] != null));
+  // Every gated Blood card clamps to 1 HP: the four single-target ones carry selfDamage.
+  check('the four single-target Blood cards carry selfDamage', (['crimsonPact', 'scarletWard', 'openVeins', 'transfusion'] as CardId[]).every((id) => CARDS[id].selfDamage != null));
+  eq('Crimson Pact HP cost', CARDS.crimsonPact.selfDamage, CRIMSON_PACT_HP);
+  eq('Crimson Pact draws CRIMSON_PACT_DRAW', CARDS.crimsonPact.draw, CRIMSON_PACT_DRAW);
+  eq('Scarlet Ward HP cost', CARDS.scarletWard.selfDamage, SCARLET_WARD_HP);
+  eq('Open Veins HP cost', CARDS.openVeins.selfDamage, OPEN_VEINS_HP);
+  eq('Transfusion HP cost', CARDS.transfusion.selfDamage, TRANSFUSION_HP);
+  check('Blood Banner has no ">N HP" gate (no selfDamage, target none)', CARDS.bloodBanner.selfDamage == null && CARDS.bloodBanner.target === 'none');
+  check('Grimoire of Turning / Sanguine Pact are real relics', (['grimoireOfTurning', 'sanguinePact'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
+  check('Sanguine Pact is registered as a curse', RELICS.sanguinePact.curse === true);
+  check('Grimoire of Turning is not a curse', RELICS.grimoireOfTurning.curse !== true);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

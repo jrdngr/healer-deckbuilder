@@ -44,6 +44,9 @@ export type CardId =
   | 'thornskin' | 'sporeburst'
   // Status-window management (#67): manage enemy Poison / Vulnerability windows.
   | 'hemorrhage' | 'umbralFeast' | 'dreadWhisper'
+  // Blood + cycling (#68): HP as a spendable resource — draw, shields, damage,
+  // redistribution, and party offense, all priced in HP the healer manages.
+  | 'crimsonPact' | 'scarletWard' | 'openVeins' | 'transfusion' | 'bloodBanner'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
@@ -780,6 +783,22 @@ export const SPOREBURST_POISON = 2;      // Sporeburst: enemy Poison per turn ap
 export const UMBRAL_FEAST_PER_EFFECT = 1; // Umbral Feast: damage per active effect in play (party buffs + enemy debuffs)
 export const DREAD_WHISPER_REDUCTION = 1; // Dread Whisper: per-target damage shaved off the standing telegraph (floor 0)
 
+// Blood + cycling (#68): HP becomes a second currency — the healer spends party HP
+// for draw / shields / damage / redistribution / offense and then manages it back.
+// Every HP cost here rides the existing selfDamage clamp-to-1 rule (never lethal),
+// and the ">N HP" gates read the EFFECTIVE cost (base + Sanguine Pact surcharge).
+// Magnitudes are tunable — a later balance pass owns the numbers.
+export const CRIMSON_PACT_HP = 4;         // Crimson Pact: HP the target pays to draw
+export const CRIMSON_PACT_DRAW = 2;       // Crimson Pact: cards drawn
+export const SCARLET_WARD_HP = 3;         // Scarlet Ward: HP the target pays for a Shield
+export const OPEN_VEINS_HP = 3;           // Open Veins: HP the target pays
+export const OPEN_VEINS_DMG = 4;          // Open Veins: damage dealt to the enemy
+export const TRANSFUSION_HP = 4;          // Transfusion: HP the target pays
+export const TRANSFUSION_HEAL = 5;        // Transfusion: HP the most-wounded other member heals
+export const BLOOD_BANNER_HP = 2;         // Blood Banner: HP every living member pays (clamps to 1)
+export const BLOOD_BANNER_BONUS = 2;      // Blood Banner: +auto damage party-wide while it lasts
+export const BLOOD_BANNER_TURNS = 2;      // Blood Banner: enemy turns the party auto buff lasts
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -953,6 +972,22 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // Chill — stacks with every other reduction to zero out a sweep.
   dreadWhisper: { id: 'dreadWhisper', name: 'Dread Whisper', cost: 1, target: 'none',
     desc: `The standing telegraph deals ${DREAD_WHISPER_REDUCTION} less per target (min 0).` },
+  // --- Blood + cycling (#68): HP as a spendable resource ---------------------
+  // Crimson Pact draws 2 through the normal draw path (a reshuffle mid-draw fires
+  // Prayer Beads / Grimoire); like Inspiration it is `engine`-tagged (draw effect),
+  // so Retain/Efficient are ineligible. 0-MP — the HP is the cost (Blood Tithe precedent).
+  crimsonPact: { id: 'crimsonPact', name: 'Crimson Pact', cost: 0, target: 'single', selfDamage: CRIMSON_PACT_HP, draw: CRIMSON_PACT_DRAW, engine: true,
+    desc: `A member with more than ${CRIMSON_PACT_HP} HP pays ${CRIMSON_PACT_HP} HP; draw ${CRIMSON_PACT_DRAW}.` },
+  scarletWard: { id: 'scarletWard', name: 'Scarlet Ward', cost: 1, target: 'single', selfDamage: SCARLET_WARD_HP,
+    desc: `A member with more than ${SCARLET_WARD_HP} HP pays ${SCARLET_WARD_HP} HP; gain a Shield.` },
+  openVeins: { id: 'openVeins', name: 'Open Veins', cost: 0, target: 'single', selfDamage: OPEN_VEINS_HP,
+    desc: `A member with more than ${OPEN_VEINS_HP} HP pays ${OPEN_VEINS_HP} HP; deal ${OPEN_VEINS_DMG} to the enemy.` },
+  transfusion: { id: 'transfusion', name: 'Transfusion', cost: 1, target: 'single', selfDamage: TRANSFUSION_HP, heal: TRANSFUSION_HEAL,
+    desc: `A member with more than ${TRANSFUSION_HP} HP pays ${TRANSFUSION_HP} HP; the most wounded other member heals ${TRANSFUSION_HEAL}.` },
+  // Blood Banner has no ">N HP" gate (clamped, target 'none'): every living member
+  // pays, and the payment leaves each at 1 HP minimum.
+  bloodBanner: { id: 'bloodBanner', name: 'Blood Banner', cost: 2, target: 'none',
+    desc: `Every living member pays ${BLOOD_BANNER_HP} HP (clamps to 1); the party's autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.` },
   // --- count-based payoff cards (#63, Part B) --------------------------------
   cascade: { id: 'cascade', name: 'Cascade', cost: 2, target: 'none', draw: CASCADE_DRAW, engine: true,
     desc: `Draw ${CASCADE_DRAW}. Costs ${CASCADE_DISCOUNT_PER_ARCANE} less per Arcane card already played this turn (min 0).` },
@@ -1027,6 +1062,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   // Blood — sacrifice something (usually HP) to gain something.
   bloodTithe: 'blood', martyrsGift: 'blood', grimHarvest: 'blood',
   incite: 'blood', /* outlier: HP-cost doubled strike */
+  crimsonPact: 'blood', scarletWard: 'blood', openVeins: 'blood', transfusion: 'blood', bloodBanner: 'blood', /* Blood + cycling (#68) */
   // Arcane — the mana / card-draw economy.
   refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane', cascade: 'arcane',
   // Iron — protection: shields, Defense, Taunt/Provoke, braces.
@@ -1652,6 +1688,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   thornskin: 'common', sporeburst: 'uncommon',
   // Status-window management (#67).
   hemorrhage: 'rare', umbralFeast: 'uncommon', dreadWhisper: 'common',
+  // Blood + cycling (#68): Blood Banner is the rare of the set.
+  crimsonPact: 'uncommon', scarletWard: 'uncommon', openVeins: 'common', transfusion: 'uncommon', bloodBanner: 'rare',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1891,7 +1929,10 @@ export type RelicId =
   | 'ossuaryBell'      // a member dropping below 50% max HP gains Regen 2 (every crossing)
   // --- Status-window management relics (#67): amplify / cash in the windows ---
   | 'venomGland'       // Poison you apply lasts +1 turn
-  | 'embermark';       // whenever the enemy's Vulnerability expires, deal 4 (every expiry)
+  | 'embermark'        // whenever the enemy's Vulnerability expires, deal 4 (every expiry)
+  // --- Blood + cycling relics (#68): pay off the reshuffle / hold the knife-edge ---
+  | 'grimoireOfTurning'// every draw-pile reshuffle deals 3 to the enemy (no per-fight cap)
+  | 'sanguinePact';    // curse: Blood-card HP costs +2; while any member < 50% HP, party autos +2
 
 export interface RelicDef {
   id: RelicId;
@@ -1962,6 +2003,13 @@ export const OSSUARY_THRESHOLD = 0.25;   // Ossuary Bell: fires on a downward cr
 // Status-window management relics (#67). Magnitudes tunable; a later balance pass owns them.
 export const VENOM_GLAND_BONUS_TURNS = 1; // Venom Gland: extra turns on every Poison application while owned
 export const EMBERMARK_DMG = 4;           // Embermark: damage dealt on every natural Vulnerability expiry
+// Blood + cycling relics (#68). Magnitudes tunable; a later balance pass owns them.
+// Grimoire is deliberately UNCAPPED (user verdict removed the 2×/fight cap): reshuffle
+// frequency is bounded by draws, which cost cards/MP, so the loop is self-limiting.
+export const GRIMOIRE_DMG = 3;               // Grimoire of Turning: damage dealt to the enemy on every reshuffle
+export const SANGUINE_PACT_SURCHARGE = 2;    // Sanguine Pact (curse): extra HP every Blood-card cost pays
+export const SANGUINE_PACT_AUTO_BONUS = 2;   // Sanguine Pact (curse): +auto damage while any member is below the threshold
+export const SANGUINE_PACT_THRESHOLD = 0.5;  // Sanguine Pact (curse): "below 50% HP" holds the auto buff open
 
 export const RELICS: Record<RelicId, RelicDef> = {
   lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
@@ -2030,6 +2078,11 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Poison you apply lasts +${VENOM_GLAND_BONUS_TURNS} turn.` },
   embermark: { id: 'embermark', name: 'Embermark', rarity: 'uncommon', icon: '🔥',
     desc: `Whenever the enemy's Vulnerability expires, deal ${EMBERMARK_DMG}.` },
+  // --- Blood + cycling relics (#68) ------------------------------------------
+  grimoireOfTurning: { id: 'grimoireOfTurning', name: 'Grimoire of Turning', rarity: 'uncommon', icon: '📖',
+    desc: `Every time the draw pile reshuffles, deal ${GRIMOIRE_DMG} to the enemy.` },
+  sanguinePact: { id: 'sanguinePact', name: 'Sanguine Pact', rarity: 'rare', icon: '🩸', curse: true,
+    desc: `CURSE — Blood-card HP costs +${SANGUINE_PACT_SURCHARGE}; while any member is below ${SANGUINE_PACT_THRESHOLD * 100}% HP, the party's autos deal +${SANGUINE_PACT_AUTO_BONUS}.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];
