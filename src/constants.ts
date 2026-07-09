@@ -20,7 +20,7 @@ export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 export type CardType = 'holy' | 'nature' | 'shadow' | 'blood' | 'arcane' | 'iron';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright' | 'hierophant';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright' | 'hierophant' | 'duelist';
 // 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
 // damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
 // controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
@@ -34,9 +34,14 @@ export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berse
 // 'liturgy' (Hierophant, #73) gives the active channel DUAL CADENCE — for its
 // remaining duration it also ticks at the start of the enemy phase (after party
 // autos, before the telegraph resolves), doubling total ticks while the duration
-// still counts down only once per round. Each fires via that member's own ability
-// card (#44), inserted into the deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment' | 'liturgy';
+// still counts down only once per round; 'enGarde' (Duelist, #74) grants a chosen
+// member PERSISTENT Riposte — for EN_GARDE_TURNS enemy turns they counter EVERY hit
+// that strikes them (fully blocked hits included) for their live auto damage, not
+// consumed on the first trigger like the one-shot Riposte card. It is the first
+// target 'single' ability card — the stance can be placed on any member, self
+// included. Each fires via that member's own ability card (#44), inserted into the
+// deck when they are deployed.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment' | 'liturgy' | 'enGarde';
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -80,7 +85,7 @@ export type CardId =
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
   | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment' | 'liturgy';
+  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment' | 'liturgy' | 'enGarde';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -213,6 +218,12 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // enemy-phase tick each round for the channel's remaining duration. Home slot 2
   // (back line), like the other caster bodies.
   hierophant: { slot: 2, id: 'hierophant', name: 'Hierophant', maxHP: 9, damage: 2, ability: 'liturgy' },
+  // Duelist (#74): a front-line skirmisher who converts being attacked well into
+  // damage. Her En Garde grants a chosen member PERSISTENT Riposte — for a couple of
+  // enemy turns they counterattack EVERY hit that lands on them (fully blocked hits
+  // included) for their live auto damage. Between Tank and Ranger on the body curve.
+  // Home slot 0 (front line), where the hits — and the counters — land.
+  duelist: { slot: 0, id: 'duelist', name: 'Duelist', maxHP: 12, damage: 3, ability: 'enGarde' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -233,7 +244,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist'];
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
@@ -245,14 +256,14 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
   ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3, sentinel: 2,
-  plaguewright: 3, hierophant: 2,
+  plaguewright: 3, hierophant: 2, duelist: 3,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
 // and the Berserker wants to STAY low (healing him is friendly fire), so neither
 // counts toward the healable floor.
 export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
-  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant'],
+  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist'],
 );
 
 export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
@@ -714,6 +725,7 @@ export const SHARPEN_TURNS = 3;    // enemy turns Sharpen lasts
 export const EMBOLDEN_BONUS = 1;   // Embolden (issue "Rally"): +auto damage to every fielded hero
 export const EMBOLDEN_TURNS = 3;   // enemy turns Embolden lasts
 export const EMPOWER_BONUS = 1;    // Empower: +abilityPower on a hero's next ability (one-shot)
+export const EN_GARDE_TURNS = 2;   // Duelist's En Garde (#74): enemy turns the persistent Riposte stance holds
 
 // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
 // Costs and magnitudes are tunable — a later balance pass owns the numbers; this
@@ -768,6 +780,7 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
   plaguewright: `Ferment — for ${FERMENT_TURNS} enemy turns the enemy's Poison compounds: each tick deals its damage, then +${FERMENT_GROWTH}/turn and its duration is frozen. Recasts extend the window.`,
   hierophant: `Liturgy — your active channel gains dual cadence: for its remaining duration it also ticks at the start of the enemy phase, before the blow lands.`,
+  duelist: `En Garde — a chosen member gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity
@@ -922,6 +935,10 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // Liturgy (#73) needs an active channel to enhance (needsChannel gates the dead cast).
   liturgy: { id: 'liturgy', name: 'Liturgy', cost: 2, target: 'none', ability: 'liturgy', needsChannel: true,
     desc: 'Through the Hierophant, give your active channel dual cadence — an extra enemy-phase tick each round.' },
+  // En Garde (#74) is the first target 'single' ability card — the Duelist grants the
+  // persistent Riposte stance to the chosen member (herself included).
+  enGarde: { id: 'enGarde', name: 'En Garde', cost: 2, target: 'single', ability: 'enGarde',
+    desc: `Through the Duelist, a chosen member gains Riposte for ${EN_GARDE_TURNS} enemy turns — they counter every hit that strikes them.` },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -1169,6 +1186,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   bolster: 'iron', guard: 'iron', goad: 'iron',
   fortify: 'iron', /* channeled Iron shield (#64) */
   feint: 'iron', anvilStance: 'iron', interlock: 'iron', /* Iron mitigation web (#65) */
+  enGarde: 'iron', /* Duelist's persistent-Riposte stance (#74); Iron Ward's first-iron discount applies */
 };
 
 // The assembled card table: each raw def with its type folded in. Every card in
@@ -1219,6 +1237,7 @@ export const ABILITY_CARD: Record<AbilityId, CardId> = {
   stun: 'stagger',
   ferment: 'ferment',
   liturgy: 'liturgy',
+  enGarde: 'enGarde',
 };
 
 // The set of per-member ability card ids — excluded from the shop pool and Retain
@@ -1697,7 +1716,7 @@ export const INFIRMARY_INJURY_PRICE = 45;  // shed one death-scar from a chosen 
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
   ranger: 18, tank: 13, mage: 20,          // classic trio: 18 + 13 + 20 = 51
   warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15, sentinel: 15,
-  plaguewright: 17, hierophant: 16,
+  plaguewright: 17, hierophant: 16, duelist: 15,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -1806,7 +1825,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
   conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
-  ferment: 'uncommon', liturgy: 'uncommon',
+  ferment: 'uncommon', liturgy: 'uncommon', enGarde: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a

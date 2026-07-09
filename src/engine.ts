@@ -26,7 +26,7 @@ import {
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
-  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS,
+  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS,
   SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
@@ -130,6 +130,9 @@ export interface Member {
   thornskin: boolean;
   empowerBonus: number; // Empower (#62): +abilityPower on the next ability this hero fires (one-shot)
   riposte: boolean;    // Riposte (#62): counter the next attack that hits this hero (consumed)
+  riposteTurns: number; // En Garde (#74): enemy turns of PERSISTENT Riposte — while > 0, this
+                        // hero counters EVERY hit that strikes it (fully blocked included) and the
+                        // one-shot `riposte` above is neither consumed nor double-triggered.
   ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
   boarHp: number;   // Beast Warden (#29): standing Boar's HP (0 = no Boar); it soaks whole hits
   boarTurns: number; // Beast Warden (#29): enemy turns the Boar has left before it returns to the wild
@@ -255,6 +258,7 @@ export type GameEvent =
   | { kind: 'boarExpire'; slot: Slot } // Boar returns to the wild (#29)
   | { kind: 'stun'; slot: Slot; intent: string } // Sentinel cancels the standing telegraph (#61)
   | { kind: 'ferment'; slot: Slot; turns: number; growth: number } // Plaguewright ferments enemy Poison (#72)
+  | { kind: 'enGarde'; slot: Slot; turns: number } // Duelist grants persistent Riposte (#74)
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -385,6 +389,7 @@ export class Game {
         thornskin: false, // no Thornskin mark armed (#66)
         empowerBonus: 0, // no Empower pending (#62)
         riposte: false,  // no Riposte pending (#62)
+        riposteTurns: 0, // no En Garde stance running (#74)
         ward: 0,       // no Aegis Ward standing
         boarHp: 0,     // no Boar summoned yet (#29)
         boarTurns: 0,
@@ -949,6 +954,7 @@ export class Game {
     m.strikeBonus = 0; m.strikeTurns = 0; // death drops the hero-buff batch (#62)
     m.guardDR = 0; m.guardTurns = 0;
     m.empowerBonus = 0; m.riposte = false;
+    m.riposteTurns = 0; // death ends the En Garde stance (#74)
     m.ward = 0;
     m.boarHp = 0;    // the Boar has no summoner left (#29)
     m.boarTurns = 0;
@@ -1673,6 +1679,14 @@ export class Game {
           this._log(`${m.name}'s edge dulls.`, 'status');
         }
       }
+      // En Garde (#74): the persistent Riposte stance counts down one enemy turn at a
+      // time. It ran (and fired its counters) during this turn's _resolveAttack, which
+      // precedes _decayBuffs — so a 2-turn stance counters on enemy turns 1 and 2, then
+      // expires here at the end of turn 2 (no counter on turn 3).
+      if (m.alive && m.riposteTurns > 0) {
+        m.riposteTurns -= 1;
+        if (m.riposteTurns === 0) this._log(`${m.name} lowers their guard — En Garde fades.`, 'status');
+      }
       // Guard (#62): the standing +DR buff decays after its turns.
       if (m.alive && m.guardTurns > 0) {
         m.guardTurns -= 1;
@@ -1776,6 +1790,22 @@ export class Game {
     }
   }
 
+  // En Garde (#74): deal the persistent Riposte counter for a member holding the stance
+  // that was just struck. Called once per hit that lands on (or is blocked by) the
+  // stance-holder — a multi-hit sweep therefore draws one counter per hit, and a fully
+  // Shield-blocked hit still counters (the stance rewards blocking, per the #65 web).
+  // `amount` is the member's live auto (memberDamage), CAPTURED BY THE CALLER before the
+  // hit spends any Shield/Brace, so Anvil Stance's "+2 while shielded" payoff counts even
+  // on the blocking hit. Routes through _damageEnemy, so Vulnerability applies. Returns
+  // true if the counter defeated the enemy (the caller must stop the phase).
+  _dealEnGardeCounter(m: Member, amount: number): boolean {
+    if (amount <= 0) return false;
+    const defeated = this._damageEnemy(amount, `${m.name} (En Garde)`);
+    this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(amount), enemyHp: this.enemy.hp });
+    if (defeated) this._emit({ kind: 'defeatEnemy' });
+    return defeated;
+  }
+
   // Resolve an enemy attack. Defaults to the standing telegraph, but the boss's
   // second action passes a freshly generated (untelegraphed) one.
   _resolveAttack(t: Telegraph | null = this.telegraph): void {
@@ -1811,6 +1841,12 @@ export class Game {
       // Defense -> Brace -> Shield (#17); the same pipeline attackTargets()
       // previews. Brace and Shield only spend on a still-damaging instance.
       const w = this._wardedDamage(m, t.damage, t.ignoreDefense, t.type);
+      // En Garde (#74): capture the counter magnitude NOW — before this hit spends any
+      // Shield/Brace — so Anvil Stance's "+2 while shielded" (memberDamage reads the live
+      // hold) counts even on the very hit that consumes the block. Sharpen, Battle Hymn,
+      // Lone Wolf, injuries etc. all fold in through the one auto-damage seam. 0 when the
+      // holder isn't En Garde; a corpse never counters (guarded at each fire site).
+      const engardeCounter = m.riposteTurns > 0 ? this.memberDamage(m) : 0;
       if (w.spendsStormglass) {
         this.stormglassUsed = true;
         this._log(`The Stormglass Mirror shatters the blow aimed at ${m.name}.`, 'shield');
@@ -1832,6 +1868,11 @@ export class Game {
           this._emit({ kind: 'braceApplied', slot: m.slot });
         }
         this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
+        // En Garde (#74): a fully Shield-blocked hit STILL counters — the stance rewards
+        // blocking. The member took no damage (Whetstone still sees them as untouched),
+        // yet the blow that struck their guard is answered in kind (with the Anvil-while-
+        // shielded payoff, captured above before the Shield was spent).
+        if (m.riposteTurns > 0 && this._dealEnGardeCounter(m, engardeCounter)) return;
         continue;
       }
       if (w.spendsBrace) {
@@ -1865,10 +1906,16 @@ export class Game {
         this._log(`The Ossuary Bell tolls for ${m.name} — Regen ${m.regen}.`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
       }
-      // Riposte (#62): the first attack that actually connects with a buffed, still-
-      // living hero draws a counter for their damage. Consumed once; routed through
-      // _damageEnemy so the counter respects Vulnerability like every party source.
-      if (w.dmg > 0 && !killed && m.alive && m.riposte) {
+      // En Garde (#74): the persistent stance counters EVERY hit that strikes the holder,
+      // even a Defense/Brace-reduced hit that lands for 0. It SUPERSEDES the one-shot
+      // Riposte below — while the stance runs, the one-shot is neither consumed nor
+      // double-triggered (persistent state wins). Fires on a still-living, un-killed hero.
+      if (!killed && m.alive && m.riposteTurns > 0) {
+        if (this._dealEnGardeCounter(m, engardeCounter)) return;
+      } else if (w.dmg > 0 && !killed && m.alive && m.riposte) {
+        // Riposte (#62): the first attack that actually connects with a buffed, still-
+        // living hero draws a counter for their damage. Consumed once; routed through
+        // _damageEnemy so the counter respects Vulnerability like every party source.
         m.riposte = false;
         const counter = this.memberDamage(m);
         if (counter > 0) {
@@ -2155,7 +2202,9 @@ export class Game {
     // already ensured a living carrier exists (devPlayCard tolerates its absence).
     if (card.ability != null) {
       const m = this._abilityMember(card.ability);
-      if (m) this._fireAbility(m);
+      // En Garde (#74) is the first target 'single' ability card — the chosen member
+      // receives the stance. Every other ability is target 'none' and ignores `target`.
+      if (m) this._fireAbility(m, target);
       return;
     }
     // Channeled cards (#64): start a channel (first tick immediate) rather than a
@@ -2298,7 +2347,7 @@ export class Game {
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
         m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
         m.interlockGuardTurns = []; m.anvilStance = false; // #65 buffs/marks cleared on revive
-        m.empowerBonus = 0; m.riposte = false;
+        m.empowerBonus = 0; m.riposte = false; m.riposteTurns = 0; // En Garde stance cleared on revive (#74)
         // Reworked (#18): the revive comes back behind a fresh Shield so the
         // standing telegraph can't immediately undo the 4 MP investment.
         m.shield = true; m.shieldTurns = SHIELD_TURNS;
@@ -2820,7 +2869,7 @@ export class Game {
     }
   }
 
-  _fireAbility(m: Member): void {
+  _fireAbility(m: Member, target: number | null = null): void {
     // War Drum (#21): any Ability cast primes the caster's next auto to double.
     if (this.hasRelic('warDrum')) m.drumPrimed = true;
     // Empower (#62): a one-shot +abilityPower on this ability. Every case reads
@@ -2996,6 +3045,17 @@ export class Game {
             ? `${m.name}'s Liturgy already sustains the ${CARDS[this.channelCard as CardId].name} channel's dual cadence.`
             : `${m.name} intones a Liturgy — the ${CARDS[this.channelCard as CardId].name} channel gains dual cadence (an extra enemy-phase tick each round).`, 'status');
         }
+        break;
+      }
+      case 'enGarde': {
+        // The Duelist (#74) grants a CHOSEN member the persistent Riposte stance. This is
+        // the first target 'single' ability card, so `target` is the picked slot (canPlay's
+        // 'single' branch already validated a living member); it defaults to the Duelist
+        // herself if somehow unset. Recasting refreshes the duration (no stacking).
+        const holder = (target != null && this.members[target]?.alive) ? this.members[target] : m;
+        holder.riposteTurns = EN_GARDE_TURNS;
+        this._log(`${m.name} sets ${holder === m ? 'her own' : `${holder.name}'s`} guard — En Garde: every hit is answered for ${EN_GARDE_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'enGarde', slot: holder.slot, turns: EN_GARDE_TURNS });
         break;
       }
       default:

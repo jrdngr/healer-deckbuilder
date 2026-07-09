@@ -1,6 +1,6 @@
 # Issue 74 — Duelist: counterattack tank and En Garde
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (roster + ability)   **Size:** M
 - **Depends on:** #65 (hit-steering + block-payoff web this kit pays off)   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: a member who converts *being attacked

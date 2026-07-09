@@ -4,7 +4,7 @@ import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS,
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
-import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS } from '../src/constants';
+import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
@@ -322,11 +322,13 @@ eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
   check('the Hex card is unplayable with no Warlock deployed', g.canPlay(pact, null) !== null);
 }
 {
-  // Every ability card is a no-target card (#44), so the UI plays it immediately
-  // with no member-pick prompt (BattleScreen fast-paths target 'none'/'all').
+  // Ability cards (#44) are no-target and play immediately with no member-pick prompt —
+  // EXCEPT En Garde (#74), the first single-target ability card: the Duelist grants her
+  // stance to a chosen member, so it runs the normal single-target pick flow.
   for (const id of Object.keys(CARDS) as CardId[]) {
     const card = CARDS[id];
     if (card.ability == null) continue;
+    if (id === 'enGarde') { eq('enGarde is the single-target ability card', card.target, 'single'); continue; }
     eq(`${id} is a no-target ability card`, card.target, 'none');
   }
 }
@@ -5083,6 +5085,175 @@ function liturgyGame(seed: number): Game {
   g.playCard(giveCard(g, 'liturgy'), null); // recast: still exempt, still dual, no tick
   check('still the same channel, still dual-cadenced', g.channelActive() && g.channelDualCadence);
   eq('a recast does not tick or advance the channel', g.channelTurns, turns);
+}
+
+// --- Duelist + En Garde (#74): persistent Riposte stance ---------------------
+// A benign fight with a Duelist fielded so her En Garde ability card is playable.
+// Duelist seats LEFT (slot 0); tank CENTER, mage RIGHT. HP/enemy tuned so nobody dies
+// and counters never actually finish the enemy.
+function duelistGame(seed: number): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['duelist', 'tank', 'mage']);
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  const g = new Game(seed, cfg); g.start();
+  g.members.forEach((m) => { m.maxHP = 100; m.hp = 100; m.alive = true; m.shield = false; m.shieldTurns = 0; });
+  g.enemy.maxHP = 100000; g.enemy.hp = 100000;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 0;
+  g.maxMana = 40; g.mp = 40; g.passiveMp = 0; g.enrageTurn = 9999;
+  return g;
+}
+// A one-hit single-target telegraph aimed at a slot (matches the Riposte-test shape).
+function hitAt(g: Game, slots: number[], damage: number): void {
+  g.telegraph = { type: slots.length > 1 ? 'aoe' : 'single', hidden: false, damage, targets: slots as Slot[], enraged: false, forTurn: g.turn };
+}
+{
+  // Definitions / typing sanity for the member and the ability card (#74).
+  eq('Duelist is in MEMBER_POOL', MEMBER_POOL.duelist?.id, 'duelist');
+  eq('Duelist maxHP 12', MEMBER_POOL.duelist.maxHP, 12);
+  eq('Duelist damage 3', MEMBER_POOL.duelist.damage, 3);
+  eq('Duelist ability is enGarde', MEMBER_POOL.duelist.ability, 'enGarde');
+  eq('Duelist base salary 15', MEMBER_BASE_SALARY.duelist, 15);
+  check('Duelist is in the draft pool', DRAFT_POOL.includes('duelist'));
+  check('Duelist has an ability flavor mentioning En Garde', /En Garde/.test(MEMBER_ABILITY_FLAVOR.duelist ?? ''));
+  eq('enGarde is the Duelist\'s bound ability card', ABILITY_CARD.enGarde, 'enGarde');
+  eq('En Garde is Iron', cardType('enGarde'), 'iron');
+  check('En Garde counts toward the Iron bucket (Iron Ward\'s discount reads it)', cardsOfType('iron').includes('enGarde'));
+  eq('En Garde costs 2', CARDS.enGarde.cost, 2);
+  eq('En Garde targets single (the first single-target ability card)', CARDS.enGarde.target, 'single');
+  eq('En Garde is uncommon', CARD_RARITY.enGarde, 'uncommon');
+  check('En Garde is an ability card (never shopped)', isAbilityCard('enGarde') && !CARD_POOL.includes('enGarde'));
+}
+{
+  // Single-target ability card: needs a living pick; arms the stance on the chosen member.
+  const g = duelistGame(740);
+  eq('En Garde needs a living target', g.canPlay(giveCard(g, 'enGarde'), null), 'target must be a living member');
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT); // grant to herself
+  eq('En Garde arms the stance on the chosen member', g.members[SLOT.LEFT].riposteTurns, EN_GARDE_TURNS);
+  // The targeting departure: the Duelist can place the stance on ANOTHER member.
+  const g2 = duelistGame(741);
+  g2.playCard(giveCard(g2, 'enGarde'), SLOT.CENTER);
+  eq('En Garde can be placed on another member (the tank)', g2.members[SLOT.CENTER].riposteTurns, EN_GARDE_TURNS);
+  check('granting it elsewhere leaves the Duelist herself un-stanced', g2.members[SLOT.LEFT].riposteTurns === 0);
+}
+{
+  // Unplayable while the Duelist is down (ability-member gate wins over targeting).
+  const g = duelistGame(742);
+  g._killMember(g.members[SLOT.LEFT]); // the Duelist
+  eq('En Garde is unplayable with the Duelist down', g.canPlay(giveCard(g, 'enGarde'), SLOT.CENTER), 'that member is unavailable');
+}
+{
+  // En Garde + a Feint-style two-hit sweep into the Duelist → TWO counters, each at her
+  // live auto damage (multi-hit resolution: N hits => N counters in one phase).
+  const g = duelistGame(743);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  const dmg = g.memberDamage(duelist);
+  g.telegraph = { type: 'two', hidden: false, damage: 3, targets: [SLOT.LEFT, SLOT.LEFT], enraged: false, forTurn: g.turn };
+  const before = g.enemy.hp;
+  g._resolveAttack();
+  eq('a two-hit sweep into the stance-holder draws two counters', before - g.enemy.hp, 2 * dmg);
+}
+{
+  // The counter is the defender's LIVE auto: Sharpen (+1) and Anvil Stance (+2 while
+  // shielded) both fold in, and the Anvil payoff survives the very hit that spends the
+  // Shield (captured before the block resolves — the #65 "bigger block, bigger payoff").
+  const g = duelistGame(744);
+  const duelist = g.members[SLOT.LEFT];
+  const base = g.memberDamage(duelist);
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  g.playCard(giveCard(g, 'sharpen'), SLOT.LEFT);      // +SHARPEN_BONUS
+  g.playCard(giveCard(g, 'anvilStance'), SLOT.LEFT);  // +ANVIL_STANCE_BONUS while shielded
+  g.playCard(giveCard(g, 'shield'), SLOT.LEFT);       // the hold Anvil needs
+  const expected = base + SHARPEN_BONUS + ANVIL_STANCE_BONUS;
+  eq('Sharpen + Anvil-while-shielded fold into the live auto', g.memberDamage(duelist), expected);
+  hitAt(g, [SLOT.LEFT], 5); // a damaging hit the Shield fully blocks
+  const before = g.enemy.hp;
+  g._resolveAttack();
+  eq('the counter carries Sharpen + Anvil even on the blocking hit', before - g.enemy.hp, expected);
+  check('the blocking hit spent the Shield', !duelist.shield);
+}
+{
+  // A fully Shield-blocked hit still counters, and Whetstone still sees her as untouched
+  // (a 0-damage block never sets the took-damage flag).
+  const g = duelistGame(745);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  g.playCard(giveCard(g, 'shield'), SLOT.LEFT);
+  const dmg = g.memberDamage(duelist);
+  hitAt(g, [SLOT.LEFT], 4);
+  const before = g.enemy.hp; const hpBefore = duelist.hp;
+  g._resolveAttack();
+  eq('a fully Shield-blocked hit still counters', before - g.enemy.hp, dmg);
+  eq('the blocked hit dealt no damage', duelist.hp, hpBefore);
+  check('Whetstone still sees her as untouched (no took-damage flag)', !duelist.tookDamageLastEnemyPhase);
+}
+{
+  // Stance + one-shot Riposte: the timed stance SUPERSEDES — exactly one counter per hit,
+  // and the one-shot is neither consumed nor double-triggered while the stance runs.
+  const g = duelistGame(746);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  g.playCard(giveCard(g, 'riposte'), SLOT.LEFT);
+  check('one-shot Riposte is armed alongside the stance', duelist.riposte && duelist.riposteTurns > 0);
+  const dmg = g.memberDamage(duelist);
+  hitAt(g, [SLOT.LEFT], 4);
+  const before = g.enemy.hp;
+  g._resolveAttack();
+  eq('exactly one counter fires (no double-trigger)', before - g.enemy.hp, dmg);
+  check('the one-shot Riposte is NOT consumed while the stance runs', duelist.riposte);
+}
+{
+  // Timer: counters on enemy turns 1 and 2, none on turn 3 (decrements with _decayBuffs,
+  // which runs AFTER the attack — so the stance fires on the turn it also decays).
+  const g = duelistGame(747);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  const dmg = g.memberDamage(duelist);
+  const oneTurn = (): number => {
+    hitAt(g, [SLOT.LEFT], 3);
+    const before = g.enemy.hp;
+    g._resolveAttack();
+    g._decayBuffs();
+    return before - g.enemy.hp;
+  };
+  eq('enemy turn 1 counters', oneTurn(), dmg);
+  eq('enemy turn 2 counters', oneTurn(), dmg);
+  eq('enemy turn 3 does not counter (stance expired)', oneTurn(), 0);
+  check('the stance timer is spent', duelist.riposteTurns === 0);
+}
+{
+  // Death ends the stance immediately.
+  const g = duelistGame(748);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  check('stance armed', duelist.riposteTurns > 0);
+  g._killMember(duelist);
+  check('death ends the En Garde stance', duelist.riposteTurns === 0);
+}
+{
+  // An AoE hitting the whole party triggers ONLY the members holding the stance.
+  const g = duelistGame(749);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT); // only the Duelist holds it
+  const dmg = g.memberDamage(duelist);
+  hitAt(g, [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], 3);
+  const before = g.enemy.hp;
+  g._resolveAttack();
+  eq('an AoE draws one counter — only the stance-holder answers', before - g.enemy.hp, dmg);
+}
+{
+  // The stance is party->enemy only: it never perturbs the telegraph preview
+  // (preview == applied for the member), and it moves enemy HP.
+  const g = duelistGame(750);
+  const duelist = g.members[SLOT.LEFT];
+  g.playCard(giveCard(g, 'enGarde'), SLOT.LEFT);
+  hitAt(g, [SLOT.LEFT], 4);
+  const preview = g.attackTargets().find((s) => s.slot === SLOT.LEFT)?.damage ?? -1;
+  const hpBefore = duelist.hp; const enemyBefore = g.enemy.hp;
+  g._resolveAttack();
+  eq('the stance leaves the telegraph preview intact (preview == applied to the member)', preview, hpBefore - duelist.hp);
+  check('the counter moved enemy HP (party->enemy only)', g.enemy.hp < enemyBefore);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

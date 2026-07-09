@@ -45,6 +45,7 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
   conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward', stagger: 'ward', ferment: 'power',
   liturgy: 'mana', // channel-economy ability card (#73)
+  enGarde: 'ward', // Duelist's Iron counter-stance (#74)
 };
 
 interface CardProps {

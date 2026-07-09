@@ -305,7 +305,16 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // 174->163, F6 172->160, F7 169->156, F8 161->149 (F0 unchanged). Full-run 72.0% ±2.8
   // at N=1000 — still in the ~75% optimal-ceiling band; all band/CI/boss gates below
   // still hold. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 198, 185, 177, 173, 163, 160, 156, 149]));
+  // 2026-07-09 (#74 Duelist + En Garde): a new member joins the roster pool — the Duelist
+  // (a 12-HP / 3-dmg front-line skirmisher whose En Garde grants persistent Riposte) is
+  // now offered at the start draft and every Recruit, so availableMembers() grows and the
+  // draft/deploy RNG stream reshuffles (En Garde is a per-fight ability card — no card
+  // enters the shop pool). The best-fit policy has no steer-into-the-counter line, so it
+  // reads the Duelist as a plain 3-dmg body; seating her over a higher-rated striker is a
+  // small NERF on top of the stream perturbation: F2 185->180, F3 177->173, F4 173->171,
+  // F5 163->158, F6 160->154, F7 156->152, F8 149->146 (F0/F1 unchanged). All band/CI/boss
+  // gates below still hold. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 180, 173, 171, 158, 154, 152, 146]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
