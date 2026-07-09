@@ -26,7 +26,7 @@ import {
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
-  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS,
+  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS,
   SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
@@ -259,6 +259,7 @@ export type GameEvent =
   | { kind: 'stun'; slot: Slot; intent: string } // Sentinel cancels the standing telegraph (#61)
   | { kind: 'ferment'; slot: Slot; turns: number; growth: number } // Plaguewright ferments enemy Poison (#72)
   | { kind: 'enGarde'; slot: Slot; turns: number } // Duelist grants persistent Riposte (#74)
+  | { kind: 'penance'; slot: Slot; bonus: number; died: boolean } // Flagellant pays HP for a party +auto (#75)
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -302,6 +303,7 @@ export class Game {
   surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
   lensArmed: boolean;     // Arcane Lens (#70): the next single-target heal this turn also splashes to the most wounded other
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
+  penanceBonus: number;   // Penance (#75): +auto for every living member this party phase; ADDITIVE with hymnBonus (own field so it stacks with Battle Hymn)
   bloodBannerTurns: number; // Blood Banner (#68): enemy turns the party-wide +auto buff lasts
   // Delayed player-phase-start effects (#69): a generic FIFO fired at the START of the
   // player phase (after the Regen tick, before the draw). Per-fight; cleared at fight
@@ -428,6 +430,7 @@ export class Game {
     this.surgePending = false;
     this.lensArmed = false; // no Arcane Lens armed at fight start (#70)
     this.hymnBonus = 0;
+    this.penanceBonus = 0; // no Penance buff at fight start (#75)
     this.bloodBannerTurns = 0; // no Blood Banner buff at fight start (#68)
     this.delayedStartEffects = []; // no queued delayed effects at fight start (#69)
     this.relics = new Set(config.relics ?? []);
@@ -539,7 +542,9 @@ export class Game {
     const sanguine = this.hasRelic('sanguinePact')
       && this.livingMembers().some((x) => x.hp < x.maxHP * SANGUINE_PACT_THRESHOLD)
       ? SANGUINE_PACT_AUTO_BONUS : 0;
-    return base + this.hymnBonus + banner + lone + strike + anvil + whet + bloodBanner + sanguine;
+    // Penance (#75): a one-phase party-wide +auto, its OWN field so it stacks additively
+    // with Battle Hymn's hymnBonus (both summed here) rather than max-ing against it.
+    return base + this.hymnBonus + this.penanceBonus + banner + lone + strike + anvil + whet + bloodBanner + sanguine;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -3058,6 +3063,29 @@ export class Game {
         this._emit({ kind: 'enGarde', slot: holder.slot, turns: EN_GARDE_TURNS });
         break;
       }
+      case 'penance': {
+        // The Flagellant (#75) pays PENANCE_HP — NO clamp; this is the SOLE Blood effect
+        // that can kill him. Order is payment -> death check -> buff (per the design):
+        //   1) drain via _drainMember (unclamped): at <= PENANCE_HP HP it empties him and
+        //      runs the FULL standard death pipeline — Martyr's Icon may veto it (survive at
+        //      1 HP), else scars/deadMemberIds/incapacitate rules all apply and the wipe is
+        //      re-checked. At 5+ HP he simply survives at HP - PENANCE_HP.
+        //   2) buff EVERY living member's auto +PENANCE_STRIKE_BONUS this turn — a global
+        //      one-phase field, so it lands whether or not he died (him included only if he
+        //      is still alive, since a dead member takes no auto). It ADDS to Battle Hymn /
+        //      Blood Banner / Sanguine / Hex (its own field; see memberDamage).
+        // Sanguine Pact's surcharge rides this ability-card blood cost too (scope call
+        // documented on PENANCE_HP): the payment is PENANCE_HP + the surcharge.
+        const cost = PENANCE_HP + this._sanguineSurcharge();
+        this._drainMember(m, cost);
+        const died = !m.alive;
+        this.penanceBonus = Math.max(this.penanceBonus, PENANCE_STRIKE_BONUS);
+        this._log(died
+          ? `${m.name} spends the last of his blood — Penance is paid. Every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`
+          : `${m.name} scourges himself (-${cost} HP) — Penance: every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`, 'status');
+        this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died });
+        break;
+      }
       default:
         break;
     }
@@ -3186,6 +3214,7 @@ export class Game {
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
     this.hymnBonus = 0; // Battle Hymn only buffs the phase it was sung in
+    this.penanceBonus = 0; // Penance only buffs the phase it was cast in (#75)
   }
 
   // Once-per-RUN relics this fight consumed (#22) — the run layer records these

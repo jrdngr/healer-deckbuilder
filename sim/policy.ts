@@ -632,7 +632,7 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // hero buffs (they're for a human's setup turns), so they stay dead-deck weight.
   guard: 1, sharpen: 1, goad: 1, doubleStrike: 1, embolden: 1, empower: 1, riposte: 1,
   // Ability cards (#44) — inserted per-fight, never bought.
-  imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, hush: 0, beckon: 0, stagger: 0, ferment: 0, liturgy: 0, enGarde: 0,
+  imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, hush: 0, beckon: 0, stagger: 0, ferment: 0, liturgy: 0, enGarde: 0, penance: 0,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

@@ -314,7 +314,19 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // small NERF on top of the stream perturbation: F2 185->180, F3 177->173, F4 173->171,
   // F5 163->158, F6 160->154, F7 156->152, F8 149->146 (F0/F1 unchanged). All band/CI/boss
   // gates below still hold. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 180, 173, 171, 158, 154, 152, 146]));
+  // 2026-07-09 (#75 Flagellant + Penance): a new member joins the roster pool — the
+  // Flagellant (a 15-HP / 2-dmg blood battery whose Penance pays HP, unclamped and
+  // possibly lethal, for a party +2 auto) is now offered at the start draft and every
+  // Recruit, so availableMembers() grows and the draft/deploy RNG stream reshuffles
+  // (Penance is a per-fight ability card — no card enters the shop pool). The best-fit
+  // policy has no HP-battery / spend-to-buff line, so it reads the Flagellant as a plain
+  // 2-dmg body (draft rating 2); seating that weak swing over a higher striker is a NERF
+  // on top of the stream perturbation, sharpest at the later walls where the softer party
+  // trades worse: F0/F1 200/200->199/197, F2 180->178, F3 173->172, F4 171->166, F5
+  // 158->148, F6 154->145, F7 152->140, F8 146->125. All band/CI/boss gates below still
+  // hold (full-run CI-consistent with the ~75% ceiling; bosses in-band). Re-pinned on the
+  // new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 178, 172, 166, 148, 145, 140, 125]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

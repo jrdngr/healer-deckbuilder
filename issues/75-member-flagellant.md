@@ -1,6 +1,6 @@
 # Issue 75 — Flagellant: the blood battery and Penance
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (roster + ability)   **Size:** M
 - **Depends on:** #68 (knife-edge blood web this kit anchors)   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: a member whose HP is the party's fuel;

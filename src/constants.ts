@@ -20,7 +20,7 @@ export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 export type CardType = 'holy' | 'nature' | 'shadow' | 'blood' | 'arcane' | 'iron';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright' | 'hierophant' | 'duelist';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright' | 'hierophant' | 'duelist' | 'flagellant';
 // 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
 // damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
 // controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
@@ -41,7 +41,7 @@ export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berse
 // target 'single' ability card — the stance can be placed on any member, self
 // included. Each fires via that member's own ability card (#44), inserted into the
 // deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment' | 'liturgy' | 'enGarde';
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment' | 'liturgy' | 'enGarde' | 'penance';
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -85,7 +85,7 @@ export type CardId =
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
   | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment' | 'liturgy' | 'enGarde';
+  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment' | 'liturgy' | 'enGarde' | 'penance';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -224,6 +224,11 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // included) for their live auto damage. Between Tank and Ranger on the body curve.
   // Home slot 0 (front line), where the hits — and the counters — land.
   duelist: { slot: 0, id: 'duelist', name: 'Duelist', maxHP: 12, damage: 3, ability: 'enGarde' },
+  // Flagellant (#75): the blood battery. A big body, weak swing (Berserker-adjacent
+  // chassis) whose HP is the party's fuel — his Penance pays 4 HP (NO clamp, it can
+  // kill him) to buff every living member's auto +2 this turn. High HP holds Sanguine
+  // Pact's below-50% window open and bankrolls the Blood web (#68). Home slot 0.
+  flagellant: { slot: 0, id: 'flagellant', name: 'Flagellant', maxHP: 15, damage: 2, ability: 'penance' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -244,7 +249,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist', 'flagellant'];
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
@@ -256,14 +261,14 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
   ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3, sentinel: 2,
-  plaguewright: 3, hierophant: 2, duelist: 3,
+  plaguewright: 3, hierophant: 2, duelist: 3, flagellant: 2,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
 // and the Berserker wants to STAY low (healing him is friendly fire), so neither
 // counts toward the healable floor.
 export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
-  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist'],
+  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist', 'flagellant'],
 );
 
 export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
@@ -726,6 +731,15 @@ export const EMBOLDEN_BONUS = 1;   // Embolden (issue "Rally"): +auto damage to 
 export const EMBOLDEN_TURNS = 3;   // enemy turns Embolden lasts
 export const EMPOWER_BONUS = 1;    // Empower: +abilityPower on a hero's next ability (one-shot)
 export const EN_GARDE_TURNS = 2;   // Duelist's En Garde (#74): enemy turns the persistent Riposte stance holds
+// Penance (#75): the Flagellant's Blood ability. The ONE blood effect that breaks the
+// never-lethal clamp — the payment is a raw drain (engine _drainMember), so at PENANCE_HP
+// or less HP the cast KILLS him (a real death: scars, permadeath, ability-card removal),
+// and the party still gets the fury. Declared here (before MEMBER_ABILITY_FLAVOR) so the
+// flavor string can read it. Sanguine Pact's surcharge rides this ability-card blood cost
+// too (a deliberate scope call: curse costs apply to blood ABILITY cards, not just hand
+// Blood cards — see _fireAbility's penance case).
+export const PENANCE_HP = 4;           // Penance: HP the Flagellant pays — NO clamp; <= this kills him
+export const PENANCE_STRIKE_BONUS = 2; // Penance: +auto damage every living member gets this turn
 
 // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
 // Costs and magnitudes are tunable — a later balance pass owns the numbers; this
@@ -781,6 +795,7 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   plaguewright: `Ferment — for ${FERMENT_TURNS} enemy turns the enemy's Poison compounds: each tick deals its damage, then +${FERMENT_GROWTH}/turn and its duration is frozen. Recasts extend the window.`,
   hierophant: `Liturgy — your active channel gains dual cadence: for its remaining duration it also ticks at the start of the enemy phase, before the blow lands.`,
   duelist: `En Garde — a chosen member gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
+  flagellant: `Penance — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn (him included if he survives; the buff lands even if he dies).`,
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity
@@ -939,6 +954,13 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // persistent Riposte stance to the chosen member (herself included).
   enGarde: { id: 'enGarde', name: 'En Garde', cost: 2, target: 'single', ability: 'enGarde',
     desc: `Through the Duelist, a chosen member gains Riposte for ${EN_GARDE_TURNS} enemy turns — they counter every hit that strikes them.` },
+  // Penance (#75) is a Blood ability card (incite precedent — target 'none', counts toward
+  // the blood type counters). It carries NO selfDamage field: the payment is not the clamped
+  // canPlay Blood gate but a raw lethal drain in _fireAbility (this ability is meant to be
+  // castable at any HP — a lethal Penance is a legal, informed sacrifice, so there is no
+  // ">N HP" playability gate). The Sanguine surcharge is applied in the engine, not via _bloodCost.
+  penance: { id: 'penance', name: 'Penance', cost: 2, target: 'none', ability: 'penance',
+    desc: `Through the Flagellant, pay ${PENANCE_HP} HP (no clamp — it can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.` },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -1177,6 +1199,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   bloodTithe: 'blood', martyrsGift: 'blood', grimHarvest: 'blood',
   incite: 'blood', /* outlier: HP-cost doubled strike */
   crimsonPact: 'blood', scarletWard: 'blood', openVeins: 'blood', transfusion: 'blood', bloodBanner: 'blood', /* Blood + cycling (#68) */
+  penance: 'blood', /* Flagellant's lethal-blood ability card (#75); counts toward blood counters */
   // Arcane — the mana / card-draw economy.
   refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane', cascade: 'arcane',
   attunement: 'arcane', arcaneLens: 'arcane', /* channel archetype rescue + arcane support (#70) */
@@ -1238,6 +1261,7 @@ export const ABILITY_CARD: Record<AbilityId, CardId> = {
   ferment: 'ferment',
   liturgy: 'liturgy',
   enGarde: 'enGarde',
+  penance: 'penance',
 };
 
 // The set of per-member ability card ids — excluded from the shop pool and Retain
@@ -1716,7 +1740,7 @@ export const INFIRMARY_INJURY_PRICE = 45;  // shed one death-scar from a chosen 
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
   ranger: 18, tank: 13, mage: 20,          // classic trio: 18 + 13 + 20 = 51
   warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15, sentinel: 15,
-  plaguewright: 17, hierophant: 16, duelist: 15,
+  plaguewright: 17, hierophant: 16, duelist: 15, flagellant: 14,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -1825,7 +1849,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
   conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
-  ferment: 'uncommon', liturgy: 'uncommon', enGarde: 'uncommon',
+  ferment: 'uncommon', liturgy: 'uncommon', enGarde: 'uncommon', penance: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a

@@ -323,6 +323,20 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return impact + 190;
   },
+  flagellant: (ev, push, t) => {
+    // A heavy, martyr's swing: a slow, blood-dark scourge that lands with weight (#75).
+    const c = '#c0392b';
+    push({ at: t, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 1.1, dur: 240 },
+    ] });
+    const impact = t + 240;
+    push({ at: impact, shake: 7, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'slash', at: 'enemy', color: c, angle: 30 },
+      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 52 },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 220;
+  },
 };
 
 // Resolve one enemy-attack target at `at`: a whiff, a block, a hit, or a kill
@@ -736,6 +750,21 @@ export function buildTimeline(events: GameEvent[]): Timeline {
           { type: 'float', at: ev.slot, text: 'EN GARDE', color: c },
         ] });
         t += 420;
+        break;
+      }
+
+      case 'penance': {
+        // The Flagellant scourges himself (#75): a self-sacrifice, then the whole party's
+        // autos flare. The HP cost's own -N shake rides its bloodPay event; here we mark the
+        // party-wide fury (his slot glows only if he survived the payment).
+        push({ at: t, fx: [
+          { type: 'glow', at: 0, color: C.danger },
+          { type: 'glow', at: 1, color: C.danger },
+          { type: 'glow', at: 2, color: C.danger },
+          { type: 'float', at: 1, text: `+${ev.bonus} ATK`, color: C.danger, big: true },
+          ...(ev.died ? [{ type: 'float', at: ev.slot, text: 'PENANCE PAID', color: C.danger } as const] : []),
+        ] });
+        t += 460;
         break;
       }
 

@@ -4,7 +4,7 @@ import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS,
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
-import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS } from '../src/constants';
+import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SANGUINE_PACT_THRESHOLD } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
@@ -5254,6 +5254,123 @@ function hitAt(g: Game, slots: number[], damage: number): void {
   g._resolveAttack();
   eq('the stance leaves the telegraph preview intact (preview == applied to the member)', preview, hpBefore - duelist.hp);
   check('the counter moved enemy HP (party->enemy only)', g.enemy.hp < enemyBefore);
+}
+
+// --- Flagellant + Penance (#75): the lethal blood battery --------------------
+// A fight with a Flagellant fielded so his Penance ability card is playable.
+// Flagellant seats LEFT (slot 0); tank CENTER, mage RIGHT. Enemy HP is huge so the
+// buffed autos never actually finish it; per-test HP is set on the Flagellant directly.
+function flagellantGame(seed: number, relics: RelicId[] = []): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['flagellant', 'tank', 'mage']);
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  cfg.relics = relics;
+  const g = new Game(seed, cfg); g.start();
+  g.members.forEach((m) => { m.shield = false; m.shieldTurns = 0; });
+  g.enemy.maxHP = 100000; g.enemy.hp = 100000;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 0;
+  g.maxMana = 40; g.mp = 40; g.passiveMp = 0; g.enrageTurn = 9999;
+  return g;
+}
+{
+  // Definitions / typing sanity for the member and the ability card (#75).
+  eq('Flagellant is in MEMBER_POOL', MEMBER_POOL.flagellant?.id, 'flagellant');
+  eq('Flagellant maxHP 15', MEMBER_POOL.flagellant.maxHP, 15);
+  eq('Flagellant damage 2 (weak swing)', MEMBER_POOL.flagellant.damage, 2);
+  eq('Flagellant ability is penance', MEMBER_POOL.flagellant.ability, 'penance');
+  eq('Flagellant base salary 14', MEMBER_BASE_SALARY.flagellant, 14);
+  check('Flagellant is in the draft pool', DRAFT_POOL.includes('flagellant'));
+  check('Flagellant has an ability flavor mentioning Penance', /Penance/.test(MEMBER_ABILITY_FLAVOR.flagellant ?? ''));
+  eq('penance is the Flagellant\'s bound ability card', ABILITY_CARD.penance, 'penance');
+  eq('Penance is Blood', cardType('penance'), 'blood');
+  check('Penance counts toward the blood bucket (incite precedent)', cardsOfType('blood').includes('penance'));
+  eq('Penance costs 2', CARDS.penance.cost, 2);
+  eq('Penance targets none', CARDS.penance.target, 'none');
+  eq('Penance carries NO selfDamage field (payment is a raw drain, not the clamped gate)', CARDS.penance.selfDamage, undefined);
+  eq('Penance is uncommon', CARD_RARITY.penance, 'uncommon');
+  check('Penance is an ability card (never shopped)', isAbilityCard('penance') && !CARD_POOL.includes('penance'));
+}
+{
+  // Survive branch: at 15 HP the payment leaves him at 11, and every LIVING member's
+  // auto (his own included, since he lives) gains +PENANCE_STRIKE_BONUS this turn.
+  const g = flagellantGame(750);
+  const flag = g.members[SLOT.LEFT];
+  const baseFlag = g.memberDamage(flag);
+  const baseTank = g.memberDamage(g.members[SLOT.CENTER]);
+  eq('Flagellant opens at full 15 HP', flag.hp, 15);
+  g.playCard(giveCard(g, 'penance'), null);
+  eq('Penance pays PENANCE_HP with no clamp: 15 -> 11', flag.hp, 15 - PENANCE_HP);
+  check('the payment left him alive (5+ HP survives)', flag.alive);
+  eq('his own auto is buffed (he survived)', g.memberDamage(flag), baseFlag + PENANCE_STRIKE_BONUS);
+  eq('every other living member is buffed too', g.memberDamage(g.members[SLOT.CENTER]), baseTank + PENANCE_STRIKE_BONUS);
+}
+{
+  // Die branch: at PENANCE_HP or less the cast KILLS him — the full standard death
+  // pipeline runs (diedThisFight scar bookkeeping, hp 0, not alive) — and the party
+  // still gets the +2 fury on their autos (his own does not count; he is dead).
+  const g = flagellantGame(751);
+  const flag = g.members[SLOT.LEFT];
+  const baseTank = g.memberDamage(g.members[SLOT.CENTER]);
+  flag.hp = PENANCE_HP; // exactly the payment — a lethal cast
+  const res = g.playCard(giveCard(g, 'penance'), null);
+  check('the lethal cast was legal (no HP playability gate)', res.ok);
+  check('the Flagellant died', !flag.alive);
+  eq('he was drained to 0', flag.hp, 0);
+  check('the death recorded a scar (diedThisFight bookkeeping)', g.diedThisFightSlots().includes(flag.slot));
+  eq('the +2 buff still landed on the surviving party', g.memberDamage(g.members[SLOT.CENTER]), baseTank + PENANCE_STRIKE_BONUS);
+  check('the party did not wipe (tank + mage stand)', g.status === 'playing');
+}
+{
+  // Martyr's Icon (#22) converts the suicide to a 1-HP survival: the Icon triggers on
+  // MEMBER DEATH, and a Penance suicide is a member death — intended, not special-cased.
+  // The buff then includes him, because he lives.
+  const g = flagellantGame(752, ['martyrsIcon']);
+  const flag = g.members[SLOT.LEFT];
+  const baseFlag = g.memberDamage(flag);
+  check('the Icon starts unspent', !g.martyrUsed);
+  flag.hp = PENANCE_HP; // would be lethal without the Icon
+  g.playCard(giveCard(g, 'penance'), null);
+  check('the Icon saved him — he survives', flag.alive);
+  eq('he clings to life at 1 HP', flag.hp, 1);
+  check('the Icon is now spent', g.martyrUsed);
+  check('no scar recorded — a Martyr save is not a death', !g.diedThisFightSlots().includes(flag.slot));
+  eq('the buff includes him (he lives)', g.memberDamage(flag), baseFlag + PENANCE_STRIKE_BONUS);
+}
+{
+  // Sanguine Pact (#68 curse) raises the payment by its blood-cost rider — the surcharge
+  // rides this Blood ABILITY card too (documented scope call). Starting at 13, paying
+  // PENANCE_HP + surcharge = 6 leaves him at 7 (< 50% of 15), opening the Pact's window.
+  const g = flagellantGame(753, ['sanguinePact']);
+  const flag = g.members[SLOT.LEFT];
+  const baseTank = g.members[SLOT.CENTER].damage; // raw, before any party-wide bonuses
+  flag.hp = 13;
+  g.playCard(giveCard(g, 'penance'), null);
+  eq('the surcharge raised the payment to 6 (13 -> 7)', flag.hp, 13 - (PENANCE_HP + SANGUINE_PACT_SURCHARGE));
+  check('the below-50% window is now open', g.livingMembers().some((m) => m.hp < m.maxHP * SANGUINE_PACT_THRESHOLD));
+  // The tank's auto now carries BOTH the Penance +2 and the Sanguine below-threshold +2.
+  eq('Penance and the Sanguine window both buff the tank auto', g.memberDamage(g.members[SLOT.CENTER]),
+    baseTank + PENANCE_STRIKE_BONUS + SANGUINE_PACT_AUTO_BONUS);
+}
+{
+  // The Penance buff is its OWN field, additive with Battle Hymn in the same turn
+  // (not max-ed against it): the tank auto gains HYMN_BONUS + PENANCE_STRIKE_BONUS.
+  const g = flagellantGame(754);
+  const tank = g.members[SLOT.CENTER];
+  const base = tank.damage;
+  g.playCard(giveCard(g, 'battleHymn'), null);
+  g.playCard(giveCard(g, 'penance'), null);
+  eq('Penance stacks additively with Battle Hymn', g.memberDamage(tank), base + HYMN_BONUS + PENANCE_STRIKE_BONUS);
+}
+{
+  // Party->enemy surface only: the buff is a one-phase field that resets after the
+  // party autos resolve (like Battle Hymn) — it never leaks into the next turn, and
+  // never touches the enemy's telegraph.
+  const g = flagellantGame(755);
+  g.playCard(giveCard(g, 'penance'), null);
+  check('penanceBonus is live this phase', g.penanceBonus === PENANCE_STRIKE_BONUS);
+  g._runPartyPhase();
+  check('the buff resets after the party autos resolve (one-phase, like Hymn)', g.penanceBonus === 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
