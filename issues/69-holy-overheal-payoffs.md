@@ -1,6 +1,6 @@
 # Issue 69 — Holy overheal & board-state payoffs
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (cards + relics)   **Size:** L
 - **Depends on:** —   **Blocks:** #76 (Lightkeeper deepens the overheal seam)
 - **Addresses:** intake 2026-07-07 — new-content wave: excess healing and buff density should be
@@ -61,20 +61,20 @@ rows; `CARD_TYPE` entries; N=1000 sim gates (25–35% band, ≤ +9pp per relic).
 
 ## Acceptance criteria
 
-- [ ] Five `CardId`s in union + `CARDS` + `CARD_TYPE` (4 holy, Rootbind nature) + `CARD_RARITY` +
+- [x] Five `CardId`s in union + `CARDS` + `CARD_TYPE` (4 holy, Rootbind nature) + `CARD_RARITY` +
       pools; magnitudes as named constants.
-- [ ] Benediction heals 2 + exact buff count; count source is the shared helper.
-- [ ] Sunrise Vigil: queue entry fires next player-phase start (post-regen, pre-draw); fires even
+- [x] Benediction heals 2 + exact buff count; count source is the shared helper.
+- [x] Sunrise Vigil: queue entry fires next player-phase start (post-regen, pre-draw); fires even
       if cast twice (two entries); dead members skipped at fire time; fight end clears the queue.
-- [ ] Consecration: the +1/2-turn strike buff applies only to members at full HP *after* its heal.
-- [ ] Absolution: overheal → Brace amount (respecting Brace-replaces-Shield rules); no cap.
-- [ ] Rootbind: every listed timer +1; effects at 0 (absent) are untouched; a test pins the field list.
-- [ ] Beacon: draw on every card-driven heal-to-full (direct heals, Twin Censer splash, Radiance
+- [x] Consecration: the +1/2-turn strike buff applies only to members at full HP *after* its heal.
+- [x] Absolution: overheal → Brace amount (respecting Brace-replaces-Shield rules); no cap.
+- [x] Rootbind: every listed timer +1; effects at 0 (absent) are untouched; a test pins the field list.
+- [x] Beacon: draw on every card-driven heal-to-full (direct heals, Twin Censer splash, Radiance
       later in #76); regen ticks do NOT trigger it; inert with no relics.
-- [ ] Twin Censer: splash 1 to most wounded other (shared `_mostWoundedOther` from #68); no
+- [x] Twin Censer: splash 1 to most wounded other (shared `_mostWoundedOther` from #68); no
       splash on `all`/`none` heals or ability heals; inert with no relics.
-- [ ] Mechanic-coverage rows; N=1000 band; ≤ +9pp per relic.
-- [ ] `npm test` / `npm run typecheck` clean; own `jj` commit.
+- [x] Mechanic-coverage rows; N=1000 band; ≤ +9pp per relic.
+- [x] `npm test` / `npm run typecheck` clean; own `jj` commit.
 
 ## Implementation notes (anchors)
 

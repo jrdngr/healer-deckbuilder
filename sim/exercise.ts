@@ -30,6 +30,7 @@ import {
   SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
   WHETSTONE_BONUS, OSSUARY_REGEN, POISON_TURNS, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
   GRIMOIRE_DMG, OPEN_VEINS_HP, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS,
+  BEACON_DRAW, TWIN_CENSER_SPLASH,
 } from '../src/constants';
 import type {
   CardId, AbilityId, RelicId, MemberId, BattleConfig, Slot, DeckCard,
@@ -65,6 +66,9 @@ const EXERCISE_DECK: CardId[] = [
   'hemorrhage', 'umbralFeast', 'dreadWhisper',
   // Blood + cycling (#68): HP-priced draw/shield/damage/redistribution/offense.
   'crimsonPact', 'scarletWard', 'openVeins', 'transfusion', 'bloodBanner',
+  // Holy overheal & board-state payoffs (#69): overheal->Brace, full-HP->offense, a
+  // delayed party heal, buff-density heal, and the timed-effect duration extender.
+  'benediction', 'sunriseVigil', 'consecration', 'absolution', 'rootbind',
   // Shadow cards (#63).
   'shadowBolt', 'siphonLife', 'doom',
   // Count-based payoff cards (#63).
@@ -126,6 +130,12 @@ function exerciseOnePlay(game: Game, cov: Coverage): boolean {
       const p = legalPlay(game, i);
       if (p && game.playCard(i, p.target).ok) { recordPlay(dc, cov); return true; }
     }
+    // No Regen-granting card in hand to seed with (deck shuffle can leave a stuck Bloom /
+    // Cultivate / Sporeburst / Thornskin with its fodder elsewhere) — grant Regen directly
+    // so the consumer becomes playable this phase (mirrors pass 0b's direct poison seed;
+    // the harness already pokes state each turn, keeping coverage decoupled from draws).
+    const living = game.livingMembers()[0];
+    if (living && living.regen <= 0) living.regen = 3;
   }
   // Pass 0b — seed enemy Poison. Hemorrhage (#67, needsPoison) is a dead card until the
   // enemy is Poisoned; the bigger #68 deck can draw it while no poison stands and the
@@ -412,6 +422,26 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     // Surcharge half: Open Veins' effective HP cost rises by the surcharge under the Pact.
     const cost = g._bloodCost(resolveCard(makeDeckCard('openVeins', -1)));
     return wounded - full === SANGUINE_PACT_AUTO_BONUS && cost === OPEN_VEINS_HP + SANGUINE_PACT_SURCHARGE;
+  },
+  // --- Holy overheal & board-state relics (#69) ---------------------------------
+  beaconOfSecondSun: () => {
+    const g = probeGame(['beaconOfSecondSun']); g.start();
+    g.tank.hp = g.tank.maxHP - 1;               // one below full so a heal tops it off
+    g.drawPile = [makeDeckCard('lowHeal', -1)]; // a card to draw on the top-off
+    const idx = give(g, 'highHeal');
+    const handBefore = g.hand.length;           // includes the highHeal about to be spent
+    g.playCard(idx, SLOT.CENTER);               // tops the tank off -> Beacon draws
+    // The played card leaves the hand; net change = BEACON_DRAW - 1 (0 with a draw, -1 without).
+    return g.hand.length - handBefore === BEACON_DRAW - 1;
+  },
+  twinCenser: () => {
+    const g = probeGame(['twinCenser']); g.start();
+    g.tank.hp = g.tank.maxHP;      // heal target (the primary heal can even land full)
+    g.ranger.hp = g.ranger.maxHP;  // healthy -> not the splash target
+    g.mage.hp = g.mage.maxHP - 3;  // the most wounded OTHER member
+    const before = g.mage.hp;
+    g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // single-target heal card splashes to the mage
+    return g.mage.hp - before === TWIN_CENSER_SPLASH;
   },
 };
 

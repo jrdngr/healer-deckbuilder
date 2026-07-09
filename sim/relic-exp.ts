@@ -84,6 +84,8 @@ const BATTERY: RelicId[] = [
   // Blood + cycling relics (#68) — gated ≤ +9pp (measure the Sanguine Pact curse too:
   // its net should read as a real trade, not a strict trap).
   'grimoireOfTurning', 'sanguinePact',
+  // Holy overheal & board-state relics (#69) — gated ≤ +9pp.
+  'beaconOfSecondSun', 'twinCenser',
 ];
 
 const pct = (x: number): string => (100 * x).toFixed(1);

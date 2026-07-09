@@ -47,6 +47,10 @@ export type CardId =
   // Blood + cycling (#68): HP as a spendable resource — draw, shields, damage,
   // redistribution, and party offense, all priced in HP the healer manages.
   | 'crimsonPact' | 'scarletWard' | 'openVeins' | 'transfusion' | 'bloodBanner'
+  // Holy overheal & board-state payoffs (#69): a healthy party becomes a plan —
+  // overheal -> mitigation, full HP -> offense, topping off pays cards, buff density
+  // is a stat. Rootbind (Nature) is the generic timed-effect duration extender.
+  | 'benediction' | 'sunriseVigil' | 'consecration' | 'absolution' | 'rootbind'
   // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
   | 'shadowBolt' | 'siphonLife' | 'doom'
   // Count-based payoff cards (#63, Part B): scale with the per-type counters.
@@ -799,6 +803,24 @@ export const BLOOD_BANNER_HP = 2;         // Blood Banner: HP every living membe
 export const BLOOD_BANNER_BONUS = 2;      // Blood Banner: +auto damage party-wide while it lasts
 export const BLOOD_BANNER_TURNS = 2;      // Blood Banner: enemy turns the party auto buff lasts
 
+// Holy overheal & board-state payoffs (#69): a healthy party becomes a plan — overheal
+// converts to mitigation (Absolution), full HP to offense (Consecration), topping off
+// pays cards (Beacon), heals splash (Twin Censer), and buff DENSITY is a stat every buff
+// feeds (Benediction). Sunrise Vigil is the wave's delayed-heal timing tool; Rootbind is
+// the generic timed-effect duration extender. Magnitudes are tunable — a later balance
+// pass owns the numbers; this issue ships the mechanics.
+export const BENEDICTION_HEAL = 2;          // Benediction: base heal before the per-buff bonus
+export const BENEDICTION_PER_BUFF = 1;      // Benediction: extra heal per active buff on the target (uncapped)
+export const SUNRISE_VIGIL_HEAL = 2;        // Sunrise Vigil: heal every living member this much next player-phase start
+export const CONSECRATION_HEAL = 1;         // Consecration: heal all this much
+export const CONSECRATION_STRIKE_BONUS = 1; // Consecration: +auto for members at full HP afterward
+export const CONSECRATION_STRIKE_TURNS = 2; // Consecration: enemy turns that strike buff lasts
+export const ABSOLUTION_HEAL = 3;           // Absolution: heal this much; any overheal becomes Brace (uncapped)
+export const ROOTBIND_BONUS_TURNS = 1;      // Rootbind: extra turns added to every friendly timed effect
+// Holy overheal & board-state relics (#69). Magnitudes tunable; a later balance pass owns them.
+export const BEACON_DRAW = 1;               // Beacon of the Second Sun: cards drawn on a card-driven heal-to-full (uncapped)
+export const TWIN_CENSER_SPLASH = 1;        // Twin Censer: heal splashed to the most wounded OTHER member on a single-target heal card
+
 // Hexweaver (#13) scripted-effect magnitudes.
 export const WOUND_TURNS = 3;        // enemy turns the Hex healing-reduction lasts
 export const WOUND_HEAL_FACTOR = 0.5; // healing multiplied by this while Wounded (floored)
@@ -988,6 +1010,29 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // pays, and the payment leaves each at 1 HP minimum.
   bloodBanner: { id: 'bloodBanner', name: 'Blood Banner', cost: 2, target: 'none',
     desc: `Every living member pays ${BLOOD_BANNER_HP} HP (clamps to 1); the party's autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.` },
+  // --- Holy overheal & board-state payoffs (#69) -----------------------------
+  // Benediction heals a flat base plus BENEDICTION_PER_BUFF per active buff on the
+  // TARGET (the per-member half of _activeEffectCount, #67). No cap — buff density pays.
+  benediction: { id: 'benediction', name: 'Benediction', cost: 2, target: 'single', heal: BENEDICTION_HEAL,
+    desc: `Heal ${BENEDICTION_HEAL}, +${BENEDICTION_PER_BUFF} per active buff on the target. No cap.` },
+  // Sunrise Vigil queues a delayed party heal: at the START of your next turn (after the
+  // enemy blow and the Regen tick, before the draw) every living member heals. Cast twice,
+  // it queues twice. The wave's timing tool — heal AFTER the blow lands.
+  sunriseVigil: { id: 'sunriseVigil', name: 'Sunrise Vigil', cost: 2, target: 'none',
+    desc: `At the start of your next turn, heal every living member ${SUNRISE_VIGIL_HEAL}.` },
+  // Consecration heals the whole party a little; members at FULL HP afterward turn the
+  // surplus into offense — a standing +auto for a couple enemy turns.
+  consecration: { id: 'consecration', name: 'Consecration', cost: 3, target: 'all', heal: CONSECRATION_HEAL,
+    desc: `Heal all ${CONSECRATION_HEAL}; members at full HP afterward gain +${CONSECRATION_STRIKE_BONUS} auto for ${CONSECRATION_STRIKE_TURNS} enemy turns.` },
+  // Absolution heals, then converts any OVERHEAL into Brace on the target (uncapped). It
+  // captures the overheal itself, so Aegis Font sees none of it this cast — the two never
+  // double-convert one heal (Absolution converts first; see engine _applyHeal).
+  absolution: { id: 'absolution', name: 'Absolution', cost: 2, target: 'single', heal: ABSOLUTION_HEAL,
+    desc: `Heal ${ABSOLUTION_HEAL}; any overheal becomes Brace on the target. No cap.` },
+  // Rootbind (Nature) extends every FRIENDLY timed effect by a turn — Regen, Shield/Brace
+  // fuses, Guard, Defense, strike buffs, Taunt. Makes every timed effect, old and new, worth more.
+  rootbind: { id: 'rootbind', name: 'Rootbind', cost: 2, target: 'none',
+    desc: `All friendly timed effects (Regen, Shield/Brace, Guard, Defense, strike buffs, Taunt) last +${ROOTBIND_BONUS_TURNS} turn.` },
   // --- count-based payoff cards (#63, Part B) --------------------------------
   cascade: { id: 'cascade', name: 'Cascade', cost: 2, target: 'none', draw: CASCADE_DRAW, engine: true,
     desc: `Draw ${CASCADE_DRAW}. Costs ${CASCADE_DISCOUNT_PER_ARCANE} less per Arcane card already played this turn (min 0).` },
@@ -1048,9 +1093,11 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   // Holy — one-shot heals, resurrect, purify (the current starter core).
   lowHeal: 'holy', highHeal: 'holy', aoeHeal: 'holy', resurrect: 'holy', cleanse: 'holy', focus: 'holy',
   mendingStream: 'holy', /* channeled Holy heal (#64) */
+  benediction: 'holy', sunriseVigil: 'holy', consecration: 'holy', absolution: 'holy', /* Holy overheal payoffs (#69) */
   // Nature — the regen family, and buffs generally (incl. combat buffs).
   regen: 'nature', overgrowth: 'nature', cultivate: 'nature', bloom: 'nature', lifebloom: 'nature',
   thornskin: 'nature', sporeburst: 'nature', /* Regen conversions (#66) */
+  rootbind: 'nature', /* Holy overheal payoffs wave (#69): the timed-effect duration extender */
   battleHymn: 'nature', /* outlier: offense buff */ rally: 'nature', /* outlier: offense buff */
   imbuePoison: 'nature', /* outlier: venom/toxin DoT */ beckon: 'nature', /* outlier: summon */
   sharpen: 'nature', doubleStrike: 'nature', embolden: 'nature', empower: 'nature', riposte: 'nature',
@@ -1690,6 +1737,8 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   hemorrhage: 'rare', umbralFeast: 'uncommon', dreadWhisper: 'common',
   // Blood + cycling (#68): Blood Banner is the rare of the set.
   crimsonPact: 'uncommon', scarletWard: 'uncommon', openVeins: 'common', transfusion: 'uncommon', bloodBanner: 'rare',
+  // Holy overheal & board-state payoffs (#69): Consecration / Rootbind are the rares.
+  benediction: 'uncommon', sunriseVigil: 'common', consecration: 'rare', absolution: 'uncommon', rootbind: 'rare',
   // Small-party cards (#42).
   rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
@@ -1932,7 +1981,10 @@ export type RelicId =
   | 'embermark'        // whenever the enemy's Vulnerability expires, deal 4 (every expiry)
   // --- Blood + cycling relics (#68): pay off the reshuffle / hold the knife-edge ---
   | 'grimoireOfTurning'// every draw-pile reshuffle deals 3 to the enemy (no per-fight cap)
-  | 'sanguinePact';    // curse: Blood-card HP costs +2; while any member < 50% HP, party autos +2
+  | 'sanguinePact'     // curse: Blood-card HP costs +2; while any member < 50% HP, party autos +2
+  // --- Holy overheal & board-state relics (#69): pay off a topped-off party -------
+  | 'beaconOfSecondSun'// whenever a card heals a member to full, draw 1 (no per-fight cap)
+  | 'twinCenser';      // single-target heal cards also heal the most wounded other member 1
 
 export interface RelicDef {
   id: RelicId;
@@ -2083,6 +2135,11 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Every time the draw pile reshuffles, deal ${GRIMOIRE_DMG} to the enemy.` },
   sanguinePact: { id: 'sanguinePact', name: 'Sanguine Pact', rarity: 'rare', icon: '🩸', curse: true,
     desc: `CURSE — Blood-card HP costs +${SANGUINE_PACT_SURCHARGE}; while any member is below ${SANGUINE_PACT_THRESHOLD * 100}% HP, the party's autos deal +${SANGUINE_PACT_AUTO_BONUS}.` },
+  // --- Holy overheal & board-state relics (#69) ------------------------------
+  beaconOfSecondSun: { id: 'beaconOfSecondSun', name: 'Beacon of the Second Sun', rarity: 'rare', icon: '🌅',
+    desc: `Whenever a card heals a member to full, draw ${BEACON_DRAW}.` },
+  twinCenser: { id: 'twinCenser', name: 'Twin Censer', rarity: 'rare', icon: '🪔',
+    desc: `Single-target heal cards also heal the most wounded other member ${TWIN_CENSER_SPLASH}.` },
 };
 
 export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];

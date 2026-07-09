@@ -15,6 +15,7 @@ import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TUR
 import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPEN_VEINS_DMG, TRANSFUSION_HP, TRANSFUSION_HEAL, BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS, GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
+import { BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
 
 let passed = 0;
@@ -2220,7 +2221,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const tank = g.tank;
   tank.hp = tank.maxHP;
   tank.defense = 2; tank.defenseAmount = 2;
-  tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  tank.brace = true; tank.braceAmount = BRACE_AMOUNT; tank.braceTurns = BRACE_TURNS;
   g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
   eq('preview folds Defense then Brace', g.attackTargets()[0]?.damage, 5 - 2 - BRACE_AMOUNT);
   const before = tank.hp;
@@ -2233,7 +2234,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const g = new Game(96); g.start();
   const tank = g.tank;
   tank.defense = 2; tank.defenseAmount = 4;
-  tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  tank.brace = true; tank.braceAmount = BRACE_AMOUNT; tank.braceTurns = BRACE_TURNS;
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
   eq('Defense alone absorbs the hit', g.attackTargets()[0]?.damage, 0);
   g._resolveAttack();
@@ -2282,7 +2283,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
       if (g.rng() < 0.5) { m.defense = 1 + Math.floor(g.rng() * 3); m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
       const r = g.rng();
       if (r < 0.3) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
-      else if (r < 0.6) { m.brace = true; m.braceTurns = BRACE_TURNS; }
+      else if (r < 0.6) { m.brace = true; m.braceAmount = BRACE_AMOUNT; m.braceTurns = BRACE_TURNS; }
     }
     const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
     const hpBefore = g.members.map((m) => m.hp);
@@ -2551,7 +2552,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
         if (g.rng() < 0.5) { m.defense = 1 + Math.floor(g.rng() * 3); m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
         const r = g.rng();
         if (r < 0.3) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
-        else if (r < 0.6) { m.brace = true; m.braceTurns = BRACE_TURNS; }
+        else if (r < 0.6) { m.brace = true; m.braceAmount = BRACE_AMOUNT; m.braceTurns = BRACE_TURNS; }
       }
       const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
       const hpBefore = g.members.map((m) => m.hp);
@@ -3770,7 +3771,7 @@ function countPulses(g: Game): number {
   eq('Anvil Stance: bonus restored when the hold returns', g.memberDamage(tank), base + ANVIL_STANCE_BONUS);
   // Brace also satisfies the condition.
   tank.shield = false; tank.shieldTurns = 0;
-  tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  tank.brace = true; tank.braceAmount = BRACE_AMOUNT; tank.braceTurns = BRACE_TURNS;
   eq('Anvil Stance: a Brace hold also grants the bonus', g.memberDamage(tank), base + ANVIL_STANCE_BONUS);
 }
 {
@@ -3835,7 +3836,7 @@ function countPulses(g: Game): number {
   // A Brace-reduced but still-damaging hit must NOT re-trigger Bulwark (it stays a
   // one-shot Brace, consumed, not refreshed into another).
   const mage = g.mage; mage.hp = mage.maxHP;
-  mage.brace = true; mage.braceTurns = BRACE_TURNS;
+  mage.brace = true; mage.braceAmount = BRACE_AMOUNT; mage.braceTurns = BRACE_TURNS;
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.RIGHT], enraged: false, forTurn: g.turn };
   g._resolveAttack();
   check('Bulwark Core: a partial (Brace) block does not re-grant Brace', !mage.brace);
@@ -4002,7 +4003,7 @@ function countPulses(g: Game): number {
   // Thornskin composes with Brace in the pipeline and preview still equals applied.
   const g = new Game(673); g.start(); g.mp = g.maxMana;
   const tank = g.tank; tank.hp = tank.maxHP; tank.shield = false; tank.defense = 0;
-  tank.regen = 2; tank.brace = true; tank.braceTurns = BRACE_TURNS;
+  tank.regen = 2; tank.brace = true; tank.braceAmount = BRACE_AMOUNT; tank.braceTurns = BRACE_TURNS;
   g.playCard(giveCard(g, 'thornskin'), SLOT.CENTER);
   g.telegraph = { type: 'single', hidden: false, damage: 6, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
   const shown = g.attackTargets().find((s) => s.slot === SLOT.CENTER)?.damage;
@@ -4179,7 +4180,7 @@ function countPulses(g: Game): number {
 {
   // Scarlet Ward: pay SCARLET_WARD_HP for a normal Shield (replaces Brace, fades in SHIELD_TURNS).
   const g = new Game(683); g.start(); g.mp = g.maxMana;
-  g.tank.hp = g.tank.maxHP; g.tank.brace = true; g.tank.braceTurns = 2;
+  g.tank.hp = g.tank.maxHP; g.tank.brace = true; g.tank.braceAmount = BRACE_AMOUNT; g.tank.braceTurns = 2;
   const hp0 = g.tank.hp;
   g.playCard(giveCard(g, 'scarletWard'), SLOT.CENTER);
   eq('Scarlet Ward pays its HP cost', hp0 - g.tank.hp, SCARLET_WARD_HP);
@@ -4361,6 +4362,216 @@ function countPulses(g: Game): number {
   check('Grimoire of Turning / Sanguine Pact are real relics', (['grimoireOfTurning', 'sanguinePact'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
   check('Sanguine Pact is registered as a curse', RELICS.sanguinePact.curse === true);
   check('Grimoire of Turning is not a curse', RELICS.grimoireOfTurning.curse !== true);
+}
+
+// --- Holy overheal & board-state payoffs (#69) ------------------------------
+{
+  // Benediction heals a flat base + 1 per active buff on the TARGET (the per-member
+  // half of _activeEffectCount). Shield + Regen + Guard = 3 buffs -> heal 2 + 3 = 5.
+  const g = new Game(690001); g.start(); g.mp = 20;
+  const m = g.tank; m.hp = 1;
+  m.shield = true; m.regen = 2; m.guardDR = 1; m.guardTurns = 2; // 3 distinct buffs
+  eq('Benediction reads the per-member buff count', g._memberEffectCount(m), 3);
+  g.playCard(giveCard(g, 'benediction'), SLOT.CENTER);
+  eq('Benediction heals base + 1 per buff (5)', m.hp - 1, BENEDICTION_HEAL + BENEDICTION_PER_BUFF * 3);
+}
+{
+  // Benediction with no buffs heals the flat base only.
+  const g = new Game(690002); g.start(); g.mp = 20;
+  const m = g.mage; m.hp = 1;
+  g.playCard(giveCard(g, 'benediction'), SLOT.RIGHT);
+  eq('Benediction with no buffs heals the base', m.hp - 1, BENEDICTION_HEAL);
+}
+{
+  // Sunrise Vigil queues a delayed heal that fires at the START of the next player
+  // phase (post-Regen, pre-draw) — every living member heals SUNRISE_VIGIL_HEAL.
+  const g = new Game(690010); g.start(); g.mp = 20;
+  g.playCard(giveCard(g, 'sunriseVigil'));
+  eq('Sunrise Vigil queues one delayed entry', g.delayedStartEffects.length, 1);
+  for (const m of g.members) m.hp = m.maxHP - 5;
+  g._startPlayerPhase(); // regen (none) then the queue, before the draw
+  check('Sunrise Vigil heals every living member at phase start',
+    g.members.every((m) => m.hp === m.maxHP - 5 + SUNRISE_VIGIL_HEAL));
+  eq('Sunrise Vigil drains its queue after firing', g.delayedStartEffects.length, 0);
+}
+{
+  // Cast twice -> two entries -> heals twice (2x SUNRISE_VIGIL_HEAL). Dead members are
+  // skipped at fire time; a fresh fight starts with an empty queue.
+  const g = new Game(690011); g.start(); g.mp = 20;
+  g.playCard(giveCard(g, 'sunriseVigil'));
+  g.playCard(giveCard(g, 'sunriseVigil'));
+  eq('two casts queue two entries', g.delayedStartEffects.length, 2);
+  g._killMember(g.mage); // dead -> skipped
+  for (const m of g.members) if (m.alive) m.hp = m.maxHP - 5;
+  g._startPlayerPhase();
+  check('two queued Vigils heal twice', g.ranger.hp === g.ranger.maxHP - 5 + 2 * SUNRISE_VIGIL_HEAL
+    && g.tank.hp === g.tank.maxHP - 5 + 2 * SUNRISE_VIGIL_HEAL);
+  eq('a dead member is skipped by the Vigil', g.mage.hp, 0);
+  eq('a fresh fight starts with an empty delayed-effect queue', new Game(690012).delayedStartEffects.length, 0);
+}
+{
+  // Consecration heals the whole party a little; only members at FULL HP AFTERWARD gain
+  // the strike buff. Mixed party: two land full, one stays wounded.
+  const g = new Game(690020); g.start(); g.mp = 20;
+  g.ranger.hp = g.ranger.maxHP;      // already full -> stays full -> buffed
+  g.mage.hp = g.mage.maxHP - 1;      // heal 1 -> full -> buffed
+  g.tank.hp = g.tank.maxHP - 5;      // heal 1 -> still wounded -> NOT buffed
+  g.playCard(giveCard(g, 'consecration'));
+  check('Consecration buffs the members at full HP afterward',
+    g.ranger.strikeTurns === CONSECRATION_STRIKE_TURNS && g.ranger.strikeBonus >= CONSECRATION_STRIKE_BONUS
+    && g.mage.strikeTurns === CONSECRATION_STRIKE_TURNS);
+  eq('Consecration leaves the still-wounded member unbuffed', g.tank.strikeTurns, 0);
+  eq('Consecration healed the wounded member its base', g.tank.hp, g.tank.maxHP - 5 + CONSECRATION_HEAL);
+}
+{
+  // Absolution: at full HP the whole heal is overheal -> Brace ABSOLUTION_HEAL.
+  const g = new Game(690030); g.start(); g.mp = 20;
+  const m = g.tank; m.hp = m.maxHP; m.shield = true; m.shieldTurns = 3; // Brace should replace the Shield
+  g.playCard(giveCard(g, 'absolution'), SLOT.CENTER);
+  check('Absolution at full HP braces for the whole heal', m.brace && m.braceAmount === ABSOLUTION_HEAL && m.braceTurns === BRACE_TURNS);
+  check('Absolution Brace replaces the standing Shield', !m.shield);
+  eq('Absolution did no actual healing at full HP', m.hp, m.maxHP);
+}
+{
+  // Absolution: 1 HP missing -> heal 1, overheal 2 -> Brace 2.
+  const g = new Game(690031); g.start(); g.mp = 20;
+  const m = g.tank; m.hp = m.maxHP - 1;
+  g.playCard(giveCard(g, 'absolution'), SLOT.CENTER);
+  eq('Absolution heals the missing HP first', m.hp, m.maxHP);
+  eq('Absolution braces for exactly the overheal', m.braceAmount, ABSOLUTION_HEAL - 1);
+}
+{
+  // The variable Brace actually reduces the next hit by braceAmount (not the fixed 2).
+  const g = new Game(690032); g.start(); g.mp = 20;
+  const m = g.tank; m.hp = m.maxHP;
+  g.playCard(giveCard(g, 'absolution'), SLOT.CENTER); // Brace 3
+  eq('the captured Brace is 3', m.braceAmount, ABSOLUTION_HEAL);
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  g._resolveAttack();
+  eq('Brace 3 blunts the 5-damage hit to 2', m.hp, m.maxHP - (5 - ABSOLUTION_HEAL));
+}
+{
+  // With Aegis Font owned, Absolution converts the overheal first — the Font sees none of
+  // it (no Ward), and both effects do not double-convert one cast.
+  const cfg = defaultBattleConfig(); cfg.relics = ['aegisFont'];
+  const g = new Game(690033, cfg); g.start(); g.mp = 20;
+  const m = g.tank; m.hp = m.maxHP;
+  g.playCard(giveCard(g, 'absolution'), SLOT.CENTER);
+  check('Absolution braces from the overheal', m.brace && m.braceAmount === ABSOLUTION_HEAL);
+  eq('the Aegis Font gets no Ward from an Absolution cast', m.ward, 0);
+}
+{
+  // Rootbind extends every listed friendly timed effect by ROOTBIND_BONUS_TURNS; effects
+  // at 0 (absent) are untouched, and excluded fields (Interlock grants, once-armed flags)
+  // do not move. This pins the published field list.
+  const g = new Game(690040); g.start(); g.mp = 20;
+  const m = g.tank;
+  m.regen = 2; m.shield = true; m.shieldTurns = 1; m.brace = true; m.braceAmount = 2; m.braceTurns = 1;
+  m.guardDR = 1; m.guardTurns = 1; m.defense = 1; m.defenseAmount = 1; m.strikeBonus = 1; m.strikeTurns = 1; m.taunt = 1;
+  // Excluded / absent controls.
+  m.interlockGuardTurns = [1]; m.empowerBonus = 1; m.charge = 1; m.boarHp = 4; m.boarTurns = 1;
+  g.ranger.regen = 0; // an absent effect on another member
+  g.playCard(giveCard(g, 'rootbind'));
+  check('Rootbind extends the seven listed timers by +1',
+    m.regen === 2 + ROOTBIND_BONUS_TURNS && m.shieldTurns === 1 + ROOTBIND_BONUS_TURNS
+    && m.braceTurns === 1 + ROOTBIND_BONUS_TURNS && m.guardTurns === 1 + ROOTBIND_BONUS_TURNS
+    && m.defense === 1 + ROOTBIND_BONUS_TURNS && m.strikeTurns === 1 + ROOTBIND_BONUS_TURNS
+    && m.taunt === 1 + ROOTBIND_BONUS_TURNS);
+  eq('Rootbind leaves an absent effect (Regen 0) untouched', g.ranger.regen, 0);
+  check('Rootbind excludes Interlock grants / once-armed flags / Boar / Charge',
+    m.interlockGuardTurns[0] === 1 && m.empowerBonus === 1 && m.charge === 1 && m.boarTurns === 1);
+}
+{
+  // Beacon of the Second Sun: a card-driven heal-to-full draws a card (no per-fight cap).
+  const cfg = defaultBattleConfig(); cfg.relics = ['beaconOfSecondSun'];
+  const g = new Game(690050, cfg); g.start(); g.mp = 20;
+  g.tank.hp = g.tank.maxHP - 1;
+  g.drawPile = [makeDeckCard('lowHeal', -1)];
+  let idx = giveCard(g, 'highHeal'); let handBefore = g.hand.length;
+  g.playCard(idx, SLOT.CENTER); // tops the tank off -> draw 1
+  eq('Beacon draws on the first heal-to-full', g.hand.length - handBefore, BEACON_DRAW - 1);
+  // A second top-off draws again (uncapped).
+  g.mage.hp = g.mage.maxHP - 1;
+  g.drawPile = [makeDeckCard('lowHeal', -2)];
+  idx = giveCard(g, 'highHeal'); handBefore = g.hand.length;
+  g.playCard(idx, SLOT.RIGHT);
+  eq('Beacon draws again on a second heal-to-full (no cap)', g.hand.length - handBefore, BEACON_DRAW - 1);
+}
+{
+  // Beacon does NOT fire on a Regen tick (direct-only), and is inert with no relic.
+  const cfg = defaultBattleConfig(); cfg.relics = ['beaconOfSecondSun'];
+  const g = new Game(690051, cfg); g.start();
+  g.tank.hp = g.tank.maxHP - 5;
+  const handBefore = g.hand.length;
+  g._healMember(g.tank, 5); // the Regen-tick path (direct=false) — tops off but must NOT draw
+  eq('a Regen-tick heal-to-full does not trigger Beacon', g.hand.length, handBefore);
+  eq('the tick still healed to full', g.tank.hp, g.tank.maxHP);
+  const g2 = new Game(690052); g2.start(); // no relics
+  g2.mage.hp = g2.mage.maxHP - 5;
+  const hb2 = g2.hand.length;
+  g2._applyHeal(g2.mage, 5, true); // direct heal-to-full, but Beacon not owned
+  eq('Beacon is inert with no relic', g2.hand.length, hb2);
+}
+{
+  // Twin Censer: a single-target heal card also heals the most wounded OTHER member.
+  const cfg = defaultBattleConfig(); cfg.relics = ['twinCenser'];
+  const g = new Game(690060, cfg); g.start(); g.mp = 20;
+  g.tank.hp = g.tank.maxHP;         // heal target
+  g.ranger.hp = g.ranger.maxHP;     // healthy -> not the splash target
+  g.mage.hp = g.mage.maxHP - 3;     // most wounded other
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+  eq('Twin Censer splashes to the most wounded other', g.mage.hp, g.mage.maxHP - 3 + TWIN_CENSER_SPLASH);
+}
+{
+  // The Twin Censer splash routes through the heal pipeline: Field Triage boosts it.
+  const cfg = defaultBattleConfig(); cfg.relics = ['twinCenser', 'fieldTriage'];
+  const g = new Game(690061, cfg); g.start(); g.mp = 20;
+  g.tank.hp = g.tank.maxHP;
+  g.ranger.hp = g.ranger.maxHP;
+  g.mage.hp = 2; // below half of 9 -> Field Triage adds to the splash
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
+  eq('Twin Censer splash is boosted by Field Triage', g.mage.hp - 2, TWIN_CENSER_SPLASH + FIELD_TRIAGE_BONUS);
+}
+{
+  // The Twin Censer splash can itself trigger Beacon (topping the other to full draws).
+  const cfg = defaultBattleConfig(); cfg.relics = ['twinCenser', 'beaconOfSecondSun'];
+  const g = new Game(690062, cfg); g.start(); g.mp = 20;
+  g.tank.hp = g.tank.maxHP;         // primary heal lands full (heal 0)
+  g.ranger.hp = g.ranger.maxHP;
+  g.mage.hp = g.mage.maxHP - 1;     // splash 1 tops it off -> Beacon draws
+  g.drawPile = [makeDeckCard('lowHeal', -1)];
+  const idx = giveCard(g, 'lowHeal'); const handBefore = g.hand.length;
+  g.playCard(idx, SLOT.CENTER);
+  eq('Twin Censer splash-to-full triggers Beacon', g.hand.length - handBefore, BEACON_DRAW - 1);
+}
+{
+  // No splash on a non-heal single-target card (regen), and inert with no relic.
+  const cfg = defaultBattleConfig(); cfg.relics = ['twinCenser'];
+  const g = new Game(690063, cfg); g.start(); g.mp = 20;
+  g.mage.hp = g.mage.maxHP - 3;
+  g.playCard(giveCard(g, 'regen'), SLOT.CENTER); // single, but not a heal card -> no splash
+  eq('Twin Censer does not splash on a non-heal single-target card', g.mage.hp, g.mage.maxHP - 3);
+  const g2 = new Game(690064); g2.start(); g2.mp = 20; // no relics
+  g2.tank.hp = g2.tank.maxHP; g2.mage.hp = g2.mage.maxHP - 3;
+  g2.playCard(giveCard(g2, 'lowHeal'), SLOT.CENTER);
+  eq('Twin Censer is inert with no relic', g2.mage.hp, g2.mage.maxHP - 3);
+}
+{
+  // Definitions / typing sanity for the five new cards and two relics (#69).
+  const holy: CardId[] = ['benediction', 'sunriseVigil', 'consecration', 'absolution'];
+  check('the four new Holy cards are Holy', holy.every((id) => cardType(id) === 'holy'));
+  eq('Rootbind is Nature', cardType('rootbind'), 'nature');
+  const all: CardId[] = [...holy, 'rootbind'];
+  check('all five count toward their type bucket', all.every((id) => cardsOfType(cardType(id)).includes(id)));
+  check('all five are shop/reward-eligible', all.every((id) => CARD_POOL.includes(id)));
+  check('all five carry a rarity', all.every((id) => CARD_RARITY[id] != null));
+  eq('Benediction heal base', CARDS.benediction.heal, BENEDICTION_HEAL);
+  eq('Consecration heal', CARDS.consecration.heal, CONSECRATION_HEAL);
+  eq('Absolution heal', CARDS.absolution.heal, ABSOLUTION_HEAL);
+  eq('Sunrise Vigil targets none', CARDS.sunriseVigil.target, 'none');
+  eq('Consecration targets all', CARDS.consecration.target, 'all');
+  check('Beacon / Twin Censer are real relics', (['beaconOfSecondSun', 'twinCenser'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
+  check('neither new relic is a curse', RELICS.beaconOfSecondSun.curse !== true && RELICS.twinCenser.curse !== true);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -45,6 +45,9 @@ import {
   CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_DMG, TRANSFUSION_HEAL,
   BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS,
   GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS, SANGUINE_PACT_THRESHOLD,
+  BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL,
+  CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS,
+  ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
   GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
@@ -64,6 +67,20 @@ import type { Rng } from './rng';
 export type Phase = 'idle' | 'player' | 'over';
 export type Status = 'playing' | 'win' | 'loss';
 
+// The result of one heal through the central pipeline (#69). Overheal-payoff effects
+// all read this one struct: Absolution converts `overheal` to Brace, Beacon draws on
+// `reachedFull`, and #76's Radiance reuses both. `reachedFull` is true only when this
+// heal crossed the member from below max to exactly full (an already-full member is not).
+export interface HealResult {
+  healed: number;      // HP actually restored (0 if dead / no-op / already full)
+  overheal: number;    // effective healing that spilled past max HP
+  reachedFull: boolean; // this heal brought the member from below max to full
+}
+
+// A delayed effect queued to fire at the START of a later player phase (#69), after the
+// Regen tick and before the draw. Generic FIFO — one entry kind today (Sunrise Vigil).
+export type DelayedStartEffect = { kind: 'sunriseVigil' };
+
 export interface Member {
   slot: Slot;
   id: MemberId;
@@ -76,8 +93,11 @@ export interface Member {
   alive: boolean;
   shield: boolean;      // pending shield (blocks the next damaging instance)
   shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
-  brace: boolean;       // pending Brace: next damaging instance reduced by BRACE_AMOUNT (#17)
+  brace: boolean;       // pending Brace: next damaging instance reduced by braceAmount (#17)
   braceTurns: number;   // enemy turns the pending Brace lasts before fading unused
+  braceAmount: number;  // per-member Brace strength (#69): normal Brace = BRACE_AMOUNT; Absolution
+                        // sets it to the overheal it captured (variable, uncapped). Only read
+                        // while brace is true.
   regen: number;      // Regen value (#52): heals this much this tick, then decays by 1
                       // each tick until 0. Magnitude IS duration — a Regen R runs R ticks.
   bloomBurst: number; // pending Lifebloom burst: heals this much when the Regen ends alive (#16)
@@ -266,6 +286,10 @@ export class Game {
   surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
   bloodBannerTurns: number; // Blood Banner (#68): enemy turns the party-wide +auto buff lasts
+  // Delayed player-phase-start effects (#69): a generic FIFO fired at the START of the
+  // player phase (after the Regen tick, before the draw). Per-fight; cleared at fight
+  // start. Sunrise Vigil pushes one entry per cast (two casts -> two heals).
+  delayedStartEffects: DelayedStartEffect[];
   relics: Set<RelicId>;   // run-long passives (#21); empty set = fully inert
   echoUsed: boolean;      // Echo Locket: its once-per-fight return has fired
   stormglassUsed: boolean;// Stormglass Mirror: its once-per-fight negate has fired
@@ -334,6 +358,7 @@ export class Game {
         shieldTurns: 0,
         brace: false,  // pending Brace (one-shot damage reduction)
         braceTurns: 0,
+        braceAmount: 0, // Brace strength while active (#69); default BRACE_AMOUNT on a normal Brace
         regen: 0,      // Regen value (magnitude == remaining ticks; #52)
         bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
@@ -382,6 +407,7 @@ export class Game {
     this.surgePending = false;
     this.hymnBonus = 0;
     this.bloodBannerTurns = 0; // no Blood Banner buff at fight start (#68)
+    this.delayedStartEffects = []; // no queued delayed effects at fight start (#69)
     this.relics = new Set(config.relics ?? []);
     this.echoUsed = false;
     this.stormglassUsed = false;
@@ -1083,29 +1109,78 @@ export class Game {
   // `direct` marks a cast heal (heal cards, Bloom, Martyr's Gift, the Lifebloom
   // burst) as opposed to the Regen tick — the Aegis Font (#22) only converts
   // DIRECT overheal to Ward, so a ticking Regen can't farm the buffer.
-  _healMember(m: Member, amount: number, direct = false): number {
-    if (!m.alive || amount <= 0) return 0;
+  //
+  // _applyHeal is the full path and returns a RESULT STRUCT ({healed, overheal,
+  // reachedFull}) so the #69 overheal-payoff callers all read ONE source: Absolution's
+  // Brace conversion (overheal), Beacon's heal-to-full draw (reachedFull), and #76's
+  // Radiance later. `captureOverheal` lets a card (Absolution) claim the overheal itself,
+  // suppressing the Aegis Font conversion for this cast — Absolution converts first, so
+  // the Font gets nothing from that heal (the two never double-convert one cast).
+  // _healMember is the thin back-compat wrapper returning just the HP healed.
+  _applyHeal(m: Member, amount: number, direct = false, captureOverheal = false): HealResult {
+    const none: HealResult = { healed: 0, overheal: 0, reachedFull: false };
+    if (!m.alive || amount <= 0) return none;
     // Field Triage Kit (#21): heals on a member below half max HP heal harder.
     // The bonus lands before the Hex halving — the curse dominates everything.
     if (this.hasRelic('fieldTriage') && m.hp < m.maxHP * FIELD_TRIAGE_THRESHOLD) {
       amount += FIELD_TRIAGE_BONUS;
     }
     const effective = this.woundTurns > 0 ? Math.floor(amount * WOUND_HEAL_FACTOR) : amount;
-    if (effective <= 0) return 0;
+    if (effective <= 0) return none;
     const before = m.hp;
     m.hp = Math.min(m.maxHP, m.hp + effective);
     const healed = m.hp - before;
+    const overheal = effective - healed;
+    const reachedFull = before < m.maxHP && m.hp === m.maxHP;
     // Aegis Font (#22): direct-cast overheal becomes a Ward buffer — capped,
-    // larger-replaces (no stacking), independent of Shield.
-    if (direct && this.hasRelic('aegisFont')) {
-      const over = Math.min(WARD_MAX, effective - healed);
+    // larger-replaces (no stacking), independent of Shield. Skipped when the caller
+    // captures the overheal itself (Absolution, #69): it converts first, Font sees none.
+    if (direct && !captureOverheal && overheal > 0 && this.hasRelic('aegisFont')) {
+      const over = Math.min(WARD_MAX, overheal);
       if (over > m.ward) {
         m.ward = over;
         this._log(`The Aegis Font wells up: Ward ${m.ward} on ${m.name}.`, 'status');
         this._emit({ kind: 'wardApplied', slot: m.slot, amount: m.ward });
       }
     }
-    return healed;
+    // Beacon of the Second Sun (#69): a card-driven heal that TOPS A MEMBER OFF draws a
+    // card (uncapped). `direct` gates out the Regen tick; a member already full (before ==
+    // max) is not a heal-to-full, so no draw. Twin Censer's splash and #76 Radiance route
+    // through here too, so they trigger it as well — the draw can chain the payoff.
+    if (direct && reachedFull && this.hasRelic('beaconOfSecondSun')) {
+      let drawn = 0;
+      for (let i = 0; i < BEACON_DRAW; i++) {
+        const c = this._drawOne();
+        if (c == null) break;
+        this.hand.push(c);
+        drawn++;
+      }
+      if (drawn > 0) {
+        this._log(`Beacon of the Second Sun: ${m.name} is topped off — draw ${drawn}.`, 'status');
+        this._emit({ kind: 'draw', count: drawn });
+      }
+    }
+    return { healed, overheal, reachedFull };
+  }
+
+  _healMember(m: Member, amount: number, direct = false): number {
+    return this._applyHeal(m, amount, direct).healed;
+  }
+
+  // Twin Censer (#69): a single-target heal CARD also splashes TWIN_CENSER_SPLASH to the
+  // most wounded OTHER living member (shared _mostWoundedOther, #68). The splash routes
+  // through the normal heal pipeline (Field Triage applies; it can itself trigger Beacon).
+  // Inert when unowned or when no other member is wounded. Only the holy single-target
+  // heal cards call this — never a Regen tick, an ability heal, or an all/none heal.
+  _twinCenserSplash(primary: Member): void {
+    if (!this.hasRelic('twinCenser')) return;
+    const other = this._mostWoundedOther(primary);
+    if (!other) return;
+    const res = this._applyHeal(other, TWIN_CENSER_SPLASH, true);
+    if (res.healed > 0) {
+      this._log(`The Twin Censer splashes ${res.healed} to ${other.name}. (${other.hp}/${other.maxHP})`, 'heal');
+      this._emit({ kind: 'heal', slot: other.slot, amount: res.healed, hp: other.hp });
+    }
   }
 
   // Pay out a pending Lifebloom burst (#16). A Lifebloom Regen that ENDS while
@@ -1138,6 +1213,7 @@ export class Game {
       // Brace 2, respecting the Shield-OR-Brace replacement rule (#17): the fresh
       // Brace replaces any standing Shield.
       m.brace = true;
+      m.braceAmount = BRACE_AMOUNT; // standard Brace strength (#69)
       m.braceTurns = BRACE_TURNS;
       m.shield = false;
       m.shieldTurns = 0;
@@ -1170,21 +1246,30 @@ export class Game {
   // (Enraged is not a debuff, so it is excluded). A pure read — no side effects.
   _activeEffectCount(): number {
     let n = 0;
-    for (const m of this.livingMembers()) {
-      if (m.shield) n += 1;
-      if (m.brace) n += 1;
-      if (m.guardTurns > 0 || m.interlockGuardTurns.some((t) => t > 0)) n += 1;
-      if (m.defense > 0) n += 1;
-      if (m.taunt > 0) n += 1;
-      if (m.regen > 0) n += 1;
-      if (m.strikeTurns > 0) n += 1;
-      if (m.empowerBonus > 0) n += 1;
-      if (m.riposte) n += 1;
-      if (m.ward > 0) n += 1;
-      if (m.boarHp > 0) n += 1;
-    }
+    for (const m of this.livingMembers()) n += this._memberEffectCount(m);
     if (this.enemy.poisonTurns > 0) n += 1;
     if (this.enemy.vulnerableTurns > 0) n += 1;
+    return n;
+  }
+
+  // The per-member half of _activeEffectCount (#69's Benediction reads it directly): the
+  // count of active buffs on ONE member — Shield, Brace, Guard (base + Interlock folded
+  // to one), Defense, Taunt, Regen, strike bonus, Empower, Riposte, Ward, Boar. A pure
+  // read, no side effects. Anvil Stance / Charge / War-Drum / Lifebloom-burst / Thornskin
+  // are NOT on the list.
+  _memberEffectCount(m: Member): number {
+    let n = 0;
+    if (m.shield) n += 1;
+    if (m.brace) n += 1;
+    if (m.guardTurns > 0 || m.interlockGuardTurns.some((t) => t > 0)) n += 1;
+    if (m.defense > 0) n += 1;
+    if (m.taunt > 0) n += 1;
+    if (m.regen > 0) n += 1;
+    if (m.strikeTurns > 0) n += 1;
+    if (m.empowerBonus > 0) n += 1;
+    if (m.riposte) n += 1;
+    if (m.ward > 0) n += 1;
+    if (m.boarHp > 0) n += 1;
     return n;
   }
 
@@ -1286,7 +1371,7 @@ export class Game {
       return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: true, wardSpent: 0 };
     }
     if (m.brace && dmg > 0) {
-      dmg = Math.max(0, dmg - BRACE_AMOUNT);
+      dmg = Math.max(0, dmg - m.braceAmount); // #69: variable Brace strength (Absolution's overheal)
       spendsBrace = true;
     }
     if (m.shield && dmg > 0) {
@@ -1636,6 +1721,7 @@ export class Game {
         // a Brace/Guard/Defense-reduced hit takes the ordinary-damage path below.
         if (this.hasRelic('bulwarkCore')) {
           m.brace = true;
+          m.braceAmount = BRACE_AMOUNT; // standard Brace strength (#69)
           m.braceTurns = BULWARK_BRACE_TURNS;
           this._log(`The Bulwark Core holds — ${m.name} braces (${BRACE_AMOUNT}).`, 'shield');
           this._emit({ kind: 'braceApplied', slot: m.slot });
@@ -1714,6 +1800,22 @@ export class Game {
         m.regen -= 1;
         if (m.regen === 0) {
           this._onRegenEnded(m, false); // natural expiry: Lifebloom burst + Deep Roots + Thornskin cleanup (#66)
+        }
+      }
+    }
+    // Delayed player-phase-start effects (#69): fire AFTER the Regen tick, BEFORE the
+    // draw. Drain the whole queue (Sunrise Vigil cast twice heals twice); dead members
+    // are skipped at fire time. These are direct cast heals, so Aegis Font / Beacon fire.
+    if (this.delayedStartEffects.length > 0) {
+      const queued = this.delayedStartEffects;
+      this.delayedStartEffects = [];
+      for (const eff of queued) {
+        if (eff.kind === 'sunriseVigil') {
+          for (const m of this.livingMembers()) {
+            const res = this._applyHeal(m, SUNRISE_VIGIL_HEAL, true);
+            if (res.healed > 0) this._emit({ kind: 'heal', slot: m.slot, amount: res.healed, hp: m.hp });
+          }
+          this._log(`Sunrise Vigil breaks: every living member heals ${SUNRISE_VIGIL_HEAL}.`, 'heal');
         }
       }
     }
@@ -1954,6 +2056,7 @@ export class Game {
         const healed = this._healMember(m, (card.heal ?? 0) + this._holyHealBonus(card), true);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        this._twinCenserSplash(m); // #69: single-target heal card splashes to the most wounded other
         break;
       }
       case 'aoeHeal': {
@@ -1962,6 +2065,87 @@ export class Game {
           this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         }
         this._log(`Group Heal: all living members heal up to ${card.heal}.`, 'heal');
+        break;
+      }
+      // --- Holy overheal & board-state payoffs (#69) --------------------------
+      case 'benediction': {
+        // Heal a flat base + BENEDICTION_PER_BUFF per active buff on the TARGET (the
+        // per-member buff count, #67). No cap — buff density is the payoff.
+        const m = this.members[target as number];
+        const buffs = this._memberEffectCount(m);
+        const amount = BENEDICTION_HEAL + BENEDICTION_PER_BUFF * buffs + this._holyHealBonus(card);
+        const healed = this._healMember(m, amount, true);
+        this._log(`Benediction: ${m.name} heals ${healed} (${buffs} buff${buffs === 1 ? '' : 's'}). (${m.hp}/${m.maxHP})`, 'heal');
+        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        this._twinCenserSplash(m);
+        break;
+      }
+      case 'sunriseVigil': {
+        // Queue a delayed party heal — it fires at the START of the next player phase
+        // (after the Regen tick, before the draw; see _startPlayerPhase). Each cast
+        // queues its own entry, so casting twice this turn heals twice next turn.
+        this.delayedStartEffects.push({ kind: 'sunriseVigil' });
+        this._log(`Sunrise Vigil set — every living member heals ${SUNRISE_VIGIL_HEAL} at the start of your next turn.`, 'status');
+        break;
+      }
+      case 'consecration': {
+        // Heal the whole party a little; then members at FULL HP afterward turn the
+        // surplus into offense — a standing +auto (shares the strike field with Sharpen).
+        const bonus = this._holyHealBonus(card);
+        for (const m of this.livingMembers()) {
+          const healed = this._healMember(m, (card.heal ?? CONSECRATION_HEAL) + bonus, true);
+          this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        }
+        let atFull = 0;
+        for (const m of this.livingMembers()) {
+          if (m.hp >= m.maxHP) {
+            m.strikeBonus = Math.max(m.strikeTurns > 0 ? m.strikeBonus : 0, CONSECRATION_STRIKE_BONUS);
+            m.strikeTurns = CONSECRATION_STRIKE_TURNS;
+            atFull += 1;
+          }
+        }
+        this._log(`Consecration: the party heals ${card.heal ?? CONSECRATION_HEAL}; ${atFull} at full HP strike +${CONSECRATION_STRIKE_BONUS} for ${CONSECRATION_STRIKE_TURNS} enemy turns.`, 'heal');
+        if (atFull > 0) this._emit({ kind: 'hymn', bonus: CONSECRATION_STRIKE_BONUS });
+        break;
+      }
+      case 'absolution': {
+        // Heal, then convert any OVERHEAL into Brace on the target (uncapped, respecting
+        // the Shield-OR-Brace rule, #17). captureOverheal suppresses Aegis Font's own
+        // conversion this cast — Absolution converts first, the Font gets nothing.
+        const m = this.members[target as number];
+        const res = this._applyHeal(m, ABSOLUTION_HEAL + this._holyHealBonus(card), true, true);
+        this._emit({ kind: 'heal', slot: m.slot, amount: res.healed, hp: m.hp });
+        if (res.overheal > 0) {
+          m.brace = true;
+          m.braceAmount = res.overheal; // variable Brace strength (#69)
+          m.braceTurns = BRACE_TURNS;
+          m.shield = false; m.shieldTurns = 0; // newest ward replaces (#17)
+          this._log(`Absolution: ${m.name} heals ${res.healed}; ${res.overheal} overheal hardens into Brace ${res.overheal}.`, 'status');
+          this._emit({ kind: 'braceApplied', slot: m.slot });
+        } else {
+          this._log(`Absolution: ${m.name} heals ${res.healed}. (${m.hp}/${m.maxHP})`, 'heal');
+        }
+        this._twinCenserSplash(m);
+        break;
+      }
+      case 'rootbind': {
+        // Extend every FRIENDLY timed effect by ROOTBIND_BONUS_TURNS. Published field list
+        // (#69): regen (magnitude == duration), shieldTurns, braceTurns, guardTurns,
+        // defense, strikeTurns, taunt. Effects at 0 (absent) are untouched. Enemy statuses
+        // (#67), channels (turn-gated), Interlock grants, and once-armed flags
+        // (Empower/Riposte/drumPrimed, Anvil Stance, Thornskin) carry no member timer here
+        // and are deliberately excluded.
+        let extended = 0;
+        for (const m of this.livingMembers()) {
+          if (m.regen > 0) { m.regen += ROOTBIND_BONUS_TURNS; extended += 1; }
+          if (m.shieldTurns > 0) { m.shieldTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
+          if (m.braceTurns > 0) { m.braceTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
+          if (m.guardTurns > 0) { m.guardTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
+          if (m.defense > 0) { m.defense += ROOTBIND_BONUS_TURNS; extended += 1; }
+          if (m.strikeTurns > 0) { m.strikeTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
+          if (m.taunt > 0) { m.taunt += ROOTBIND_BONUS_TURNS; extended += 1; }
+        }
+        this._log(`Rootbind: ${extended} friendly timed effect${extended === 1 ? '' : 's'} last +${ROOTBIND_BONUS_TURNS} turn.`, 'status');
         break;
       }
       case 'regen': {
@@ -2275,6 +2459,7 @@ export class Game {
       case 'brace': {
         const m = this.members[target as number];
         m.brace = true;
+        m.braceAmount = BRACE_AMOUNT; // standard Brace strength (#69)
         m.braceTurns = BRACE_TURNS;
         m.shield = false; // a member holds Shield OR Brace — newest replaces
         m.shieldTurns = 0;
@@ -2377,6 +2562,7 @@ export class Game {
         const healed = this._healMember(m, amount, true);
         this._log(`Focus: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
+        this._twinCenserSplash(m); // #69: single-target heal card splashes to the most wounded other
         break;
       }
       case 'channel': {

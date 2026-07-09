@@ -609,6 +609,10 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // Blood + cycling (#68): the best-3 sim policy has no HP-as-a-resource line, so these
   // stay dead-deck weight (they are for a human's knife-edge Blood build).
   crimsonPact: 1, scarletWard: 1, openVeins: 1, transfusion: 1, bloodBanner: 1,
+  // Holy overheal & board-state payoffs (#69): the best-3 policy already tops the party
+  // off with heal spam and has no overheal/buff-density line, so these stay dead-deck
+  // weight (they are for a human's healthy-party build).
+  benediction: 1, sunriseVigil: 1, consecration: 1, absolution: 1, rootbind: 1,
   // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
   // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
   shadowBolt: 2, siphonLife: 2, doom: 1,
@@ -747,6 +751,10 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Blood + cycling relics (#68): the best-3 policy has no HP-as-a-resource / reshuffle
   // line, so it can't leverage these — value 0 (Sanguine Pact is a curse besides).
   grimoireOfTurning: 0, sanguinePact: 0,
+  // Holy overheal & board-state relics (#69): the best-3 policy tops off with heal spam
+  // (so Beacon's heal-to-full draw and Twin Censer's splash rarely fire on a healthy
+  // party) and has no build for them — value 0 (a human healthy-party reward).
+  beaconOfSecondSun: 0, twinCenser: 0,
 };
 
 // Relic buy-value, letting a tier value relics the stick treats as inert (the #63

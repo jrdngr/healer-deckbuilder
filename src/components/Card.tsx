@@ -26,6 +26,9 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   // Blood + cycling (#68): Crimson Pact is draw economy (mana), Scarlet Ward a shield
   // (ward), Transfusion a redistribution heal (heal), Open Veins / Blood Banner offense.
   crimsonPact: 'mana', scarletWard: 'ward', openVeins: 'power', transfusion: 'heal', bloodBanner: 'power',
+  // Holy overheal & board-state payoffs (#69): the heals are green; Absolution hardens
+  // overheal into Brace (ward) and Rootbind extends defensive timers (ward).
+  benediction: 'heal', sunriseVigil: 'heal', consecration: 'heal', absolution: 'ward', rootbind: 'ward',
   // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
   cascade: 'mana', nightfall: 'power',
   // Channeled cards (#64): Drain/Sap are aggressive, Mending Stream a heal, Fortify a ward.
