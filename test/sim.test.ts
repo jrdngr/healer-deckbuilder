@@ -288,7 +288,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   // stream reshuffles downstream and the vector shifts: F3 179->180, F4 177->179, F5
   // 171->172, F6 166->169, F7 164->166, F8 156->159 (F0/F1/F2 unchanged). All band/CI/boss
   // gates below still hold; re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 199, 185, 180, 179, 172, 169, 166, 159]));
+  // 2026-07-09 (#72 Plaguewright + Ferment): a new member joins the roster pool — the
+  // Plaguewright (a viable 10-HP / 3-dmg poison body) is now offered at the start draft
+  // and every Recruit, so availableMembers() grows and the draft/deploy RNG stream
+  // reshuffles (no card enters the shop pool — Ferment is a per-fight ability card). The
+  // best-fit draft/deploy policy sometimes fields the new body, lifting the vector: F1
+  // 199->200, F2 185->190, F3 180->188, F4 179->183, F5 172->174, F6 169->172, F7 166->169,
+  // F8 159->161 (F0 unchanged). All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 190, 188, 183, 174, 172, 169, 161]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

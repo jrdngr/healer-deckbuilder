@@ -22,7 +22,7 @@ import {
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
-  POISON_BASE, POISON_TURNS,
+  POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
@@ -150,6 +150,8 @@ export interface Enemy {
   maxHP: number;
   poison: number;      // Poison strength: damage dealt per turn while active
   poisonTurns: number; // enemy turns of Poison remaining
+  fermentTurns: number; // Ferment (#72) window: enemy turns Poison compounds instead of decaying
+  fermentGrowth: number; // per-turn Poison growth applied after each fermented tick (set at cast)
   vulnerable: number;      // Vulnerability (Warlock's Hex, #39): party damage is x(1 + this)
   vulnerableTurns: number; // enemy turns of Vulnerability remaining
   enraged: boolean;
@@ -252,6 +254,7 @@ export type GameEvent =
   | { kind: 'boarHit'; slot: Slot; amount: number; boarHp: number; killed: boolean } // Boar soaks a hit (#29)
   | { kind: 'boarExpire'; slot: Slot } // Boar returns to the wild (#29)
   | { kind: 'stun'; slot: Slot; intent: string } // Sentinel cancels the standing telegraph (#61)
+  | { kind: 'ferment'; slot: Slot; turns: number; growth: number } // Plaguewright ferments enemy Poison (#72)
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -390,7 +393,8 @@ export class Game {
 
     this.enemy = {
       hp: config.enemy.maxHP, maxHP: config.enemy.maxHP,
-      poison: 0, poisonTurns: 0, vulnerable: 0, vulnerableTurns: 0, enraged: false,
+      poison: 0, poisonTurns: 0, fermentTurns: 0, fermentGrowth: 0,
+      vulnerable: 0, vulnerableTurns: 0, enraged: false,
     };
 
     // Focus Stone (#42): fewer bodies to tend means more MP to spare while small.
@@ -1443,14 +1447,34 @@ export class Game {
 
     // 1) start-of-turn status ticks: Poison -> Refresh. (Regen ticks at the start
     // of the player phase instead, so its heal lands after the enemy's blow.)
+    const fermenting = this.enemy.fermentTurns > 0;
     if (this.enemy.poisonTurns > 0) {
       const dmg = this.enemy.poison;
       const killed = this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
       this._emit({ kind: 'poisonTick', amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });
-      this.enemy.poisonTurns -= 1;
-      if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
+      // Ferment (#72): tick order is damage -> grow -> (skip duration decrement). While
+      // the window runs, the per-turn value grows and the duration is frozen, so Poison
+      // compounds instead of expiring; once the window closes, normal decay resumes at
+      // the inflated per-turn rate. Growth was scaled by the caster's power at cast.
+      if (fermenting) {
+        this.enemy.poison += this.enemy.fermentGrowth;
+        this._log(`The enemy's Poison ferments — ${dmg}/turn grows to ${this.enemy.poison}/turn (${this.enemy.poisonTurns} turns held).`, 'status');
+      } else {
+        this.enemy.poisonTurns -= 1;
+        if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
+      }
       if (this.status === 'win') return; // poison can finish the enemy
+    }
+    // The ferment window itself decrements once per enemy phase regardless of whether
+    // any Poison stood this turn — an empty window still burns down while it waits for
+    // Poison to arrive (poison applied mid-window compounds from its first tick).
+    if (this.enemy.fermentTurns > 0) {
+      this.enemy.fermentTurns -= 1;
+      if (this.enemy.fermentTurns === 0) {
+        this.enemy.fermentGrowth = 0;
+        this._log('The fermentation subsides; the enemy\'s Poison decays normally again.', 'status');
+      }
     }
     // Vulnerability (Warlock's Hex, #39) counts down here, after Poison this turn is
     // amplified — so a cast Hex amplifies HEX_TURNS full party phases before fading.
@@ -2897,6 +2921,21 @@ export class Game {
         } else {
           this._log(`${m.name} winds up to Stun, but there is nothing to interrupt.`, 'status');
         }
+        break;
+      }
+      case 'ferment': {
+        // The Plaguewright (#72) opens a fermentation window: for the next FERMENT_TURNS
+        // enemy turns, Poison compounds (see the tick in _runEnemyPhase). Recasts extend
+        // the remaining window additively — no cap. The per-tick growth is captured at
+        // cast time (the tick has no caster) and scaled by the caster's ability power
+        // (Empower / injury penalty). Floored at 0 so a Broken member can't SHRINK Poison
+        // (mirrors the taunt/poison DR1 floors); no upper cap. The window opens even with
+        // no Poison standing — it ferments whatever arrives before it closes.
+        const growth = Math.max(0, FERMENT_GROWTH + m.abilityPower);
+        this.enemy.fermentTurns += FERMENT_TURNS;
+        this.enemy.fermentGrowth = growth;
+        this._log(`${m.name} Ferments the enemy's Poison — it compounds (+${growth}/turn, duration frozen) for the next ${this.enemy.fermentTurns} enemy turns.`, 'status');
+        this._emit({ kind: 'ferment', slot: m.slot, turns: this.enemy.fermentTurns, growth });
         break;
       }
       default:

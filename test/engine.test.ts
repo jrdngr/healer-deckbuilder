@@ -5,7 +5,7 @@ import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEA
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS } from '../src/constants';
-import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR } from '../src/constants';
+import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
@@ -16,7 +16,7 @@ import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPE
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
 import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL_MP, REFRESH_CHANNEL_MAX_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_MAX_TURNS, FORTIFY_MAX_TURNS } from '../src/constants';
 import { BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH, PILGRIM_FLASK_HEAL } from '../src/constants';
-import type { CardId, ModifierId, RelicId, Slot, CardType } from '../src/constants';
+import type { CardId, ModifierId, RelicId, Slot, CardType, MemberId } from '../src/constants';
 
 let passed = 0;
 let failed = 0;
@@ -3120,6 +3120,151 @@ function sentinelBossGame(seed: number, def = GATEWARDEN_DEF): Game {
   g2._fireAbility(g2.members[0]);
   g2._fireAbility(g2.members[0]);
   check('re-stunning keeps the telegraph stunned (no error)', g2.telegraph.stunned === true);
+}
+
+// --- party roster: Plaguewright + Ferment (#72) -----------------------------
+// A second poison hero. Ferment opens a window in which enemy Poison COMPOUNDS:
+// each tick deals its damage, then per-turn grows and the duration is frozen.
+function plaguewrightGame(seed: number, ids: MemberId[] = ['plaguewright', 'tank', 'mage']): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(ids);
+  cfg.enemy = { maxHP: 99999, boss: false, attackBonus: 0, def: DEFAULT_ENEMY_DEF, enrageTurn: 999 };
+  return new Game(seed, cfg).start();
+}
+// A harmless 0-damage single so a driven enemy phase only surfaces the Poison tick
+// (enemy attacks hit the party, not the enemy — enemy HP moves only by Poison).
+function harmlessTelegraph(g: Game) {
+  g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [1], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+}
+{
+  // Data: the Plaguewright is a mid-line caster (Ranger-adjacent, one less HP) whose
+  // Ferment card (2 MP, no target, nature) maps through ABILITY_CARD like every member.
+  const p = MEMBER_POOL.plaguewright;
+  eq('Plaguewright HP 10', p.maxHP, 10);
+  eq('Plaguewright damage 3', p.damage, 3);
+  eq('Plaguewright ability is ferment', p.ability, 'ferment');
+  eq('ferment binds to the Ferment card', ABILITY_CARD.ferment, 'ferment');
+  eq('Ferment costs 2 MP', CARDS.ferment.cost, 2);
+  eq('Ferment takes no target', CARDS.ferment.target, 'none');
+  eq('Ferment fires the ferment ability', CARDS.ferment.ability, 'ferment');
+  eq('Ferment is a nature card', cardType('ferment'), 'nature');
+  check('Ferment is a per-member ability card', isAbilityCard('ferment'));
+  check('the Plaguewright has ability flavor', MEMBER_ABILITY_FLAVOR.plaguewright.length > 0);
+  eq('Plaguewright base salary is 17', MEMBER_BASE_SALARY.plaguewright, 17);
+  check('Ferment is excluded from the shop pool', !CARD_POOL.includes('ferment'));
+}
+{
+  // Fresh 5×5 Poison + Ferment: the window deals 5, 7, 9 (per-turn grows +2 each,
+  // duration frozen), then decays 11×5 = 55 after the window — a fight total of 76.
+  const g = plaguewrightGame(1);
+  g.enemy.poison = POISON_BASE; g.enemy.poisonTurns = POISON_TURNS; // 5×5 = 25 raw
+  g._fireAbility(g.members[0]);
+  eq('ferment opens a 3-turn window', g.enemy.fermentTurns, FERMENT_TURNS);
+  const dealt: number[] = [];
+  for (let i = 0; i < 10; i++) {
+    const before = g.enemy.hp;
+    harmlessTelegraph(g);
+    g._runEnemyPhase();
+    dealt.push(before - g.enemy.hp);
+  }
+  eq('the fermented window deals 5 then 7 then 9', JSON.stringify(dealt.slice(0, 3)), JSON.stringify([5, 7, 9]));
+  eq('after the window the per-turn is inflated to 11', dealt[3], 11);
+  eq('the inflated Poison decays 11×5 after the window', JSON.stringify(dealt.slice(3, 8)), JSON.stringify([11, 11, 11, 11, 11]));
+  eq('the whole fermented Poison deals 76 total', dealt.reduce((a, b) => a + b, 0), 76);
+}
+{
+  // Mid-window the per-turn is inflated and the duration is FROZEN at its cast value.
+  const g = plaguewrightGame(2);
+  g.enemy.poison = POISON_BASE; g.enemy.poisonTurns = POISON_TURNS;
+  g._fireAbility(g.members[0]);
+  harmlessTelegraph(g); g._runEnemyPhase(); // tick 5 -> poison 7
+  harmlessTelegraph(g); g._runEnemyPhase(); // tick 7 -> poison 9
+  eq('two ticks inflate the per-turn to 9', g.enemy.poison, 9);
+  eq('the duration is frozen at its cast value', g.enemy.poisonTurns, POISON_TURNS);
+  eq('the ferment window itself decremented once per phase', g.enemy.fermentTurns, FERMENT_TURNS - 2);
+}
+{
+  // Recast extends the window additively (+3), and the duration stays frozen across
+  // the whole 6-turn window.
+  const g = plaguewrightGame(3);
+  g.enemy.poison = POISON_BASE; g.enemy.poisonTurns = POISON_TURNS;
+  g._fireAbility(g.members[0]); // window 3
+  g._fireAbility(g.members[0]); // recast: +3 -> window 6
+  eq('a recast adds +3 to the window', g.enemy.fermentTurns, FERMENT_TURNS * 2);
+  let frozenThroughout = true;
+  for (let i = 0; i < 6; i++) {
+    harmlessTelegraph(g); g._runEnemyPhase();
+    if (g.enemy.poisonTurns !== POISON_TURNS) frozenThroughout = false;
+  }
+  check('the duration stayed frozen through all 6 fermented ticks', frozenThroughout);
+  eq('the 6-turn window has fully closed', g.enemy.fermentTurns, 0);
+  eq('the per-turn compounded 6× (+2 each) to 17', g.enemy.poison, POISON_BASE + FERMENT_GROWTH * 6);
+  // After the window, normal decay resumes at the inflated rate.
+  const before = g.enemy.poisonTurns;
+  harmlessTelegraph(g); g._runEnemyPhase();
+  eq('normal decay resumes once the window closes', g.enemy.poisonTurns, before - 1);
+}
+{
+  // Hemorrhage (#67) reads the inflated per-turn × the frozen duration (9×5 = 45).
+  const g = plaguewrightGame(4);
+  g.mp = g.maxMana;
+  g.enemy.poison = POISON_BASE; g.enemy.poisonTurns = POISON_TURNS;
+  g._fireAbility(g.members[0]);
+  harmlessTelegraph(g); g._runEnemyPhase(); // poison -> 7
+  harmlessTelegraph(g); g._runEnemyPhase(); // poison -> 9
+  eq('mid-window poison is 9 over a frozen 5 turns', g.enemy.poison, 9);
+  const before = g.enemy.hp;
+  g.playCard(giveCard(g, 'hemorrhage'));
+  eq('Hemorrhage cashes 9×5 = 45 mid-fermentation', before - g.enemy.hp, 9 * POISON_TURNS);
+}
+{
+  // Ability power (Empower here) modifies the +2 growth per tick — it becomes +3.
+  const g = plaguewrightGame(5);
+  g.enemy.poison = POISON_BASE; g.enemy.poisonTurns = POISON_TURNS;
+  g.members[0].empowerBonus = EMPOWER_BONUS; // +1 power on the next ability
+  g._fireAbility(g.members[0]);
+  eq('Empower lifts the growth to +3', g.enemy.fermentGrowth, FERMENT_GROWTH + EMPOWER_BONUS);
+  check('Empower was spent by the cast', g.members[0].empowerBonus === 0);
+  harmlessTelegraph(g); g._runEnemyPhase();
+  eq('one fermented tick grew the per-turn by 3', g.enemy.poison, POISON_BASE + FERMENT_GROWTH + EMPOWER_BONUS);
+}
+{
+  // The Devourer's Consume eats the whole investment: it clears Poison entirely, but
+  // the ferment window keeps running (empty) — counterplay both ways.
+  const g = plaguewrightGame(6);
+  g.enemy.poison = 9; g.enemy.poisonTurns = POISON_TURNS; // a fat fermented poison
+  g._fireAbility(g.members[0]);
+  const consume = { type: 'single' as const, cast: 'consume' as const, name: 'Consume', hidden: false, damage: 0, targets: [1] as Slot[], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+  g._resolveCast(consume);
+  eq('Consume clears the poison strength', g.enemy.poison, 0);
+  eq('Consume clears the poison duration', g.enemy.poisonTurns, 0);
+  check('the ferment window keeps running, now empty', g.enemy.fermentTurns === FERMENT_TURNS);
+}
+{
+  // Ferment before any poison: the window opens and burns down on its own, then a
+  // fresh Imbue Venom (the Ranger's poison) compounds from its very first tick.
+  const g = plaguewrightGame(7, ['ranger', 'plaguewright', 'tank']);
+  const plague = g.members[1];
+  g._fireAbility(plague); // ferment with no poison standing
+  eq('the window opens with no poison', g.enemy.fermentTurns, FERMENT_TURNS);
+  harmlessTelegraph(g); g._runEnemyPhase(); // empty window ticks down, no poison dealt
+  eq('an empty window still ticks down', g.enemy.fermentTurns, FERMENT_TURNS - 1);
+  eq('no poison stood so nothing was dealt', g.enemy.poison, 0);
+  g._fireAbility(g.members[0]); // the Ranger applies a fresh 5×5 Poison mid-window
+  eq('Imbue Venom seeds a fresh 5×5 poison', g.enemy.poison, POISON_BASE);
+  harmlessTelegraph(g); g._runEnemyPhase();
+  eq('the poison compounds from its first in-window tick', g.enemy.poison, POISON_BASE + FERMENT_GROWTH);
+  eq('and its duration is frozen from that tick', g.enemy.poisonTurns, POISON_TURNS);
+}
+{
+  // Ferment is unplayable while the Plaguewright is down (the #44/#54 path), and
+  // firing it opens a window even against a fresh enemy (no crash, no poison needed).
+  const g = plaguewrightGame(8);
+  g.mp = 10;
+  const idx = giveCard(g, 'ferment');
+  check('Ferment is playable with a living Plaguewright', g.canPlay(idx, null) === null);
+  g._killMember(g.members[0]);
+  check('Ferment is disabled once the Plaguewright is down', g.canPlay(idx, null) !== null);
 }
 
 // --- Provoke / Taunt-lite card (#31) ----------------------------------------

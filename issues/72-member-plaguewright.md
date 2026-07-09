@@ -1,6 +1,6 @@
 # Issue 72 — Plaguewright: a second poison member and Ferment
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (roster + ability)   **Size:** M
 - **Depends on:** #67 (shared `_applyPoison` helper + poison-window web)   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: a second poison hero whose ability changes

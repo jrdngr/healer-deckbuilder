@@ -281,6 +281,19 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return impact + 240;
   },
+  plaguewright: (ev, push, t) => {
+    // A lobbed vial of toxin that bursts into a lingering sickly-green cloud.
+    const c = '#8fbf4d';
+    push({ at: t, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 0.95, dur: 300 },
+    ] });
+    const impact = t + 300;
+    push({ at: impact, shake: 4, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 46, mode: 'fall' },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 220;
+  },
 };
 
 // Resolve one enemy-attack target at `at`: a whiff, a block, a hit, or a kill
