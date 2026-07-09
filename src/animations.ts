@@ -281,6 +281,21 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return impact + 240;
   },
+  hierophant: (ev, push, t) => {
+    // A swung censer: a warm consecrated arc that rings the enemy on impact.
+    const c = '#e8d48a';
+    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 240 }] });
+    push({ at: t + 180, fx: [
+      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 1.0, dur: 300 },
+    ] });
+    const impact = t + 180 + 300;
+    push({ at: impact, shake: 4, patch: { enemyHp: ev.enemyHp }, fx: [
+      { type: 'ring', at: 'enemy', color: c },
+      { type: 'burst', at: 'enemy', color: c, count: 10, spread: 50, mode: 'rise' },
+      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
+    ] });
+    return impact + 220;
+  },
   plaguewright: (ev, push, t) => {
     // A lobbed vial of toxin that bursts into a lingering sickly-green cloud.
     const c = '#8fbf4d';

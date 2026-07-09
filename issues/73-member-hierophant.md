@@ -1,6 +1,6 @@
 # Issue 73 — Hierophant: the channel member and Liturgy
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** content (roster + ability)   **Size:** M
 - **Depends on:** #70 (channel-keep flags; this member anchors that archetype)   **Blocks:** none
 - **Addresses:** intake 2026-07-07 — new-content wave: a channel hero whose ability changes how

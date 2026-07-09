@@ -5,7 +5,7 @@ import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEA
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS } from '../src/constants';
-import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH } from '../src/constants';
+import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
@@ -4898,6 +4898,191 @@ function countPulses(g: Game): number {
   eq('Consecration targets all', CARDS.consecration.target, 'all');
   check('Beacon / Twin Censer are real relics', (['beaconOfSecondSun', 'twinCenser'] as RelicId[]).every((id) => RELIC_IDS.includes(id)));
   check('neither new relic is a curse', RELICS.beaconOfSecondSun.curse !== true && RELICS.twinCenser.curse !== true);
+}
+
+// --- Hierophant + Liturgy (#73): channel dual cadence -----------------------
+// A benign channel fight (mirrors channelGame) but with a Hierophant fielded so its
+// Liturgy ability card is playable. Hierophant seats LEFT; tank CENTER, mage RIGHT.
+function liturgyGame(seed: number): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['hierophant', 'tank', 'mage']);
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  const g = new Game(seed, cfg); g.start();
+  g.members.forEach((m) => { m.maxHP = 100; m.hp = 100; m.alive = true; m.shield = false; m.shieldTurns = 0; });
+  g.enemy.maxHP = 100000; g.enemy.hp = 100000;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0;
+  g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 0;
+  g.maxMana = 40; g.mp = 40; g.passiveMp = 0; g.enrageTurn = 9999;
+  return g;
+}
+{
+  // Definitions / typing sanity for the member and the ability card (#73).
+  eq('Hierophant is in MEMBER_POOL', MEMBER_POOL.hierophant?.id, 'hierophant');
+  eq('Hierophant maxHP 9', MEMBER_POOL.hierophant.maxHP, 9);
+  eq('Hierophant damage 2', MEMBER_POOL.hierophant.damage, 2);
+  eq('Hierophant ability is liturgy', MEMBER_POOL.hierophant.ability, 'liturgy');
+  eq('Hierophant base salary 16', MEMBER_BASE_SALARY.hierophant, 16);
+  check('Hierophant is in the draft pool', DRAFT_POOL.includes('hierophant'));
+  check('Hierophant has an ability flavor mentioning Liturgy', /Liturgy/.test(MEMBER_ABILITY_FLAVOR.hierophant ?? ''));
+  eq('liturgy is the Hierophant\'s bound ability card', ABILITY_CARD.liturgy, 'liturgy');
+  eq('Liturgy is Arcane', cardType('liturgy'), 'arcane');
+  check('Liturgy counts toward the Arcane bucket (Cascade reads it)', cardsOfType('arcane').includes('liturgy'));
+  eq('Liturgy costs 2', CARDS.liturgy.cost, 2);
+  eq('Liturgy targets none', CARDS.liturgy.target, 'none');
+  eq('Liturgy needs an active channel', CARDS.liturgy.needsChannel, true);
+  eq('Liturgy is uncommon', CARD_RARITY.liturgy, 'uncommon');
+  check('Liturgy is an ability card (never shopped)', isAbilityCard('liturgy') && !CARD_POOL.includes('liturgy'));
+}
+{
+  // Liturgy is a dead cast with no channel running (needsChannel gate, no-dead-cast UX).
+  const g = liturgyGame(730);
+  eq('Liturgy is unplayable with no active channel', g.canPlay(giveCard(g, 'liturgy'), null), 'no active channel');
+  // With a channel up it becomes playable; playing it does NOT break the channel and
+  // arms dual cadence on the surviving channel.
+  g.playCard(giveCard(g, 'drain'), null);
+  check('Drain channel is running', g.channelActive() && g.channelCard === 'drain');
+  check('dual cadence is off until Liturgy is cast', !g.channelDualCadence);
+  eq('Liturgy is playable once a channel runs', g.canPlay(giveCard(g, 'liturgy'), null), null);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  check('Liturgy does not break the channel it enhances', g.channelActive() && g.channelCard === 'drain');
+  check('Liturgy arms dual cadence', g.channelDualCadence);
+}
+{
+  // Liturgy is unplayable while the Hierophant is down (ability-member gate), even
+  // with a channel running.
+  const g = liturgyGame(731);
+  g.playCard(giveCard(g, 'sap'), null);
+  check('a channel is running', g.channelActive());
+  g._killMember(g.members[SLOT.LEFT]); // the Hierophant
+  eq('Liturgy is unplayable with the Hierophant down', g.canPlay(giveCard(g, 'liturgy'), null), 'that member is unavailable');
+}
+{
+  // Sap + Liturgy: Vulnerability climbs TWO steps per held round (dual cadence), and the
+  // duration decrements only ONCE per round (the player-phase tick).
+  const g = liturgyGame(732);
+  g.playCard(giveCard(g, 'sap'), null);   // cast tick: +1 step
+  g.playCard(giveCard(g, 'liturgy'), null);
+  eq('Sap cast adds one Vulnerability step', g.enemy.vulnerable, SAP_VULN_PER_TICK);
+  g.endTurn();                            // close the cast turn (2 cards played — no tick)
+  const turnsBefore = g.channelTurns, vulnBefore = g.enemy.vulnerable;
+  g.endTurn();                            // hold one round: dual + normal tick
+  eq('the duration decrements exactly once per round', turnsBefore - g.channelTurns, 1);
+  eq('Sap climbs two steps per round under dual cadence',
+    g.enemy.vulnerable, Math.min(SAP_VULN_CAP, vulnBefore + 2 * SAP_VULN_PER_TICK));
+}
+{
+  // Sap + Liturgy total ticks ≈ 2× duration: one cast tick + two ticks per held round
+  // for the remaining duration = 2*SAP_MAX_TURNS - 1 pulses.
+  const g = liturgyGame(733);
+  g.playCard(giveCard(g, 'sap'), null);   // cast tick
+  let pulses = countPulses(g);            // count the cast pulse now (playing Liturgy resets events)
+  g.playCard(giveCard(g, 'liturgy'), null);
+  g.endTurn();                            // close the cast turn (2 cards played — no tick)
+  for (let i = 0; i < SAP_MAX_TURNS + 3 && g.channelActive(); i++) {
+    g.endTurn();                          // hold: dual + normal tick each round
+    pulses += countPulses(g);
+  }
+  eq('Sap + Liturgy ticks ≈ 2× duration', pulses, 2 * SAP_MAX_TURNS - 1);
+  check('the channel still ends on its own at the (undoubled) duration cap', !g.channelActive());
+}
+{
+  // Drain + Liturgy: a held round deals Drain's damage TWICE (dual cadence doubles it).
+  const g = liturgyGame(734);
+  g.members.forEach((m) => { m.damage = 0; }); // silence party autos so only Drain moves enemy HP
+  g.playCard(giveCard(g, 'drain'), null); // cast tick: one Drain hit
+  g.playCard(giveCard(g, 'liturgy'), null);
+  g.endTurn();                            // close the cast turn (no tick — 2 cards played)
+  const before = g.enemy.hp;
+  g.mp = 40;                              // room so MP return doesn't gate the damage path
+  g.endTurn();                            // hold: dual + normal Drain tick
+  eq('Drain deals double damage in a dual-cadence round', before - g.enemy.hp, 2 * DRAIN_DMG);
+}
+{
+  // Refresh + Liturgy: MP is restored TWICE per held round (legal channel income).
+  const g = liturgyGame(735);
+  g.mp = CARDS.refresh.cost;
+  g.playCard(giveCard(g, 'refresh'), null);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  g.endTurn();                            // close the cast turn (no tick)
+  g.mp = 0;
+  g.endTurn();                            // hold: dual + normal Refresh tick
+  eq('Refresh restores its MP twice per dual-cadence round', g.mp, 2 * REFRESH_CHANNEL_MP);
+}
+{
+  // Fortify + Liturgy: the pre-blow enemy-phase tick puts the Shield up before the blow
+  // resolves, and the telegraph preview reflects it (preview == applied).
+  const g = liturgyGame(736);
+  const tank = g.members[SLOT.CENTER];
+  g.playCard(giveCard(g, 'fortify'), tank.slot);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  check('Fortify shields on the cast tick', tank.shield === true);
+  g.endTurn();                            // close the cast turn (no tick)
+  tank.shield = false; tank.shieldTurns = 0; // consume the standing Shield
+  // A known single-target blow aimed at the Fortify target, still with no Shield up.
+  g.telegraph = { type: 'single', hidden: false, damage: 6, targets: [tank.slot], enraged: false, forTurn: g.turn, turnsUntilResolve: 1 };
+  const preview = g.attackTargets().find((s) => s.slot === tank.slot)?.damage ?? -1;
+  eq('the preview folds in the pending pre-blow Fortify shield (0 damage)', preview, 0);
+  const hpBefore = tank.hp;
+  g.endTurn();                            // hold: dual/normal Fortify tick shields before the blow
+  eq('the pre-blow shield absorbs the telegraphed hit that same round', tank.hp, hpBefore);
+  eq('preview == applied for the shielded blow', preview, hpBefore - tank.hp);
+}
+{
+  // Mending Stream + Liturgy on a target that dies mid-round: the channel ends and there
+  // is no orphan tick (neither the dual cadence tick nor the normal tick fires).
+  const g = liturgyGame(737);
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 1;
+  g.playCard(giveCard(g, 'mendingStream'), tank.slot);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  check('Mending Stream is dual-cadenced and running', g.channelActive() && g.channelDualCadence);
+  g.endTurn();                            // close the cast turn
+  g._killMember(tank);                    // the remembered target dies before the enemy phase
+  g.events = [];
+  g.endTurn();                            // hold: the tick sees the dead target and ends the channel
+  check('the channel ended with its target', !g.channelActive());
+  check('dual cadence cleared with the channel', !g.channelDualCadence);
+  eq('no orphan tick fired', countPulses(g), 0);
+}
+{
+  // Break rules unchanged: a non-exempt card play ends the channel AND its dual cadence.
+  const g = liturgyGame(738);
+  g.playCard(giveCard(g, 'sap'), null);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  check('dual cadence armed', g.channelDualCadence);
+  g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // a plain, non-exempt card
+  check('a non-exempt play breaks the channel', !g.channelActive());
+  check('and clears dual cadence with it', !g.channelDualCadence);
+}
+{
+  // Attunement (#70) exemption keeps BOTH the channel and its dual cadence alive.
+  const g = liturgyGame(739);
+  g.playCard(giveCard(g, 'sap'), null);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  g.drawPile = [makeDeckCard('lowHeal', 950)];
+  g.playCard(giveCard(g, 'attunement'), null); // exempt: keeps the channel
+  check('the channel survives Attunement', g.channelActive() && g.channelCard === 'sap');
+  check('dual cadence survives Attunement', g.channelDualCadence);
+}
+{
+  // Starting a NEW channel after a dual-cadenced one resets to normal cadence.
+  const g = liturgyGame(740);
+  g.playCard(giveCard(g, 'sap'), null);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  check('dual cadence armed on the first channel', g.channelDualCadence);
+  g.playCard(giveCard(g, 'drain'), null); // a channel card replaces the old channel
+  check('the new channel replaced the old', g.channelActive() && g.channelCard === 'drain');
+  check('the new channel starts on normal cadence', !g.channelDualCadence);
+}
+{
+  // Recasting Liturgy while already dual-cadenced is a harmless no-op (idempotent).
+  const g = liturgyGame(741);
+  g.playCard(giveCard(g, 'sap'), null);
+  g.playCard(giveCard(g, 'liturgy'), null);
+  const turns = g.channelTurns;
+  g.playCard(giveCard(g, 'liturgy'), null); // recast: still exempt, still dual, no tick
+  check('still the same channel, still dual-cadenced', g.channelActive() && g.channelDualCadence);
+  eq('a recast does not tick or advance the channel', g.channelTurns, turns);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

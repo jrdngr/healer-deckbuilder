@@ -20,7 +20,7 @@ export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 export type CardType = 'holy' | 'nature' | 'shadow' | 'blood' | 'arcane' | 'iron';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright' | 'hierophant';
 // 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
 // damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
 // controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
@@ -30,10 +30,13 @@ export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berse
 // telegraph — the move is consumed (rotation advances, channel wind-up aborts) and
 // a fresh action telegraphs next turn; 'ferment' (Plaguewright, #72) opens a window
 // in which enemy Poison compounds — each tick deals its damage, then the per-turn
-// value GROWS and the duration does NOT count down (investment over drip). Each
-// fires via that member's own ability card (#44), inserted into the deck when they
-// are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment';
+// value GROWS and the duration does NOT count down (investment over drip);
+// 'liturgy' (Hierophant, #73) gives the active channel DUAL CADENCE — for its
+// remaining duration it also ticks at the start of the enemy phase (after party
+// autos, before the telegraph resolves), doubling total ticks while the duration
+// still counts down only once per round. Each fires via that member's own ability
+// card (#44), inserted into the deck when they are deployed.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment' | 'liturgy';
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
@@ -77,7 +80,7 @@ export type CardId =
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
   | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment';
+  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment' | 'liturgy';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -126,6 +129,9 @@ export interface CardDef {
   // Playability gate (#67): the enemy must be Poisoned (Hemorrhage is a dead card
   // with no poison to cash out — mirrors needsRegen's UX, but reads the enemy).
   needsPoison?: boolean;
+  // Playability gate (#73): a channel must be active (Liturgy is a dead cast with
+  // no channel to grant dual cadence — mirrors needsRegen's no-dead-cast UX).
+  needsChannel?: boolean;
   // Excluded from the Potent modifier even though it has a strength field
   // (Overgrowth: +1 strength would be x3 members x3 turns for one upgrade).
   noPotent?: boolean;
@@ -202,6 +208,11 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // investment — while the window runs, each tick deals its damage, then the per-turn
   // value grows and the duration stops counting down (compounds instead of expiring).
   plaguewright: { slot: 2, id: 'plaguewright', name: 'Plaguewright', maxHP: 10, damage: 3, ability: 'ferment' },
+  // Hierophant (#73): the channel archetype anchor. A fragile support body (Mage-tier
+  // HP, low auto) whose Liturgy gives the active channel DUAL CADENCE — an extra
+  // enemy-phase tick each round for the channel's remaining duration. Home slot 2
+  // (back line), like the other caster bodies.
+  hierophant: { slot: 2, id: 'hierophant', name: 'Hierophant', maxHP: 9, damage: 2, ability: 'liturgy' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -222,7 +233,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant'];
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
@@ -234,14 +245,14 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
   ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3, sentinel: 2,
-  plaguewright: 3,
+  plaguewright: 3, hierophant: 2,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
 // and the Berserker wants to STAY low (healing him is friendly fire), so neither
 // counts toward the healable floor.
 export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
-  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright'],
+  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant'],
 );
 
 export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
@@ -756,6 +767,7 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
   sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
   plaguewright: `Ferment — for ${FERMENT_TURNS} enemy turns the enemy's Poison compounds: each tick deals its damage, then +${FERMENT_GROWTH}/turn and its duration is frozen. Recasts extend the window.`,
+  hierophant: `Liturgy — your active channel gains dual cadence: for its remaining duration it also ticks at the start of the enemy phase, before the blow lands.`,
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity
@@ -907,6 +919,9 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
     desc: 'Through the Sentinel, Stun the enemy — cancel its telegraphed action.' },
   ferment: { id: 'ferment', name: 'Ferment', cost: 2, target: 'none', ability: 'ferment',
     desc: 'Through the Plaguewright, Ferment the enemy\'s Poison — it compounds instead of expiring.' },
+  // Liturgy (#73) needs an active channel to enhance (needsChannel gates the dead cast).
+  liturgy: { id: 'liturgy', name: 'Liturgy', cost: 2, target: 'none', ability: 'liturgy', needsChannel: true,
+    desc: 'Through the Hierophant, give your active channel dual cadence — an extra enemy-phase tick each round.' },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -1148,6 +1163,7 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   // Arcane — the mana / card-draw economy.
   refresh: 'arcane', fontOfMana: 'arcane', inspiration: 'arcane', surge: 'arcane', channel: 'arcane', conduct: 'arcane', cascade: 'arcane',
   attunement: 'arcane', arcaneLens: 'arcane', /* channel archetype rescue + arcane support (#70) */
+  liturgy: 'arcane', /* channel-economy ability card — dual cadence (#73); Cascade counts it */
   // Iron — protection: shields, Defense, Taunt/Provoke, braces.
   shield: 'iron', barrier: 'iron', phalanx: 'iron', brace: 'iron', provoke: 'iron', holdTheLine: 'iron',
   bolster: 'iron', guard: 'iron', goad: 'iron',
@@ -1202,6 +1218,7 @@ export const ABILITY_CARD: Record<AbilityId, CardId> = {
   callBoar: 'beckon',
   stun: 'stagger',
   ferment: 'ferment',
+  liturgy: 'liturgy',
 };
 
 // The set of per-member ability card ids — excluded from the shop pool and Retain
@@ -1501,6 +1518,7 @@ export interface ResolvedCard {
   draw?: number;
   needsRegen: boolean;
   needsPoison: boolean; // Hemorrhage (#67): playable only while the enemy is Poisoned
+  needsChannel: boolean; // Liturgy (#73): playable only while a channel is active
   refreshCap: number; // per-cast lifetime MP cap for Refresh-slot cards
   selfDamage?: number; // Blood cost the target pays (never bumped by modifiers)
   noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
@@ -1679,7 +1697,7 @@ export const INFIRMARY_INJURY_PRICE = 45;  // shed one death-scar from a chosen 
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
   ranger: 18, tank: 13, mage: 20,          // classic trio: 18 + 13 + 20 = 51
   warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15, sentinel: 15,
-  plaguewright: 17,
+  plaguewright: 17, hierophant: 16,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -1788,7 +1806,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
   conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
-  ferment: 'uncommon',
+  ferment: 'uncommon', liturgy: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
@@ -2258,6 +2276,7 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     draw: base.draw,
     needsRegen: base.needsRegen === true,
     needsPoison: base.needsPoison === true,
+    needsChannel: base.needsChannel === true,
     // The cap is the BASE card's designed lifetime — Potent/Lingering change the
     // tempo of a Refresh-slot cast, never its total (flaw #7).
     refreshCap: base.refreshCap ?? REFRESH_MP_CAP,

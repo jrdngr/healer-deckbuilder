@@ -287,6 +287,10 @@ export class Game {
   channelCard: CardId | null;
   channelTarget: number | null;
   channelTurns: number;
+  // Liturgy (#73): the active channel has dual cadence — it also ticks at the start
+  // of the enemy phase (before the blow) for its remaining duration. Channel state,
+  // cleared whenever the channel ends for any reason. Per-fight, never serialized.
+  channelDualCadence: boolean;
   // Channel keep-alive (#70): card INSTANCE uids whose play is exempt from breaking a
   // running channel. Attunement stamps its own uid and the card it draws. Per-fight.
   channelExemptUids: Set<number>;
@@ -413,6 +417,7 @@ export class Game {
     this.channelCard = null;   // no channel running at fight start (#64)
     this.channelTarget = null;
     this.channelTurns = 0;
+    this.channelDualCadence = false; // Liturgy (#73) is off until cast on a channel
     this.channelExemptUids = new Set(); // no channel-exempt cards at fight start (#70)
     this.woundTurns = 0;    // no Hex active at fight start
     this.surgePending = false;
@@ -782,9 +787,23 @@ export class Game {
   // Lines to draw for the standing telegraph. [] when the game is over / no telegraph.
   // Each entry: { slot, damage, hidden }. Hidden attacks fan out to every living
   // member with unknown (null) damage; known attacks hit their living targets.
+  // The slot a pending pre-blow Fortify tick will shield this enemy phase, or null.
+  // Both the normal once-per-round tick and Liturgy's dual-cadence tick (#73) apply
+  // Fortify's Shield before the telegraph resolves, but only on a fully held turn
+  // (cardsPlayedThisPhase === 0 — the same gate the enemy-phase tick uses). Folding
+  // that deterministic grant into the preview keeps preview == applied for the blow.
+  _pendingFortifyShieldSlot(): number | null {
+    if (this.channelCard !== 'fortify' || !this.channelActive()) return null;
+    if (this.cardsPlayedThisPhase !== 0) return null;
+    const slot = this.channelTarget;
+    const m = slot == null ? null : this.members[slot];
+    return m && m.alive ? slot : null;
+  }
+
   attackTargets(): AttackSpec[] {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
+    const fortifySlot = this._pendingFortifyShieldSlot();
     // A Stunned telegraph (#61) is cancelled: it strikes nothing, so the preview is
     // empty (preview == applied == 0) and the UI clears the incoming-attack lines.
     if (t.stunned) return [];
@@ -798,7 +817,7 @@ export class Game {
       // Defense -> Brace -> Shield pipeline folded in), keeping preview ==
       // applied for whichever target the attack turns out to have.
       return this.livingMembers().map((m): AttackSpec => (
-        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: true }
+        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type, m.slot === fortifySlot).dmg, hidden: true }
       ));
     }
     // Resolve targets through the shared helper (#47), so the preview lines match
@@ -807,8 +826,9 @@ export class Game {
       .map((slot): AttackSpec => {
         const m = this.members[slot];
         // The preview runs the same Defense -> Brace -> Shield pipeline the
-        // resolver applies (telegraph == applied invariant).
-        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: t.hidden };
+        // resolver applies (telegraph == applied invariant). A pending pre-blow
+        // Fortify tick (#73) shields its target before the blow — folded in here.
+        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type, slot === fortifySlot).dmg, hidden: t.hidden };
       });
   }
 
@@ -1016,6 +1036,10 @@ export class Game {
   // only SKIPS the cancel step; it never ticks the channel (the enemy-phase tick is
   // still gated on a fully restrained turn) and never re-enables Rest / passive MP.
   _channelExempt(dc: DeckCard): boolean {
+    // Liturgy (#73) enhances the running channel, so it must not break it — it is
+    // always exempt (like an Attunement-stamped play). canPlay already gates it on
+    // an active channel, and _fireAbility flips dualCadence on the surviving channel.
+    if (resolveCard(dc).id === 'liturgy') return true;
     if (this.hasRelic('chantersIdol') && this.cardsPlayedThisPhase === 1) return true;
     return this.channelExemptUids.has(dc.uid);
   }
@@ -1029,6 +1053,7 @@ export class Game {
     this.channelCard = card.id;
     this.channelTarget = ch.single ? target : null;
     this.channelTurns = ch.maxTurns;
+    this.channelDualCadence = false; // a fresh channel starts on normal cadence (#73)
     this._log(`${card.name} begins channeling (up to ${ch.maxTurns} turns).`, 'status');
     this._emit({ kind: 'channelStart', card: card.id, slot: (ch.single ? target : null) as Slot | null, turns: ch.maxTurns });
     this._tickChannel(); // first tick is immediate, like a cast
@@ -1041,6 +1066,7 @@ export class Game {
     this._log(`The ${CARDS[id].name} channel is broken.`, 'status');
     this._emit({ kind: 'channelCancel', card: id });
     this.channelCard = null; this.channelTarget = null; this.channelTurns = 0;
+    this.channelDualCadence = false; // dual cadence dies with the channel (#73)
   }
 
   // End the active channel on its own terms (ticks spent, or a single-target
@@ -1051,11 +1077,15 @@ export class Game {
     this._log(`The ${CARDS[id].name} channel ends (${reason}).`, 'status');
     this._emit({ kind: 'channelEnd', card: id });
     this.channelCard = null; this.channelTarget = null; this.channelTurns = 0;
+    this.channelDualCadence = false; // dual cadence dies with the channel (#73)
   }
 
   // Apply one tick of the active channel (its per-turn payoff, keyed by card id),
-  // then decrement the tick counter and end the channel if it is spent.
-  _tickChannel(): void {
+  // then (on a duration-counting tick) decrement the counter and end the channel if
+  // spent. `decrement` distinguishes the once-per-round player-phase tick (true —
+  // counts down the duration) from Liturgy's extra enemy-phase cadence tick (#73:
+  // false — a full-effect tick that does NOT advance the duration).
+  _tickChannel(decrement = true): void {
     const id = this.channelCard;
     if (id == null || this.channelTurns <= 0) return;
     const ch = CARDS[id].channel;
@@ -1115,9 +1145,9 @@ export class Game {
       }
       default: break;
     }
-    this.channelTurns -= 1;
+    if (decrement) this.channelTurns -= 1;
     this._emit({ kind: 'channelPulse', card: id, turnsLeft: this.channelTurns });
-    if (this.channelTurns <= 0) this._endChannel('spent');
+    if (decrement && this.channelTurns <= 0) this._endChannel('spent');
   }
 
   // Reliquary of Light (#63): a flat bonus to healing from Holy cards. Read per heal
@@ -1397,7 +1427,11 @@ export class Game {
   // still deals damage after the stages before it. Pure read — attackTargets()
   // and _resolveAttack() both compute damage through here, which is what keeps
   // the telegraph preview equal to the applied damage across the whole pipeline.
-  _wardedDamage(m: Member, raw: number, ignoreDefense = false, attackType?: AttackType):
+  // `assumeShield` (preview only, #73): treat the member as Shielded even if it is not
+  // yet — the preview path passes it for the target of a pending pre-blow Fortify tick,
+  // whose deterministic Shield grant lands before the telegraph resolves (keeps
+  // preview == applied). _resolveAttack never passes it (the tick has already run).
+  _wardedDamage(m: Member, raw: number, ignoreDefense = false, attackType?: AttackType, assumeShield = false):
       { dmg: number; spendsBrace: boolean; spendsShield: boolean; spendsStormglass: boolean; wardSpent: number } {
     // Beast Warden's Boar (#29) stands in front of her slot and eats the WHOLE
     // instance, so the Warden takes 0 and none of her own wards are spent. Checked
@@ -1417,7 +1451,7 @@ export class Game {
       dmg = Math.max(0, dmg - m.braceAmount); // #69: variable Brace strength (Absolution's overheal)
       spendsBrace = true;
     }
-    if (m.shield && dmg > 0) {
+    if ((m.shield || assumeShield) && dmg > 0) {
       dmg = 0;
       spendsShield = true;
     }
@@ -1527,7 +1561,15 @@ export class Game {
     // cast turn in playCard, where cardsPlayedThisPhase >= 1 skips this. Placed after
     // the Vulnerability decay so Sap's fresh Vulnerability survives its own tick turn.
     if (this.channelActive() && this.cardsPlayedThisPhase === 0) {
-      this._tickChannel();
+      // Liturgy dual cadence (#73): the extra enemy-phase tick fires FIRST — a full
+      // tick that does NOT advance the duration — so Fortify's shield is up before the
+      // blow, Sap stacks a second step, and Drain doubles its damage/return this round.
+      // The normal tick below still owns the single per-round duration decrement.
+      if (this.channelDualCadence) {
+        this._tickChannel(false);
+        if (this.status === 'win') return; // a Drain cadence tick can finish the enemy
+      }
+      this._tickChannel(true);
       if (this.status === 'win') return; // a Drain tick can finish the enemy
     }
 
@@ -2016,6 +2058,9 @@ export class Game {
     // Hemorrhage (#67): a dead card with no enemy poison to cash out (mirrors
     // needsRegen's UX, but reads the enemy — no target to point at).
     if (card.needsPoison && this.enemy.poisonTurns <= 0) return 'the enemy is not Poisoned';
+    // Liturgy (#73): a dead cast with no channel to grant dual cadence (mirrors
+    // needsRegen's no-dead-cast UX, but reads the channel state).
+    if (card.needsChannel && !this.channelActive()) return 'no active channel';
     return null;
   }
 
@@ -2936,6 +2981,21 @@ export class Game {
         this.enemy.fermentGrowth = growth;
         this._log(`${m.name} Ferments the enemy's Poison — it compounds (+${growth}/turn, duration frozen) for the next ${this.enemy.fermentTurns} enemy turns.`, 'status');
         this._emit({ kind: 'ferment', slot: m.slot, turns: this.enemy.fermentTurns, growth });
+        break;
+      }
+      case 'liturgy': {
+        // The Hierophant (#73) gives the active channel DUAL CADENCE: for its remaining
+        // duration it also ticks at the start of the enemy phase (see _runEnemyPhase),
+        // before the blow lands. canPlay's needsChannel gate guarantees a channel is
+        // running, and Liturgy is channel-exempt so playing it never broke that channel.
+        // Idempotent: recasting while already dual-cadenced just re-affirms the flag.
+        if (this.channelActive()) {
+          const already = this.channelDualCadence;
+          this.channelDualCadence = true;
+          this._log(already
+            ? `${m.name}'s Liturgy already sustains the ${CARDS[this.channelCard as CardId].name} channel's dual cadence.`
+            : `${m.name} intones a Liturgy — the ${CARDS[this.channelCard as CardId].name} channel gains dual cadence (an extra enemy-phase tick each round).`, 'status');
+        }
         break;
       }
       default:
