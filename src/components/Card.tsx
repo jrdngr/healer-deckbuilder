@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { MODIFIERS } from '../constants';
 import type { CardId, ResolvedCard } from '../constants';
 
@@ -58,6 +58,13 @@ interface CardProps {
   ineligible?: boolean;
   selected: boolean;
   onClick: () => void;
+  // Begin a potential drag from this card (drag-and-drop targeting). The battle
+  // screen decides on pointer-move whether it becomes a drag or falls through to a
+  // normal click, so this only starts the gesture.
+  onPointerDown?: (e: ReactPointerEvent) => void;
+  // This card is the source of an in-progress drag — dim it in place while its
+  // ghost follows the cursor.
+  dragging?: boolean;
   // Stable deck-card identity, exposed as data-uid so the battle screen can
   // measure this card's box when it is played (the fly-to-target ghost).
   uid?: number;
@@ -65,11 +72,11 @@ interface CardProps {
   style?: CSSProperties;
 }
 
-export function Card({ card, affordable, ineligible = false, selected, onClick, uid, style }: CardProps) {
+export function Card({ card, affordable, ineligible = false, selected, onClick, onPointerDown, dragging = false, uid, style }: CardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const disabled = !affordable || ineligible;
   const cls = ['card', `family-${CARD_FAMILY[card.id]}`,
-    !affordable && 'unaffordable', ineligible && 'ineligible', selected && 'selected']
+    !affordable && 'unaffordable', ineligible && 'ineligible', selected && 'selected', dragging && 'dragging']
     .filter(Boolean).join(' ');
 
   // A click that can't do anything still answers: the card shakes its head.
@@ -96,6 +103,7 @@ export function Card({ card, affordable, ineligible = false, selected, onClick, 
       tabIndex={disabled ? -1 : 0}
       aria-disabled={disabled || undefined}
       aria-pressed={selected || undefined}
+      onPointerDown={onPointerDown}
       onClick={handleClick}
       onKeyDown={(e) => {
         if (disabled) return;

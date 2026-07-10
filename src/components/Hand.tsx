@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { resolveCard } from '../constants';
 import type { ResolvedCard } from '../constants';
 import type { Game } from '../engine';
@@ -12,6 +12,10 @@ interface HandProps {
   selectedIndex: number | null;
   selectedCard: ResolvedCard | null;
   onCardClick: (handIndex: number) => void;
+  // Begin a drag from a hand card (drag-to-target). uid of the card currently being
+  // dragged is dimmed in place while its ghost follows the cursor.
+  onCardPointerDown: (handIndex: number, e: ReactPointerEvent) => void;
+  draggingUid: number | null;
 }
 
 function promptFor(card: ResolvedCard, game: Game): string {
@@ -29,7 +33,7 @@ function promptFor(card: ResolvedCard, game: Game): string {
   return `Select ${kind} for ${card.name} — or Cancel`;
 }
 
-export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick }: HandProps) {
+export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid }: HandProps) {
   const over = game.status !== 'playing';
   // In-fight deck viewer (#24): click a pile to see its contents (grouped and
   // name-sorted — the draw pile's order is never leaked).
@@ -62,6 +66,8 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick 
                 ineligible={ineligible}
                 selected={selectedIndex === i}
                 onClick={() => onCardClick(i)}
+                onPointerDown={(e) => onCardPointerDown(i, e)}
+                dragging={draggingUid === dc.uid}
                 // Fan geometry + draw-stagger inputs; uid-keying means only
                 // genuinely new cards mount and play the deal-in animation.
                 style={{ '--i': i, '--n': game.hand.length } as CSSProperties}

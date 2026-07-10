@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { resolveCard } from '../constants';
 import type { Slot, ResolvedCard } from '../constants';
 import type { Game } from '../engine';
@@ -8,6 +9,7 @@ import { EnemyPanel } from './EnemyPanel';
 import { Party } from './Party';
 import { ManaBar } from './ManaBar';
 import { Hand } from './Hand';
+import { Card } from './Card';
 import { Actions } from './Actions';
 import { CombatLog } from './CombatLog';
 import { GameOverlay } from './GameOverlay';
@@ -18,6 +20,22 @@ interface Selected {
   handIndex: number;
   card: ResolvedCard;
 }
+
+// The floating card ghost that follows the pointer during a drag. x/y are its
+// viewport top-left; w/h size the ghost to match the source card.
+interface DragView {
+  handIndex: number;
+  card: ResolvedCard;
+  uid: number;
+  board: boolean; // no-target card — plays wherever it's released
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// How far the pointer must travel before a press becomes a drag rather than a click.
+const DRAG_THRESHOLD = 6;
 
 interface BattleScreenProps {
   game: Game;
@@ -40,6 +58,10 @@ export function BattleScreen({
   game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn, onWinFx, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
+  const [dragView, setDragView] = useState<DragView | null>(null);
+  // After a drag ends we swallow the click the browser fires on the source card, so
+  // a drag never doubles as a select.
+  const suppressClickRef = useRef(false);
   // The result overlay waits until the win burst has played (#59): false while the
   // fight is live or the gold coins are still flying, true once it's time to show
   // Victory/Defeat. A ref keeps the burst firing exactly once per fight.
@@ -50,7 +72,7 @@ export function BattleScreen({
   const mainRef = useRef<HTMLElement>(null);
 
   // A fresh Game instance (newGame) means any pending targeting is stale.
-  useEffect(() => { setSelected(null); }, [game]);
+  useEffect(() => { setSelected(null); setDragView(null); }, [game]);
 
   // A fresh fight re-arms the result gate.
   useEffect(() => { resultFired.current = false; setResultReady(false); }, [game]);
@@ -72,11 +94,11 @@ export function BattleScreen({
   }, [animating, game.status, game]);
 
   // Cancel any pending targeting once a sequence starts playing.
-  useEffect(() => { if (animating) setSelected(null); }, [animating]);
+  useEffect(() => { if (animating) { setSelected(null); setDragView(null); } }, [animating]);
 
   // Escape cancels targeting.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelected(null); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelected(null); setDragView(null); } };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
@@ -93,11 +115,17 @@ export function BattleScreen({
     return () => clearTimeout(t);
   }, [shakeTick]);
 
-  const isValidTarget = (slot: Slot): boolean =>
-    !animating && !!selected && game.canPlay(selected.handIndex, slot) === null;
+  // The card whose targeting is currently live — the one being dragged, else the
+  // click-selected one. Its legal drops (dropTargets, not raw canPlay, so ability
+  // cards only accept their own carrier) drive both the hero highlights and the
+  // target validation shared by the click and drag paths.
+  const activeIndex = dragView ? dragView.handIndex : selected?.handIndex ?? null;
+  const dropSpec = activeIndex != null && !animating ? game.dropTargets(activeIndex) : null;
 
-  // Measure the clicked card's on-screen box (container-relative) BEFORE the
-  // engine removes it from the hand, so its ghost can fly out of that spot.
+  const isValidTarget = (slot: Slot): boolean => !!dropSpec && dropSpec.slots.includes(slot);
+
+  // Measure a hand card's on-screen box (container-relative) BEFORE the engine
+  // removes it from the hand, so its ghost can fly out of that spot.
   const cardOrigin = (handIndex: number): CardOrigin | undefined => {
     const main = mainRef.current;
     const uid = game.hand[handIndex]?.uid;
@@ -109,6 +137,9 @@ export function BattleScreen({
   };
 
   const onCardClick = (handIndex: number) => {
+    // A just-finished drag also emits a click on the source card — swallow it so a
+    // drag never doubles as a select.
+    if (suppressClickRef.current) { suppressClickRef.current = false; return; }
     if (animating || game.status !== 'playing' || game.phase !== 'player') return;
     const card = resolveCard(game.hand[handIndex]);
     if (game.mp < game.effectiveCost(card)) return; // unaffordable
@@ -128,17 +159,86 @@ export function BattleScreen({
 
   const onMemberClick = (slot: Slot) => {
     if (animating || !selected) return;
-    if (game.canPlay(selected.handIndex, slot) !== null) return; // invalid target; ignore
+    if (game.dropTargets(selected.handIndex).slots.includes(slot) === false) return; // invalid target
     const origin = cardOrigin(selected.handIndex);
     setSelected(null);
     playCard(selected.handIndex, slot, origin);
   };
 
+  // Resolve where a drag was released. A no-target ('board') card plays wherever it
+  // lands on the board (but not back on the hand); a hero-targeted card plays only on
+  // a valid hero — anything else (off-board, wrong/invalid hero, an ability card on
+  // the wrong carrier) cancels.
+  const resolveDrop = (handIndex: number, spec: { slots: number[]; board: boolean }, clientX: number, clientY: number) => {
+    const main = mainRef.current;
+    const el = document.elementFromPoint(clientX, clientY);
+    if (!main || !el || !main.contains(el)) return; // released off the board -> cancel
+    if (el.closest('.hand-wrap')) return;           // released back on the hand -> cancel
+    if (spec.board) { playCard(handIndex, null, cardOrigin(handIndex)); return; }
+    const memberEl = el.closest('.member');
+    if (!memberEl) return;                           // not over a hero -> cancel
+    const party = main.querySelector('.party');
+    const slot = party ? Array.prototype.indexOf.call(party.children, memberEl) : -1;
+    if (slot >= 0 && spec.slots.includes(slot)) playCard(handIndex, slot, cardOrigin(handIndex));
+    // else: a hero that doesn't accept this card (incl. an ability card's wrong carrier) -> cancel
+  };
+
+  // Begin a drag gesture from a hand card. The listeners live for the life of the
+  // gesture only, capturing this render's game/handlers; a press that never crosses
+  // the threshold falls through to the normal click (select-then-target).
+  const onCardPointerDown = (handIndex: number, e: ReactPointerEvent) => {
+    if (e.button !== 0) return; // primary button only
+    if (animating || game.status !== 'playing' || game.phase !== 'player') return;
+    const dc = game.hand[handIndex];
+    if (!dc) return;
+    const spec = game.dropTargets(handIndex);
+    if (spec.slots.length === 0 && !spec.board) return; // nothing legal to drag onto
+    const card = resolveCard(dc);
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const offsetX = e.clientX - r.left;
+    const offsetY = e.clientY - r.top;
+    const w = r.width;
+    const h = r.height;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const pointerId = e.pointerId;
+    let active = false;
+    suppressClickRef.current = false;
+
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      if (!active) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return;
+        active = true;
+        setSelected({ handIndex, card }); // lights up valid hero slots via isValidTarget
+      }
+      setDragView({ handIndex, card, uid: dc.uid, board: spec.board, x: ev.clientX - offsetX, y: ev.clientY - offsetY, w, h });
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      if (!active) return; // never became a drag -> let the click fire normally
+      suppressClickRef.current = true;
+      setDragView(null);
+      setSelected(null);
+      if (ev.type !== 'pointercancel') resolveDrop(handIndex, spec, ev.clientX, ev.clientY);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
   const onEndTurn = () => { setSelected(null); endTurn(); };
   const onSkip = () => { setSelected(null); skipTurn(); };
 
+  // While a drag is live, cue the board: hero-targeted cards light their valid heroes
+  // (isValidTarget); a no-target 'board' card arms the whole board instead.
+  const mainCls = dragView ? (dragView.board ? 'dragging drag-board' : 'dragging') : undefined;
+
   return (
-    <main ref={mainRef}>
+    <main ref={mainRef} className={mainCls}>
       <EnemyPanel game={game} displayHp={view.enemyHp} />
       <Party
         game={game}
@@ -155,6 +255,8 @@ export function BattleScreen({
         selectedIndex={selected?.handIndex ?? null}
         selectedCard={selected?.card ?? null}
         onCardClick={onCardClick}
+        onCardPointerDown={onCardPointerDown}
+        draggingUid={dragView?.uid ?? null}
       />
       <Actions
         game={game}
@@ -170,6 +272,16 @@ export function BattleScreen({
       <FxLayer fx={fx} containerRef={mainRef} />
       {/* Result card drops in only after the flourish AND the win gold burst (#59). */}
       {resultReady && <GameOverlay game={game} onContinue={onBattleEnd} />}
+      {/* The card ghost that follows the pointer during a drag. pointer-events:none
+          (in CSS) keeps it out of elementFromPoint so drops hit the target under it. */}
+      {dragView && (
+        <div
+          className="card-drag-ghost"
+          style={{ left: dragView.x, top: dragView.y, width: dragView.w, height: dragView.h }}
+        >
+          <Card card={dragView.card} affordable selected onClick={() => {}} />
+        </div>
+      )}
     </main>
   );
 }

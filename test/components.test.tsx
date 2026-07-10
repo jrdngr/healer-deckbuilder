@@ -234,7 +234,7 @@ async function render(el: React.ReactElement): Promise<string> {
   const game = new Game(12, cfg).start(); // slot 0 seats dead+incapacitated, 1/2 alive
   const resurrect = resolveCard(makeDeckCard('resurrect', -1));
   const text = await render(
-    <Hand game={game} disabled={false} selectedIndex={null} selectedCard={resurrect} onCardClick={() => {}} />,
+    <Hand game={game} disabled={false} selectedIndex={null} selectedCard={resurrect} onCardClick={() => {}} onCardPointerDown={() => {}} draggingUid={null} />,
   );
   check('Resurrect prompt explains the incapacitated cannot be reached', text.includes("can't reach the Incapacitated"), text);
   check('Resurrect prompt points at the Infirmary', text.includes('Infirmary'), text);
