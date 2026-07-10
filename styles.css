@@ -26,6 +26,10 @@ body {
   background: var(--bg);
   color: var(--ink);
   line-height: 1.4;
+  /* This is a game UI — text selection is never wanted and dragging a card would
+     otherwise start a text selection. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .topbar {
