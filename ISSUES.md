@@ -61,7 +61,9 @@ through this list and, for each note:
 3. **Add its row** to the [Issues table](#issues-implementation-order) below.
 4. **Remove the note** from this Intake list once it has become an issue.
 
-- 
+- With seed 216002962, I got a blank node after the first fight. I should never get blank nodes.
+- Channeling needs to have UI feedback. I should always know when I'm channeling and what the effect is
+- Healer upgrades should be offered after boss fights as a choice rather than at nodes
 
 ## Issues (implementation order)
 

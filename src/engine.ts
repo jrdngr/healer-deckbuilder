@@ -2116,6 +2116,34 @@ export class Game {
     return null;
   }
 
+  // Where a hand card may legally be dropped, for the drag-and-drop UI. `slots` is
+  // the set of member slots that accept the card (single/dead cards, and ability
+  // cards — which bind to exactly their carrier); `board` marks a no-target card
+  // (AoE 'all' / non-ability 'none') that plays wherever it is released. An
+  // unplayable card (wrong phase / unaffordable / carrier down) yields no slots and
+  // board:false. canPlay ignores `target` for ability cards, so the ability→carrier
+  // restriction lives HERE — that is what makes a drop on the wrong hero cancel.
+  dropTargets(handIndex: number): { slots: number[]; board: boolean } {
+    const dc = this.hand[handIndex];
+    if (dc == null) return { slots: [], board: false };
+    const card = resolveCard(dc);
+    // A non-'single' ability card auto-fires on its carrier; the only legal drop is
+    // that member (any other hero falls outside `slots` and cancels).
+    if (card.ability != null && card.target !== 'single') {
+      const m = this._abilityMember(card.ability);
+      if (m && this.canPlay(handIndex, null) === null) return { slots: [m.slot], board: false };
+      return { slots: [], board: false };
+    }
+    if (card.target === 'single' || card.target === 'dead') {
+      const slots = this.members
+        .filter((m) => this.canPlay(handIndex, m.slot) === null)
+        .map((m) => m.slot);
+      return { slots, board: false };
+    }
+    // 'all' / non-ability 'none': plays with no target, anywhere on the board.
+    return { slots: [], board: this.canPlay(handIndex, null) === null };
+  }
+
   // target: a slot index for single/ability/dead cards; ignored otherwise.
   playCard(handIndex: number, target: number | null = null): PlayResult {
     const reason = this.canPlay(handIndex, target);

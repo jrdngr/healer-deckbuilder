@@ -5516,5 +5516,76 @@ function lightkeeperGame(seed: number, relics: RelicId[] = []): Game {
   check('Radiance is unplayable while the Lightkeeper is down', !res.ok);
 }
 
+// --- drag-and-drop: dropTargets (legal drop slots per card) ----------------
+// A default-trio game with full MP; the drag UI reads dropTargets to decide which
+// heroes/board accept a dragged card and to cancel a drop on the wrong target.
+function dndGame(seed: number): Game {
+  const g = new Game(seed); g.start();
+  g.mp = 40; g.maxMana = 40;
+  g.members.forEach((m) => { m.hp = m.maxHP; m.alive = true; });
+  return g;
+}
+{
+  // A single-target heal accepts every living hero, and is not a board card.
+  const g = dndGame(1);
+  const spec = g.dropTargets(giveCard(g, 'highHeal'));
+  eq('heal accepts 3 living heroes', spec.slots.length, 3);
+  check('heal is not a board card', !spec.board);
+}
+{
+  // Resurrect (target 'dead') accepts ONLY the dead hero; living heroes are excluded.
+  const g = dndGame(2);
+  const down = g.members[SLOT.CENTER];
+  down.alive = false; down.hp = 0;
+  const spec = g.dropTargets(giveCard(g, 'resurrect'));
+  eq('Resurrect targets exactly the dead hero', spec.slots.join(','), String(SLOT.CENTER));
+  check('Resurrect does not accept a living hero', !spec.slots.includes(SLOT.LEFT));
+}
+{
+  // Ability card binds to its carrier only — a drop on any other hero must cancel.
+  // Default trio: LEFT=Imbue Venom, CENTER=Bolster, RIGHT=Unleash.
+  const g = dndGame(3);
+  const spec = g.dropTargets(giveAbility(g, SLOT.LEFT)); // imbuePoison -> the LEFT member
+  eq('ability card accepts exactly its carrier', spec.slots.join(','), String(SLOT.LEFT));
+  check('ability card rejects the wrong hero (center)', !spec.slots.includes(SLOT.CENTER));
+  check('ability card rejects the wrong hero (right)', !spec.slots.includes(SLOT.RIGHT));
+  check('ability card is not a board card', !spec.board);
+}
+{
+  // A downed carrier makes its ability card accept nothing (and no board drop).
+  const g = dndGame(4);
+  g.members[SLOT.LEFT].alive = false; g.members[SLOT.LEFT].hp = 0;
+  const spec = g.dropTargets(giveAbility(g, SLOT.LEFT));
+  eq('ability card with a downed carrier accepts no hero', spec.slots.length, 0);
+  check('ability card with a downed carrier is not a board card', !spec.board);
+}
+{
+  // En Garde is the one single-target ability card: it picks a member like any
+  // single-target card, so it accepts every living hero.
+  const g = duelistGame(5);
+  const spec = g.dropTargets(giveCard(g, 'enGarde'));
+  eq('En Garde accepts every living hero', spec.slots.length, 3);
+  check('En Garde is not a board card', !spec.board);
+}
+{
+  // No-target cards (AoE 'all' and non-ability 'none') are board cards: no member
+  // slots, plays wherever released.
+  const g = dndGame(6);
+  const aoe = g.dropTargets(giveCard(g, 'aoeHeal'));
+  check('AoE heal is a board card', aoe.board);
+  eq('AoE heal has no member slots', aoe.slots.length, 0);
+  const bolt = g.dropTargets(giveCard(g, 'shadowBolt'));
+  check('Shadow Bolt (offensive, no target) is a board card', bolt.board);
+}
+{
+  // Unaffordable cards accept nothing — the drag has nowhere legal to land.
+  const g = dndGame(7);
+  g.mp = 0;
+  const heal = g.dropTargets(giveCard(g, 'highHeal'));
+  eq('unaffordable heal accepts no hero', heal.slots.length, 0);
+  const aoe = g.dropTargets(giveCard(g, 'aoeHeal'));
+  check('unaffordable AoE is not a board card', !aoe.board);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
