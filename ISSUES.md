@@ -61,7 +61,9 @@ through this list and, for each note:
 3. **Add its row** to the [Issues table](#issues-implementation-order) below.
 4. **Remove the note** from this Intake list once it has become an issue.
 
-_(no notes pending)_
+- When I buff members with +1 ATK, the "+1 ATK" popup should show over each member that's affected. This is true for all other buffs and debuffs as well.
+- Starting decks should have a reasonable number of healing cards in them. Let's redesign them a bit. Ask me which healing cards to add and ask me about each existing card and whether or not we should keep it in the deck. We'll figure out a good deck size once we've repopulated each deck, and then we'll adjust the decks based on the chosen size. I want to choose the cards first though.
+- Healer upgrades should no longer happen in nodes. Instead, after each boss the player can select one healer upgrade from a list of three. The upgrade option values should be adjusted so that they're each approximately equal in strength
 
 ## Issues (implementation order)
 
