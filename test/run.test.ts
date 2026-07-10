@@ -253,6 +253,79 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('an openable recruit stop survives untouched', nodes[0].type === 'recruit' && nodes[1].type === 'event');
 }
 
+// --- #77: fork availability is resolved for EVERY branch at fork-entry ----------
+{
+  // Repro (intake 2026-07-10, seed 216002962): after the first fight the roster is a
+  // single ranger at full HP, and fork 0 branch 0 rolled [cardShop, infirmary]. The
+  // Infirmary is hidden (nobody hurt), which used to leave that branch showing a
+  // single stop and an empty slot. Drive the real flow to the first fork and assert
+  // every branch of fork 0 now exposes exactly NODES_PER_BRANCH enterable stops.
+  const run = new Run(216002962);
+  run.beginDraft();
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]); // 'ranger'
+  run.confirmDeployment(run.deployment);
+  run.winFight();
+  run.skipCardReward(); // -> _enterForkChoice(0)
+  check('the repro run reaches the fork', run.location.kind === 'forkChoice');
+  check('the repro roster is a single full-HP hero (nobody needs the Infirmary)',
+    run.roster.length === 1 && !run.anyoneNeedsInfirmary());
+  let allShow = true, allDistinct = true;
+  for (const branch of run.map[0].branches) {
+    const avail = branch.nodes.filter((n) => run.nodeAvailable(n.type));
+    if (avail.length !== NODES_PER_BRANCH) allShow = false;
+    if (new Set(branch.nodes.map((n) => n.type)).size !== branch.nodes.length) allDistinct = false;
+  }
+  check('seed 216002962: every fork-0 branch shows NODES_PER_BRANCH enterable stops', allShow);
+  check('seed 216002962: rerolled branches stay distinct within the branch', allDistinct);
+}
+{
+  // Worst case: a branch rolled [infirmary, recruit] with a healthy, full roster —
+  // BOTH types unavailable, which used to render a fully blank branch. After the
+  // fork is reached both slots are rerolled into enterable, distinct types.
+  const run = new Run(32);
+  startRun(run);
+  run.winFight();               // -> cardReward
+  run.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'recruit' }];
+  run.roster = partyFromMembers(DRAFT_POOL); // full roster, all full-HP: both stops closed
+  run.skipCardReward();         // -> _enterForkChoice(0) resolves all branches up front
+  const nodes = run.map[0].branches[0].nodes;
+  check('worst-case: the infirmary slot is rerolled away', nodes[0].type !== 'infirmary');
+  check('worst-case: the recruit slot is rerolled away', nodes[1].type !== 'recruit');
+  check('worst-case: both slots are now enterable', nodes.every((n) => run.nodeAvailable(n.type)));
+  check('worst-case: the two rerolled stops are distinct', nodes[0].type !== nodes[1].type);
+}
+{
+  // State-dependence: resolution runs against the LIVE state at fork-entry. A hurt
+  // party keeps its Infirmary, and a non-full roster keeps its Recruit — neither is
+  // rerolled away.
+  const run = new Run(32);
+  startRun(run);
+  run.winFight();
+  run.map[0].branches[0].nodes = [{ type: 'infirmary' }, { type: 'recruit' }];
+  run.roster = partyFromMembers(['ranger', 'tank']); // room to recruit
+  run.roster[0].hp = 1;                               // someone is hurt
+  run.skipCardReward();
+  const nodes = run.map[0].branches[0].nodes;
+  check('state-dependence: a hurt party keeps its Infirmary', nodes[0].type === 'infirmary');
+  check('state-dependence: a non-full roster keeps its Recruit', nodes[1].type === 'recruit');
+}
+{
+  // Idempotence: the up-front pass resolves once. chooseBranch on the resolved fork
+  // changes nothing and draws no further rng (already-available nodes consume none).
+  const run = new Run(216002962);
+  run.beginDraft();
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+  run.confirmDeployment(run.deployment);
+  run.winFight();
+  run.skipCardReward(); // -> forkChoice, all branches resolved
+  const before = run.map[0].branches.map((b) => b.nodes.map((n) => n.type).join(','));
+  const rngBefore = run.rng.getState();
+  run.chooseBranch(0);
+  const after = run.map[0].branches.map((b) => b.nodes.map((n) => n.type).join(','));
+  check('idempotence: chooseBranch does not change the resolved node types', before.join('|') === after.join('|'));
+  check('idempotence: chooseBranch draws no extra rng after the entry pass', run.rng.getState() === rngBefore);
+}
+
 // --- end-of-fight gold burst: the bounty preview matches what winFight banks ----
 {
   const run = new Run(70);
@@ -1601,7 +1674,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   run.winFight([2, run.roster[1].maxHP, run.roster[2].maxHP]);
   const carried = run.roster[0].hp;
   const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
-  eq('save version is 14', run.toJSON().version, 14);
+  eq('save version is 15', run.toJSON().version, 15);
   eq('resumed run keeps each member current HP', resumed.roster[0].hp, carried);
   // An old snapshot without hp reconciles to full (maxHP), not undefined.
   const legacy = run.toJSON();

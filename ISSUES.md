@@ -67,5 +67,4 @@ _(no notes pending)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 77 | 📋 Open | [No blank map nodes](issues/77-no-blank-map-nodes.md) | map/run | — | intake 2026-07-10 (blank node, seed 216002962) |
 | 78 | 📋 Open | [Channeling UI feedback](issues/78-channel-ui-feedback.md) | ui (battle) | #64 | intake 2026-07-10 (channel feedback) |

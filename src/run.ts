@@ -99,7 +99,12 @@ export type NodeContent =
 // v14: preset starter decks (#63) — the run records the chosen preset (starterDeck)
 // and a 'starterDeck' picker location sits between 'start' and the first draft. Old
 // saves lack the field (they default to Preserver) and predate the picker location.
-export const RUN_SAVE_VERSION = 14;
+// v15: fork availability resolved at fork-entry (#77) — unavailable node types are
+// rerolled into enterable ones the moment a fork is reached (_enterForkChoice), so no
+// branch ever shows a blank/missing stop. A save created before this fix that sits AT
+// a forkChoice holds unresolved (hidden) nodes and is past the new resolution point,
+// so stale mid-fork saves are discarded rather than resumed with a blank slot.
+export const RUN_SAVE_VERSION = 15;
 
 export interface RunSnapshot {
   version: number;
@@ -663,6 +668,20 @@ export class Run {
       this.nodeContent = { type: 'spoils', offers: this.rollSpoils(fi) };
       return;
     }
+    this._enterForkChoice(fi);
+  }
+
+  // Enter a fork (from a won fight's card reward, or an act boss's spoils). Sets the
+  // location AND resolves availability for EVERY branch up front (#77): unavailable
+  // node types (a Recruit on a full roster, an Infirmary with nobody hurt) are
+  // rerolled into enterable types *now*, against the live roster/HP/injury state, so
+  // the map preview and the branch hub never show a blank/missing stop. Resolution
+  // must run here — not at map generation — because availability is time-dependent
+  // (it would evaluate against the start-of-run state, which is wrong by fork-reach).
+  // The reroll writes into this.map, so resolved types are stable for the visit and
+  // survive save/resume. chooseBranch's per-branch resolve then becomes a no-op.
+  _enterForkChoice(fi: number): void {
+    for (let b = 0; b < BRANCHES_PER_FORK; b++) this._resolveBranchAvailability(fi, b);
     this.location = { kind: 'forkChoice', forkIndex: fi };
     this.nodeContent = null;
   }
@@ -685,8 +704,7 @@ export class Run {
   // Recruit node, and the map guarantees a recruiter fork after each boss.
   _leaveSpoils(): void {
     if (this.location.kind !== 'spoils') return;
-    this.location = { kind: 'forkChoice', forkIndex: this.location.fightIndex };
-    this.nodeContent = null;
+    this._enterForkChoice(this.location.fightIndex);
   }
 
   // Take the spoils offer at `index` (free), then move on.

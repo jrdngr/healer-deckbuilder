@@ -343,7 +343,13 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   //     the wins vector rises at the walls: F2 181->186, F3 175->180, F4 171->178, F5 159->171,
   //     F6 152->166, F7 152->164, F8 142->156 (F0/F1 unchanged — act-1 solo/duo HP untouched
   //     except Gatewarden). All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 186, 180, 178, 171, 166, 164, 156]));
+  //   • #77 (no blank map nodes): fork availability now resolves for EVERY branch at
+  //     fork-entry (_enterForkChoice), where previously only the chosen branch resolved in
+  //     chooseBranch. Rerolling the other branch's unavailable stops draws extra rng, so the
+  //     map stream shifts from fork 0 onward — pure stream perturbation, no HP/policy change.
+  //     F0/F1 unchanged (199/197), F2 186->182, F3 180->178, F4 178->175, F5 171->165, F6
+  //     166->160, F7 164->159, F8 156->153. All band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 182, 178, 175, 165, 160, 159, 153]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

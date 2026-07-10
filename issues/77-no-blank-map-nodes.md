@@ -1,6 +1,6 @@
 # Issue 77 — No blank map nodes (resolve availability when the fork is reached)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** map/run   **Size:** S
 - **Depends on:** none   **Blocks:** none
 - **Addresses:** intake 2026-07-10 — "With seed 216002962, I got a blank node after the first
