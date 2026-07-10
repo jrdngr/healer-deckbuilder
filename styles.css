@@ -67,6 +67,23 @@ section.enemy {
 .cast-track { height: 6px; background: #2a1414; border: 1px solid #6a2a2a; border-radius: 4px; overflow: hidden; margin-top: 3px; }
 .cast-fill { height: 100%; background: linear-gradient(90deg, #c04040, #f07050); transition: width .3s ease; }
 @keyframes pulse { 50% { opacity: .55; } }
+
+/* ---- Player channel banner (#78) ----------------------------------------
+   Persistent feedback for a player-cast channel, mounted between the mana bar
+   and the hand. Mirrors the enemy cast-bar language (.cast-bar) but tinted
+   arcane-blue so it reads as YOUR sustained effect, not the enemy's wind-up. */
+.channel-banner {
+  margin: 8px 0; padding: 8px 12px; border: 1px solid #4a5aa0; border-radius: 8px;
+  background: linear-gradient(90deg, rgba(40,52,110,.45), rgba(30,38,80,.25));
+  display: flex; flex-direction: column; gap: 4px;
+  animation: pulse 1.8s infinite;
+}
+.channel-banner .channel-label { color: #a9c0f0; }
+.channel-banner .channel-target { color: #d6e2ff; }
+.channel-effect { font-size: 12px; color: #c7d2e8; }
+.channel-banner .cast-track { background: #17203a; border-color: #3a4a80; }
+.channel-banner .channel-fill { background: linear-gradient(90deg, #4060c0, #70a0f0); }
+.channel-warn { font-size: 11px; color: #f0b866; font-weight: 600; }
 .enemy-status { margin-top: 8px; font-size: 13px; color: var(--gold); min-height: 18px; }
 
 .bar { position: relative; height: 22px; background: #11141a; overflow: hidden; border: 1px solid #000; }
@@ -350,6 +367,24 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
    elementFromPoint reads the drop target beneath it, never the ghost. */
 .hand .card.dragging { opacity: .3; transform: translateY(-4px); }
 .hand .card.dragging:hover { transform: translateY(-4px); }
+
+/* ---- Channeling card highlight (#78) -------------------------------------
+   Any in-hand copy of the id currently channeling glows arcane-blue and wears a
+   "channeling · N left" badge, so the source of the running channel is obvious. */
+.card.channeling {
+  border-color: #70a0f0;
+  box-shadow: 0 4px 10px rgba(0,0,0,.4), 0 0 0 1px #4a5aa0, 0 0 14px rgba(96,140,240,.55);
+  animation: channel-glow 1.8s ease-in-out infinite;
+}
+@keyframes channel-glow {
+  50% { box-shadow: 0 4px 10px rgba(0,0,0,.4), 0 0 0 1px #6a7ad0, 0 0 22px rgba(112,160,240,.85); }
+}
+.channel-badge {
+  position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; font-weight: 700; white-space: nowrap;
+  color: #dce8ff; background: linear-gradient(90deg, #3a52b0, #4a68c8);
+  border: 1px solid #7090e0; border-radius: 9px; padding: 1px 7px; z-index: 4;
+}
 .card-drag-ghost {
   position: fixed; z-index: 60; pointer-events: none;
   filter: drop-shadow(0 10px 18px rgba(0,0,0,.55));

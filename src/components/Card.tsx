@@ -65,6 +65,9 @@ interface CardProps {
   // This card is the source of an in-progress drag — dim it in place while its
   // ghost follows the cursor.
   dragging?: boolean;
+  // A player-cast channel of this card's id is currently running (#78): glow the
+  // card and show a "channeling · N left" badge. N is the ticks remaining.
+  channelingTurns?: number | null;
   // Stable deck-card identity, exposed as data-uid so the battle screen can
   // measure this card's box when it is played (the fly-to-target ghost).
   uid?: number;
@@ -72,11 +75,13 @@ interface CardProps {
   style?: CSSProperties;
 }
 
-export function Card({ card, affordable, ineligible = false, selected, onClick, onPointerDown, dragging = false, uid, style }: CardProps) {
+export function Card({ card, affordable, ineligible = false, selected, onClick, onPointerDown, dragging = false, channelingTurns = null, uid, style }: CardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const disabled = !affordable || ineligible;
+  const channeling = channelingTurns != null;
   const cls = ['card', `family-${CARD_FAMILY[card.id]}`,
-    !affordable && 'unaffordable', ineligible && 'ineligible', selected && 'selected', dragging && 'dragging']
+    !affordable && 'unaffordable', ineligible && 'ineligible', selected && 'selected', dragging && 'dragging',
+    channeling && 'channeling']
     .filter(Boolean).join(' ');
 
   // A click that can't do anything still answers: the card shakes its head.
@@ -110,6 +115,11 @@ export function Card({ card, affordable, ineligible = false, selected, onClick, 
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
       }}
     >
+      {channeling && (
+        <div className="channel-badge" title="This card's channel is active — playing any card cancels it.">
+          ⚡ channeling · {channelingTurns} left
+        </div>
+      )}
       <div className="cost">{card.cost}</div>
       {card.heal != null && <div className="heal" title="Healing">{card.heal}</div>}
       <div className="cname">{card.name}</div>

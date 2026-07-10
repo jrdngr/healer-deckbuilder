@@ -1,6 +1,6 @@
 # Issue 78 — Channeling UI feedback (banner + card highlight)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** ui (battle)   **Size:** S
 - **Depends on:** #64 (channeled cards — engine state + events already exist)   **Blocks:** none
 - **Addresses:** intake 2026-07-10 — "Channeling needs to have UI feedback. I should always know

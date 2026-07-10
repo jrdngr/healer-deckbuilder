@@ -1,5 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
+import { channelEffectLine } from '../src/channelView';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
@@ -5585,6 +5586,20 @@ function dndGame(seed: number): Game {
   eq('unaffordable heal accepts no hero', heal.slots.length, 0);
   const aoe = g.dropTargets(giveCard(g, 'aoeHeal'));
   check('unaffordable AoE is not a board card', !aoe.board);
+}
+
+{
+  // Channel banner effect-line derivation (#78): a pure helper that strips the
+  // "Channel:" prefix and the trailing cancel/lifetime sentence from a channel
+  // card's desc, leaving just the per-tick effect for the banner to show.
+  eq('Drain effect line drops the Channel: prefix and cancel warning',
+    channelEffectLine('drain'),
+    `each turn deal ${DRAIN_DMG} to the enemy and, if it dealt damage, return ${DRAIN_MP_MIN}-${DRAIN_MP_MAX} MP (up to ${DRAIN_MAX_TURNS} turns)`);
+  eq('Mending Stream effect line drops the "Ends if they die..." tail',
+    channelEffectLine('mendingStream'),
+    `heal a member for ${MENDING_STREAM_HEAL} each turn (up to ${MENDING_STREAM_MAX_TURNS} turns)`);
+  check('Fortify effect line has no leading "Channel:"', !channelEffectLine('fortify').startsWith('Channel'));
+  check('Fortify effect line drops the play-a-card warning', !/play a card/i.test(channelEffectLine('fortify')));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -35,6 +35,9 @@ function promptFor(card: ResolvedCard, game: Game): string {
 
 export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid }: HandProps) {
   const over = game.status !== 'playing';
+  // A player-cast channel (#64, #78) is tracked per card id in the engine, so any
+  // in-hand copy of the channeling card gets the glow + "channeling · N left" badge.
+  const channelingId = game.channelActive() ? game.channelCard : null;
   // In-fight deck viewer (#24): click a pile to see its contents (grouped and
   // name-sorted — the draw pile's order is never leaked).
   const [viewing, setViewing] = useState<'draw' | 'discard' | null>(null);
@@ -68,6 +71,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick,
                 onClick={() => onCardClick(i)}
                 onPointerDown={(e) => onCardPointerDown(i, e)}
                 dragging={draggingUid === dc.uid}
+                channelingTurns={channelingId != null && dc.id === channelingId ? game.channelTurns : null}
                 // Fan geometry + draw-stagger inputs; uid-keying means only
                 // genuinely new cards mount and play the deal-in animation.
                 style={{ '--i': i, '--n': game.hand.length } as CSSProperties}

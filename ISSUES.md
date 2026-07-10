@@ -67,4 +67,3 @@ _(no notes pending)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 78 | 📋 Open | [Channeling UI feedback](issues/78-channel-ui-feedback.md) | ui (battle) | #64 | intake 2026-07-10 (channel feedback) |

@@ -8,6 +8,7 @@ import type { CardOrigin, FxInstance } from '../animations';
 import { EnemyPanel } from './EnemyPanel';
 import { Party } from './Party';
 import { ManaBar } from './ManaBar';
+import { ChannelBanner } from './ChannelBanner';
 import { Hand } from './Hand';
 import { Card } from './Card';
 import { Actions } from './Actions';
@@ -249,6 +250,9 @@ export function BattleScreen({
         onMemberClick={onMemberClick}
       />
       <ManaBar game={game} animating={animating} />
+      {/* Persistent channel feedback (#78): banner sits between the mana bar and the
+          hand while a player-cast channel runs; clears when it ends/cancels. */}
+      <ChannelBanner game={game} />
       <Hand
         game={game}
         disabled={animating}
