@@ -61,11 +61,14 @@ through this list and, for each note:
 3. **Add its row** to the [Issues table](#issues-implementation-order) below.
 4. **Remove the note** from this Intake list once it has become an issue.
 
-- When I buff members with +1 ATK, the "+1 ATK" popup should show over each member that's affected. This is true for all other buffs and debuffs as well.
-- Starting decks should have a reasonable number of healing cards in them. Let's redesign them a bit. Ask me which healing cards to add and ask me about each existing card and whether or not we should keep it in the deck. We'll figure out a good deck size once we've repopulated each deck, and then we'll adjust the decks based on the chosen size. I want to choose the cards first though.
-- Healer upgrades should no longer happen in nodes. Instead, after each boss the player can select one healer upgrade from a list of three. The upgrade option values should be adjusted so that they're each approximately equal in strength
+_(empty — all current notes written up as issues #79–#83 on 2026-07-11.)_
 
 ## Issues (implementation order)
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
+| 79 | 📋 Open | [Floating +ATK popups for every buff/debuff](issues/79-buff-debuff-floats.md) | post-demo | — | intake 2026-07-11 |
+| 80 | 📋 Open | [Small UI tweaks batch (button/topbar/banner theme)](issues/80-ui-tweaks-batch.md) | post-demo | — | intake 2026-07-11 |
+| 81 | 📋 Open | [Strip explanatory text across the UI](issues/81-strip-explanatory-text.md) | post-demo | — | intake 2026-07-11 |
+| 82 | 📋 Open | [Heal-forward preset decks, unified to size 6](issues/82-preset-deck-heal-redesign.md) | rules | — | intake 2026-07-11 |
+| 83 | 📋 Open | [Post-boss healer boon (remove Sanctum node)](issues/83-post-boss-healer-boon.md) | run structure | — | intake 2026-07-11 |
