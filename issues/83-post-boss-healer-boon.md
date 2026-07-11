@@ -1,6 +1,6 @@
 # Issue 83 — Post-boss healer boon (remove the Sanctum node)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** run structure   **Size:** M
 - **Depends on:** —   **Blocks:** —   **Note:** bumps the save version
 - **Addresses:** intake 2026-07-11 — "Healer upgrades should no longer happen in nodes. After each

@@ -3,7 +3,6 @@ import type { RunAct } from '../useRun';
 import { CardShopScreen } from './CardShopScreen';
 import { CardUpgradeShopScreen } from './CardUpgradeShopScreen';
 import { PartyUpgradeShopScreen } from './PartyUpgradeShopScreen';
-import { HealerUpgradeShopScreen } from './HealerUpgradeShopScreen';
 import { EventScreen } from './EventScreen';
 import { ReliquaryScreen } from './ReliquaryScreen';
 import { RecruitScreen } from './RecruitScreen';
@@ -27,8 +26,6 @@ export function NodeScreen({ run, act, onDone }: NodeScreenProps) {
       return <CardUpgradeShopScreen run={run} act={act} onDone={onDone} />;
     case 'partyUpgrade':
       return <PartyUpgradeShopScreen run={run} act={act} onDone={onDone} />;
-    case 'healerUpgrade':
-      return <HealerUpgradeShopScreen run={run} act={act} onDone={onDone} />;
     case 'event':
       return <EventScreen run={run} act={act} onDone={onDone} />;
     case 'recruit':

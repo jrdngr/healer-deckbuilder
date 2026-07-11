@@ -302,7 +302,7 @@ import { Run } from '../src/run';
 import type { RunStatus } from '../src/run';
 import { FIGHT_COUNT, isActBoss, actOfFight } from '../src/constants';
 import type { MemberId } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, advanceBranch, draftPick, deployBest } from './policy';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, chooseHealerBoon, advanceBranch, draftPick, deployBest } from './policy';
 import { STICK, type SkillProfile } from './profile';
 
 // Options that steer a whole run for the balance-tier / party-size matrix. All default to
@@ -366,6 +366,7 @@ export function runSingleRun(seed: number, setup?: (run: Run) => void, opts: Run
       }
       case 'cardReward': { const ci = chooseCardReward(run, profile); if (ci >= 0) run.pickCardReward(ci); else run.skipCardReward(); break; } // #57
       case 'spoils': run.pickSpoil(chooseSpoil(run, profile)); break;
+      case 'healerBoon': run.pickHealerBoon(chooseHealerBoon(run)); break; // #83
       case 'forkChoice': run.chooseBranch(chooseBranch(run)); break;
       case 'branch': advanceBranch(run); break;
       case 'node': {

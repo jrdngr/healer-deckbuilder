@@ -58,6 +58,7 @@ export type RunLocation =
   | { kind: 'fight'; fightIndex: number }
   | { kind: 'cardReward'; fightIndex: number } // free card pick after every won fight (#57)
   | { kind: 'spoils'; fightIndex: number } // relic pick after an act-1/2 boss (#21)
+  | { kind: 'healerBoon'; fightIndex: number } // free healer-upgrade pick after an act-1/2 boss (#83)
   | { kind: 'forkChoice'; forkIndex: number }
   | { kind: 'branch'; forkIndex: number; branch: number } // the hub on a chosen branch: pick a stop, or move on
   | { kind: 'node'; forkIndex: number; branch: number; index: number; nodeType: NodeType };
@@ -70,9 +71,9 @@ export type NodeContent =
   | { type: 'cardReward'; offers: CardOffer[] } // free pick of 1 after a won fight (#57)
   | { type: 'cardUpgrade'; offers: ModifierOffer[] }
   | { type: 'partyUpgrade'; offers: PartyUpgradeOffer[] }
-  | { type: 'healerUpgrade'; offers: HealerUpgradeOffer[] }
   | { type: 'event'; event: EventDef; done: boolean } // done: resolved once — revisits find it spent
   | { type: 'spoils'; offers: RelicOffer[] }                          // free pick of 1 (#21)
+  | { type: 'healerBoon'; offers: HealerUpgradeOffer[] }              // free healer-upgrade pick, all four (#83)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
   | { type: 'draft'; options: MemberId[] }                            // pick-one member draft (2026-07)
   | { type: 'recruit'; options: MemberId[]; done: boolean }           // Recruit node: add one member, once
@@ -104,7 +105,12 @@ export type NodeContent =
 // branch ever shows a blank/missing stop. A save created before this fix that sits AT
 // a forkChoice holds unresolved (hidden) nodes and is past the new resolution point,
 // so stale mid-fork saves are discarded rather than resumed with a blank slot.
-export const RUN_SAVE_VERSION = 15;
+// v16: post-boss healer boon (#83) — the Sanctum / healerUpgrade map node is gone and
+// healer upgrades are now a free post-boss pick. A new 'healerBoon' location +
+// {type:'healerBoon'} node content sit between boss spoils and the fork, and old saves
+// can hold a 'healerUpgrade' node/location or a map with a Sanctum stop, so they are
+// discarded rather than resumed against a node type that no longer exists.
+export const RUN_SAVE_VERSION = 16;
 
 export interface RunSnapshot {
   version: number;
@@ -461,6 +467,7 @@ export class Run {
       case 'draft': return 0;
       case 'cardReward': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'spoils': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
+      case 'healerBoon': return Math.min(location.fightIndex + 1, FIGHT_COUNT - 1);
       case 'forkChoice': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'branch': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
       case 'node': return Math.min(location.forkIndex + 1, FIGHT_COUNT - 1);
@@ -699,12 +706,13 @@ export class Run {
   // Skip the card reward empty-handed (allowed, mirroring spoils) and move on.
   skipCardReward(): void { this._leaveCardReward(); }
 
-  // Leave the spoils screen (with or without a pick) straight on to the fork. The
-  // post-boss member draft was removed with #56 — recruitment now lives solely in the
-  // Recruit node, and the map guarantees a recruiter fork after each boss.
+  // Leave the spoils screen (with or without a pick) on to the post-boss healer boon
+  // (#83), which then leads to the fork. The post-boss member draft was removed with
+  // #56 — recruitment now lives solely in the Recruit node, and the map guarantees a
+  // recruiter fork after each boss.
   _leaveSpoils(): void {
     if (this.location.kind !== 'spoils') return;
-    this._enterForkChoice(this.location.fightIndex);
+    this._enterHealerBoon(this.location.fightIndex);
   }
 
   // Take the spoils offer at `index` (free), then move on.
@@ -718,6 +726,45 @@ export class Run {
   }
 
   skipSpoils(): void { this._leaveSpoils(); }
+
+  // ---- post-boss healer boon (#83) -----------------------------------------
+  // A FREE pick of one of all four HEALER_UPGRADES after a boss, replacing the
+  // removed gold-bought Sanctum node. Fires after boss spoils (spoils → healerBoon
+  // → fork). Picks are REPEATABLE/STACKABLE across bosses: the offers are never
+  // removed and re-picking stacks the stat (respecting caps like PASSIVE_MP_CAP via
+  // applyHealerUpgrade).
+  // DECISION (#83 open decision): the act-3 boss ends the run in winFight, so it
+  // never reaches the reward chain — the boon therefore fires after bosses 1 & 2
+  // only (2 effective picks), mirroring how spoils fires after "fights 3/6". There
+  // is deliberately NO post-final-boss boon.
+  _enterHealerBoon(fi: number): void {
+    this.location = { kind: 'healerBoon', fightIndex: fi };
+    this.nodeContent = { type: 'healerBoon', offers: this.rollHealerBoon() };
+  }
+
+  // All four healer upgrades, free (price 0) and not rerolled/removed across bosses,
+  // so the same four are offered each time and re-picking stacks the stat.
+  rollHealerBoon(): HealerUpgradeOffer[] {
+    return HEALER_UPGRADES.map((def): HealerUpgradeOffer => ({ def, price: 0 }));
+  }
+
+  // Leave the boon (with or without a pick) on to the fork.
+  _leaveHealerBoon(): void {
+    if (this.location.kind !== 'healerBoon') return;
+    this._enterForkChoice(this.location.fightIndex);
+  }
+
+  // Take the boon at `index` (free), apply it (stacks, honoring caps), and move on.
+  pickHealerBoon(index: number): HealerUpgradeDef | null {
+    if (this.location.kind !== 'healerBoon' || this.nodeContent?.type !== 'healerBoon') return null;
+    const offer = this.nodeContent.offers[index];
+    if (!offer) return null;
+    this.applyHealerUpgrade(offer.def);
+    this._leaveHealerBoon();
+    return offer.def;
+  }
+
+  skipHealerBoon(): void { this._leaveHealerBoon(); }
 
   loseFight(): void {
     this.status = 'lost';
@@ -862,7 +909,6 @@ export class Run {
       case 'cardShop': return { type: 'cardShop', offers: this.rollCardShop() };
       case 'cardUpgrade': return { type: 'cardUpgrade', offers: this.rollCardUpgradeShop() };
       case 'partyUpgrade': return { type: 'partyUpgrade', offers: this.rollPartyShop() };
-      case 'healerUpgrade': return { type: 'healerUpgrade', offers: this.rollHealerShop() };
       case 'event': return { type: 'event', event: this.rollEvent(), done: false };
       case 'recruit': return { type: 'recruit', options: this._rollMemberOffer(this.availableMembers(), RECRUIT_OFFER_SIZE), done: false };
       case 'infirmary': return { type: 'infirmary' };
@@ -918,14 +964,6 @@ export class Run {
       SHOP_SIZE.partyUpgrade,
     );
     return defs.map((def): PartyUpgradeOffer => ({ def, price: this.discountedPrice(def.price ?? RARITY_PRICE[def.rarity]) }));
-  }
-
-  rollHealerShop(): HealerUpgradeOffer[] {
-    const defs = this._pickDistinct(
-      HEALER_UPGRADES.map((d): [HealerUpgradeDef, number] => [d, RARITY_WEIGHT[d.rarity]]),
-      SHOP_SIZE.healerUpgrade,
-    );
-    return defs.map((def): HealerUpgradeOffer => ({ def, price: this.discountedPrice(def.price ?? RARITY_PRICE[def.rarity]) }));
   }
 
   rollEvent(): EventDef {
@@ -1125,19 +1163,6 @@ export class Run {
     if (!offer || this.gold < offer.price) return false;
     this.gold -= offer.price;
     this.applyPartyUpgrade(slot, offer.def);
-    this.nodeContent.offers.splice(index, 1);
-    return true;
-  }
-
-  // Buy the healer-upgrade offer at `index`.
-  buyHealerOffer(index: number): boolean {
-    if (this.nodeContent?.type !== 'healerUpgrade') return false;
-    const offer = this.nodeContent.offers[index];
-    if (!offer || this.gold < offer.price) return false;
-    // passiveMp is capped per run; a maxed-out offer is unbuyable (no wasted gold).
-    if (offer.def.stat === 'passiveMp' && this.healer.passiveMp >= PASSIVE_MP_CAP) return false;
-    this.gold -= offer.price;
-    this.applyHealerUpgrade(offer.def);
     this.nodeContent.offers.splice(index, 1);
     return true;
   }

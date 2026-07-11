@@ -264,7 +264,7 @@ async function render(el: React.ReactElement): Promise<string> {
   // Pin the fork so the node count doesn't depend on the seed's roll (an
   // Infirmary node hides from an unscarred party — asserted separately below).
   mapRun.map[0].branches[0].nodes = [{ type: 'cardShop' }, { type: 'event' }];
-  mapRun.map[0].branches[1].nodes = [{ type: 'partyUpgrade' }, { type: 'healerUpgrade' }];
+  mapRun.map[0].branches[1].nodes = [{ type: 'partyUpgrade' }, { type: 'cardUpgrade' }];
   let chosen: number | null = null;
   await render(<MapScreen run={mapRun} onChoose={(b) => { chosen = b; }} />);
   check('map draws both trails', rootEl.querySelectorAll('.map-path').length === 2);

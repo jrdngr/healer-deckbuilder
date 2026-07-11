@@ -17,7 +17,7 @@ import {
   resolveCard, SLOT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
   DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
-  INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, SAP_VULN_CAP,
+  INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, SAP_VULN_CAP, PASSIVE_MP_CAP,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
 import type { SkillProfile } from './profile';
@@ -672,16 +672,20 @@ function shopCardNode(run: Run, profile: SkillProfile = STICK): void {
   }
 }
 
-function shopHealerNode(run: Run): void {
-  if (run.nodeContent?.type !== 'healerUpgrade') return;
+// The free post-boss healer boon (#83): pick the most valuable of the four offered
+// upgrades. passiveMp already at its per-run cap is worthless (applyHealerUpgrade
+// would clamp it away), so skip it and take the next-best stat. Returns the offer
+// index for run.pickHealerBoon; always picks (the boon is free).
+export function chooseHealerBoon(run: Run): number {
+  if (run.nodeContent?.type !== 'healerBoon') return 0;
   const offers = run.nodeContent.offers;
-  let best = -1, bestVal = -1;
+  let best = 0, bestVal = -1;
   offers.forEach((o, i) => {
-    if (o.price > run.gold) return;
+    if (o.def.stat === 'passiveMp' && run.healer.passiveMp >= PASSIVE_MP_CAP) return;
     const v = HEALER_STAT_VALUE[o.def.stat] ?? 0;
     if (v > bestVal) { bestVal = v; best = i; }
   });
-  if (best >= 0) run.buyHealerOffer(best);
+  return best;
 }
 
 function shopPartyNode(run: Run): void {
@@ -949,7 +953,6 @@ function infirmaryNode(run: Run): void {
 export function resolveNode(run: Run, profile: SkillProfile = STICK): void {
   switch (run.nodeContent?.type) {
     case 'cardShop': shopCardNode(run, profile); break;
-    case 'healerUpgrade': shopHealerNode(run); break;
     case 'partyUpgrade': shopPartyNode(run); break;
     case 'cardUpgrade': shopModifierNode(run); break;
     case 'event': resolveEvent(run); break;

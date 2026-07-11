@@ -349,7 +349,14 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   //     map stream shifts from fork 0 onward — pure stream perturbation, no HP/policy change.
   //     F0/F1 unchanged (199/197), F2 186->182, F3 180->178, F4 178->175, F5 171->165, F6
   //     166->160, F7 164->159, F8 156->153. All band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 197, 182, 178, 175, 165, 160, 159, 153]));
+  //   • #83 (post-boss healer boon): the Sanctum / healerUpgrade map node was removed (its
+  //     NODE_TYPE_WEIGHTS entry dropped and its 15 weight redistributed), so map generation
+  //     reshuffles from fork 0; healer upgrades are now a FREE post-boss boon (2 picks) instead
+  //     of gold-bought, and +1 Max Mana was retuned to +2. Mixed stream + resource perturbation,
+  //     no HP/policy change: F0/F1 ~unchanged (199/198), F2 178->182, F3 178->179, F4 175->173,
+  //     F5 165->164, F6 160->164, F7 159->162, F8 153->153. All band/CI/boss gates below still
+  //     hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 198, 182, 179, 173, 164, 164, 162, 153]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

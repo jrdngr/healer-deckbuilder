@@ -58,6 +58,8 @@ const crossBranch = (run: Run, branch = 0): void => {
   // helper reaches the fork regardless of what the win produced.
   if (run.location.kind === 'cardReward') run.skipCardReward();
   if (run.location.kind === 'spoils') run.skipSpoils();
+  // Act bosses also drop a free healer boon after spoils (#83), before the fork.
+  if (run.location.kind === 'healerBoon') run.skipHealerBoon();
   run.chooseBranch(branch);
   for (let i = 0; i < NODES_PER_BRANCH; i++) { run.enterNode(i); run.completeNode(); }
   run.startNextFight();
@@ -396,7 +398,10 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
       if (isActBoss(f)) {
         check(`win of boss fight ${f} -> spoils`, run.location.kind === 'spoils');
         run.skipSpoils();
-        check(`boss ${f} spoils -> forkChoice (no post-boss draft, #56)`, run.location.kind === 'forkChoice');
+        // Spoils now flows into the free healer boon (#83), then the fork.
+        check(`boss ${f} spoils -> healerBoon (#83)`, run.location.kind === 'healerBoon');
+        run.skipHealerBoon();
+        check(`boss ${f} boon -> forkChoice`, run.location.kind === 'forkChoice');
       }
       check(`win of fight ${f} -> forkChoice`, run.location.kind === 'forkChoice');
       crossBranch(run, run.rng() < 0.5 ? 0 : 1);
@@ -606,15 +611,78 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('party gold deducted', run.gold, 1000 - RARITY_PRICE.common);
 }
 
-// --- healer upgrade shop ----------------------------------------------------
+// --- #83: post-boss healer boon (free, repeatable, replaces the Sanctum node) ----
 {
+  // The Sanctum / healerUpgrade node is gone: it never appears on the map, and no
+  // gold-buy path survives.
+  check('healerUpgrade absent from NODE_TYPE_WEIGHTS', NODE_TYPE_WEIGHTS.every(([t]) => (t as string) !== 'healerUpgrade'));
+  check('healerUpgrade absent from NON_FIGHT_NODES', NON_FIGHT_NODES.every((t) => (t as string) !== 'healerUpgrade'));
+  check('no gold-buy healer path remains', !('rollHealerShop' in (Run.prototype as object)) && !('buyHealerOffer' in (Run.prototype as object)));
+  check('SHOP_SIZE has no healerUpgrade entry', !('healerUpgrade' in SHOP_SIZE));
+  // NODE_TYPE_WEIGHTS still totals the same weight (the removed 15 was redistributed).
+  eq('node-type weights still total 140', NODE_TYPE_WEIGHTS.reduce((a, [, w]) => a + w, 0), 140);
+}
+{
+  // After an act-1 boss, the reward chain reaches a healerBoon offering all four
+  // upgrades; picking one applies its stat for free and lands on the fork.
   const run = new Run(10);
-  run.gold = 1000;
-  const def = { id: 'mana', stat: 'maxMana' as const, amount: 1, rarity: 'common' as const, name: '+1 Max Mana', desc: '' };
-  run.nodeContent = { type: 'healerUpgrade', offers: [{ def, price: RARITY_PRICE.common }] };
+  startRun(run);
+  // Fast-forward to the act-1 boss (fight 2).
+  run.winFight(); run.skipCardReward(); crossBranch(run, 0); // fight 0 -> fork -> fight 1
+  run.winFight(); run.skipCardReward(); crossBranch(run, 0); // fight 1 -> fork -> fight 2 (boss)
+  check('standing at the act-1 boss', run.location.kind === 'fight' && run.fightIndex === 2 && run.isBossFight);
+  run.winFight();
+  check('boss win -> cardReward', run.location.kind === 'cardReward');
+  run.skipCardReward();
+  check('cardReward -> spoils', run.location.kind === 'spoils');
+  run.skipSpoils();
+  check('spoils -> healerBoon (#83)', run.location.kind === 'healerBoon');
+  check('boon offers all four upgrades', run.nodeContent?.type === 'healerBoon' && run.nodeContent.offers.length === HEALER_UPGRADES.length);
+  check('boon offers are free', run.nodeContent?.type === 'healerBoon' && run.nodeContent.offers.every((o) => o.price === 0));
+  const handIdx = (run.nodeContent as { offers: { def: { stat: string } }[] }).offers.findIndex((o) => o.def.stat === 'handSize');
+  const before = run.healer.handSize;
+  run.pickHealerBoon(handIdx);
+  eq('picking the hand boon raises hand size for free', run.healer.handSize, before + 1);
+  check('picking the boon lands on the fork', run.location.kind === 'forkChoice');
+}
+{
+  // Skipping the boon proceeds straight to the fork with the stat untouched.
+  const run = new Run(11);
+  run.location = { kind: 'healerBoon', fightIndex: 2 } as RunLocation;
+  run.nodeContent = { type: 'healerBoon', offers: run.rollHealerBoon() };
   const before = run.healer.maxMana;
-  check('buy healer offer succeeds', run.buyHealerOffer(0));
-  eq('maxMana raised', run.healer.maxMana, before + 1);
+  run.skipHealerBoon();
+  eq('skipping the boon leaves stats untouched', run.healer.maxMana, before);
+  check('skipping the boon proceeds to the fork', run.location.kind === 'forkChoice');
+}
+{
+  // Repeatable/stackable across bosses: re-picking the same boon stacks the stat,
+  // and passiveMp still honors PASSIVE_MP_CAP.
+  const run = new Run(12);
+  const enter = () => { run.location = { kind: 'healerBoon', fightIndex: 2 }; run.nodeContent = { type: 'healerBoon', offers: run.rollHealerBoon() }; };
+  const idxOf = (stat: string) => (run.nodeContent as { offers: { def: { stat: string } }[] }).offers.findIndex((o) => o.def.stat === stat);
+  const manaAmt = HEALER_UPGRADES.find((d) => d.stat === 'maxMana')!.amount;
+  const base = run.healer.maxMana;
+  enter(); run.pickHealerBoon(idxOf('maxMana'));
+  enter(); run.pickHealerBoon(idxOf('maxMana'));
+  eq('two mana picks stack', run.healer.maxMana, base + 2 * manaAmt);
+  // passiveMp: pick it three times; the stat clamps at the per-run cap.
+  enter(); run.pickHealerBoon(idxOf('passiveMp'));
+  enter(); run.pickHealerBoon(idxOf('passiveMp'));
+  enter(); run.pickHealerBoon(idxOf('passiveMp'));
+  eq('repeated passive picks clamp at PASSIVE_MP_CAP', run.healer.passiveMp, PASSIVE_MP_CAP);
+}
+{
+  // Save/resume round-trips the healerBoon location + content.
+  const run = new Run(13);
+  run.location = { kind: 'healerBoon', fightIndex: 5 };
+  run.nodeContent = { type: 'healerBoon', offers: run.rollHealerBoon() };
+  const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
+  check('resumed location is the healerBoon', resumed.location.kind === 'healerBoon' && (resumed.location as { fightIndex: number }).fightIndex === 5);
+  check('resumed content is the healerBoon offers', resumed.nodeContent?.type === 'healerBoon' && resumed.nodeContent.offers.length === HEALER_UPGRADES.length);
+  const before = resumed.healer.restRegen;
+  resumed.pickHealerBoon((resumed.nodeContent as { offers: { def: { stat: string } }[] }).offers.findIndex((o) => o.def.stat === 'restRegen'));
+  eq('resumed boon still applies its stat', resumed.healer.restRegen, before + 1);
 }
 
 // --- events -----------------------------------------------------------------
@@ -906,7 +974,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     check('spoils are free', offers.every((o) => o.price === 0));
     const picked = run.pickSpoil(0);
     check('the pick lands in the relic list', picked !== null && run.hasRelic(picked));
-    eq('spoils -> forkChoice (no post-boss draft, #56)', run.location.kind, 'forkChoice');
+    eq('spoils -> healerBoon (#83)', run.location.kind, 'healerBoon');
+    run.skipHealerBoon();
+    eq('healerBoon -> forkChoice', run.location.kind, 'forkChoice');
     check('the battle config carries the relics', run.toBattleConfig().relics!.includes(picked!));
   }
   // The fight-3 spoils roll guarantees >=1 rare, across seeds.
@@ -1537,7 +1607,9 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('an act boss drops spoils first', run.location.kind, 'spoils');
   const before = run.roster.length;
   run.skipSpoils();
-  eq('leaving spoils goes straight to the fork (no draft)', run.location.kind, 'forkChoice');
+  eq('leaving spoils goes to the healer boon (#83)', run.location.kind, 'healerBoon');
+  run.skipHealerBoon();
+  eq('leaving the boon goes straight to the fork (no draft)', run.location.kind, 'forkChoice');
   eq('winning a boss no longer auto-adds a member', run.roster.length, before);
   // A recruiter fork is guaranteed after each boss (fork 2 here), so the roster can
   // still grow — just through the Recruit node, not an auto-draft.
@@ -1674,7 +1746,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   run.winFight([2, run.roster[1].maxHP, run.roster[2].maxHP]);
   const carried = run.roster[0].hp;
   const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
-  eq('save version is 15', run.toJSON().version, 15);
+  eq('save version is current', run.toJSON().version, RUN_SAVE_VERSION);
   eq('resumed run keeps each member current HP', resumed.roster[0].hp, carried);
   // An old snapshot without hp reconciles to full (maxHP), not undefined.
   const legacy = run.toJSON();

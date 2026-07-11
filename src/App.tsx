@@ -19,6 +19,7 @@ import { NODE_META } from './components/nodeMeta';
 import { NodeScreen } from './components/NodeScreen';
 import { CardRewardScreen } from './components/CardRewardScreen';
 import { SpoilsScreen } from './components/SpoilsScreen';
+import { HealerBoonScreen } from './components/HealerBoonScreen';
 import { RunOverScreen } from './components/RunOverScreen';
 import { DevPanel } from './components/DevPanel';
 
@@ -40,6 +41,7 @@ function progressLabel(run: Run): string {
   if (loc.kind === 'forkChoice') return 'Choose a path';
   if (loc.kind === 'cardReward') return 'Claim a card';
   if (loc.kind === 'spoils') return 'Spoils of victory';
+  if (loc.kind === 'healerBoon') return 'A healer’s boon';
   if (loc.kind === 'branch') return 'Along the trail';
   return NODE_META[loc.nodeType].label;
 }
@@ -176,6 +178,8 @@ export function App() {
     screen = <CardRewardScreen run={run} act={act} />;
   } else if (run.location.kind === 'spoils') {
     screen = <SpoilsScreen run={run} act={act} />;
+  } else if (run.location.kind === 'healerBoon') {
+    screen = <HealerBoonScreen run={run} act={act} />;
   } else if (run.location.kind === 'forkChoice') {
     screen = <MapScreen run={run} onChoose={(b) => act((r) => r.chooseBranch(b))} />;
   } else if (run.location.kind === 'branch') {

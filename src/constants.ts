@@ -1686,25 +1686,29 @@ export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
 // ---------------------------------------------------------------------------
 
 export type NodeType =
-  | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event' | 'healerUpgrade'
+  | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event'
   | 'recruit'   // add a member to the roster (2026-07) — a weighted node; hidden when the roster is full
   | 'infirmary' // heal HP / shed a scar for gold (#58) — hidden when nobody is hurt or injured
   | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
 // The non-fight node types that fill the branches between fights. The Infirmary is
 // back (#58): HP persists across fights now, so a paid HP/scar top-up is a real
-// attrition-economy stop again (it hides at runtime when the party is healthy).
+// attrition-economy stop again (it hides at runtime when the party is healthy). The
+// Sanctum / healerUpgrade node was removed (#83) — healer upgrades are now a free
+// post-boss boon (see run.ts _enterHealerBoon), not a gold-bought map node.
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'healerUpgrade', 'recruit', 'infirmary', 'reliquary',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'recruit', 'infirmary', 'reliquary',
 ];
 
 // Weights for placing non-fight node types on the map. The Recruit node (2026-07)
 // grows the roster past the pick-one drafts; it is a real roll (you must find one)
 // and is hidden once the roster already holds every member. The Infirmary (#58) is
-// the paid HP/scar top-up; it too hides at runtime when the party is healthy.
+// the paid HP/scar top-up; it too hides at runtime when the party is healthy. The
+// old healerUpgrade weight (15) was removed with the Sanctum node (#83) and
+// redistributed across the surviving types (total stays 140).
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
-  ['cardShop', 25], ['cardUpgrade', 20], ['partyUpgrade', 20], ['event', 20], ['healerUpgrade', 15],
-  ['recruit', 20], ['infirmary', 20],
+  ['cardShop', 28], ['cardUpgrade', 23], ['partyUpgrade', 22], ['event', 22],
+  ['recruit', 22], ['infirmary', 23],
 ];
 
 // A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks
@@ -1816,7 +1820,7 @@ export const ENEMY_ENRAGE_TURN_BY_FIGHT: number[] = [
 ];
 
 // Storefront sizes per shop type.
-export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4, healerUpgrade: 3 } as const;
+export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4 } as const;
 
 // Rarity of each existing card (new cards are a separate design task).
 export const CARD_RARITY: Record<CardId, Rarity> = {
@@ -1910,13 +1914,18 @@ export interface HealerUpgradeDef {
   desc: string;
   price?: number; // overrides the rarity price when an offer needs a bespoke cost
 }
+// #83: these are now a FREE, repeatable post-boss boon (run.ts _enterHealerBoon),
+// not a gold-bought Sanctum node — so the bespoke prices are gone and the four are
+// retuned toward roughly EQUAL value as free picks. +1 to hand/passive/rest is a
+// big swing; a single +1 max mana is the weakest of the four, so mana is bumped to
+// +2 to sit alongside them. passiveMp stays capped per run (PASSIVE_MP_CAP), so a
+// second pick of it is absorbed by the cap — the other three keep stacking. rarity
+// no longer drives a price (the boon is free); it is retained only as a display tag.
+// Exact equalized magnitudes land against the sim/balance harness in a follow-up.
 export const HEALER_UPGRADES: HealerUpgradeDef[] = [
-  { id: 'mana', stat: 'maxMana', amount: 1, rarity: 'common', name: '+1 Max Mana', desc: 'Raise max mana (and starting mana) by 1.' },
-  // +1 Rest Regen repriced to 50g (flaw #9): it was too cheap for the sustain it buys.
+  { id: 'mana', stat: 'maxMana', amount: 2, rarity: 'uncommon', name: '+2 Max Mana', desc: 'Raise max mana (and starting mana) by 2.' },
   { id: 'rest', stat: 'restRegen', amount: 1, rarity: 'uncommon', name: '+1 Rest Regen', desc: 'Rest restores 1 more MP.' },
-  // Priced at double its rarity cost (rare 75 → 150): passive MP is the strongest
-  // sustain lever, so it should be a real gold commitment.
-  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', price: 150, name: '+1 Passive MP', desc: `Gain 1 MP at the start of each of your turns (max +${PASSIVE_MP_CAP} per run).` },
+  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', name: '+1 Passive MP', desc: `Gain 1 MP at the start of each of your turns (max +${PASSIVE_MP_CAP} per run).` },
   { id: 'hand', stat: 'handSize', amount: 1, rarity: 'rare', name: '+1 Hand Size', desc: 'Draw 1 more card each turn.' },
 ];
 

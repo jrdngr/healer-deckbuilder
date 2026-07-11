@@ -67,4 +67,3 @@ _(empty — all current notes written up as issues #79–#83 on 2026-07-11.)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 83 | 📋 Open | [Post-boss healer boon (remove Sanctum node)](issues/83-post-boss-healer-boon.md) | run structure | — | intake 2026-07-11 |
