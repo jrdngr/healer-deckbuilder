@@ -1061,7 +1061,7 @@ main.drag-board .enemy, main.drag-board .party {
 .map-node.type-cardUpgrade  { border-left: 4px solid var(--gold); }
 .map-node.type-reliquary    { border-left: 4px solid var(--gold); }
 .map-node.type-event        { border-left: 4px solid var(--unknown); }
-.map-node.type-healerUpgrade{ border-left: 4px solid var(--hp); }
+.map-node.type-recruit      { border-left: 4px solid var(--accent); }
 .map-node.type-infirmary    { border-left: 4px solid var(--hp); }
 .map-node.type-partyUpgrade { border-left: 4px solid var(--defense); }
 /* Per-type idle life on the icons — small and slow, a flicker of identity. */
@@ -1070,7 +1070,7 @@ main.drag-board .enemy, main.drag-board .party {
 .map-node.type-cardUpgrade .map-node-icon,
 .map-node.type-reliquary .map-node-icon { animation: icon-glint 3.4s ease-in-out infinite; }
 .map-node.type-event .map-node-icon { animation: icon-flicker 3s ease-in-out infinite; }
-.map-node.type-healerUpgrade .map-node-icon,
+.map-node.type-recruit .map-node-icon,
 .map-node.type-infirmary .map-node-icon { animation: icon-breathe 3.2s ease-in-out infinite; }
 @keyframes icon-pulse   { 50% { transform: scale(1.14); } }
 @keyframes icon-glint   { 6%, 12% { filter: brightness(1.9); } 9% { filter: brightness(1.2); } }
@@ -1103,15 +1103,8 @@ main.drag-board .enemy, main.drag-board .party {
   display: flex; flex-direction: column; gap: 12px;
 }
 
-/* ---- Node + run-over cards ----------------------------------------------- */
-.node-screen, .runover-screen { display: grid; place-items: center; min-height: 50vh; }
-.node-card {
-  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 14px;
-  padding: 28px 36px; text-align: center; max-width: 460px;
-}
-.node-icon { font-size: 40px; display: block; margin-bottom: 6px; }
-.node-card p { color: var(--muted); }
-.node-placeholder { font-style: italic; opacity: .7; }
+/* ---- Run-over card ------------------------------------------------------- */
+.runover-screen { display: grid; place-items: center; min-height: 50vh; }
 .runover-stats { color: var(--gold) !important; font-weight: 700; }
 
 /* ---- Shops --------------------------------------------------------------- */
@@ -1163,14 +1156,6 @@ main.drag-board .enemy, main.drag-board .party {
 .leave-btn { justify-self: start; width: max-content; }
 
 /* ---- Draft (#27 skeleton) ------------------------------------------------ */
-.draft-slots { display: flex; gap: 12px; margin: 14px 0; }
-.draft-slot {
-  flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: center;
-  background: var(--panel); border: var(--bw) dashed var(--faint); border-radius: 10px; padding: 12px 14px;
-}
-.draft-slot.filled { border-style: solid; border-color: var(--accent); }
-.draft-slot-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.draft-slot-name { font-weight: 700; }
 .draft-offers { margin-top: 4px; }
 .draft-member {
   width: 200px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
@@ -1183,11 +1168,7 @@ main.drag-board .enemy, main.drag-board .party {
 .draft-member-name { font-weight: 700; }
 .draft-member-stats { font-size: 11px; color: var(--muted); }
 .draft-member-ability { font-size: 11px; color: var(--accent); }
-.draft-actions { display: flex; gap: 12px; margin-top: 18px; }
 .draft-weights { font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
-.draft-pairs { display: flex; flex-direction: column; gap: 14px; }
-.draft-pair { border-top: 1px solid var(--track); padding-top: 10px; }
-.draft-pair-label { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
 
 /* ---- Deploy (pre-fight member selection, 2026-07) ------------------------ */
 .deploy-slots { display: flex; gap: 12px; margin: 14px 0; }
@@ -1295,26 +1276,25 @@ button.pile { font: inherit; color: inherit; cursor: pointer; }
 }
 .deck-view-list li { font-size: 14px; line-height: 1.55; break-inside: avoid; }
 .upgrade-names { font-size: 11px; opacity: .85; margin-left: 4px; }
-.next-fight { font-size: 15px; }
 .runover-score { font-size: 14px; opacity: .95; }
 
 /* ---- Theme polish: uniform sticker depth + chunky borders on the standalone
    panels across the app (map/shop/draft/deploy/event/reliquary/dev), so every
    screen reads in the cream/ink language, not just the battle board. ---------- */
-.map-node, .map-branch, .node-card, .event-card, .event-choice, .mod-offer,
-.member-pick, .draft-member, .draft-slot, .deploy-slot, .relic-tile, .pile-viewer,
+.map-node, .map-branch, .event-card, .event-choice, .mod-offer,
+.member-pick, .draft-member, .deploy-slot, .relic-tile, .pile-viewer,
 .map-next-fight, .map-take {
   box-shadow: var(--shadow-card);
   border-width: var(--bw);
 }
-.map-node, .node-card, .event-card, .event-choice, .mod-offer, .member-pick,
-.draft-member, .draft-slot, .deploy-slot, .relic-tile, .pile-viewer {
+.map-node, .event-card, .event-choice, .mod-offer, .member-pick,
+.draft-member, .deploy-slot, .relic-tile, .pile-viewer {
   border-radius: var(--r-md);
 }
 /* Map node icon chip: family-tinted rounded tile (guide §4 map recipe). */
 .map-node-icon { border-radius: var(--r-sm); }
 /* Standalone screen titles pick up the display face. */
-.shop-head h2, .event-card h2, .map-title, .node-card h2 { font-family: var(--f-disp); font-weight: 800; }
+.shop-head h2, .event-card h2, .map-title { font-family: var(--f-disp); font-weight: 800; }
 /* Relic chips in the topbar sit on a pill so the emoji read on cream. */
 .relic-badge {
   display: inline-flex; align-items: center; justify-content: center;

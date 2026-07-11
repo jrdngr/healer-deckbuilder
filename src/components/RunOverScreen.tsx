@@ -1,4 +1,5 @@
 import type { Run } from '../run';
+import { FIGHT_COUNT } from '../constants';
 
 interface RunOverScreenProps {
   run: Run;
@@ -18,7 +19,7 @@ export function RunOverScreen({ run, onNewRun }: RunOverScreenProps) {
             : 'The party fell before the boss. The run ends here.'}
         </p>
         <p className="runover-stats">
-          Fights won: {run.fightsWon} / 9 · Relics: {run.relics.length} · Deck: {run.deck.length} cards · Gold left: {run.gold}
+          Fights won: {run.fightsWon} / {FIGHT_COUNT} · Relics: {run.relics.length} · Deck: {run.deck.length} cards · Gold left: {run.gold}
         </p>
         {(() => {
           const s = run.runScore();
