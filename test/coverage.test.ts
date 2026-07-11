@@ -11,12 +11,7 @@ import { exerciseAll } from '../sim/exercise';
 import { CARDS, RELIC_IDS, RELICS, isAbilityCard } from '../src/constants';
 import type { CardId, AbilityId } from '../src/constants';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra: string = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
+import { check, results } from './harness';
 
 const cov = exerciseAll();
 
@@ -61,5 +56,5 @@ check('the sweep is deterministic',
   && cov2.relicsFired.size === cov.relicsFired.size
   && cov2.crashes.length === cov.crashes.length);
 
-if (failed > 0) { console.error(`\ncoverage.test: ${passed} passed, ${failed} failed`); process.exit(1); }
-else console.log(`coverage.test: ${passed} passed (${cov.cardsPlayed.size} cards · ${cov.relicsFired.size} relics · ${cov.cursesFired.size} curses)`);
+if (results.failed > 0) { console.error(`\ncoverage.test: ${results.passed} passed, ${results.failed} failed`); process.exit(1); }
+else console.log(`coverage.test: ${results.passed} passed (${cov.cardsPlayed.size} cards · ${cov.relicsFired.size} relics · ${cov.cursesFired.size} curses)`);

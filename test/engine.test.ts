@@ -20,13 +20,7 @@ import { DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, DRAIN_MAX_TURNS, REFRESH_CHANNEL
 import { BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH, PILGRIM_FLASK_HEAL } from '../src/constants';
 import type { CardId, ModifierId, RelicId, Slot, CardType, MemberId } from '../src/constants';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra: string | undefined = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
-function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
+import { check, eq, finish } from './harness';
 
 // Find a hand index for a card id, drawing/arranging as needed by stuffing the hand.
 // Cards in the hand are now DeckCard instances; give each a unique negative uid so
@@ -5629,5 +5623,4 @@ function dndGame(seed: number): Game {
   check('Fortify effect line drops the play-a-card warning', !/play a card/i.test(channelEffectLine('fortify')));
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+finish();

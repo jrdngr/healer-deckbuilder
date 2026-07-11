@@ -30,12 +30,7 @@ import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 import { groupPile } from '../src/deckView';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
+import { check, finish } from './harness';
 
 const rootEl = document.getElementById('root')!;
 const root = createRoot(rootEl);
@@ -385,5 +380,4 @@ async function render(el: React.ReactElement): Promise<string> {
 }
 
 await act(async () => { root.unmount(); });
-console.log(`\ncomponents: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+finish('components');

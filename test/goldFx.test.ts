@@ -1,13 +1,7 @@
 // Tests for the pure gold-particle plan (#59). Run via: npm test.
 import { planGoldFx, GOLD_FX_MAX_PARTICLES } from '../src/goldFx';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
-function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
+import { check, eq, finish } from './harness';
 
 // --- under the cap: exactly one coin per gold --------------------------------
 {
@@ -56,5 +50,4 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
   eq('exactly-at-cap is exact', plan.total, GOLD_FX_MAX_PARTICLES);
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+finish();

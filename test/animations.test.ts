@@ -2,13 +2,7 @@
 import { buildTimeline, FX_DURATION, fxDuration, HITSTOP } from '../src/animations';
 import type { GameEvent } from '../src/engine';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra: string = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
-function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
+import { check, eq, finish } from './harness';
 
 const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   tl.entries.flatMap((e) => (e.fx ?? []).map((f) => f.type));
@@ -370,5 +364,4 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   check('blood cost floats a number', labelFor({ kind: 'bloodPay', slot: 1, amount: 2, hp: 7 }).some((s) => s.includes('-2')));
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+finish();

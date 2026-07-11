@@ -1,12 +1,8 @@
 // Deploy reducer test harness (#60). Run with: tsx test/deploy.test.ts
 import { firstEmptySlot, nextEmptySlot, reduceDeploy, type Deployment } from '../src/deploy';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra: string = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
+import { check, finish } from './harness';
+
 function eqArr(name: string, a: Deployment, b: Deployment): void {
   check(name, a.length === b.length && a.every((x, i) => x === b[i]), `expected [${b}], got [${a}]`);
 }
@@ -108,5 +104,4 @@ check('nextEmptySlot: advances to first empty', nextEmptySlot([5, 6, null], 0) =
   eqArr('unseat: hero returns to the hand', out, [10, null, 12]);
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+finish();

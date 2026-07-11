@@ -25,13 +25,7 @@ import { emptyStats, recordRunEnd } from '../src/stats';
 import { groupPile } from '../src/deckView';
 import type { CardId, ModifierId, Slot, MemberId, RelicId } from '../src/constants';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra: string = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
-function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
+import { check, eq, finish } from './harness';
 
 const uidOf = (run: Run, id: CardId): number => run.deck.find((c) => c.id === id)!.uid;
 
@@ -1915,5 +1909,4 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check("Beggar's Bowl is excluded from the spoils pool", !spoilsPool.includes('beggarsBowl'));
 }
 
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed === 0 ? 0 : 1);
+finish();

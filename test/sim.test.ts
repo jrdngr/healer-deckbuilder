@@ -23,13 +23,7 @@ function setParty(cfg: BattleConfig, ids: MemberId[]): void {
   cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
 }
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra: string = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
-function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `expected ${b}, got ${a}`); }
+import { check, eq, results } from './harness';
 
 // --- determinism ------------------------------------------------------------
 {
@@ -616,5 +610,5 @@ function eq(name: string, a: unknown, b: unknown): void { check(name, a === b, `
     edge.two - edge.twoNoRelics >= 0.05, `build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp`);
 }
 
-if (failed > 0) { console.error(`\nsim.test: ${passed} passed, ${failed} failed`); process.exit(1); }
-else console.log(`sim.test: ${passed} passed`);
+if (results.failed > 0) { console.error(`\nsim.test: ${results.passed} passed, ${results.failed} failed`); process.exit(1); }
+else console.log(`sim.test: ${results.passed} passed`);

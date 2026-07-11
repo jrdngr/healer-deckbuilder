@@ -9,12 +9,7 @@ import {
   GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF,
 } from '../src/constants';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
+import { check, finish } from './harness';
 
 const memberIds = Object.keys(MEMBER_POOL);
 const enemyDefs = [
@@ -83,5 +78,4 @@ for (const id of ['gatewarden', 'hexweaver', 'devourer', 'boss']) {
 check('no id is shared between the hero and enemy art tables',
   HERO_ART_IDS.every((id) => !ENEMY_ART_IDS.includes(id)));
 
-console.log(`\ncharacterArt: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+finish('characterArt');

@@ -19,12 +19,7 @@ import { createRoot } from 'react-dom/client';
 import { useGame, type GameController } from '../src/useGame';
 import { defaultBattleConfig } from '../src/constants';
 
-let passed = 0;
-let failed = 0;
-function check(name: string, cond: boolean, extra = ''): void {
-  if (cond) { passed++; }
-  else { failed++; console.error(`  FAIL: ${name}${extra ? ' — ' + extra : ''}`); }
-}
+import { check, finish } from './harness';
 
 // Capture "Maximum update depth exceeded" — React reports it through console.error
 // rather than throwing synchronously, so spy on it for the duration of the test.
@@ -112,5 +107,4 @@ check('controller reference is stable across renders',
 await act(async () => { root.unmount(); });
 console.error = origError;
 
-console.log(`\nuseGame: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+finish('useGame');
