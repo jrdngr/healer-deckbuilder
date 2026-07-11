@@ -1267,6 +1267,13 @@ export class Game {
     }
   }
 
+  // The lockstep tail every single-target heal card runs: Twin Censer splashes the
+  // most-wounded other (#69), then an armed Arcane Lens refracts the full heal (#70).
+  _healCardSplash(primary: Member, amount: number): void {
+    this._twinCenserSplash(primary);
+    this._lensSplash(primary, amount);
+  }
+
   // Pay out a pending Lifebloom burst (#16). A Lifebloom Regen that ENDS while
   // its target lives — natural expiry (regen decays to 0) or Bloom's consume —
   // burst-heals; death forfeits it (_killMember clears the field without paying).
@@ -2255,8 +2262,7 @@ export class Game {
         const healed = this._healMember(m, amount, true);
         this._log(`${card.name}: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        this._twinCenserSplash(m); // #69: single-target heal card splashes to the most wounded other
-        this._lensSplash(m, amount); // #70: an armed Arcane Lens refracts the full heal to the most wounded other
+        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
         break;
       }
       case 'aoeHeal': {
@@ -2277,8 +2283,7 @@ export class Game {
         const healed = this._healMember(m, amount, true);
         this._log(`Benediction: ${m.name} heals ${healed} (${buffs} buff${buffs === 1 ? '' : 's'}). (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        this._twinCenserSplash(m);
-        this._lensSplash(m, amount); // #70
+        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
         break;
       }
       case 'sunriseVigil': {
@@ -2327,8 +2332,7 @@ export class Game {
         } else {
           this._log(`Absolution: ${m.name} heals ${res.healed}. (${m.hp}/${m.maxHP})`, 'heal');
         }
-        this._twinCenserSplash(m);
-        this._lensSplash(m, amount); // #70
+        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
         break;
       }
       case 'rootbind': {
@@ -2790,8 +2794,7 @@ export class Game {
         const healed = this._healMember(m, amount, true);
         this._log(`Focus: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        this._twinCenserSplash(m); // #69: single-target heal card splashes to the most wounded other
-        this._lensSplash(m, amount); // #70
+        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
         break;
       }
       case 'channel': {
