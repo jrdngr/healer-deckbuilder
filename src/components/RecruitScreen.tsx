@@ -2,6 +2,7 @@ import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { MEMBER_POOL } from '../constants';
 import { MemberOfferButton } from './DraftScreen';
+import { ScreenHeader } from './ScreenChrome';
 
 interface RecruitScreenProps {
   run: Run;
@@ -19,12 +20,10 @@ export function RecruitScreen({ run, act, onDone }: RecruitScreenProps) {
 
   return (
     <main className="shop-screen draft-screen">
-      <header className="shop-head">
-        <div>
-          <h2>Recruiter</h2>
-        </div>
-        <button className="leave-btn" onClick={onDone}>{done ? 'Move on' : 'Decline'}</button>
-      </header>
+      <ScreenHeader
+        title="Recruiter"
+        right={<button className="leave-btn" onClick={onDone}>{done ? 'Move on' : 'Decline'}</button>}
+      />
 
       {rosterNames.length > 0 && (
         <div className="draft-weights"><span>Your roster: {rosterNames.join(' · ')}</span></div>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ScreenHeader, GoldTag } from './ScreenChrome';
 
 interface ShopFrameProps {
   title: string;
@@ -12,12 +13,7 @@ interface ShopFrameProps {
 export function ShopFrame({ title, gold, onLeave, children }: ShopFrameProps) {
   return (
     <main className="shop-screen">
-      <header className="shop-head">
-        <div>
-          <h2>{title}</h2>
-        </div>
-        <span className="run-gold" title="Gold">⦿ {gold}</span>
-      </header>
+      <ScreenHeader title={title} right={<GoldTag gold={gold} />} />
       {children}
       <button className="leave-btn" onClick={onLeave}>Leave</button>
     </main>

@@ -3,6 +3,7 @@ import { toggleAnimSpeed, animSpeedLabel } from '../settings';
 import { RELICS } from '../constants';
 import type { DeckCard, RelicId } from '../constants';
 import { groupPile } from '../deckView';
+import { GoldTag } from './ScreenChrome';
 
 interface TopbarProps {
   seedField: string;
@@ -24,7 +25,7 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, reli
       <h1>Bandage of Brothers <span className="tag">prototype</span></h1>
       <div className="run-status">
         <span className="run-progress">{progress}</span>
-        <span className="run-gold" title="Gold">⦿ {gold}</span>
+        <GoldTag gold={gold} />
         {relics.length > 0 && (
           <span className="relic-row" aria-label="Relics">
             {relics.map((id) => (

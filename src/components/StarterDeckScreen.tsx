@@ -2,6 +2,7 @@ import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { STARTER_DECK_IDS, STARTER_DECKS, CARDS } from '../constants';
 import type { CardId, StarterDeckId } from '../constants';
+import { ScreenHeader } from './ScreenChrome';
 
 // Summarize a preset's card list as "2x Shadow Bolt · Heal · ..." so the player sees
 // what they are choosing before the run begins.
@@ -25,11 +26,7 @@ export function StarterDeckScreen({ run, act }: StarterDeckScreenProps) {
 
   return (
     <main className="shop-screen draft-screen">
-      <header className="shop-head">
-        <div>
-          <h2>Choose your starting deck</h2>
-        </div>
-      </header>
+      <ScreenHeader title="Choose your starting deck" />
 
       <div className="shop-offers draft-offers">
         {STARTER_DECK_IDS.map((id: StarterDeckId) => {

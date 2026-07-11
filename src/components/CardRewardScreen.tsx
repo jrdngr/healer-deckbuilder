@@ -2,6 +2,7 @@ import { resolveCard, makeDeckCard } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { Card } from './Card';
+import { RewardScreen, GoldTag } from './ScreenChrome';
 
 interface CardRewardScreenProps {
   run: Run;
@@ -15,27 +16,22 @@ export function CardRewardScreen({ run, act }: CardRewardScreenProps) {
   const offers = run.nodeContent.offers;
 
   return (
-    <main className="shop-screen">
-      <header className="shop-head">
-        <div>
-          <h2>Spoils of Battle</h2>
+    <RewardScreen
+      title="Spoils of Battle"
+      headerRight={<GoldTag gold={run.gold} />}
+      onSkip={() => act((r) => r.skipCardReward())}
+    >
+      {offers.map((offer, i) => (
+        <div className="shop-offer" key={offer.cardId}>
+          <Card
+            card={resolveCard(makeDeckCard(offer.cardId, -1))}
+            affordable
+            selected={false}
+            onClick={() => act((r) => r.pickCardReward(i))}
+          />
+          <div className={`offer-price ${offer.rarity}`}>{offer.rarity}</div>
         </div>
-        <span className="run-gold" title="Gold">⦿ {run.gold}</span>
-      </header>
-      <div className="shop-offers">
-        {offers.map((offer, i) => (
-          <div className="shop-offer" key={offer.cardId}>
-            <Card
-              card={resolveCard(makeDeckCard(offer.cardId, -1))}
-              affordable
-              selected={false}
-              onClick={() => act((r) => r.pickCardReward(i))}
-            />
-            <div className={`offer-price ${offer.rarity}`}>{offer.rarity}</div>
-          </div>
-        ))}
-      </div>
-      <button className="leave-btn" onClick={() => act((r) => r.skipCardReward())}>Take nothing</button>
-    </main>
+      ))}
+    </RewardScreen>
   );
 }

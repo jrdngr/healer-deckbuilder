@@ -2,6 +2,7 @@ import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, CONVENTIONALLY_HEALABLE } from '../constants';
 import type { MemberId } from '../constants';
+import { ScreenHeader } from './ScreenChrome';
 
 // One member offer button — shared by the pick-one draft and the Recruit node. The
 // ability shows its player-facing flavor, never the raw id (#37); a self-reliant tag
@@ -36,11 +37,7 @@ export function DraftScreen({ run, act }: DraftScreenProps) {
 
   return (
     <main className="shop-screen draft-screen">
-      <header className="shop-head">
-        <div>
-          <h2>Choose your starting hero</h2>
-        </div>
-      </header>
+      <ScreenHeader title="Choose your starting hero" />
 
       {rosterNames.length > 0 && (
         <div className="draft-weights"><span>Your roster: {rosterNames.join(' · ')}</span></div>
