@@ -1,5 +1,6 @@
 import { FIGHT_COUNT, ACT_COUNT, actOfFight } from '../constants';
 import { NODE_META } from './nodeMeta';
+import { NodeTileBody } from './MapChrome';
 import { loadStats } from '../stats';
 
 interface StartScreenProps {
@@ -22,10 +23,10 @@ export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: S
         <div className="map-branch start-branch">
           {savedFightIndex != null && (
             <div className="map-node">
-              <span className="map-node-icon" aria-hidden>{fight.icon}</span>
-              <span className="map-node-label">
-                Act {actOfFight(savedFightIndex) + 1} / {ACT_COUNT} · Fight {savedFightIndex + 1} / {FIGHT_COUNT}
-              </span>
+              <NodeTileBody
+                icon={fight.icon}
+                label={`Act ${actOfFight(savedFightIndex) + 1} / ${ACT_COUNT} · Fight ${savedFightIndex + 1} / ${FIGHT_COUNT}`}
+              />
             </div>
           )}
           <button className="primary map-take" onClick={onContinue}>Continue your saved run</button>
@@ -33,8 +34,7 @@ export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: S
       )}
       <div className="map-branch start-branch">
         <div className="map-node">
-          <span className="map-node-icon" aria-hidden>{fight.icon}</span>
-          <span className="map-node-label">Draft your first hero</span>
+          <NodeTileBody icon={fight.icon} label="Draft your first hero" />
         </div>
         <button className={hasSave ? 'map-take' : 'primary map-take'} onClick={onBegin}>
           {hasSave ? 'Start a new run instead' : 'Begin your journey'}

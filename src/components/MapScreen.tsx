@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss, memberDefAt } from '../constants';
 import type { Run } from '../run';
 import { NODE_META } from './nodeMeta';
+import { nextFightPreview, InjuryBanner, NodeTileBody } from './MapChrome';
 
 interface MapScreenProps {
   run: Run;
@@ -35,32 +35,17 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
   const [hovered, setHovered] = useState<number | null>(null);
   if (run.location.kind !== 'forkChoice') return null;
   const fork = run.map[run.location.forkIndex];
-  // The next fight is shared by both paths — preview its foe and rough threat
-  // (flaw #15: no more blind forks). peekEncounter is stream-independent, so
-  // showing it here changes nothing about the roll itself.
-  const nextFight = Math.min(run.location.forkIndex + 1, FIGHT_COUNT - 1);
-  const foe = run.peekEncounter(nextFight);
-  const boss = isActBoss(nextFight);
-  const hp = ENEMY_HP_BY_FIGHT[nextFight] ?? 0;
-  const threat = boss ? '💀💀💀' : hp >= 140 ? '💀💀' : '💀';
+  const { foe, boss, threat } = nextFightPreview(run, run.location.forkIndex);
 
   const canvasCls = [
     'map-canvas',
     hovered !== null && `hover-${hovered}`,
   ].filter(Boolean).join(' ');
 
-  const injured = run.party
-    .map((p, slot) => ({ p, name: memberDefAt(run.party, slot).name }))
-    .filter(({ p }) => p.injuries > 0);
-
   return (
     <main className="map-screen">
       <h2 className="map-title">Choose your path</h2>
-      {injured.length > 0 && (
-        <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
-          🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}
-        </p>
-      )}
+      <InjuryBanner run={run} />
       <div className={canvasCls}>
         <svg className="map-paths" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {PATH_D.map((d, b) => (
@@ -79,9 +64,7 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
               };
               return (
                 <div className={`map-node type-${node.type}`} key={i} style={style}>
-                  <span className="map-node-icon" aria-hidden>{meta.icon}</span>
-                  <span className="map-node-label">{meta.label}</span>
-                  <span className="map-node-desc">{meta.desc}</span>
+                  <NodeTileBody icon={meta.icon} label={meta.label} desc={meta.desc} />
                 </div>
               );
             })}
@@ -99,9 +82,7 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
           style={{ left: '50%', top: `${FIGHT_Y}%`, '--d': '620ms' } as MapStyle}
           title={boss ? 'An act boss — expect a signature mechanic.' : 'A normal fight.'}
         >
-          <span className="map-node-icon" aria-hidden>⚔</span>
-          <span className="map-node-label">Ahead: {foe.name}</span>
-          <span className="map-node-desc">{threat}</span>
+          <NodeTileBody icon="⚔" label={`Ahead: ${foe.name}`} desc={threat} />
         </div>
       </div>
     </main>
