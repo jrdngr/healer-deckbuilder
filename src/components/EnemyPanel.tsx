@@ -1,5 +1,6 @@
 import type { Game } from '../engine';
 import { Icon } from './Icon';
+import { CharacterBlob } from './CharacterBlob';
 
 interface EnemyPanelProps {
   game: Game;
@@ -26,6 +27,7 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
   return (
     <section className="enemy">
       <div className="enemy-head">
+        <CharacterBlob id={game.enemyDef.id} size={86} isEnemy />
         <h2>
           {game.enemyDef.name} {e.enraged && <span className="enrage">ENRAGED</span>}
           {showCountdown && (

@@ -7,6 +7,7 @@ import type { Member } from '../engine';
 import type { MemberReactKind } from '../animations';
 import type { MemberReactState } from '../useGame';
 import { Icon } from './Icon';
+import { CharacterBlob } from './CharacterBlob';
 
 // How long each one-shot reaction class stays on the card (matches the CSS
 // animation lengths in styles.css).
@@ -131,6 +132,7 @@ export function MemberCard({
         </div>
       )}
       <div className="atk" title="Attack"><Icon name="sword" /><span>{liveDamage}</span></div>
+      <CharacterBlob id={m.id} size={62} />
       <h3>{m.name}</h3>
       <div className="bar">
         <div className="bar-track">

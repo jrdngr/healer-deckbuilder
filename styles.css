@@ -118,6 +118,10 @@ section.enemy {
   border: var(--bw-card) solid var(--ink); border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
 }
+/* Blob on the left; name / HP bar / status stack in the second column. */
+.enemy-head { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; align-items: center; }
+.enemy-head > .char-blob { grid-row: 1 / -1; align-self: center; }
+.enemy-head > h2, .enemy-head > .bar, .enemy-head > .enemy-status, .enemy-head > .cast-bar { grid-column: 2; }
 .enemy-head h2 { margin: 0 0 8px; font-family: var(--f-disp); font-weight: 800; font-size: 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .enrage {
   font-size: 11px; font-weight: 900; letter-spacing: 1.5px;
