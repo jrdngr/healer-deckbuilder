@@ -17,7 +17,7 @@ export function CardShopScreen({ run, act, onDone }: CardShopScreenProps) {
   const offers = run.nodeContent.offers;
 
   return (
-    <ShopFrame title="Card Shop" subtitle="Add new cards to your deck." gold={run.gold} onLeave={onDone}>
+    <ShopFrame title="Card Shop" gold={run.gold} onLeave={onDone}>
       <div className="shop-offers">
         {offers.map((offer, i) => {
           const affordable = run.gold >= offer.price;

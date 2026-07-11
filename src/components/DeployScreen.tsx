@@ -71,7 +71,7 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
       <header className="shop-head">
         <div>
           <h2>Deploy your party</h2>
-          <p>Field up to three heroes and set their positions — fewer bodies is riskier, but earns more gold. Up next: <strong>{enemy.name}</strong>{enemy.boss ? ' — Boss' : ''}.</p>
+          <p>Up next: <strong>{enemy.name}</strong>{enemy.boss ? ' — Boss' : ''}.</p>
           <p className="deploy-salary-line">Gold {run.gold} · win pays <strong>{projectedBounty}g</strong>{emptySeats > 0 ? ` (+${Math.round(EMPTY_SEAT_GOLD_BONUS * emptySeats * 100)}% for ${emptySeats} empty)` : ''} − <strong>{projectedSalary}g</strong> wages = <strong>{projectedNet}g</strong></p>
         </div>
         <button className="primary map-take" disabled={seatedCount === 0}

@@ -18,11 +18,6 @@ export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: S
   return (
     <main className="map-screen">
       <h2 className="map-title">Your run begins</h2>
-      <p className="map-sub">
-        {ACT_COUNT} acts and {FIGHT_COUNT} fights stand between you and the final boss — three act
-        bosses along the way, each act tougher than the last. Draft your first hero, then build
-        and field your roster all the way through.
-      </p>
       {hasSave && (
         <div className="map-branch start-branch">
           {savedFightIndex != null && (
@@ -31,7 +26,6 @@ export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: S
               <span className="map-node-label">
                 Act {actOfFight(savedFightIndex) + 1} / {ACT_COUNT} · Fight {savedFightIndex + 1} / {FIGHT_COUNT}
               </span>
-              <span className="map-node-desc">Pick up where you left off.</span>
             </div>
           )}
           <button className="primary map-take" onClick={onContinue}>Continue your saved run</button>
@@ -41,7 +35,6 @@ export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: S
         <div className="map-node">
           <span className="map-node-icon" aria-hidden>{fight.icon}</span>
           <span className="map-node-label">Draft your first hero</span>
-          <span className="map-node-desc">The opening battle is a solo — choose who fights it. More heroes join after each boss.</span>
         </div>
         <button className={hasSave ? 'map-take' : 'primary map-take'} onClick={onBegin}>
           {hasSave ? 'Start a new run instead' : 'Begin your journey'}

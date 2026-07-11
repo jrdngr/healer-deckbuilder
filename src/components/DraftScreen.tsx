@@ -39,7 +39,6 @@ export function DraftScreen({ run, act }: DraftScreenProps) {
       <header className="shop-head">
         <div>
           <h2>Choose your starting hero</h2>
-          <p>Pick one of three heroes drawn from the full roster to open your run. Your first battle is a solo; more heroes join at the recruiter after your first fight and after each boss.</p>
         </div>
       </header>
 

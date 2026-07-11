@@ -16,7 +16,7 @@ export function HealerUpgradeShopScreen({ run, act, onDone }: HealerUpgradeShopS
   const h = run.healer;
 
   return (
-    <ShopFrame title="Sanctum" subtitle="Improve your own resources." gold={run.gold} onLeave={onDone}>
+    <ShopFrame title="Sanctum" gold={run.gold} onLeave={onDone}>
       <p className="shop-hint">
         Max Mana {h.maxMana} · Hand {h.handSize} · Rest +{h.restRegen} · Passive +{h.passiveMp}
       </p>

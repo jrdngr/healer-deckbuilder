@@ -19,7 +19,6 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
   return (
     <ShopFrame
       title="Infirmary"
-      subtitle="Rest and mend. Restore a member's HP, or pay more to shed a lasting injury."
       gold={run.gold}
       onLeave={onDone}
     >

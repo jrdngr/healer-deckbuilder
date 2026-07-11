@@ -18,7 +18,6 @@ export function SpoilsScreen({ run, act }: SpoilsScreenProps) {
       <header className="shop-head">
         <div>
           <h2>Spoils of Victory</h2>
-          <p>The fallen boss leaves a prize. Choose one relic — it lasts the rest of the run.</p>
         </div>
         <span className="run-gold" title="Gold">⦿ {run.gold}</span>
       </header>

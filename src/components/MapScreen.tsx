@@ -56,7 +56,6 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
   return (
     <main className="map-screen">
       <h2 className="map-title">Choose your path</h2>
-      <p className="map-sub">Visit the stops on the path you pick in any order — as often as you like — before the next fight.</p>
       {injured.length > 0 && (
         <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
           🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}

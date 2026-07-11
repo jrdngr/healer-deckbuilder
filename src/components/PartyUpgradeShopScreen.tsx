@@ -22,7 +22,6 @@ export function PartyUpgradeShopScreen({ run, act, onDone }: PartyUpgradeShopScr
   return (
     <ShopFrame
       title="Training Hall"
-      subtitle="Buy a boost, then choose who receives it."
       gold={run.gold}
       onLeave={onDone}
     >

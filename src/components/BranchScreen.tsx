@@ -30,7 +30,6 @@ export function BranchScreen({ run, onEnter, onFight }: BranchScreenProps) {
   return (
     <main className="branch-screen">
       <h2 className="map-title">Along the trail</h2>
-      <p className="map-sub">Stop wherever you like, in any order — return as often as you want. The fight waits until you're ready.</p>
       {injured.length > 0 && (
         <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
           🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}

@@ -22,7 +22,6 @@ export function ReliquaryScreen({ run, act, onDone }: ReliquaryScreenProps) {
   return (
     <ShopFrame
       title="Reliquary"
-      subtitle="Relics last the rest of the run. The keeper also disposes of unwanted cards."
       gold={run.gold}
       onLeave={onDone}
     >

@@ -28,7 +28,6 @@ export function StarterDeckScreen({ run, act }: StarterDeckScreenProps) {
       <header className="shop-head">
         <div>
           <h2>Choose your starting deck</h2>
-          <p>Each preset leans on a pair of card types. You will build on it with card rewards and shops all run long.</p>
         </div>
       </header>
 
@@ -44,7 +43,6 @@ export function StarterDeckScreen({ run, act }: StarterDeckScreenProps) {
             >
               <span className="draft-member-name">{d.name}</span>
               <span className="draft-member-stats">{d.types.map((t) => t[0].toUpperCase() + t.slice(1)).join(' / ')} · {d.list.length} cards</span>
-              <span className="draft-member-ability">{d.desc}</span>
               <span className="draft-member-ability">{deckSummary(d.list)}</span>
             </button>
           );

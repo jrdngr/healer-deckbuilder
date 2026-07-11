@@ -1,6 +1,6 @@
 # Issue 81 — Strip explanatory text across the UI
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** post-demo (UI polish)   **Size:** M (full self-driven sweep)
 - **Depends on:** —   **Blocks:** —   **Relates:** #80, #82 (deck-selection screen)
 - **Addresses:** intake 2026-07-11 — "There's a ton of explanatory text all over the UI. Remove all

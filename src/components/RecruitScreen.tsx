@@ -22,7 +22,6 @@ export function RecruitScreen({ run, act, onDone }: RecruitScreenProps) {
       <header className="shop-head">
         <div>
           <h2>Recruiter</h2>
-          <p>{done ? 'A new hero has joined your roster.' : 'A wandering hero offers to join your cause — pick one, or move on.'}</p>
         </div>
         <button className="leave-btn" onClick={onDone}>{done ? 'Move on' : 'Decline'}</button>
       </header>

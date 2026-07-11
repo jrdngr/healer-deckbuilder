@@ -22,7 +22,6 @@ export function CardUpgradeShopScreen({ run, act, onDone }: CardUpgradeShopScree
   return (
     <ShopFrame
       title="Upgrade Shop"
-      subtitle="Buy a modifier, then apply it to one of your cards."
       gold={run.gold}
       onLeave={onDone}
     >

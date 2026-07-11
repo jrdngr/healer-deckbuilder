@@ -19,7 +19,6 @@ export function CardRewardScreen({ run, act }: CardRewardScreenProps) {
       <header className="shop-head">
         <div>
           <h2>Spoils of Battle</h2>
-          <p>Victory yields a new card. Choose one — it joins your deck for free.</p>
         </div>
         <span className="run-gold" title="Gold">⦿ {run.gold}</span>
       </header>
