@@ -459,6 +459,19 @@ export const BOSS_ENEMY_DEF: EnemyDef = {
 const aw = (single: number, two: number, aoe: number, hidden: number, heavy: number, sweep: number): AttackWeights =>
   ({ single, two, aoe, hidden, heavy, sweep, cast: 0 });
 
+// A pierce step: ignores Taunt AND Defense and aims at the lowest-HP living member
+// — the shared shape of every piercer (Piercing Bolt / Needle Shot / Skewer).
+const pierceStep = (name: string, damage: number): RotationStep =>
+  ({ type: 'single', name, damage, ignoreTaunt: true, ignoreDefense: true, targetLowest: true });
+
+// A rotation-driven enemy: its base/enraged weights are fallback-only (the rotation
+// drives attack selection), so they point at the shared normal/boss tables — kept as
+// the SAME object references so weightedPick's draw order stays bit-identical (#07).
+const normalDef = (id: string, name: string, rest: Partial<EnemyDef>): EnemyDef =>
+  ({ id, name, boss: false, baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, ...rest });
+const bossDef = (id: string, name: string, rest: Partial<EnemyDef>): EnemyDef =>
+  ({ id, name, boss: true, baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, ...rest });
+
 // Four named normals (issue 09). Each is a distinct *shape* of the same total
 // threat as the old generic normal (~4.5 party-wide dmg/turn), not a difficulty
 // spike — the encounter tables keep per-fight winrates within ±5pp of baseline.
@@ -486,12 +499,10 @@ export const ENEMY_CLEAVER: EnemyDef = { // cleaver: occasional heavy single hit
 // Taunt upkeep + topping the tank up survives it, while the ranger (11) and
 // mage (9) still die to it — at the original 20 it exceeded every max HP and
 // killed a member in 82% of good-play sims, teaching sacrifice instead.
-export const GATEWARDEN_DEF: EnemyDef = {
-  id: 'gatewarden', name: 'Gatewarden', boss: true,
-  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
+export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Gatewarden', {
   rotation: ['single', 'two', 'heavy', 'sweep'],
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Crushing Blow' },
-};
+});
 
 // Boss 2 — Hexweaver (issue 13): the telegraphed taunt-punisher. It breaks the
 // permanent-taunt/turtle solve with three tools, all fully telegraphed:
@@ -503,18 +514,16 @@ export const GATEWARDEN_DEF: EnemyDef = {
 // Opens on a plain single (a gentle turn-1 read), then cycles the three tricks
 // between whole-party pressure. Cleanse (added this issue) is its designed counter.
 export const HEXWEAVER_PIERCER_DMG = 5; // Piercing Bolt per-hit damage (before attackBonus)
-export const HEXWEAVER_DEF: EnemyDef = {
-  id: 'hexweaver', name: 'Hexweaver', boss: true,
-  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
+export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Hexweaver', {
   rotation: [
     'single',
-    { type: 'single', name: 'Piercing Bolt', damage: HEXWEAVER_PIERCER_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
+    pierceStep('Piercing Bolt', HEXWEAVER_PIERCER_DMG),
     { type: 'cast', name: 'Hex', cast: 'wound' },
     'sweep',
-    { type: 'single', name: 'Piercing Bolt', damage: HEXWEAVER_PIERCER_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
+    pierceStep('Piercing Bolt', HEXWEAVER_PIERCER_DMG),
     { type: 'cast', name: 'Siphon', cast: 'siphon' },
   ],
-};
+});
 
 // Boss 3 — Devourer (issue 14): "race or die". Turns the invisible enrage race
 // into an explicit, fair one via a phase system:
@@ -526,9 +535,7 @@ export const HEXWEAVER_DEF: EnemyDef = {
 //     tighter enrage. Enraged Maw one-shots an unshielded squishy: race it down.
 // The phase threshold is edge-detected (fires once, even mid-Poison-tick).
 export const DEVOURER_MAW_DMG = 7; // Maw per-target sweep damage (before enrage/attackBonus)
-export const DEVOURER_DEF: EnemyDef = {
-  id: 'devourer', name: 'Devourer', boss: true,
-  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged, // fallback only
+export const DEVOURER_DEF: EnemyDef = bossDef('devourer', 'Devourer', {
   rotation: [
     'single',
     'heavy',
@@ -547,7 +554,7 @@ export const DEVOURER_DEF: EnemyDef = {
     channel: { slot: 0, everyCycles: 1, turns: 2, damage: DEVOURER_MAW_DMG, type: 'sweep', name: 'Maw' },
     enrageTurn: 11,
   },
-};
+});
 
 // Act boss per act (0-based): Gatewarden (#12), Hexweaver (#13), Devourer (#14).
 export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF];
@@ -563,70 +570,48 @@ export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURE
 
 // Act 2 — Ironmaw (channeler): a learnable 3-step cycle whose 3rd step becomes
 // Siegebreak every 2nd cycle — a 2-turn single-target channel at 9.
-export const IRONMAW_DEF: EnemyDef = {
-  id: 'ironmaw', name: 'Ironmaw', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+export const IRONMAW_DEF: EnemyDef = normalDef('ironmaw', 'Ironmaw', {
   rotation: ['single', 'two', 'single'],
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 9, type: 'single', name: 'Siegebreak' },
-};
+});
 
 // Act 2 — Needler (piercer): one step per cycle is Needle Shot — a mini
 // Piercing Bolt (ignores Taunt AND Defense, aims at the lowest-HP member) at 4.
 // Pierce-at-lowest is worth far more than its number (it bypasses the whole
 // taunt/Defense answer), so it appears once per 4-step cycle.
 export const NEEDLER_PIERCE_DMG = 4;
-export const NEEDLER_DEF: EnemyDef = {
-  id: 'needler', name: 'Needler', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
-  rotation: [
-    'single',
-    { type: 'single', name: 'Needle Shot', damage: NEEDLER_PIERCE_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
-    'two',
-    'single',
-  ],
-};
+export const NEEDLER_DEF: EnemyDef = normalDef('needler', 'Needler', {
+  rotation: ['single', pierceStep('Needle Shot', NEEDLER_PIERCE_DMG), 'two', 'single'],
+});
 
 // Act 2 — Leech (self-healer): a mini Consume ('Gorge') every 6th turn cleanses
 // its own Poison and self-heals the remaining ticks — poison timing matters on
 // normals now, not just on the Devourer. Its plain cycle runs light because the
 // Gorge value is real threat too.
-export const LEECH_DEF: EnemyDef = {
-  id: 'leech', name: 'Leech', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+export const LEECH_DEF: EnemyDef = normalDef('leech', 'Leech', {
   rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Gorge', cast: 'consume' }, 'two'],
-};
+});
 
 // Act 3 — Juggernaut (channeler, heavier): Overrun is an 11-damage 2-turn
 // channel every 2nd cycle, over a single-heavy base cycle (the channel is the
 // threat; the cycle stays on budget).
-export const JUGGERNAUT_DEF: EnemyDef = {
-  id: 'juggernaut', name: 'Juggernaut', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+export const JUGGERNAUT_DEF: EnemyDef = normalDef('juggernaut', 'Juggernaut', {
   rotation: ['single', 'single', 'two'],
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 11, type: 'single', name: 'Overrun' },
-};
+});
 
 // Act 3 — Lancer (piercer, heavier): Skewer pierces at 5, once per 4-step cycle.
 export const LANCER_PIERCE_DMG = 5;
-export const LANCER_DEF: EnemyDef = {
-  id: 'lancer', name: 'Lancer', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
-  rotation: [
-    'single',
-    { type: 'single', name: 'Skewer', damage: LANCER_PIERCE_DMG, ignoreTaunt: true, ignoreDefense: true, targetLowest: true },
-    'single',
-    'two',
-  ],
-};
+export const LANCER_DEF: EnemyDef = normalDef('lancer', 'Lancer', {
+  rotation: ['single', pierceStep('Skewer', LANCER_PIERCE_DMG), 'single', 'two'],
+});
 
 // Act 3 — Devourling (self-healer, hungrier): Gorge every 6th turn over a
 // light cycle (long 150-HP fights sit near the enrage cliff, so every eaten
 // poison tick is expensive — the Gorge itself is the difficulty).
-export const DEVOURLING_DEF: EnemyDef = {
-  id: 'devourling', name: 'Devourling', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged, // fallback only
+export const DEVOURLING_DEF: EnemyDef = normalDef('devourling', 'Devourling', {
   rotation: ['single', 'two', 'single', { type: 'cast', name: 'Gorge', cast: 'consume' }, 'two', 'single'],
-};
+});
 
 export const NORMAL_ENEMY_DEFS: EnemyDef[] = [
   ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER,
