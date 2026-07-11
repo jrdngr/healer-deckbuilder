@@ -46,7 +46,11 @@ DOM-free TypeScript module that the UI and the tests both consume.
 - **Keep the engine pure and DOM-free** so it stays unit-testable: do not import React or
   touch the DOM from `src/engine.ts`, `src/constants.ts`, or `src/rng.ts`.
 - **Layout:**
-  - `src/engine.ts` — pure battle engine (no DOM), the source of truth for mechanics.
+  - `src/engine/` — pure battle engine (no DOM), the source of truth for mechanics.
+    `core.ts` holds the `Game` class (state, turn/mitigation pipeline, most methods);
+    `effects.ts` attaches the big card/ability effect methods (`_applyCard`,
+    `_fireAbility`) to the prototype (every Game member is public); `index.ts` is the
+    barrel — import the engine as `./engine`, never a sub-file.
   - `src/constants.ts` — all tunable numbers and shared types; change balance values here.
   - `src/rng.ts` — seedable PRNG + shuffle/weighted-pick (keeps games deterministic by seed).
   - `src/useGame.ts` — React hook binding the engine to the UI.
