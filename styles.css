@@ -93,15 +93,16 @@ h1, h2, h3, h4 { font-family: var(--f-disp); font-weight: 800; }
 
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 20px; background: var(--panel); border-bottom: 1px solid #000;
+  padding: 12px 20px; background: var(--hud-bg); border-bottom: var(--bw-card) solid var(--ink);
 }
-.topbar h1 { font-size: 18px; margin: 0; }
+.topbar h1 { font-family: var(--f-disp); font-weight: 800; font-size: 20px; margin: 0; }
 .tag {
-  font-size: 11px; background: var(--accent); color: #08101f;
-  padding: 1px 7px; border-radius: 10px; vertical-align: middle; margin-left: 6px;
+  font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;
+  background: var(--accent-grad); color: var(--accent-ink); border: var(--bw) solid var(--ink);
+  padding: 2px 9px; border-radius: 999px; vertical-align: middle; margin-left: 8px;
 }
-.newgame { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
-.newgame input { width: 110px; background: var(--panel-2); border: 1px solid #333; color: var(--ink); padding: 4px 6px; border-radius: 5px; }
+.newgame { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 700; color: var(--muted); }
+.newgame input { width: 110px; background: var(--panel); border: var(--bw) solid var(--ink); color: var(--ink); font-weight: 700; padding: 5px 8px; border-radius: var(--r-sm); }
 .speed-toggle { font-variant-numeric: tabular-nums; }
 
 main {
@@ -381,7 +382,7 @@ section.enemy { animation: breathe 4.6s ease-in-out infinite; }
 .member.react-heal { animation: member-heal 520ms ease-out; }
 @keyframes member-heal {
   0%   { transform: none; }
-  30%  { transform: scale(1.025); box-shadow: 0 0 0 3px rgba(127,230,164,.45), 0 0 22px rgba(255,223,158,.35), 0 6px 14px rgba(0,0,0,.45); }
+  30%  { transform: scale(1.025); box-shadow: 0 0 0 3px rgba(127,212,194,.5), 0 0 22px rgba(255,223,158,.4), var(--shadow-card); }
   100% { transform: none; }
 }
 .member.react-block { animation: member-block 400ms cubic-bezier(.3,.7,.4,1); }
@@ -496,7 +497,7 @@ button.danger:hover:not(:disabled) { color: #fff; }
 .hand .card:hover:not(.unaffordable):not(.ineligible) {
   transform: translateY(-14px) scale(1.05);
   z-index: 3;
-  border-color: #4a5468;
+  border-color: var(--accent);
 }
 .hand .card:has(+ .card:hover:not(.unaffordable):not(.ineligible)) { --part: -8px; }
 .hand .card:hover:not(.unaffordable):not(.ineligible) + .card { --part: 8px; }
@@ -988,7 +989,7 @@ main.drag-board .enemy, main.drag-board .party {
 .map-canvas { position: relative; height: min(560px, 66vh); margin-top: 10px; }
 .map-paths { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .map-path {
-  fill: none; stroke: #3a4150; stroke-width: 3; stroke-linecap: round;
+  fill: none; stroke: var(--faint); stroke-width: 3; stroke-linecap: round;
   vector-effect: non-scaling-stroke;
   stroke-dasharray: 1; stroke-dashoffset: 1;
   animation: path-draw 650ms ease-out forwards;
@@ -999,7 +1000,7 @@ main.drag-board .enemy, main.drag-board .party {
 /* Hover: the branch's whole trail lights; the other one recedes. */
 .map-canvas.hover-0 .map-path-0,
 .map-canvas.hover-1 .map-path-1 {
-  stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(110,168,254,.6));
+  stroke: var(--accent); filter: drop-shadow(0 0 6px rgba(240,168,50,.6));
 }
 .map-canvas.hover-0 .map-path-1,
 .map-canvas.hover-1 .map-path-0 { opacity: .35; }
@@ -1010,13 +1011,13 @@ main.drag-board .enemy, main.drag-board .party {
 .map-token {
   position: absolute; left: 50%; top: 6%; transform: translate(-50%, -50%);
   font-size: 22px; color: var(--accent); z-index: 2;
-  text-shadow: 0 0 10px rgba(110,168,254,.8), 0 0 3px #fff;
+  text-shadow: 0 0 10px rgba(240,168,50,.85), 0 0 3px #fff;
   animation: node-in 320ms cubic-bezier(.3,1.3,.5,1) backwards;
 }
 
 /* Node tiles: positioned on the trail, popped in along it, color-coded by type. */
 .map-node {
-  background: var(--panel-2); border: 1px solid #333a47; border-radius: 9px; padding: 12px;
+  background: var(--panel-2); border: 1px solid var(--ink); border-radius: 9px; padding: 12px;
   display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto;
   column-gap: 10px; align-items: center; text-align: left;
 }
@@ -1028,7 +1029,7 @@ main.drag-board .enemy, main.drag-board .party {
   transition: opacity .25s, border-color .15s, box-shadow .2s;
 }
 @keyframes node-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.78); } }
-.map-branch-group:hover .map-node { border-color: #4a5468; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+.map-branch-group:hover .map-node { border-color: var(--accent); box-shadow: var(--shadow-card); }
 .map-node-icon { grid-row: 1 / span 2; font-size: 22px; text-align: center; }
 .map-node-label { font-weight: 700; font-size: 14px; }
 .map-node-desc { font-size: 11px; color: var(--muted); }
@@ -1053,11 +1054,11 @@ main.drag-board .enemy, main.drag-board .party {
 @keyframes icon-pulse   { 50% { transform: scale(1.14); } }
 @keyframes icon-glint   { 6%, 12% { filter: brightness(1.9); } 9% { filter: brightness(1.2); } }
 @keyframes icon-flicker { 42% { opacity: 1; } 45% { opacity: .5; } 48% { opacity: 1; } 51% { opacity: .7; } 54% { opacity: 1; } }
-@keyframes icon-breathe { 50% { transform: scale(1.08); filter: drop-shadow(0 0 5px rgba(90,209,122,.7)); } }
+@keyframes icon-breathe { 50% { transform: scale(1.08); filter: drop-shadow(0 0 5px rgba(87,184,165,.7)); } }
 
 /* The shared next-fight preview at the trails' reconvergence. */
 .map-next-fight { border-left: 4px solid var(--danger); width: min(250px, 42vw); }
-.map-next-fight.boss { border-color: var(--danger); box-shadow: 0 0 14px rgba(232,93,93,.35); }
+.map-next-fight.boss { border-color: var(--danger); box-shadow: 0 0 14px rgba(240,122,94,.4); }
 .map-next-fight.boss .map-node-icon { animation: icon-pulse 1.8s ease-in-out infinite; }
 
 .map-canvas .map-take {
@@ -1071,20 +1072,20 @@ main.drag-board .enemy, main.drag-board .party {
 .branch-screen { text-align: center; animation: fade-in 300ms ease-out; }
 .branch-stops { display: flex; flex-direction: column; gap: 12px; align-items: center; margin: 18px 0; }
 .branch-stop { width: min(320px, 80vw); color: inherit; font: inherit; cursor: pointer; }
-.branch-stop:hover { border-color: #4a5468; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
+.branch-stop:hover { border-color: var(--accent); box-shadow: var(--shadow-card); }
 .branch-fight { margin-top: 4px; }
 
 .start-branch { max-width: 320px; margin: 0 auto; }
 /* StartScreen still composes .map-branch panels. */
 .map-branch {
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 12px; padding: 16px;
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 12px; padding: 16px;
   display: flex; flex-direction: column; gap: 12px;
 }
 
 /* ---- Node + run-over cards ----------------------------------------------- */
 .node-screen, .runover-screen { display: grid; place-items: center; min-height: 50vh; }
 .node-card {
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 14px;
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 14px;
   padding: 28px 36px; text-align: center; max-width: 460px;
 }
 .node-icon { font-size: 40px; display: block; margin-bottom: 6px; }
@@ -1109,11 +1110,11 @@ main.drag-board .enemy, main.drag-board .party {
 /* Modifier / upgrade offers: a clickable info button. */
 .mod-offer {
   width: 200px; text-align: left; display: flex; flex-direction: column; gap: 4px;
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 10px; padding: 12px 14px;
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 10px; padding: 12px 14px;
   color: var(--ink); cursor: pointer;
 }
 .mod-offer:hover:not(:disabled) { border-color: var(--accent); }
-.mod-offer.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(110,168,254,.35); }
+.mod-offer.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(106,159,230,.35); }
 .mod-offer:disabled { opacity: .45; cursor: not-allowed; }
 .mod-offer .mod-name { font-weight: 700; font-size: 14px; }
 .mod-offer .mod-desc { font-size: 11px; color: var(--muted); }
@@ -1123,14 +1124,14 @@ main.drag-board .enemy, main.drag-board .party {
 .mod-offer.uncommon { border-left: 4px solid var(--accent); }
 .mod-offer.rare { border-left: 4px solid var(--gold); }
 
-.upgrade-target { margin-top: 16px; border-top: 1px solid #2a2f3a; padding-top: 14px; }
+.upgrade-target { margin-top: 16px; border-top: 1px solid var(--track); padding-top: 14px; }
 .upgrade-target h3 { margin: 0 0 10px; font-size: 15px; }
 .deck-picker { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .member-row { display: flex; gap: 12px; }
 .member-pick {
   flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 10px; padding: 12px 14px;
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 10px; padding: 12px 14px;
   color: var(--ink); cursor: pointer;
 }
 .member-pick:hover:not(:disabled) { border-color: var(--accent); }
@@ -1144,7 +1145,7 @@ main.drag-board .enemy, main.drag-board .party {
 .draft-slots { display: flex; gap: 12px; margin: 14px 0; }
 .draft-slot {
   flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: center;
-  background: var(--panel); border: 1px dashed #3a4150; border-radius: 10px; padding: 12px 14px;
+  background: var(--panel); border: var(--bw) dashed var(--faint); border-radius: 10px; padding: 12px 14px;
 }
 .draft-slot.filled { border-style: solid; border-color: var(--accent); }
 .draft-slot-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -1152,29 +1153,29 @@ main.drag-board .enemy, main.drag-board .party {
 .draft-offers { margin-top: 4px; }
 .draft-member {
   width: 200px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 10px; padding: 12px 14px;
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 10px; padding: 12px 14px;
   color: var(--ink); cursor: pointer; text-align: left;
 }
 .draft-member:hover:not(:disabled) { border-color: var(--accent); }
 .draft-member:disabled { opacity: .5; cursor: not-allowed; }
-.draft-member.chosen { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,193,78,.3); }
+.draft-member.chosen { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(240,168,50,.3); }
 .draft-member-name { font-weight: 700; }
 .draft-member-stats { font-size: 11px; color: var(--muted); }
 .draft-member-ability { font-size: 11px; color: var(--accent); }
 .draft-actions { display: flex; gap: 12px; margin-top: 18px; }
 .draft-weights { font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
 .draft-pairs { display: flex; flex-direction: column; gap: 14px; }
-.draft-pair { border-top: 1px solid #2a2f3a; padding-top: 10px; }
+.draft-pair { border-top: 1px solid var(--track); padding-top: 10px; }
 .draft-pair-label { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 6px; }
 
 /* ---- Deploy (pre-fight member selection, 2026-07) ------------------------ */
 .deploy-slots { display: flex; gap: 12px; margin: 14px 0; }
 .deploy-slot {
   position: relative; flex: 1; display: flex; flex-direction: column; gap: 4px; align-items: center;
-  background: var(--panel); border: 1px dashed #3a4150; border-radius: 10px; padding: 12px 14px;
+  background: var(--panel); border: var(--bw) dashed var(--faint); border-radius: 10px; padding: 12px 14px;
   color: var(--ink); cursor: pointer;
 }
-.deploy-slot.active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(242,193,78,.3); }
+.deploy-slot.active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(240,168,50,.3); }
 .deploy-slot.filled { border-style: solid; border-color: var(--accent); }
 .deploy-slot-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .deploy-slot-name { font-weight: 700; }
@@ -1183,13 +1184,13 @@ main.drag-board .enemy, main.drag-board .party {
 .deploy-roster { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* An empty deploy slot rendered in the battle party panel. */
-.member-empty { display: flex; align-items: center; justify-content: center; border: 1px dashed #3a4150; opacity: .5; }
+.member-empty { display: flex; align-items: center; justify-content: center; border: var(--bw) dashed var(--faint); opacity: .5; }
 .member-empty-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 
 /* ---- Events -------------------------------------------------------------- */
 .event-screen { display: grid; place-items: center; }
 .event-card {
-  background: var(--panel); border: 1px solid #3a4150; border-radius: 14px;
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 14px;
   padding: 26px 30px; max-width: 620px; width: 100%;
 }
 .event-card h2 { margin: 0 0 10px; }
@@ -1197,7 +1198,7 @@ main.drag-board .enemy, main.drag-board .party {
 .event-choices { display: flex; flex-direction: column; gap: 10px; }
 .event-choice {
   text-align: left; display: flex; flex-direction: column; gap: 3px;
-  background: var(--panel-2); border: 1px solid #333a47; border-radius: 9px; padding: 12px 14px;
+  background: var(--panel-2); border: 1px solid var(--ink); border-radius: 9px; padding: 12px 14px;
   color: var(--ink); cursor: pointer;
 }
 .event-choice:hover { border-color: var(--accent); }
@@ -1210,13 +1211,13 @@ main.drag-board .enemy, main.drag-board .party {
 .dev-toggle {
   position: fixed; top: 50%; right: 0; transform: translateY(-50%);
   z-index: 31; border-radius: 7px 0 0 7px; font-size: 11px; letter-spacing: .5px;
-  background: var(--panel-2); border: 1px solid #3a4150; border-right: none;
+  background: var(--panel-2); border: var(--bw) solid var(--ink); border-right: none;
   padding: 10px 8px; writing-mode: vertical-rl;
 }
 .dev-panel {
   position: fixed; top: 0; right: 0; height: 100vh; width: 300px; z-index: 30;
-  background: var(--panel); border-left: 1px solid #3a4150;
-  box-shadow: -6px 0 18px rgba(0,0,0,.5);
+  background: var(--panel); border-left: 1px solid var(--ink);
+  box-shadow: -5px 0 0 rgba(58,45,40,.18);
   padding: 16px; overflow-y: auto;
   transition: transform .25s ease;
 }
@@ -1245,7 +1246,7 @@ main.drag-board .enemy, main.drag-board .party {
 .relic-tile {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   width: 170px; min-height: 150px; padding: 12px 10px;
-  background: var(--panel, #1c2230); border: 1px solid var(--line, #333a4d);
+  background: var(--panel); border: 1px solid var(--ink);
   border-radius: 10px; color: inherit; cursor: pointer; text-align: center;
 }
 .relic-tile:hover:not(:disabled) { border-color: var(--accent, #6ea8fe); }
@@ -1260,7 +1261,7 @@ main.drag-board .enemy, main.drag-board .party {
 button.pile { font: inherit; color: inherit; cursor: pointer; }
 .pile-viewer {
   margin: 8px auto 0; max-width: 420px; padding: 10px 14px;
-  background: var(--panel, #1c2230); border: 1px solid var(--line, #333a4d); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--ink); border-radius: 10px;
 }
 .pile-viewer h4 { margin: 0 0 6px; }
 .pile-viewer ul { margin: 0 0 8px; padding-left: 18px; text-align: left; columns: 2; }
@@ -1275,3 +1276,29 @@ button.pile { font: inherit; color: inherit; cursor: pointer; }
 .upgrade-names { font-size: 11px; opacity: .85; margin-left: 4px; }
 .next-fight { font-size: 15px; }
 .runover-score { font-size: 14px; opacity: .95; }
+
+/* ---- Theme polish: uniform sticker depth + chunky borders on the standalone
+   panels across the app (map/shop/draft/deploy/event/reliquary/dev), so every
+   screen reads in the cream/ink language, not just the battle board. ---------- */
+.map-node, .map-branch, .node-card, .event-card, .event-choice, .mod-offer,
+.member-pick, .draft-member, .draft-slot, .deploy-slot, .relic-tile, .pile-viewer,
+.map-next-fight, .map-take {
+  box-shadow: var(--shadow-card);
+  border-width: var(--bw);
+}
+.map-node, .node-card, .event-card, .event-choice, .mod-offer, .member-pick,
+.draft-member, .draft-slot, .deploy-slot, .relic-tile, .pile-viewer {
+  border-radius: var(--r-md);
+}
+/* Map node icon chip: family-tinted rounded tile (guide §4 map recipe). */
+.map-node-icon { border-radius: var(--r-sm); }
+/* Standalone screen titles pick up the display face. */
+.shop-head h2, .event-card h2, .map-title, .node-card h2 { font-family: var(--f-disp); font-weight: 800; }
+/* Relic chips in the topbar sit on a pill so the emoji read on cream. */
+.relic-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 999px;
+  background: var(--panel); border: var(--bw) solid var(--ink);
+}
+.run-progress, .newgame { font-weight: 700; }
+.run-gold { display: inline-flex; align-items: center; gap: 4px; }

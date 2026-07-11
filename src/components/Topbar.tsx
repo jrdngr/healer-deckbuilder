@@ -21,7 +21,7 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, reli
 
   return (
     <header className="topbar">
-      <h1>Healer Deckbuilder <span className="tag">prototype</span></h1>
+      <h1>Bandage of Brothers <span className="tag">prototype</span></h1>
       <div className="run-status">
         <span className="run-progress">{progress}</span>
         <span className="run-gold" title="Gold">⦿ {gold}</span>
