@@ -1,6 +1,6 @@
 # Issue 82 — Heal-forward preset decks, unified to size 6
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** rules (constant, balance-relevant)   **Size:** S
 - **Depends on:** —   **Blocks:** none (feeds the between-fight-healing balance pass)
 - **Addresses:** intake 2026-07-11 — "Starting decks should have a reasonable number of healing

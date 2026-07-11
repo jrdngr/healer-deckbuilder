@@ -18,7 +18,7 @@ import {
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   HERO_HEAL_PCT, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
   SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
-  STARTER_DECKS, STARTER_DECK_IDS, DEFAULT_STARTER_DECK, buildStarterDeck,
+  STARTER_DECKS, STARTER_DECK_IDS, DEFAULT_STARTER_DECK, buildStarterDeck, DECK_LIST,
 } from '../src/constants';
 import type { RunLocation } from '../src/run';
 import { emptyStats, recordRunEnd } from '../src/stats';
@@ -1740,6 +1740,28 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     const built = buildStarterDeck(id).map((c) => c.id);
     eq(`${id} builds its declared list`, JSON.stringify(built), JSON.stringify(STARTER_DECKS[id].list));
   }
+  // #82: the maintainer-locked, heal-forward preset compositions — each preset is
+  // exactly its decided six ids (size 6, per-card counts), Preserver unchanged.
+  const countOf = (list: readonly CardId[]) =>
+    list.reduce<Record<string, number>>((m, c) => ((m[c] = (m[c] ?? 0) + 1), m), {});
+  for (const id of STARTER_DECK_IDS) {
+    eq(`${id} preset is size 6`, STARTER_DECKS[id].list.length, 6);
+  }
+  eq('Reaper preset is the decided six',
+    JSON.stringify(countOf(STARTER_DECKS.reaper.list)),
+    JSON.stringify(countOf(['shadowBolt', 'siphonLife', 'grimHarvest', 'lowHeal', 'highHeal', 'transfusion'])));
+  check('Reaper has transfusion', STARTER_DECKS.reaper.list.includes('transfusion'));
+  check('Reaper drops bloodTithe', !STARTER_DECKS.reaper.list.includes('bloodTithe'));
+  eq('Reaper keeps a single shadowBolt',
+    STARTER_DECKS.reaper.list.filter((c) => c === 'shadowBolt').length, 1);
+  eq('Warden preset is the decided six',
+    JSON.stringify(countOf(STARTER_DECKS.warden.list)),
+    JSON.stringify(countOf(['shield', 'brace', 'refresh', 'lowHeal', 'highHeal', 'mendingStream'])));
+  check('Warden has mendingStream', STARTER_DECKS.warden.list.includes('mendingStream'));
+  check('Warden drops phalanx', !STARTER_DECKS.warden.list.includes('phalanx'));
+  check('Warden drops channel', !STARTER_DECKS.warden.list.includes('channel'));
+  eq('Preserver preset is unchanged (DECK_LIST)',
+    JSON.stringify(STARTER_DECKS.preserver.list), JSON.stringify(DECK_LIST));
   // Default path (no picker): a fresh Run defaults to Preserver and its deck.
   const fresh = new Run(7);
   eq('a fresh run defaults to Preserver', fresh.starterDeck, DEFAULT_STARTER_DECK);

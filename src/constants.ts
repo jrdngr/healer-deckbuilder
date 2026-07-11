@@ -1520,13 +1520,13 @@ export const STARTER_DECKS: Record<StarterDeckId, StarterDeckDef> = {
   reaper: {
     id: 'reaper', name: 'Reaper', types: ['shadow', 'blood'],
     desc: 'Shadow & Blood — burn the enemy down and pay in blood.',
-    list: ['shadowBolt', 'shadowBolt', 'siphonLife', 'grimHarvest', 'bloodTithe', 'lowHeal', 'highHeal'],
+    list: ['shadowBolt', 'siphonLife', 'grimHarvest', 'lowHeal', 'highHeal', 'transfusion'],
   },
   // Warden — protection + economy, Iron/Arcane.
   warden: {
     id: 'warden', name: 'Warden', types: ['iron', 'arcane'],
     desc: 'Iron & Arcane — shields and mana to outlast the fight.',
-    list: ['shield', 'brace', 'phalanx', 'refresh', 'channel', 'lowHeal', 'highHeal'],
+    list: ['shield', 'brace', 'refresh', 'lowHeal', 'highHeal', 'mendingStream'],
   },
 };
 

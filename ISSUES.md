@@ -67,5 +67,4 @@ _(empty — all current notes written up as issues #79–#83 on 2026-07-11.)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 82 | 📋 Open | [Heal-forward preset decks, unified to size 6](issues/82-preset-deck-heal-redesign.md) | rules | — | intake 2026-07-11 |
 | 83 | 📋 Open | [Post-boss healer boon (remove Sanctum node)](issues/83-post-boss-healer-boon.md) | run structure | — | intake 2026-07-11 |
