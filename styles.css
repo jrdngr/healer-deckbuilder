@@ -1,36 +1,95 @@
+/* Mendlings theme — warm cream/chocolate-ink "sticker" restyle.
+   Tokens + recipes ported from design_handoff/style handoff/mendlings-theme.css.
+   Styling only: applied to the existing semantic class names; no DOM/logic changes. */
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@500;600;700;800;900&display=swap');
+
 :root {
-  --bg: #14161c;
-  --panel: #1e222b;
-  --panel-2: #262b36;
-  --ink: #e6e9ef;
-  --muted: #9aa3b2;
-  --accent: #6ea8fe;
-  --hp: #5ad17a;
-  --hp-low: #e85d5d;
-  --mp: #6ea8fe;
-  --enemy: #d96b6b;
-  --shield: #7fd0ff;
-  --regen: #7fe6a4;
-  --taunt: #f2c14e;
-  --defense: #aeb9cc;
-  --mp-pending: #aecbff; /* lighter blue: MP a Refresh tick will restore next turn */
-  --danger: #e85d5d;
-  --gold: #f2c14e;
-  --unknown: #b388ff;
+  /* surfaces */
+  --page-bg: linear-gradient(180deg, #c5e6dc 0%, #f2ecd8 58%, #f7efdc 100%);
+  --panel: #fffdf6;
+  --hud-bg: rgba(255, 253, 246, .78);
+  --track: #ece2cc;
+  --grass: #a9d58e;
+  --grass-2: #93c778;
+
+  /* ink (ONE dark: all text + all borders) */
+  --ink: #3a2d28;
+  --muted: #7c6a60;
+  --faint: #a89890;
+
+  /* semantic color */
+  --accent: #ffc94e;
+  --accent-grad: linear-gradient(180deg, #ffd97a, #ffc23e);
+  --accent-ink: #4a3410;
+  --danger: #f07a5e;
+  --danger-grad: linear-gradient(180deg, #ff9a80, #ef6a50);
+  --hp: #57b8a5;      --hp-hi: #7fd4c2;
+  --mp: #6a9fe6;      --mp-hi: #8fbaf4;
+  --gold: #f0a832;
+  --hp-mid-grad: linear-gradient(180deg, #ffd97a, #f0a832); /* HP 25–50% */
+
+  /* card families */
+  --fam-heal: #57b8a5;
+  --fam-ward: #f0a832;
+  --fam-mana: #6a9fe6;
+  --fam-power: #c78ae0;
+
+  /* feedback text */
+  --c-heal: #2f9c88; --c-dmg: #e86a50; --c-mp: #4a80cc; --c-sys: #c08428; --c-log: #8a7568;
+
+  /* hero identity */
+  --hero-tank: #8fc3e8; --hero-mage: #c7a4f0; --hero-ranger: #9ed486;
+  --hero-warlock: #b58ad6; --hero-berserker: #ff9d7e; --hero-graveAugur: #8fd4c8;
+  --hero-sentinel: #a9bdd4; --hero-duelist: #ffa9be;
+
+  /* shape + depth */
+  --r-lg: 22px; --r-md: 16px; --r-sm: 11px;
+  --bw: 2px; --bw-card: 3px;
+  --shadow-card: 0 5px 0 rgba(58, 45, 40, .18);
+  --shadow-btn: 0 5px 0 rgba(58, 45, 40, .5);
+  --shadow-btn-pressed: 0 2px 0 rgba(58, 45, 40, .5);
+  --shadow-sheet: 0 8px 0 rgba(58, 45, 40, .25);
+
+  /* type */
+  --f-disp: 'Baloo 2', cursive;
+  --f-ui: 'Nunito', system-ui, sans-serif;
+
+  /* blobs */
+  --blob-bw: 3px;
+  --blob-outline: #3a2d28;
+  --blob-shadow: rgba(58, 45, 40, .18);
+
+  /* ---- compat aliases: old dark-theme tokens remapped to the new palette so
+     not-yet-migrated sections keep working during the restyle. Removed as each
+     section is migrated. ---- */
+  --bg: #f7efdc;
+  --panel-2: #f4ead2;
+  --hp-low: #f07a5e;
+  --enemy: #f07a5e;
+  --shield: #6a9fe6;
+  --regen: #57b8a5;
+  --taunt: #f0a832;
+  --defense: #a9bdd4;
+  --mp-pending: #8fbaf4;
+  --unknown: #c78ae0;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
+  font-family: var(--f-ui);
+  font-weight: 700;
+  background: var(--page-bg);
+  background-attachment: fixed;
   color: var(--ink);
   line-height: 1.4;
+  font-variant-numeric: tabular-nums;
   /* This is a game UI — text selection is never wanted and dragging a card would
      otherwise start a text selection. */
   user-select: none;
   -webkit-user-select: none;
 }
+h1, h2, h3, h4 { font-family: var(--f-disp); font-weight: 800; }
 
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
