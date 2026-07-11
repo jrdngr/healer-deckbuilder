@@ -5,22 +5,19 @@
 //   incapacitate — the 4th death removes the member from every following fight
 //                  until a scar is healed (unresurrectable in-fight)
 //
-// Run it:  npx tsx sim/injury-exp.ts            (N = 1000 per mode)
-//          npx tsx sim/injury-exp.ts 500        (N = 500 per mode)
+// Run it:  npx tsx sim/experiments/injury-exp.ts            (N = 1000 per mode)
+//          npx tsx sim/experiments/injury-exp.ts 500        (N = 500 per mode)
 //
 // The key telemetry is `past-cap deaths`: deaths landing on a member who already
 // carries MAX_INJURIES scars. Under 'cap' these cost NOTHING — each one is the
 // nullified-system signal the playtest was asked to investigate.
 
-import { Game } from '../src/engine';
-import { Run } from '../src/run';
-import { INJURY_RULES, MAX_INJURIES } from '../src/constants';
-import type { InjuryMode } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, chooseHealerBoon, advanceBranch, draftPick, deployBest } from './policy';
-
-// Mirrors run-sim's per-fight sub-seed so results line up with the main harness.
-const fightSeed = (runSeed: number, fightIndex: number): number =>
-  (Math.imul(runSeed, 0x9e3779b1) + fightIndex * 0x85ebca77) >>> 0;
+import { Game } from '../../src/engine';
+import { Run } from '../../src/run';
+import { INJURY_RULES, MAX_INJURIES } from '../../src/constants';
+import type { InjuryMode } from '../../src/constants';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, chooseHealerBoon, advanceBranch, draftPick, deployBest } from '../policy';
+import { fightSeed, runIfMain } from '../util';
 
 interface ModeReport {
   mode: InjuryMode;
@@ -112,14 +109,13 @@ function report(r: ModeReport): void {
   console.log(`incapacitations/run ${(r.incapacitations / r.n).toFixed(3)}  ·  gold healing/run ${(r.goldHealing / r.n).toFixed(1)}  ·  turn-cap stalls ${r.stalls}`);
 }
 
-const invokedDirectly = process.argv[1] && /injury-exp\.ts$/.test(process.argv[1]);
-if (invokedDirectly) {
+runIfMain(import.meta.url, () => {
   const n = Number(process.argv[2] ?? 1000);
   console.log('--- honest line (policy heals scars at the Infirmary) ---');
   for (const mode of ['cap', 'escalate', 'incapacitate'] as InjuryMode[]) report(runMode(mode, n));
   console.log('\n--- degenerate line (never heals a scar; banks the gold) ---');
   for (const mode of ['cap', 'escalate', 'incapacitate'] as InjuryMode[]) report(runMode(mode, n, 1, false));
-}
+});
 
 export { runMode };
 export type { ModeReport };

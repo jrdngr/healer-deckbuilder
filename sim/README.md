@@ -9,6 +9,15 @@ issue backlog runs through it.
   issues register per-boss reactions (#12–#14) and relic-aware shopping (#21).
 - `run-sim.ts` — `runSingleRun(seed)` / `runSim(n, firstSeed)`, a formatted
   report, and the `npm run sim` CLI (default N=1000).
+- `campaign-exp.ts` — roster/structural experiment harness (forced starters,
+  member bans, deploy-size edge). Imported by `test/sim.test.ts`.
+- `util.ts` — shared helpers (`fightSeed`, `pct`, `runIfMain`) used across the sims.
+- `exercise.ts` — the coverage prober behind `npm run coverage`.
+- `experiments/` — hand-run, one-off balance sweeps kept for re-measuring, NOT
+  wired to any npm script. Run directly: `npx tsx sim/experiments/<name>.ts`.
+  Current: `injury-exp` (INJURY_RULES modes), `relic-exp` (per-relic power
+  battery), `heal-exp` (HERO_HEAL_PCT sweep), `balance-tiers` (skill × party-size
+  matrix).
 
 ```
 npm run sim            # N=1000 from seed 1

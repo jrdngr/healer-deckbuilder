@@ -3200,7 +3200,7 @@ export class Game {
     // wave forbids per-fight caps, so the tuning lever is SCOPE, not magnitude/frequency
     // (the pattern this repo already uses: Ossuary's threshold, Aegis's Ward cap). Keeping
     // the "every Rest heals" hook but narrowing to the single most-wounded member lands it
-    // at +8.4pp, in band. See sim/relic-exp.ts.
+    // at +8.4pp, in band. See sim/experiments/relic-exp.ts.
     if (this.hasRelic('pilgrimsFlask') && this.restRegenNow() > 0) {
       const wounded = this.livingMembers()
         .filter((m) => m.hp < m.maxHP)

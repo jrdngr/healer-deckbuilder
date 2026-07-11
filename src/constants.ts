@@ -1737,12 +1737,12 @@ export const EMPTY_SEAT_GOLD_BONUS = 0.30;
 // the same recovered amount (round(HERO_HEAL_PCT × maxHP)), not to full and not
 // to the in-fight Resurrect card's 50% (which stays a battlefield-only revive).
 // The Infirmary node (below) is the paid way to top HP back up / shed a scar.
-// Chosen from the N=1000 sweep in sim/heal-exp.ts (#58 balance pass).
+// Chosen from the N=1000 sweep in sim/experiments/heal-exp.ts (#58 balance pass).
 // ---------------------------------------------------------------------------
 export const HERO_HEAL_PCT = 0.40;
 
 // The active between-fight heal fraction. Reads HERO_HEAL_PCT by default; kept in a
-// mutable holder ONLY so the sweep (sim/heal-exp.ts) can vary it without a rebuild,
+// mutable holder ONLY so the sweep (sim/experiments/heal-exp.ts) can vary it without a rebuild,
 // exactly like INJURY_RULES. Runtime + tests use the HERO_HEAL_PCT default.
 export const HEAL_TUNING = { pct: HERO_HEAL_PCT };
 
@@ -2150,7 +2150,7 @@ export const VANGUARD_BONUS = 1;
 // Phase B (#22) magnitudes.
 // Aegis Font's Ward buffer cap. Trimmed 2→1 (#35): under player-first ordering (#26)
 // overheal gets a safe turn to convert to Wards, drifting the relic to +9.8pp; a
-// 1-point cap lands it at +7.1pp (N=1000), inside the ≤+9pp band. See sim/relic-exp.ts.
+// 1-point cap lands it at +7.1pp (N=1000), inside the ≤+9pp band. See sim/experiments/relic-exp.ts.
 export const WARD_MAX = 1;             // Aegis Font's Ward buffer cap
 export const TAPER_MAX_COST = 3;       // Taper only discounts cards this cheap
 // Taper discount magnitude (#35). Under player-first ordering (#26) a FULL zeroing
@@ -2158,7 +2158,7 @@ export const TAPER_MAX_COST = 3;       // Taper only discounts cards this cheap
 // out of the ≤+9pp band. A partial −2 discount keeps the per-turn relief (the whole
 // value; once-per-fight measured ~0) but lands it at +8.8pp (N=1000). A −1 discount
 // undershoots to +1.7pp; dropping TAPER_MAX_COST 3→2 measured *stronger* (fewer
-// penalty firings). See sim/relic-exp.ts.
+// penalty firings). See sim/experiments/relic-exp.ts.
 export const TAPER_DISCOUNT = 2;       // MP the first cheap non-engine card is reduced by
 // Telegraphs totalling this much can be delayed once per run. Lowered 13→10 (#35):
 // at 13 the once-per-run Chime drifted to +4.8pp, below a relic slot's opportunity
@@ -2168,7 +2168,7 @@ export const DUSK_CHIME_MIN = 10;      // telegraphs totalling this much can be 
 // −23.9pp under player-first ordering, but the passive-MP lever swings ~±23pp PER
 // POINT — +2 flips it to +23.2pp (a top relic, absurd for a curse). No integer buff
 // lands it as a "mild curse", so it is priced as the hard trap it is; the sim policy
-// already values every curse at 0 and never takes one. See sim/relic-exp.ts.
+// already values every curse at 0 and never takes one. See sim/experiments/relic-exp.ts.
 export const PACT_PASSIVE_MP = 1;      // Pact of Silence's passive MP per turn
 export const CRACKED_HOURGLASS_ENRAGE = 9; // enrage turn under the Hourglass
 export const HOURGLASS_POWER_BONUS = 2;    // Poison & Bolt power under the Hourglass

@@ -4,7 +4,7 @@
 // party sizes (field 1 / 2 / 3), so balance can be judged against the maintainer's
 // per-tier targets instead of the single "good player" stick number.
 //
-// Run with:  npx tsx sim/balance-tiers.ts [N] [firstSeed]   (default N=1000, seed 1)
+// Run with:  npx tsx sim/experiments/balance-tiers.ts [N] [firstSeed]   (default N=1000, seed 1)
 //
 // For each cell it prints the full-run winrate, the per-boss CONDITIONAL winrate (among
 // runs that reached the boss), and the CUMULATIVE boss-survival milestones — P(a run
@@ -15,12 +15,12 @@
 // Targets (trio / field 3): optimal 75% · average 30% (boss1 70%, boss2 50%, F1 >=88%) ·
 // poor <=3%. Solo (field 1): optimal Warlock ~25%.
 
-import { runSim, type SimReport } from './run-sim';
-import { OPTIMAL, AVERAGE, POOR, withSmallParty, type SkillProfile } from './profile';
-import { FIGHT_COUNT } from '../src/constants';
+import { runSim, type SimReport } from '../run-sim';
+import { OPTIMAL, AVERAGE, POOR, withSmallParty, type SkillProfile } from '../profile';
+import { FIGHT_COUNT } from '../../src/constants';
+import { pct, runIfMain } from '../util';
 
 const BOSSES = [2, 5, 8]; // fight indices of the act bosses (Gatewarden / Hexweaver / Devourer)
-const pct = (x: number): string => (x * 100).toFixed(1);
 
 // Cumulative boss-survival milestones: P(reach & beat boss K) over all N runs.
 function milestones(r: SimReport): number[] {
@@ -47,7 +47,7 @@ function printCell(c: Cell): void {
 }
 
 // CLI.
-if (process.argv[1] && process.argv[1].endsWith('balance-tiers.ts')) {
+runIfMain(import.meta.url, () => {
   const N = Number(process.argv[2] ?? 1000);
   const firstSeed = Number(process.argv[3] ?? 1);
   console.log(`=== balance-tier × party-size matrix (N=${N} per cell, from seed ${firstSeed}) ===`);
@@ -74,4 +74,4 @@ if (process.argv[1] && process.argv[1].endsWith('balance-tiers.ts')) {
   console.log('');
 
   console.log(`(FIGHT_COUNT=${FIGHT_COUNT}; bosses at F${BOSSES.join('/F')})`);
-}
+});

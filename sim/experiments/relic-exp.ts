@@ -13,18 +13,15 @@
 // (A curse like pactOfSilence reads as a negative delta — the harm of being handed
 // it "alone", i.e. as the only forced addition.)
 //
-// Run it:  npx tsx sim/relic-exp.ts              (N = 600 per line)
-//          npx tsx sim/relic-exp.ts 1000         (N = 1000 per line)
-//          npx tsx sim/relic-exp.ts 600 aegisFont firstLightTaper   (subset)
+// Run it:  npx tsx sim/experiments/relic-exp.ts              (N = 600 per line)
+//          npx tsx sim/experiments/relic-exp.ts 1000         (N = 1000 per line)
+//          npx tsx sim/experiments/relic-exp.ts 600 aegisFont firstLightTaper   (subset)
 
-import { Game } from '../src/engine';
-import { Run } from '../src/run';
-import type { RelicId } from '../src/constants';
-import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, chooseHealerBoon, advanceBranch, draftPick, deployBest } from './policy';
-
-// Mirrors run-sim's per-fight sub-seed so results line up with the main harness.
-const fightSeed = (runSeed: number, fightIndex: number): number =>
-  (Math.imul(runSeed, 0x9e3779b1) + fightIndex * 0x85ebca77) >>> 0;
+import { Game } from '../../src/engine';
+import { Run } from '../../src/run';
+import type { RelicId } from '../../src/constants';
+import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, chooseHealerBoon, advanceBranch, draftPick, deployBest } from '../policy';
+import { fightSeed, pct, runIfMain } from '../util';
 
 const INJECT_AFTER_FIGHT = 2; // active from fight 3 on (the #22 injection point)
 
@@ -94,11 +91,9 @@ const BATTERY: RelicId[] = [
   'pilgrimsFlask', 'surgeonsThread', 'beggarsBowl',
 ];
 
-const pct = (x: number): string => (100 * x).toFixed(1);
 const signed = (x: number): string => `${x >= 0 ? '+' : ''}${(100 * x).toFixed(1)}`;
 
-const invokedDirectly = process.argv[1] && /relic-exp\.ts$/.test(process.argv[1]);
-if (invokedDirectly) {
+runIfMain(import.meta.url, () => {
   const n = Number(process.argv[2] ?? 600);
   const which = process.argv.slice(3).filter((a): a is RelicId => (BATTERY as string[]).includes(a));
   const relics = which.length > 0 ? which : BATTERY;
@@ -110,4 +105,4 @@ if (invokedDirectly) {
     const line = runRelicLine(r, n);
     console.log(r.padEnd(20) + `${pct(line.rate)}%`.padEnd(12) + `${signed(line.rate - base.rate)}pp`);
   }
-}
+});

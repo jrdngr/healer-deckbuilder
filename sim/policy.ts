@@ -768,7 +768,7 @@ const RELIC_VALUE: Record<RelicId, number> = {
   // Meta-layer / run-economy relics (#71): kept at 0 like the rest of the new-content
   // wave, so the pinned STICK regression line stays a pure rng-stream perturbation and
   // no balance drift sneaks in through the fixed policy's picks. Each relic's marginal
-  // power is gated independently by sim/relic-exp.ts (force-injected, ≤+9pp); a later
+  // power is gated independently by sim/experiments/relic-exp.ts (force-injected, ≤+9pp); a later
   // balance pass owns whether the fixed policy should bank Flask/Thread. Beggar's Bowl
   // is a bought-only curse the policy never takes.
   pilgrimsFlask: 0, surgeonsThread: 0, beggarsBowl: 0,

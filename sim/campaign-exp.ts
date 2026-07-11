@@ -16,12 +16,7 @@ import { Run } from '../src/run';
 import { FIGHT_COUNT, DRAFT_POOL, defaultBattleConfig, partyFromMembers, abilityCardsForParty, isAbilityCard, DEFAULT_ENEMY_DEF } from '../src/constants';
 import type { MemberId, RelicId, PartyMemberConfig, EnemyDef } from '../src/constants';
 import { playFight, resolveNode, chooseBranch, chooseSpoil, chooseCardReward, chooseHealerBoon, advanceBranch, draftPick, deployBest } from './policy';
-
-// Same per-fight sub-seed the real runner uses (run-sim.ts), recreated here so this
-// harness doesn't need to reach into that module's internals.
-function fightSeed(runSeed: number, fightIndex: number): number {
-  return (Math.imul(runSeed, 0x9e3779b1) + fightIndex * 0x85ebca77) >>> 0;
-}
+import { fightSeed, pct as fmtPct, runIfMain } from './util';
 
 interface RunResult {
   won: boolean;
@@ -120,7 +115,7 @@ function aggregate(n: number, firstSeed: number, opts: Options = {}): Agg {
   };
 }
 
-const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
+const pct = (x: number): string => `${fmtPct(x)}%`;
 
 // ---------------------------------------------------------------------------
 // #42 gate: is a SUB-MAX deployment ever the winning line?
@@ -182,7 +177,7 @@ export function deploySizeEdge(n: number): { two: number; three: number; twoNoRe
 }
 
 // CLI report.
-if (process.argv[1] && process.argv[1].endsWith('campaign-exp.ts')) {
+runIfMain(import.meta.url, () => {
   const N = Number(process.argv[2] ?? 1000);
   console.log(`=== campaign experiment (N=${N} per line) ===\n`);
 
@@ -214,7 +209,7 @@ if (process.argv[1] && process.argv[1].endsWith('campaign-exp.ts')) {
   console.log(`  field 3 (plain, relics inert):  ${pct(edge.three)}`);
   console.log(`  field 2 WITHOUT the build:      ${pct(edge.twoNoRelics)}  (the trap baseline)`);
   console.log(`  verdict: ${edge.two > edge.three ? 'sub-max IS the winning line here ✓' : 'sub-max still loses to max'} (build lifts field-2 by ${((edge.two - edge.twoNoRelics) * 100).toFixed(1)}pp)`);
-}
+});
 
 export { runCampaign, aggregate };
 export type { Options, Agg, RunResult };
