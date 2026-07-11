@@ -113,51 +113,79 @@ main {
    `.enemy` rule bled onto it — its 14px padding floored the fill at 28px under
    border-box, leaving a red chunk on the bar even at 0 HP. */
 section.enemy {
-  background: var(--panel); padding: 14px;
+  background: var(--panel); padding: 14px 18px;
   width: 50%; margin-inline: auto;
+  border: var(--bw-card) solid var(--ink); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
 }
-.enemy-head h2 { margin: 0 0 8px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
-.enrage { font-size: 11px; background: var(--danger); color: #fff; padding: 1px 8px; border-radius: 10px; animation: pulse 1.2s infinite; }
-.enrage-countdown { font-size: 11px; margin-left: 8px; background: #3a2a12; color: #f0b866; border: 1px solid #7a5a22; padding: 1px 8px; border-radius: 10px; }
-.enemy-intent { color: #d0a0e0; font-weight: 600; }
-.turn-chip { font-size: 11px; margin-right: 8px; background: #1a2230; color: #9db4d0; border: 1px solid #3a4a60; padding: 1px 8px; border-radius: 10px; }
-.cast-bar { margin-top: 6px; }
-.cast-label { font-size: 12px; color: #f0a0a0; font-weight: 600; }
-.cast-track { height: 6px; background: #2a1414; border: 1px solid #6a2a2a; border-radius: 4px; overflow: hidden; margin-top: 3px; }
-.cast-fill { height: 100%; background: linear-gradient(90deg, #c04040, #f07050); transition: width .3s ease; }
-@keyframes pulse { 50% { opacity: .55; } }
+.enemy-head h2 { margin: 0 0 8px; font-family: var(--f-disp); font-weight: 800; font-size: 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.enrage {
+  font-size: 11px; font-weight: 900; letter-spacing: 1.5px;
+  background: var(--danger); color: #fff; padding: 3px 11px; border-radius: 999px;
+  border: var(--bw) solid var(--ink); animation: pulse 1.2s infinite;
+}
+.enrage-countdown {
+  font-size: 10px; font-weight: 900; margin-left: 4px;
+  background: color-mix(in srgb, var(--gold) 20%, var(--panel)); color: var(--ink);
+  border: var(--bw) solid var(--ink); padding: 3px 10px; border-radius: 999px;
+}
+.enemy-intent {
+  display: inline-flex; align-items: center; gap: 5px; font-weight: 900; font-size: 11px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border: var(--bw) solid var(--danger); border-radius: 999px; padding: 3px 11px;
+}
+.turn-chip {
+  font-size: 11px; font-weight: 800; margin-right: 4px;
+  background: var(--hud-bg); color: var(--ink);
+  border: var(--bw) solid var(--ink); padding: 3px 11px; border-radius: 999px;
+}
+.cast-bar { margin-top: 8px; }
+.cast-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--danger); font-weight: 800; }
+.cast-track { height: 9px; background: var(--track); border: var(--bw) solid var(--ink); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+.cast-fill { height: 100%; background: var(--danger-grad); transition: width .3s ease; border-radius: 999px; }
+@keyframes pulse { 50% { opacity: .5; } }
 
 /* ---- Player channel banner (#78) ----------------------------------------
    Persistent feedback for a player-cast channel, mounted between the mana bar
    and the hand. Mirrors the enemy cast-bar language (.cast-bar) but tinted
    arcane-blue so it reads as YOUR sustained effect, not the enemy's wind-up. */
 .channel-banner {
-  margin: 8px 0; padding: 8px 12px; border: 1px solid #4a5aa0; border-radius: 8px;
-  background: linear-gradient(90deg, rgba(40,52,110,.45), rgba(30,38,80,.25));
+  margin: 8px auto; width: 50%; padding: 10px 14px;
+  border: var(--bw-card) solid var(--mp); border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--mp) 14%, var(--panel));
+  box-shadow: var(--shadow-card);
   display: flex; flex-direction: column; gap: 4px;
   animation: pulse 1.8s infinite;
 }
-.channel-banner .channel-label { color: #a9c0f0; }
-.channel-banner .channel-target { color: #d6e2ff; }
-.channel-effect { font-size: 12px; color: #c7d2e8; }
-.channel-banner .cast-track { background: #17203a; border-color: #3a4a80; }
-.channel-banner .channel-fill { background: linear-gradient(90deg, #4060c0, #70a0f0); }
-.channel-warn { font-size: 11px; color: #f0b866; font-weight: 600; }
-.enemy-status { margin-top: 8px; font-size: 13px; color: var(--gold); min-height: 18px; }
+.channel-banner .channel-label { display: inline-flex; align-items: center; gap: 5px; color: var(--c-mp); font-weight: 800; }
+.channel-banner .channel-target { color: var(--ink); }
+.channel-effect { font-size: 12px; color: var(--muted); }
+.channel-banner .cast-track { background: var(--track); border-color: var(--ink); }
+.channel-banner .channel-fill { background: linear-gradient(180deg, var(--mp-hi), var(--mp)); }
+.channel-warn { font-size: 11px; color: var(--c-sys); font-weight: 800; }
+.enemy-status { margin-top: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); min-height: 18px; }
+.enemy-poison { display: inline-flex; align-items: center; gap: 5px; color: var(--fam-heal); font-weight: 800; }
 
-.bar { position: relative; height: 22px; background: #11141a; overflow: hidden; border: 1px solid #000; }
+.bar {
+  position: relative; height: 18px; overflow: hidden;
+  background: var(--track); border: var(--bw) solid var(--ink); border-radius: 999px;
+}
 /* The fill is a row of coloured segments anchored from the left: the current
    value pinned at left:0 (so it depletes from the right), then telegraphed
    next-turn changes (incoming damage / pending heals) offset to sit after it. */
 .bar-track { position: absolute; inset: 0; }
-.seg { position: absolute; top: 0; bottom: 0; transition: width .25s ease, left .25s ease; }
-.seg.hp { background: var(--hp); }
-.seg.mp { background: var(--mp); }
-.seg.refresh-pending { background: var(--mp-pending); }
-/* Siphon (#13): purple chunk carved from the right of the current MP fill. */
-.seg.siphon-pending { background: repeating-linear-gradient(45deg, #b06bfe, #b06bfe 4px, #7a3fbf 4px, #7a3fbf 8px); }
-.seg.enemy { background: var(--enemy); }
-.bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; text-shadow: 0 1px 2px #000; }
+.seg { position: absolute; top: 0; bottom: 0; border-radius: 999px; transition: width .3s ease, left .3s ease; }
+.seg.hp { background: linear-gradient(180deg, var(--hp-hi), var(--hp)); }
+/* HP fill shifts warmer as it drops (guide §4): gold 25–50%, danger below 25%. */
+.seg.hp.mid { background: var(--hp-mid-grad); }
+.seg.hp.low { background: var(--danger-grad); }
+.seg.mp { background: linear-gradient(180deg, var(--mp-hi), var(--mp)); }
+.seg.refresh-pending { background: color-mix(in srgb, var(--mp) 45%, var(--panel)); }
+/* Siphon (#13): striped chunk carved from the right of the current MP fill. */
+.seg.siphon-pending { background: repeating-linear-gradient(45deg, var(--fam-power), var(--fam-power) 4px, #a86bd0 4px, #a86bd0 8px); }
+.seg.enemy { background: var(--danger-grad); }
+.bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* Enemy attack lines (SVG overlay drawn over the layout). The dashes flow from
    the enemy toward each target, so the threat reads as motion, not just a line. */
@@ -176,90 +204,114 @@ section.enemy {
 @keyframes telegraph-flow { to { stroke-dashoffset: -17; } }
 @keyframes telegraph-flow-hidden { to { stroke-dashoffset: -13; } }
 @keyframes fade-in { from { opacity: 0; } }
-.atk-badge { fill: #1a0d0d; stroke: var(--danger); stroke-width: 1.5; animation: badge-pulse 1.6s ease-in-out infinite; }
-.hidden-badge { fill: #160d22; stroke: var(--unknown); }
-@keyframes badge-pulse { 50% { stroke-width: 2.5; } }
-.atk-text { fill: #fff; font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
-.hidden-text { fill: var(--unknown); }
+.atk-badge { fill: var(--danger); stroke: var(--ink); stroke-width: 2; animation: badge-pulse 1.6s ease-in-out infinite; }
+.hidden-badge { fill: var(--unknown); stroke: var(--ink); }
+@keyframes badge-pulse { 50% { stroke-width: 3; } }
+.atk-text { fill: #fff; font-size: 12px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+.hidden-text { fill: #fff; }
 
 /* Party — portrait cards. Big gap above pushes the enemy away; shorter cards
    reclaim most of their internal empty space and donate it to that gap. */
 .party { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 110px; }
 .member {
-  background: var(--panel); border-radius: 12px; padding: 16px 12px 12px;
-  border: 2px solid #2c3340; position: relative; transition: border-color .15s, transform .12s;
-  width: 100%; max-width: 210px; min-height: 190px; margin-inline: auto;
-  display: flex; flex-direction: column; gap: 8px;
-  box-shadow: 0 6px 14px rgba(0,0,0,.45);
+  background: var(--panel); border-radius: var(--r-md); padding: 14px 12px 12px;
+  border: var(--bw-card) solid var(--ink); position: relative; transition: border-color .15s, transform .12s;
+  width: 100%; max-width: 210px; min-height: 204px; margin-inline: auto;
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  box-shadow: var(--shadow-card);
 }
-/* Name is centered; pad so it never runs under the ATK diamond in the corner. */
-.member h3 { margin: 0; font-size: 16px; text-align: center; padding: 0 32px; }
-/* ATK value in a red diamond, inset in the top-right corner */
+/* Name is centered; pad so it never runs under the ATK chip in the corner. */
+.member h3 { margin: 0; font-family: var(--f-disp); font-weight: 700; font-size: 16px; text-align: center; padding: 0 26px; }
+/* ATK value: danger-gradient pill overhanging the top-right corner. */
 .member .atk {
-  position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
-  background: var(--danger); transform: rotate(45deg); border-radius: 4px;
-  border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center;
+  position: absolute; top: -11px; right: -9px; z-index: 4;
+  display: inline-flex; align-items: center; gap: 3px;
+  min-width: 26px; height: auto; padding: 3px 9px;
+  background: var(--danger-grad); transform: none; border-radius: 999px;
+  border: 2.5px solid var(--ink);
 }
-.member .atk span { transform: rotate(-45deg); font-weight: 700; font-size: 14px; color: #2a0a0a; }
-.member .badges { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; min-height: 22px; }
-.badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
-.badge.shield { background: var(--shield); color: #06243a; }
-.badge.regen { background: var(--regen); color: #06351a; }
-.badge.defense { background: var(--defense); color: #1c2430; }
-.badge.taunt { background: var(--taunt); color: #3a2c06; }
-.badge.injury { background: #b4442f; color: #fbe6df; }
-.member .charge { font-size: 12px; font-weight: 600; color: var(--gold); }
+.member .atk span { transform: none; font-family: var(--f-disp); font-weight: 800; font-size: 13px; color: #fff; }
+.member .atk svg { color: #fff; }
+.member .badges { display: flex; flex-direction: column; gap: 5px; align-items: center; min-height: 22px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9.5px; font-weight: 900; padding: 3px 9px; border-radius: 999px;
+  background: var(--panel); border: var(--bw) solid var(--ink); color: var(--ink);
+}
+.badge svg { color: var(--ic, var(--ink)); }
+.badge.shield { --ic: var(--mp); }
+.badge.regen { --ic: var(--hp); }
+.badge.defense { --ic: var(--hero-sentinel); }
+.badge.taunt { --ic: var(--gold); }
+.badge.injury { --ic: var(--danger); border-color: var(--danger); }
+.member .charge {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 900;
+  padding: 2px 9px; border-radius: 999px; background: var(--panel); border: var(--bw) solid var(--ink);
+  color: var(--gold);
+}
+.member .charge svg { color: currentColor; }
 /* Berserker rage tiers (#28): calm/enraged/berserk escalate warm. */
 .member .charge.rage-0 { color: var(--muted); }
 .member .charge.rage-1 { color: var(--gold); }
 .member .charge.rage-2 { color: var(--danger); }
 /* DR1: the map-side "who's wounded" readout and the Infirmary member rows. */
-.map-sub.party-injuries { color: #e0917f; font-weight: 600; }
+.map-sub.party-injuries { color: var(--danger); font-weight: 800; }
 .infirmary-member { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-.member .ability { font-size: 12px; color: var(--muted); margin-top: auto; line-height: 1.35; }
-.member.dead { opacity: .5; }
+.member .ability { font-size: 12px; color: var(--muted); margin-top: auto; line-height: 1.35; text-align: center; }
+.member.dead { opacity: .65; }
 .member.dead::after {
-  content: "DEAD"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--danger); font-weight: 700; font-size: 20px; letter-spacing: 2px;
+  content: "FALLEN"; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--f-disp); font-weight: 800; font-size: 13px; letter-spacing: 1.5px;
+  color: var(--danger); background: var(--panel);
+  border: var(--bw) solid var(--danger); border-radius: 999px; padding: 4px 14px;
 }
-/* Incapacitated (#33): a distinct overlay replaces the plain DEAD text. */
+/* Incapacitated (#33): a distinct overlay replaces the plain FALLEN text. */
 .member.incapacitated::after { content: none; }
-.member.incapacitated { opacity: .7; border-color: #7a4a8a; }
+.member.incapacitated { opacity: .8; border-color: var(--fam-power); }
 .incap-overlay {
   position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 2px; text-align: center;
-  background: rgba(30, 14, 34, .55);
+  align-items: center; justify-content: center; gap: 3px; text-align: center;
+  border-radius: calc(var(--r-md) - 3px);
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
 }
-.incap-title { color: #d79cf0; font-weight: 700; font-size: 15px; letter-spacing: 1px; }
-.incap-hint { color: #b090c0; font-size: 11px; }
-.member.targeted-by-enemy { border-color: var(--danger); }
-.member.valid-target { border-color: var(--accent); cursor: pointer; box-shadow: 0 0 0 2px rgba(110,168,254,.25); }
-.member.valid-target:hover { background: var(--panel-2); }
+.incap-title { display: inline-flex; align-items: center; gap: 5px; color: #fff; font-family: var(--f-disp); font-weight: 800; font-size: 14px; }
+.incap-hint { color: #f2e6ee; font-size: 11px; font-weight: 700; }
+.member.targeted-by-enemy { border-color: var(--danger); animation: target-ring 1.6s ease-in-out infinite; }
+.member.valid-target {
+  border-color: var(--mp); cursor: pointer;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mp) 30%, transparent), var(--shadow-card);
+}
+.member.valid-target:hover { transform: translateY(-3px); }
+@keyframes target-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,106,80,0), var(--shadow-card); }
+  50% { box-shadow: 0 0 0 6px rgba(239,106,80,.35), var(--shadow-card); }
+}
 
 /* ---- Persistent status auras --------------------------------------------
    Statuses read from across the screen as light on the card itself; the badge
    pills keep the exact numbers. Aura layers are absolutely-positioned children
    (pointer-transparent) whose animations touch only opacity/transform, so they
    can run all fight without paint churn. */
-.aura { position: absolute; inset: 0; border-radius: 10px; pointer-events: none; }
-.aura-rim { border: 2px solid; animation: aura-pulse 2.4s ease-in-out infinite; }
-.aura-rim.shield { border-color: var(--shield); box-shadow: inset 0 0 18px rgba(127,208,255,.35), 0 0 10px rgba(127,208,255,.3); }
-.aura-rim.ward   { border-color: var(--regen); box-shadow: inset 0 0 18px rgba(127,230,164,.3), 0 0 10px rgba(127,230,164,.25); }
-.aura-rim.brace  { border-color: var(--defense); box-shadow: inset 0 0 14px rgba(174,185,204,.28); }
+.aura { position: absolute; inset: 0; border-radius: var(--r-md); pointer-events: none; }
+.aura-rim { border: var(--bw) solid; animation: aura-pulse 2.4s ease-in-out infinite; }
+.aura-rim.shield { border-color: var(--mp); box-shadow: inset 0 0 18px rgba(106,159,230,.32), 0 0 10px rgba(106,159,230,.28); }
+.aura-rim.ward   { border-color: var(--hp); box-shadow: inset 0 0 18px rgba(87,184,165,.3), 0 0 10px rgba(87,184,165,.25); }
+.aura-rim.brace  { border-color: var(--hero-sentinel); box-shadow: inset 0 0 14px rgba(169,189,212,.34); }
 .aura-taunt {
-  box-shadow: 0 0 0 3px var(--taunt), 0 0 16px rgba(242,193,78,.45);
+  box-shadow: 0 0 0 3px var(--gold), 0 0 16px rgba(240,168,50,.4);
   animation: aura-pulse-strong 1.6s ease-in-out infinite;
 }
 /* Standing Defense: a steady steel footing along the bottom edge (static). */
 .aura-defense {
-  background: linear-gradient(to top, rgba(174,185,204,.22), transparent 32%);
+  background: linear-gradient(to top, rgba(169,189,212,.28), transparent 32%);
 }
 @keyframes aura-pulse { 50% { opacity: .45; } }
 @keyframes aura-pulse-strong { 50% { opacity: .55; transform: scale(1.008); } }
 /* Regen: motes drift up the card in a slow loop. */
 .aura-motes span {
   position: absolute; bottom: 18%; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--regen); box-shadow: 0 0 8px 1px var(--regen); opacity: 0;
+  background: var(--hp); box-shadow: 0 0 8px 1px var(--hp); opacity: 0;
   animation: mote-rise 2.8s linear infinite;
 }
 .aura-motes span:nth-child(1) { left: 22%; animation-delay: 0s; }
@@ -282,11 +334,11 @@ section.enemy { animation: breathe 4.6s ease-in-out infinite; }
 .member.hp-low { animation: heartbeat 1.5s ease-in-out infinite; }
 .member.hp-crit { animation: heartbeat .8s ease-in-out infinite; }
 @keyframes heartbeat {
-  0%, 100% { border-color: #2c3340; transform: none; }
+  0%, 100% { border-color: var(--ink); transform: none; }
   18% { border-color: var(--danger); transform: scale(1.012); }
-  36% { border-color: #6b3038; transform: none; }
+  36% { border-color: var(--ink); transform: none; }
   50% { border-color: var(--danger); transform: scale(1.006); }
-  70% { border-color: #2c3340; }
+  70% { border-color: var(--ink); }
 }
 .member.dead, .member.incapacitated { animation: none; }
 
@@ -340,51 +392,69 @@ section.enemy { animation: breathe 4.6s ease-in-out infinite; }
 
 /* Controls — centered MP bar at half width */
 .controls { display: flex; justify-content: center; }
-.mp-bar { width: 50%; height: 26px; }
+.mp-bar { width: 50%; height: 22px; }
 .refresh-pill {
   position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
-  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
-  background: var(--regen); color: #06351a;
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px;
+  background: var(--panel); border: var(--bw) solid var(--ink); color: var(--c-heal);
 }
 .siphon-pill {
   position: absolute; top: 50%; left: 6px; transform: translateY(-50%);
-  font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px;
-  background: #b06bfe; color: #21063a;
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 900; padding: 2px 9px; border-radius: 999px;
+  background: var(--panel); border: var(--bw) solid var(--ink); color: var(--fam-power);
 }
+.refresh-pill svg, .siphon-pill svg { color: currentColor; }
 /* Party-wide Hex banner (#13): a full-width row above the party cards (the party
    is a 3-column grid, so it must span every column) while healing is halved. */
 .hex-banner {
   grid-column: 1 / -1;
-  text-align: center; font-size: 12px; font-weight: 700; color: #f0c4ff;
-  background: #2e1440; border: 1px solid #7a3fbf; border-radius: 8px;
-  padding: 4px 10px; animation: pulse 1.6s infinite;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  text-align: center; font-size: 12px; font-weight: 900; color: var(--fam-power);
+  background: color-mix(in srgb, var(--fam-power) 16%, var(--panel));
+  border: var(--bw) solid var(--fam-power); border-radius: var(--r-md);
+  padding: 6px 12px; animation: pulse 1.6s infinite;
 }
-.buttons { display: flex; gap: 8px; }
+.hex-banner svg { color: currentColor; }
+.buttons { display: flex; gap: 10px; }
 
 button {
-  background: var(--panel-2); color: var(--ink); border: 1px solid #3a4150;
-  padding: 8px 14px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600;
+  font-family: var(--f-disp); font-weight: 800; font-size: 14px;
+  background: var(--panel); color: var(--muted); border: var(--bw-card) solid var(--ink);
+  padding: 9px 18px; border-radius: var(--r-md); cursor: pointer;
+  box-shadow: var(--shadow-card); transition: transform .12s ease, color .12s;
 }
-button:hover:not(:disabled) { background: #303644; }
-button:disabled { opacity: .4; cursor: not-allowed; }
-button.primary { background: var(--accent); color: #08101f; border-color: var(--accent); }
-button.primary:hover:not(:disabled) { background: #8bbcff; }
-button.danger { background: var(--danger); color: #2a0a0a; border-color: var(--danger); }
-button.danger:hover:not(:disabled) { background: #f07a7a; }
+button:hover:not(:disabled) { color: var(--ink); transform: translateY(-2px); }
+button:active:not(:disabled) { transform: translateY(2px); box-shadow: var(--shadow-btn-pressed); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.primary {
+  background: var(--accent-grad); color: var(--accent-ink); border-color: var(--ink);
+  box-shadow: var(--shadow-btn);
+}
+button.primary:hover:not(:disabled) { color: var(--accent-ink); }
+button.danger { background: var(--danger-grad); color: #fff; border-color: var(--ink); box-shadow: var(--shadow-btn); }
+button.danger:hover:not(:disabled) { color: #fff; }
 
 /* Hand */
-.hand-wrap h3 { margin: 0 0 8px; font-size: 14px; }
-#hand-prompt.targeting { color: var(--accent); }
+.hand-wrap h3 { margin: 0 0 8px; font-size: 14px; font-family: var(--f-ui); font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: var(--faint); }
+#hand-prompt.targeting { color: var(--c-mp); }
 .hand-area { display: flex; align-items: flex-start; gap: 16px; }
 /* Extra headroom so fanned/lifted cards don't clip against the sections above. */
-.hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 150px; padding-top: 14px; }
+.hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 158px; padding-top: 16px; }
 .card {
-  width: 132px; min-height: 150px; background: var(--panel); border: 1px solid #3a4150; border-radius: 9px;
-  /* top padding reserves a strip for the cost/heal badges so text starts below them */
-  padding: 44px 10px 10px; cursor: pointer; transition: transform .14s ease, border-color .12s; position: relative;
-  box-shadow: 0 4px 10px rgba(0,0,0,.4);
+  width: 132px; min-height: 158px; background: var(--panel);
+  border: var(--bw-card) solid var(--ink); border-radius: var(--r-md);
+  /* top padding reserves a strip for the family tick / heal pill so text starts below them */
+  padding: 28px 10px 10px; cursor: pointer; transition: transform .14s ease; position: relative;
+  box-shadow: var(--shadow-card);
   /* Own the pointer so a drag-to-target gesture isn't stolen by touch scrolling. */
   touch-action: none;
+}
+/* Family tick: a small colored pill at the top-center — what the card does at a glance. */
+.card::before {
+  content: ""; position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+  width: 22px; height: 4px; border-radius: 999px; background: var(--fam, var(--muted));
 }
 .card:hover { transform: translateY(-3px); }
 
@@ -431,31 +501,33 @@ button.danger:hover:not(:disabled) { background: #f07a7a; }
    Any in-hand copy of the id currently channeling glows arcane-blue and wears a
    "channeling · N left" badge, so the source of the running channel is obvious. */
 .card.channeling {
-  border-color: #70a0f0;
-  box-shadow: 0 4px 10px rgba(0,0,0,.4), 0 0 0 1px #4a5aa0, 0 0 14px rgba(96,140,240,.55);
+  border-color: var(--mp);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mp) 35%, transparent), var(--shadow-card);
   animation: channel-glow 1.8s ease-in-out infinite;
 }
 @keyframes channel-glow {
-  50% { box-shadow: 0 4px 10px rgba(0,0,0,.4), 0 0 0 1px #6a7ad0, 0 0 22px rgba(112,160,240,.85); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--mp) 45%, transparent), var(--shadow-card); }
 }
 .channel-badge {
-  position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
-  font-size: 10px; font-weight: 700; white-space: nowrap;
-  color: #dce8ff; background: linear-gradient(90deg, #3a52b0, #4a68c8);
-  border: 1px solid #7090e0; border-radius: 9px; padding: 1px 7px; z-index: 4;
+  position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 900; white-space: nowrap; z-index: 5;
+  color: #fff; background: linear-gradient(180deg, var(--mp-hi), var(--mp));
+  border: 2px solid var(--ink); border-radius: 999px; padding: 2px 9px;
 }
+.channel-badge svg { color: #fff; }
 .card-drag-ghost {
   position: fixed; z-index: 60; pointer-events: none;
-  filter: drop-shadow(0 10px 18px rgba(0,0,0,.55));
+  filter: drop-shadow(0 8px 0 rgba(58,45,40,.35));
   transform: rotate(-3deg) scale(1.04);
 }
 .card-drag-ghost .card {
   width: 100%; height: 100%; margin: 0; animation: none;
-  border-color: var(--accent); box-shadow: 0 0 0 2px rgba(110,168,254,.5);
+  border-color: var(--mp); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mp) 40%, transparent);
 }
 /* A no-target card arms the whole board: hint the enemy + party as drop zones. */
 main.drag-board .enemy, main.drag-board .party {
-  outline: 2px dashed rgba(110,168,254,.5); outline-offset: 3px; border-radius: 10px;
+  outline: 3px dashed color-mix(in srgb, var(--mp) 55%, transparent); outline-offset: 3px; border-radius: var(--r-md);
 }
 
 /* "No." — the shake for clicking a card you can't play right now. */
@@ -467,83 +539,109 @@ main.drag-board .enemy, main.drag-board .party {
   85% { transform: translateX(2px); }
 }
 
-/* Family edge tints: what a card does reads at a glance from across the table. */
-.card.family-heal  { border-left: 3px solid var(--hp); }
-.card.family-ward  { border-left: 3px solid var(--taunt); }
-.card.family-mana  { border-left: 3px solid var(--mp); }
-.card.family-power { border-left: 3px solid #c46bd9; }
+/* Family accent (drives the top-center tick): what a card does at a glance. */
+.card.family-heal  { --fam: var(--fam-heal); }
+.card.family-ward  { --fam: var(--fam-ward); }
+.card.family-mana  { --fam: var(--fam-mana); }
+.card.family-power { --fam: var(--fam-power); }
 
-/* Playable cards' cost gem breathes gently; dimmed cards stay still. */
+/* Playable cards' cost bubble breathes gently; dimmed cards stay still. */
 .card:not(.unaffordable):not(.ineligible) .cost { animation: cost-pulse 2.2s ease-in-out infinite; }
 @keyframes cost-pulse {
-  50% { box-shadow: 0 0 10px 2px rgba(110,168,254,.55); }
+  50% { box-shadow: 0 0 10px 2px rgba(106,159,230,.6); }
 }
-/* Mana cost: blue square, inset in the top-left corner */
+/* Mana cost: blue circle, overhanging the top-left corner. */
 .card .cost {
-  position: absolute; top: 10px; left: 10px; width: 26px; height: 26px; border-radius: 6px;
-  background: var(--mp); color: #06243a; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 13px; border: 2px solid var(--bg);
+  position: absolute; top: -11px; left: -10px; z-index: 3;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(180deg, var(--mp-hi), var(--mp)); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--f-disp); font-weight: 800; font-size: 14px; border: 2.5px solid var(--ink);
 }
-/* Healing value: green circle, inset in the top-right corner */
+/* Healing value: teal pill INSIDE the top-right (fanned cards overlap on the right). */
 .card .heal {
-  position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--hp); color: #06351a; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 13px; border: 2px solid var(--bg);
+  position: absolute; top: 8px; right: 8px;
+  display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 7px;
+  border-radius: 999px; background: linear-gradient(180deg, var(--hp-hi), var(--hp));
+  color: #fff; font-family: var(--f-disp); font-weight: 800; font-size: 11px;
+  border: var(--bw) solid var(--ink);
 }
-.card .cname { font-weight: 700; font-size: 13px; margin: 0 0 6px; }
-.card .cdesc { font-size: 11px; color: var(--muted); }
+.card .heal svg { color: #fff; }
+.card .cname { font-family: var(--f-disp); font-weight: 700; font-size: 15.5px; margin: 0 0 6px; text-align: center; }
+.card .cdesc { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.45; }
 .card.unaffordable { opacity: .45; cursor: not-allowed; }
 .card.unaffordable:hover { transform: none; }
 /* Ineligible reads differently from too-expensive: washed out, not just dim. */
 .card.ineligible { opacity: .4; filter: grayscale(.85); cursor: not-allowed; }
 .card.ineligible:hover { transform: none; }
-.card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(110,168,254,.35); }
-.card:focus-visible, .member:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* Draw / discard piles, flanking the hand */
-.pile {
-  flex: none; width: 92px; min-height: 150px; border-radius: 9px;
-  border: 1px solid #3a4150; background: var(--panel-2); color: var(--muted);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  box-shadow: 3px 3px 0 -1px var(--panel-2), 3px 3px 0 0 #3a4150,
-              6px 6px 0 -1px var(--panel-2), 6px 6px 0 0 #3a4150;
+.card.selected {
+  border-color: var(--mp);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mp) 30%, transparent), var(--shadow-card);
 }
-.pile-count { font-size: 24px; font-weight: 700; color: var(--ink); }
-.pile-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.card:focus-visible, .member:focus-visible { outline: 3px solid var(--mp); outline-offset: 2px; }
+
+/* Draw / discard piles, flanking the hand — a card back with a striped inner panel
+   and a medallion count (guide §4). Draw = mint, discard = peach. */
+.pile {
+  flex: none; position: relative; overflow: hidden;
+  width: 104px; min-height: 158px; border-radius: var(--r-md);
+  border: var(--bw-card) solid var(--ink); background: var(--panel); color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: var(--shadow-card);
+}
+.pile::before {
+  content: ""; position: absolute; inset: 7px; z-index: 0;
+  border: var(--bw) solid var(--ink); border-radius: calc(var(--r-md) - 6px);
+  background: repeating-linear-gradient(45deg, #bfe0d5 0 7px, #d3ebe2 7px 14px); opacity: .85;
+}
+.discard-pile::before { background: repeating-linear-gradient(45deg, #ecd9c2 0 7px, #f4e6d4 7px 14px); }
+.pile-count {
+  position: relative; z-index: 1;
+  width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--panel); border: 2.5px solid var(--ink);
+  font-family: var(--f-disp); font-weight: 800; font-size: 18px; color: var(--ink);
+}
+.pile-label {
+  position: relative; z-index: 1;
+  font-size: 9.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: var(--ink);
+  background: var(--panel); border: var(--bw) solid var(--ink); border-radius: 999px; padding: 2px 9px;
+}
 
 /* Log */
-.log-wrap h3 { margin: 0 0 6px; font-size: 14px; }
-.log { list-style: none; margin: 0; padding: 10px; background: var(--panel); border-radius: 8px;
-  max-height: 180px; overflow-y: auto; font-size: 12px; font-family: ui-monospace, monospace; }
-.log li { padding: 1px 0; color: var(--muted); animation: log-in 220ms ease-out backwards; }
+.log-wrap h3 { margin: 0 0 6px; font-size: 14px; font-family: var(--f-ui); font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: var(--faint); }
+.log { list-style: none; margin: 0; padding: 12px 14px; background: var(--panel);
+  border: var(--bw-card) solid var(--ink); border-radius: var(--r-md); box-shadow: var(--shadow-card);
+  max-height: 180px; overflow-y: auto; font-size: 12px; font-weight: 700; }
+.log li { padding: 1px 0; color: var(--c-log); animation: log-in 220ms ease-out backwards; }
 @keyframes log-in { from { opacity: 0; transform: translateX(-8px); } }
-.log li.hit, .log li.death, .log li.loss { color: var(--danger); }
-.log li.heal { color: var(--hp); }
-.log li.mp { color: var(--mp); }
-.log li.win { color: var(--hp); font-weight: 700; }
-.log li.system { color: var(--gold); }
-.log li.status { color: var(--shield); }
-.log li.shield { color: var(--shield); }
-.log li.enemy-dmg { color: #ffb38a; }
-.log li.turn-sep { color: #555; border-top: 1px solid #2a2f3a; margin-top: 3px; padding-top: 3px; }
+.log li.hit, .log li.death, .log li.loss { color: var(--c-dmg); }
+.log li.heal { color: var(--c-heal); }
+.log li.mp { color: var(--c-mp); }
+.log li.win { color: var(--c-heal); font-weight: 900; }
+.log li.system { color: var(--c-sys); }
+.log li.status { color: var(--c-mp); }
+.log li.shield { color: var(--c-mp); }
+.log li.enemy-dmg { color: var(--danger); }
+.log li.turn-sep { color: var(--faint); border-top: var(--bw) solid var(--track); margin-top: 3px; padding-top: 3px; }
 
 /* Overlay — the scrim fades up, then the result card drops in a beat later
    (the fight's final banner has already played by the time this mounts). */
 .overlay {
-  position: fixed; inset: 0; background: rgba(8,10,14,.82);
+  position: fixed; inset: 0; background: rgba(58, 45, 40, .45);
   display: flex; align-items: center; justify-content: center; z-index: 20;
   animation: fade-in 320ms ease-out;
 }
 .overlay-card {
-  background: var(--panel); padding: 28px 36px; border-radius: 14px; text-align: center; border: 1px solid #3a4150;
+  background: var(--panel); padding: 28px 36px; border-radius: var(--r-lg); text-align: center;
+  border: var(--bw-card) solid var(--ink); box-shadow: var(--shadow-sheet);
   animation: overlay-card-in 420ms cubic-bezier(.3,1.25,.5,1) backwards;
   animation-delay: 140ms;
 }
 @keyframes overlay-card-in {
   from { opacity: 0; transform: translateY(20px) scale(.93); }
 }
-.overlay-card h2 { margin: 0 0 8px; font-size: 28px; }
-.overlay-card.win h2 { color: var(--hp); }
+.overlay-card h2 { margin: 0 0 8px; font-family: var(--f-disp); font-weight: 800; font-size: 30px; }
+.overlay-card.win h2 { color: var(--c-heal); }
 .overlay-card.loss h2 { color: var(--danger); }
 .overlay-card p { color: var(--muted); margin: 0 0 18px; }
 .overlay-actions { display: flex; gap: 10px; justify-content: center; }
@@ -724,16 +822,17 @@ main.drag-board .enemy, main.drag-board .party {
 .fx-card-ghost {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   padding: 6px; overflow: hidden;
-  background: var(--panel); border: 1px solid var(--accent); border-radius: 9px;
-  box-shadow: 0 8px 20px rgba(0,0,0,.5), 0 0 14px rgba(110,168,254,.35);
+  background: var(--panel); border: var(--bw-card) solid var(--ink); border-radius: var(--r-md);
+  box-shadow: var(--shadow-card), 0 0 0 3px color-mix(in srgb, var(--mp) 35%, transparent);
   transform: translate(-50%, -50%);
   animation: fx-card-ghost var(--dur, 420ms) cubic-bezier(.45,.1,.55,1) forwards;
 }
 .fx-ghost-cost {
-  width: 24px; height: 24px; border-radius: 6px; background: var(--mp); color: #06243a;
-  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(180deg, var(--mp-hi), var(--mp)); color: #fff; border: 2px solid var(--ink);
+  display: flex; align-items: center; justify-content: center; font-family: var(--f-disp); font-weight: 800; font-size: 12px;
 }
-.fx-ghost-name { font-weight: 700; font-size: 12px; color: var(--ink); text-align: center; }
+.fx-ghost-name { font-family: var(--f-disp); font-weight: 700; font-size: 12px; color: var(--ink); text-align: center; }
 @keyframes fx-card-ghost {
   0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
   28%  { transform: translate(-50%, calc(-50% - 18px)) scale(1.1); opacity: 1; }
