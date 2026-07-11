@@ -1,6 +1,6 @@
 # Issue 79 — Floating "+1 ATK" popups for every buff and debuff
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** post-demo (UI juice)   **Size:** M
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** intake 2026-07-11 — "When I buff members with +1 ATK, the popup should show

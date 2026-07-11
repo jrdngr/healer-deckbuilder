@@ -67,7 +67,6 @@ _(empty — all current notes written up as issues #79–#83 on 2026-07-11.)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 79 | 📋 Open | [Floating +ATK popups for every buff/debuff](issues/79-buff-debuff-floats.md) | post-demo | — | intake 2026-07-11 |
 | 80 | 📋 Open | [Small UI tweaks batch (button/topbar/banner theme)](issues/80-ui-tweaks-batch.md) | post-demo | — | intake 2026-07-11 |
 | 81 | 📋 Open | [Strip explanatory text across the UI](issues/81-strip-explanatory-text.md) | post-demo | — | intake 2026-07-11 |
 | 82 | 📋 Open | [Heal-forward preset decks, unified to size 6](issues/82-preset-deck-heal-redesign.md) | rules | — | intake 2026-07-11 |

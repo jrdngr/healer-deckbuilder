@@ -210,7 +210,7 @@ export type GameEvent =
   | { kind: 'poisonTick'; amount: number; enemyHp: number }
   | { kind: 'refreshTick'; amount: number; mp: number }
   // --- scripted 'cast' resolutions (Hexweaver #13, Devourer #14) ---
-  | { kind: 'wound'; turns: number }                       // Hex: healing halved for `turns`
+  | { kind: 'wound'; turns: number; slots: Slot[] }        // Hex: healing halved for `turns` (slots = living members it debuffs)
   | { kind: 'siphon'; amount: number; mp: number }         // Siphon: MP drained
   | { kind: 'consume'; heal: number; enemyHp: number }     // Devourer: self-heal off its own poison
   | { kind: 'phaseChange'; beat: string }                  // Devourer: transformation beat
@@ -244,7 +244,7 @@ export type GameEvent =
   | { kind: 'wardApplied'; slot: Slot; amount: number }    // Aegis Font ward gained (#22)
   | { kind: 'chime' }                                      // Dusk Chime delays the telegraph (#22)
   | { kind: 'martyrSave'; slot: Slot }                     // Martyr's Icon refuses a death (#22)
-  | { kind: 'hymn'; bonus: number }                        // party autos buffed this phase (#16)
+  | { kind: 'hymn'; bonus: number; slots: Slot[] }         // autos buffed +bonus over these members (#16)
   | { kind: 'bloodPay'; slot: Slot; amount: number; hp: number } // Blood card HP cost paid (#16)
   | { kind: 'cleanse'; slot: Slot }
   | { kind: 'rest'; amount: number; mp: number }
@@ -259,7 +259,7 @@ export type GameEvent =
   | { kind: 'stun'; slot: Slot; intent: string } // Sentinel cancels the standing telegraph (#61)
   | { kind: 'ferment'; slot: Slot; turns: number; growth: number } // Plaguewright ferments enemy Poison (#72)
   | { kind: 'enGarde'; slot: Slot; turns: number } // Duelist grants persistent Riposte (#74)
-  | { kind: 'penance'; slot: Slot; bonus: number; died: boolean } // Flagellant pays HP for a party +auto (#75)
+  | { kind: 'penance'; slot: Slot; bonus: number; died: boolean; slots: Slot[] } // Flagellant pays HP for a party +auto (#75); slots = living members buffed
   // --- terminal flourishes ---
   | { kind: 'defeatEnemy' }
   | { kind: 'wipe' };
@@ -1753,7 +1753,7 @@ export class Game {
       case 'wound': {
         this.woundTurns = WOUND_TURNS;
         this._log(`${this.enemyDef.name} weaves a Hex — healing is halved for ${WOUND_TURNS} turns.`, 'system');
-        this._emit({ kind: 'wound', turns: WOUND_TURNS });
+        this._emit({ kind: 'wound', turns: WOUND_TURNS, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       case 'siphon': {
@@ -2297,16 +2297,16 @@ export class Game {
           const healed = this._healMember(m, (card.heal ?? CONSECRATION_HEAL) + bonus, true);
           this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
         }
-        let atFull = 0;
+        const atFullSlots: Slot[] = [];
         for (const m of this.livingMembers()) {
           if (m.hp >= m.maxHP) {
             m.strikeBonus = Math.max(m.strikeTurns > 0 ? m.strikeBonus : 0, CONSECRATION_STRIKE_BONUS);
             m.strikeTurns = CONSECRATION_STRIKE_TURNS;
-            atFull += 1;
+            atFullSlots.push(m.slot);
           }
         }
-        this._log(`Consecration: the party heals ${card.heal ?? CONSECRATION_HEAL}; ${atFull} at full HP strike +${CONSECRATION_STRIKE_BONUS} for ${CONSECRATION_STRIKE_TURNS} enemy turns.`, 'heal');
-        if (atFull > 0) this._emit({ kind: 'hymn', bonus: CONSECRATION_STRIKE_BONUS });
+        this._log(`Consecration: the party heals ${card.heal ?? CONSECRATION_HEAL}; ${atFullSlots.length} at full HP strike +${CONSECRATION_STRIKE_BONUS} for ${CONSECRATION_STRIKE_TURNS} enemy turns.`, 'heal');
+        if (atFullSlots.length > 0) this._emit({ kind: 'hymn', bonus: CONSECRATION_STRIKE_BONUS, slots: atFullSlots });
         break;
       }
       case 'absolution': {
@@ -2504,7 +2504,7 @@ export class Game {
         // No stacking — re-singing it in the same phase keeps the stronger bonus.
         this.hymnBonus = Math.max(this.hymnBonus, HYMN_BONUS);
         this._log(`Battle Hymn: every living member's attack deals +${this.hymnBonus} this turn.`, 'status');
-        this._emit({ kind: 'hymn', bonus: this.hymnBonus });
+        this._emit({ kind: 'hymn', bonus: this.hymnBonus, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       case 'barrier': {
@@ -2609,7 +2609,7 @@ export class Game {
         for (const m of this.livingMembers()) this._bloodPay(m, cost);
         this.bloodBannerTurns = BLOOD_BANNER_TURNS;
         this._log(`Blood Banner: the party bleeds for the standard — autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.`, 'status');
-        this._emit({ kind: 'hymn', bonus: BLOOD_BANNER_BONUS });
+        this._emit({ kind: 'hymn', bonus: BLOOD_BANNER_BONUS, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       // --- Shadow cards (#63): party->enemy damage through _damageEnemy, so
@@ -2780,7 +2780,7 @@ export class Game {
         const empty = 3 - this.fieldedPartySize();
         this.hymnBonus = Math.max(this.hymnBonus, RALLY_DMG_PER_SEAT * empty);
         this._log(`Rally: every attack this turn deals +${RALLY_DMG_PER_SEAT * empty} (${empty} empty seat${empty === 1 ? '' : 's'}).`, 'status');
-        this._emit({ kind: 'hymn', bonus: this.hymnBonus });
+        this._emit({ kind: 'hymn', bonus: this.hymnBonus, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       case 'focus': {
@@ -2835,7 +2835,7 @@ export class Game {
         m.strikeBonus = Math.max(m.strikeTurns > 0 ? m.strikeBonus : 0, SHARPEN_BONUS);
         m.strikeTurns = SHARPEN_TURNS;
         this._log(`Sharpen on ${m.name}: +${SHARPEN_BONUS} damage for ${SHARPEN_TURNS} enemy turns.`, 'status');
-        this._emit({ kind: 'hymn', bonus: SHARPEN_BONUS });
+        this._emit({ kind: 'hymn', bonus: SHARPEN_BONUS, slots: [m.slot] });
         break;
       }
       case 'embolden': {
@@ -2846,7 +2846,7 @@ export class Game {
           m.strikeTurns = EMBOLDEN_TURNS;
         }
         this._log(`Embolden: every fielded hero deals +${EMBOLDEN_BONUS} for ${EMBOLDEN_TURNS} enemy turns.`, 'status');
-        this._emit({ kind: 'hymn', bonus: EMBOLDEN_BONUS });
+        this._emit({ kind: 'hymn', bonus: EMBOLDEN_BONUS, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       case 'goad': {
@@ -2876,7 +2876,7 @@ export class Game {
         const m = this.members[target as number];
         m.empowerBonus = EMPOWER_BONUS;
         this._log(`Empower on ${m.name}: their next ability fires at +${EMPOWER_BONUS} power.`, 'status');
-        this._emit({ kind: 'hymn', bonus: EMPOWER_BONUS });
+        this._emit({ kind: 'hymn', bonus: EMPOWER_BONUS, slots: [m.slot] });
         break;
       }
       case 'riposte': {
@@ -3111,7 +3111,8 @@ export class Game {
         this._log(died
           ? `${m.name} spends the last of his blood — Penance is paid. Every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`
           : `${m.name} scourges himself (-${cost} HP) — Penance: every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`, 'status');
-        this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died });
+        this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died,
+          slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       case 'radiance': {

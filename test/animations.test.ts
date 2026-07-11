@@ -114,7 +114,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 
 // --- debuffs crumble downward instead of exploding -----------------------------
 {
-  const hex = buildTimeline([{ kind: 'wound', turns: 2 }]);
+  const hex = buildTimeline([{ kind: 'wound', turns: 2, slots: [0, 1, 2] }]);
   check('hex crumbles down over the party', hex.entries.some((e) =>
     e.fx?.some((f) => f.type === 'burst' && f.mode === 'fall')));
   check('hex creeps in as a vignette', hex.entries.some((e) =>
@@ -259,7 +259,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     [{ kind: 'poisonTick', amount: 3, enemyHp: 90 }],
     [{ kind: 'regenTick', slot: 0, amount: 2, hp: 9 }],
     [{ kind: 'refreshTick', amount: 2, mp: 5 }],
-    [{ kind: 'wound', turns: 2 }],
+    [{ kind: 'wound', turns: 2, slots: [0, 1, 2] }],
     [{ kind: 'siphon', amount: 3, mp: 2 }],
     [{ kind: 'consume', heal: 6, enemyHp: 80 }],
     [{ kind: 'phaseChange', beat: 'IT MOLTS' }],
@@ -278,7 +278,9 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     [{ kind: 'wardApplied', slot: 0, amount: 3 }],
     [{ kind: 'chime' }],
     [{ kind: 'martyrSave', slot: 1 }],
-    [{ kind: 'hymn', bonus: 2 }],
+    [{ kind: 'hymn', bonus: 2, slots: [0, 1, 2] }],
+    [{ kind: 'penance', slot: 0, bonus: 2, died: false, slots: [0, 1, 2] }],
+    [{ kind: 'stun', slot: 1, intent: 'a heavy blow' }],
     [{ kind: 'bloodPay', slot: 0, amount: 2, hp: 7 }],
     [{ kind: 'cleanse', slot: 1 }],
     [{ kind: 'rest', amount: 3, mp: 6 }],
@@ -306,6 +308,66 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
       (e.fx ?? []).every((f) => e.at + fxDuration(f) <= tl.total));
     check(`${kind}: total covers all fades`, covered);
   }
+}
+
+// --- buff/debuff floats: a named label rises over each affected member (#79) --
+{
+  // Helper: every float label spawned over a given slot anchor.
+  const floatsAt = (tl: ReturnType<typeof buildTimeline>, slot: 0 | 1 | 2): string[] =>
+    tl.entries.flatMap((e) => (e.fx ?? []).filter(
+      (f) => f.type === 'float' && f.at === slot).map((f) => (f as { text: string }).text));
+
+  // A party-wide +ATK buff (Battle Hymn & kin) fans a `+N ATK` float over EACH
+  // buffed member — not a single center banner.
+  const hymn = buildTimeline([{ kind: 'hymn', bonus: 2, slots: [0, 1, 2] }]);
+  const hymnFloats = hymn.entries.flatMap((e) => (e.fx ?? []).filter(
+    (f) => f.type === 'float' && f.text === '+2 ATK'));
+  eq('hymn floats +N ATK over every buffed member', hymnFloats.length, 3);
+  check('hymn +ATK lands over slot 0', floatsAt(hymn, 0).includes('+2 ATK'));
+  check('hymn +ATK lands over slot 1', floatsAt(hymn, 1).includes('+2 ATK'));
+  check('hymn +ATK lands over slot 2', floatsAt(hymn, 2).includes('+2 ATK'));
+
+  // Consecration only buffs the members at full HP — the float fans over just those.
+  const conse = buildTimeline([{ kind: 'hymn', bonus: 3, slots: [0, 2] }]);
+  const conseFloats = conse.entries.flatMap((e) => (e.fx ?? []).filter(
+    (f) => f.type === 'float' && f.text === '+3 ATK'));
+  eq('a partial buff floats only over its affected members', conseFloats.length, 2);
+  check('the unaffected member gets no +ATK float', !floatsAt(conse, 1).includes('+3 ATK'));
+
+  // Sharpen is a single-hero +ATK buff — exactly one float, over its target.
+  const sharpen = buildTimeline([{ kind: 'hymn', bonus: 1, slots: [1] }]);
+  eq('a single-hero +ATK buff floats once', sharpen.entries.flatMap(
+    (e) => (e.fx ?? []).filter((f) => f.type === 'float' && f.text === '+1 ATK')).length, 1);
+
+  // Penance fans +ATK over every living member; when the Flagellant dies paying it,
+  // a `PENANCE PAID` label still marks his (now dead) slot.
+  const pen = buildTimeline([{ kind: 'penance', slot: 0, bonus: 2, died: true, slots: [1, 2] }]);
+  eq('penance floats +ATK over each living member', pen.entries.flatMap(
+    (e) => (e.fx ?? []).filter((f) => f.type === 'float' && f.text === '+2 ATK')).length, 2);
+  check('penance marks the paid slot when the Flagellant dies', floatsAt(pen, 0).includes('PENANCE PAID'));
+
+  // Hex (a member-side debuff) floats a `Hex` label over each afflicted member.
+  const hex = buildTimeline([{ kind: 'wound', turns: 2, slots: [0, 1, 2] }]);
+  const hexFloats = hex.entries.flatMap((e) => (e.fx ?? []).filter(
+    (f) => f.type === 'float' && f.text === 'Hex'));
+  eq('hex floats a debuff label over every afflicted member', hexFloats.length, 3);
+
+  // Stun (Sentinel) now names itself with a float over the member.
+  const stun = buildTimeline([{ kind: 'stun', slot: 2, intent: 'a heavy blow' }]);
+  check('stun floats a label over its member', floatsAt(stun, 2).includes('STUN'));
+
+  // Spot-check the per-member buff/debuff set the engine already emits still floats.
+  const labelFor = (ev: GameEvent): string[] =>
+    buildTimeline([ev]).entries.flatMap((e) => (e.fx ?? []).filter(
+      (f) => f.type === 'float').map((f) => (f as { text: string }).text));
+  check('shield floats a label', labelFor({ kind: 'shieldApplied', slot: 1 }).length > 0);
+  check('defense floats a label', labelFor({ kind: 'defenseApplied', slot: 1, amount: 2 }).some((s) => s.includes('DEF')));
+  check('brace floats a label', labelFor({ kind: 'braceApplied', slot: 1 }).some((s) => s.includes('BRACE')));
+  check('ward floats a label', labelFor({ kind: 'wardApplied', slot: 1, amount: 3 }).some((s) => s.includes('WARD')));
+  check('taunt floats a label', labelFor({ kind: 'taunt', slot: 1, turns: 2 }).some((s) => s.includes('TAUNT')));
+  check('regen floats a label', labelFor({ kind: 'regenApplied', slot: 1, stack: 2 }).length > 0);
+  check('en garde floats a label', labelFor({ kind: 'enGarde', slot: 1, turns: 2 }).some((s) => s.includes('GARDE')));
+  check('blood cost floats a number', labelFor({ kind: 'bloodPay', slot: 1, amount: 2, hp: 7 }).some((s) => s.includes('-2')));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

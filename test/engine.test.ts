@@ -1,5 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
+import type { GameEvent } from '../src/engine';
 import { channelEffectLine } from '../src/channelView';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
@@ -5372,6 +5373,32 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   check('penanceBonus is live this phase', g.penanceBonus === PENANCE_STRIKE_BONUS);
   g._runPartyPhase();
   check('the buff resets after the party autos resolve (one-phase, like Hymn)', g.penanceBonus === 0);
+}
+{
+  // #79 floats: a party-wide +ATK buff resolves to a per-member payload (slots) the
+  // animator fans a `+N ATK` float over. Battle Hymn buffs every living member.
+  const g = flagellantGame(760);
+  g.events = [];
+  g.playCard(giveCard(g, 'battleHymn'), null);
+  const hymn = g.events.find((e) => e.kind === 'hymn') as Extract<GameEvent, { kind: 'hymn' }>;
+  check('Battle Hymn emits a hymn event', !!hymn);
+  eq('the hymn carries its bonus', hymn.bonus, HYMN_BONUS);
+  eq('the hymn fans over every living member', hymn.slots.slice().sort().join(','),
+    g.livingMembers().map((m) => m.slot).sort().join(','));
+}
+{
+  // #79 floats: Penance carries the living members it buffs (slots) plus the payer's
+  // own slot for the `PENANCE PAID` flag when the payment kills him.
+  const g = flagellantGame(761);
+  const flag = g.members[SLOT.LEFT];
+  flag.hp = PENANCE_HP; // a lethal payment
+  g.events = [];
+  g.playCard(giveCard(g, 'penance'), null);
+  const pen = g.events.find((e) => e.kind === 'penance') as Extract<GameEvent, { kind: 'penance' }>;
+  check('Penance emits a penance event', !!pen);
+  check('the dead payer is flagged', pen.died && pen.slot === flag.slot);
+  check('the buffed slots are the living members only (payer excluded)',
+    !pen.slots.includes(flag.slot) && pen.slots.length === g.livingMembers().length);
 }
 
 // --- Lightkeeper + Radiance (#76): overheal-as-mitigation --------------------

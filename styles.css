@@ -787,6 +787,13 @@ main.drag-board .enemy, main.drag-board .party {
   34%  { transform: translate(-50%, -6px) scale(1); }
   100% { transform: translate(-50%, -46px) scale(1); opacity: 0; }
 }
+/* Reduced-motion float: the label holds in place and fades — no upward travel. */
+@keyframes fx-float-reduced {
+  0%   { transform: translate(-50%, 0) scale(1); opacity: 0; }
+  18%  { opacity: 1; }
+  72%  { opacity: 1; }
+  100% { transform: translate(-50%, 0) scale(1); opacity: 0; }
+}
 
 /* Ring — an expanding shockwave. */
 .fx-ring {
@@ -935,6 +942,8 @@ main.drag-board .enemy, main.drag-board .party {
   /* Full-board washes are the strongest movers — drop them entirely. */
   .fx-vignette, .fx-vignette.flash { animation: none; opacity: 0; }
   .fx-banner { animation: fx-banner-reduced var(--dur, 1200ms) ease-out forwards; }
+  /* Floating labels (buff/debuff names, damage/heal numbers) fade in place. */
+  .fx-float { animation: fx-float-reduced var(--dur, 850ms) ease-out forwards; }
   /* Member cards stay still; the FX layer's floats/bursts still tell the story. */
   .member.react-hit, .member.react-heal, .member.react-block,
   .member.react-lunge, .member.react-death { animation: none; }

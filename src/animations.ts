@@ -687,13 +687,14 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'hymn': {
-        // Battle Hymn (#16): the whole party rallies for this phase's autos.
-        push({ at: t, fx: [
-          { type: 'glow', at: 0, color: C.taunt },
-          { type: 'glow', at: 1, color: C.taunt },
-          { type: 'glow', at: 2, color: C.taunt },
-          { type: 'float', at: 1, text: `+${ev.bonus} ATK`, color: C.taunt, big: true },
-        ] });
+        // Battle Hymn / Rally / Consecration / Blood Banner / Embolden / Sharpen (#16):
+        // a `+N ATK` float fans over EVERY buffed member (ev.slots), not one banner.
+        const fx: FxSpec[] = [];
+        for (const s of ev.slots) {
+          fx.push({ type: 'glow', at: s, color: C.taunt });
+          fx.push({ type: 'float', at: s, text: `+${ev.bonus} ATK`, color: C.taunt, big: true });
+        }
+        push({ at: t, fx });
         t += 460;
         break;
       }
@@ -767,17 +768,29 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
+      case 'stun': {
+        // Sentinel (#61) staggers the enemy — its standing telegraph is cancelled.
+        // A shock float over the member who pulled it off.
+        push({ at: t, fx: [
+          { type: 'glow', at: ev.slot, color: C.taunt },
+          { type: 'burst', at: ev.slot, color: C.taunt, count: 8, spread: 44, mode: 'rise' },
+          { type: 'float', at: ev.slot, text: 'STUN', color: C.taunt },
+        ] });
+        t += 380;
+        break;
+      }
+
       case 'penance': {
         // The Flagellant scourges himself (#75): a self-sacrifice, then the whole party's
         // autos flare. The HP cost's own -N shake rides its bloodPay event; here we mark the
         // party-wide fury (his slot glows only if he survived the payment).
-        push({ at: t, fx: [
-          { type: 'glow', at: 0, color: C.danger },
-          { type: 'glow', at: 1, color: C.danger },
-          { type: 'glow', at: 2, color: C.danger },
-          { type: 'float', at: 1, text: `+${ev.bonus} ATK`, color: C.danger, big: true },
-          ...(ev.died ? [{ type: 'float', at: ev.slot, text: 'PENANCE PAID', color: C.danger } as const] : []),
-        ] });
+        const fx: FxSpec[] = [];
+        for (const s of ev.slots) {
+          fx.push({ type: 'glow', at: s, color: C.danger });
+          fx.push({ type: 'float', at: s, text: `+${ev.bonus} ATK`, color: C.danger, big: true });
+        }
+        if (ev.died) fx.push({ type: 'float', at: ev.slot, text: 'PENANCE PAID', color: C.danger });
+        push({ at: t, fx });
         t += 460;
         break;
       }
@@ -824,19 +837,17 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'wound': {
-        // Hex settles over the whole party — destructive but not punchy: the
-        // curse creeps in as a vignette and crumbles down over each member.
+        // Hex settles over the party — destructive but not punchy: the curse creeps
+        // in as a vignette and crumbles down over each living member, with a `Hex`
+        // label naming the healing-reduction debuff on each affected card.
         push({ at: t, shake: 3, fx: [
           { type: 'vignette', color: C.hex, mode: 'tint', dur: 950 },
           { type: 'float', at: 'enemy', text: 'HEX', color: C.hex, big: true },
-          { type: 'glow', at: 0, color: C.hex, dur: 800 },
-          { type: 'glow', at: 1, color: C.hex, dur: 800 },
-          { type: 'glow', at: 2, color: C.hex, dur: 800 },
+          ...ev.slots.map((s): FxSpec => ({ type: 'glow', at: s, color: C.hex, dur: 800 })),
         ] });
         push({ at: t + 220, fx: [
-          { type: 'burst', at: 0, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 },
-          { type: 'burst', at: 1, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 },
-          { type: 'burst', at: 2, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 },
+          ...ev.slots.map((s): FxSpec => ({ type: 'burst', at: s, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 })),
+          ...ev.slots.map((s): FxSpec => ({ type: 'float', at: s, text: 'Hex', color: C.hex })),
         ] });
         t += 640;
         break;
