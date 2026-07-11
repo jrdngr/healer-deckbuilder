@@ -1,4 +1,4 @@
-import { memberDefAt, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, INJURY_NAMES } from '../constants';
+import { memberDefAt, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, topScarName } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { ShopFrame } from './ShopFrame';
@@ -28,7 +28,7 @@ export function InfirmaryScreen({ run, act, onDone }: InfirmaryScreenProps) {
           const hp = p.hp ?? p.maxHP;
           const hurt = hp < p.maxHP;
           const scarred = p.injuries > 0;
-          const topScar = scarred ? INJURY_NAMES[Math.min(p.injuries, INJURY_NAMES.length) - 1] : null;
+          const topScar = topScarName(p.injuries);
           return (
             <div key={index} className="member-pick infirmary-member">
               <span className="member-name">{d.name}</span>

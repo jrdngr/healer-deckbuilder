@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
-import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, INJURY_NAMES, memberSalary, GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS } from '../constants';
+import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, topScarName, memberSalary, GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS } from '../constants';
 import { firstEmptySlot, nextEmptySlot, reduceDeploy, type Deployment, type DragSource } from '../deploy';
 
 interface DeployScreenProps {
@@ -106,7 +106,7 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
           const id = p.member!;
           const dm = MEMBER_POOL[id];
           const inSlot = deploy.indexOf(ri);
-          const scar = p.injuries > 0 ? ` · ${INJURY_NAMES[Math.min(p.injuries, INJURY_NAMES.length) - 1]}` : '';
+          const scar = p.injuries > 0 ? ` · ${topScarName(p.injuries)}` : '';
           return (
             <button key={ri} className={`draft-member${inSlot >= 0 ? ' chosen' : ''}`}
               onClick={() => assign(ri)} aria-pressed={inSlot >= 0} title={MEMBER_ABILITY_FLAVOR[id]}

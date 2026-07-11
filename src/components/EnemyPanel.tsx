@@ -1,6 +1,7 @@
 import type { Game } from '../engine';
 import { Icon } from './Icon';
 import { CharacterBlob } from './CharacterBlob';
+import { StatBar } from './Bars';
 
 interface EnemyPanelProps {
   game: Game;
@@ -36,12 +37,9 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
             </span>
           )}
         </h2>
-        <div className="bar enemy-bar">
-          <div className="bar-track">
-            <div className="seg enemy" style={{ left: 0, width: `${pct}%` }} />
-          </div>
-          <span className="bar-label">{displayHp} / {e.maxHP} HP</span>
-        </div>
+        <StatBar className="enemy-bar" label={`${displayHp} / ${e.maxHP} HP`}>
+          <div className="seg enemy" style={{ left: 0, width: `${pct}%` }} />
+        </StatBar>
         <div className="enemy-status">
           {game.status === 'playing' && (
             <span className="turn-chip" title="The current turn. The standing telegraph resolves at the end of it.">Turn {game.turn}</span>

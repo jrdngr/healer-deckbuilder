@@ -1371,6 +1371,12 @@ export const INJURY_ABILITY: number[] = [0, 0, 1]; // Broken: −1 ability power
 // is the 4th scar that incapacitates under 'incapacitate' mode (INCAPACITATE_AT).
 export const INJURY_NAMES: string[] = ['Cracked', 'Weakened', 'Broken', 'Shattered'];
 
+// The name of a member's WORST (highest-tier) scar, given their scar count. Returns
+// null when uninjured. Shared by the Deploy and Infirmary screens.
+export function topScarName(injuries: number): string | null {
+  return injuries > 0 ? INJURY_NAMES[Math.min(injuries, INJURY_NAMES.length) - 1] : null;
+}
+
 // ---------------------------------------------------------------------------
 // Injury-mode experiment (2026-07-04 playtest). The 3-scar cap NULLIFIES the
 // system at its limit: once a member is Broken, every further death is free and

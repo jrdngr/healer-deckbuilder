@@ -3,11 +3,26 @@ import {
   CHARGE_MAX, BERSERKER_BAND_BONUS,
   INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
+import type { ReactNode } from 'react';
 import type { Member } from '../engine';
 import type { MemberReactKind } from '../animations';
 import type { MemberReactState } from '../useGame';
 import { Icon } from './Icon';
+import type { IconName } from './Icon';
 import { CharacterBlob } from './CharacterBlob';
+import { StatBar } from './Bars';
+
+// One status/injury pill on a member card. `icon` is omitted for injury scars,
+// which show only their tier name.
+function StatusBadge({ cls, icon, title, children }: {
+  cls: string; icon?: IconName; title: string; children: ReactNode;
+}) {
+  return (
+    <span className={`badge ${cls}`} title={title}>
+      {icon ? <><Icon name={icon} /> {children}</> : children}
+    </span>
+  );
+}
 
 // How long each one-shot reaction class stays on the card (matches the CSS
 // animation lengths in styles.css).
@@ -134,24 +149,21 @@ export function MemberCard({
       <div className="atk" title="Attack"><Icon name="sword" /><span>{liveDamage}</span></div>
       <CharacterBlob id={m.id} size={62} />
       <h3>{m.name}</h3>
-      <div className="bar">
-        <div className="bar-track">
-          {/* Fill shifts warmer as HP drops (gold 25–50%, danger <25%) — presentation only. */}
-          <div className={`seg hp${hpFrac <= 0.25 ? ' low' : hpFrac <= 0.5 ? ' mid' : ''}`} style={{ left: 0, width: `${hpPct}%` }} />
-        </div>
-        <span className="bar-label">{displayHp} / {m.maxHP}</span>
-      </div>
+      <StatBar label={`${displayHp} / ${m.maxHP}`}>
+        {/* Fill shifts warmer as HP drops (gold 25–50%, danger <25%) — presentation only. */}
+        <div className={`seg hp${hpFrac <= 0.25 ? ' low' : hpFrac <= 0.5 ? ' mid' : ''}`} style={{ left: 0, width: `${hpPct}%` }} />
+      </StatBar>
       <div className="badges">
-        {m.shield && <span className="badge shield" title={`Shield — fully blocks the next damaging hit; fades unused in ${m.shieldTurns} enemy turn(s).`}><Icon name="shield" /> Shield</span>}
-        {m.brace && <span className="badge shield" title={`Brace — the next damaging hit deals 2 less (consumed); fades unused in ${m.braceTurns} enemy turn(s).`}><Icon name="shield" /> Brace</span>}
-        {m.ward > 0 && <span className="badge shield" title={`Ward — absorbs the next ${m.ward} damage, point for point.`}><Icon name="shield" /> Ward {m.ward}</span>}
-        {m.regen > 0 && <span className="badge regen" title={`Regen — heals ${m.regen} at the start of your turn, then decays by 1 each turn (${m.regen} tick(s) left).`}><Icon name="leaf" /> Regen {m.regen}</span>}
-        {m.defense > 0 && <span className="badge defense" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}><Icon name="shield" /> Def {m.defenseAmount}·{m.defense}t</span>}
-        {m.taunt > 0 && <span className="badge taunt" title={`Taunt — aimed attacks funnel onto this member for ${m.taunt} more enemy turn(s).`}><Icon name="target" /> Taunt {m.taunt}</span>}
+        {m.shield && <StatusBadge cls="shield" icon="shield" title={`Shield — fully blocks the next damaging hit; fades unused in ${m.shieldTurns} enemy turn(s).`}>Shield</StatusBadge>}
+        {m.brace && <StatusBadge cls="shield" icon="shield" title={`Brace — the next damaging hit deals 2 less (consumed); fades unused in ${m.braceTurns} enemy turn(s).`}>Brace</StatusBadge>}
+        {m.ward > 0 && <StatusBadge cls="shield" icon="shield" title={`Ward — absorbs the next ${m.ward} damage, point for point.`}>Ward {m.ward}</StatusBadge>}
+        {m.regen > 0 && <StatusBadge cls="regen" icon="leaf" title={`Regen — heals ${m.regen} at the start of your turn, then decays by 1 each turn (${m.regen} tick(s) left).`}>Regen {m.regen}</StatusBadge>}
+        {m.defense > 0 && <StatusBadge cls="defense" icon="shield" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}>Def {m.defenseAmount}·{m.defense}t</StatusBadge>}
+        {m.taunt > 0 && <StatusBadge cls="taunt" icon="target" title={`Taunt — aimed attacks funnel onto this member for ${m.taunt} more enemy turn(s).`}>Taunt {m.taunt}</StatusBadge>}
         {injuryBadges(m.injuries).map((inj, i) => (
-          <span key={`injury-${i}`} className="badge injury" title={`${inj.name} — ${inj.detail}`}>{inj.name}</span>
+          <StatusBadge key={`injury-${i}`} cls="injury" title={`${inj.name} — ${inj.detail}`}>{inj.name}</StatusBadge>
         ))}
-        {m.boarHp > 0 && <span className="badge shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}><Icon name="shield" /> Boar {m.boarHp}·{m.boarTurns}t</span>}
+        {m.boarHp > 0 && <StatusBadge cls="shield" icon="shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}>Boar {m.boarHp}·{m.boarTurns}t</StatusBadge>}
       </div>
       {m.id === 'mage' && <div className="charge"><Icon name="bolt" /> Charge {mageCharge}/{CHARGE_MAX}</div>}
       {berserkerBands && (
