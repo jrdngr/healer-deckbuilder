@@ -225,6 +225,9 @@ section.enemy {
   display: flex; flex-direction: column; gap: 8px; align-items: center;
   box-shadow: var(--shadow-card);
 }
+/* The card centers its blob/name/badges; the HP bar must still span full width
+   (as a centered flex item with no explicit width it would otherwise collapse). */
+.member > .bar { width: 100%; }
 /* Name is centered; pad so it never runs under the ATK chip in the corner. */
 .member h3 { margin: 0; font-family: var(--f-disp); font-weight: 700; font-size: 16px; text-align: center; padding: 0 26px; }
 /* ATK value: danger-gradient pill overhanging the top-right corner. */
@@ -497,7 +500,9 @@ button.danger:hover:not(:disabled) { color: #fff; }
 .hand .card:hover:not(.unaffordable):not(.ineligible) {
   transform: translateY(-14px) scale(1.05);
   z-index: 3;
-  border-color: var(--accent);
+  /* The lift + shadow already read as hover; the border stays ink so it never
+     competes with the mana-blue selected/channel cues. */
+  border-color: var(--ink);
 }
 .hand .card:has(+ .card:hover:not(.unaffordable):not(.ineligible)) { --part: -8px; }
 .hand .card:hover:not(.unaffordable):not(.ineligible) + .card { --part: 8px; }
