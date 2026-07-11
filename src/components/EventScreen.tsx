@@ -8,11 +8,25 @@ import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { Card } from './Card';
 import { DeckPicker } from './DeckPicker';
+import { MemberPick, MemberStatLine } from './MemberList';
+import type { ReactNode } from 'react';
 
 interface EventScreenProps {
   run: Run;
   act: RunAct;
   onDone: () => void;
+}
+
+// The shared shell for an event follow-up pick: a heading, the picker body, and a
+// Back button that returns to the choice list.
+function PickStage({ title, onBack, children }: { title: ReactNode; onBack: () => void; children: ReactNode }) {
+  return (
+    <div className="event-pick">
+      <h3>{title}</h3>
+      {children}
+      <button className="leave-btn" onClick={onBack}>Back</button>
+    </div>
+  );
 }
 
 type Stage =
@@ -42,6 +56,7 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
     act((r) => r.markEventDone());
     setStage({ kind: 'result', text });
   };
+  const back = () => setStage({ kind: 'choices' });
 
   const choose = (kind: EventChoiceKind) => {
     switch (kind) {
@@ -183,8 +198,7 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
         )}
 
         {stage.kind === 'addCard' && (
-          <div className="event-pick">
-            <h3>Choose a card to add</h3>
+          <PickStage title="Choose a card to add" onBack={back}>
             <div className="deck-picker">
               {stage.offers.map((id) => (
                 <Card
@@ -196,115 +210,93 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
                 />
               ))}
             </div>
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'removeCard' && (
-          <div className="event-pick">
-            <h3>Choose a card to remove ({CARD_REMOVAL_PRICE}g)</h3>
+          <PickStage title={`Choose a card to remove (${CARD_REMOVAL_PRICE}g)`} onBack={back}>
             <DeckPicker
               deck={run.deck}
               canPick={() => run.gold >= CARD_REMOVAL_PRICE}
               onPick={removeCard}
               emptyText={run.gold >= CARD_REMOVAL_PRICE ? undefined : `You need ${CARD_REMOVAL_PRICE}g to remove a card.`}
             />
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'shrineCard' && (
-          <div className="event-pick">
-            <h3>Choose a card to bless</h3>
+          <PickStage title="Choose a card to bless" onBack={back}>
             <DeckPicker
               deck={run.deck}
               canPick={(c) => run.eligibleModifiersFor(c).length > 0}
               onPick={blessCard}
               emptyText="No card can take a blessing."
             />
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'shrineParty' && (
-          <div className="event-pick">
-            <h3>Choose a hero to bless</h3>
+          <PickStage title="Choose a hero to bless" onBack={back}>
             <div className="member-row">
-              {run.party.map((p, slot) => {
-                const d = memberDefAt(run.party, slot);
-                return (
-                  <button key={slot} className="member-pick" onClick={() => blessMember(slot as Slot)}>
-                    <span className="member-name">{d.name}</span>
-                    <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
-                  </button>
-                );
-              })}
+              {run.party.map((p, slot) => (
+                <MemberPick
+                  key={slot}
+                  name={memberDefAt(run.party, slot).name}
+                  stats={<MemberStatLine maxHP={p.maxHP} damage={p.damage} abilityPower={p.abilityPower} />}
+                  onClick={() => blessMember(slot as Slot)}
+                />
+              ))}
             </div>
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'duplicateCard' && (
-          <div className="event-pick">
-            <h3>Choose a card to copy ({DUPLICATE_PRICE}g)</h3>
+          <PickStage title={`Choose a card to copy (${DUPLICATE_PRICE}g)`} onBack={back}>
             <DeckPicker
               deck={run.deck}
               canPick={() => run.gold >= DUPLICATE_PRICE}
               onPick={duplicate}
               emptyText={run.gold >= DUPLICATE_PRICE ? undefined : `You need ${DUPLICATE_PRICE}g to commission a copy.`}
             />
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'bloodAltar' && (
-          <div className="event-pick">
-            <h3>Choose who bleeds (−{BLOOD_ALTAR_HP} max HP, +{BLOOD_ALTAR_DAMAGE} damage)</h3>
+          <PickStage title={`Choose who bleeds (−${BLOOD_ALTAR_HP} max HP, +${BLOOD_ALTAR_DAMAGE} damage)`} onBack={back}>
             <div className="member-row">
               {run.party.map((p, slot) => {
-                const d = memberDefAt(run.party, slot);
                 const able = run.canSacrifice(slot as Slot);
                 return (
-                  <button
+                  <MemberPick
                     key={slot}
-                    className="member-pick"
+                    name={`${memberDefAt(run.party, slot).name}${able ? '' : ' (too frail)'}`}
+                    stats={<MemberStatLine maxHP={p.maxHP} damage={p.damage} abilityPower={p.abilityPower} />}
                     disabled={!able}
                     onClick={() => able && sacrifice(slot as Slot)}
-                  >
-                    <span className="member-name">{d.name}{able ? '' : ' (too frail)'}</span>
-                    <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
-                  </button>
+                  />
                 );
               })}
             </div>
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'healInjury' && (
-          <div className="event-pick">
-            <h3>Choose a hero to tend</h3>
+          <PickStage title="Choose a hero to tend" onBack={back}>
             <div className="member-row">
               {run.party.map((p, slot) => {
-                const d = memberDefAt(run.party, slot);
                 const injured = p.injuries > 0;
                 return (
-                  <button
+                  <MemberPick
                     key={slot}
-                    className="member-pick"
+                    name={`${memberDefAt(run.party, slot).name}${injured ? '' : ' (unharmed)'}`}
+                    stats={<span className="member-stats">{injured ? INJURY_NAMES.slice(0, p.injuries).join(' · ') : 'No injuries'}</span>}
                     disabled={!injured}
                     onClick={() => injured && tendInjury(slot as Slot)}
-                  >
-                    <span className="member-name">{d.name}{injured ? '' : ' (unharmed)'}</span>
-                    <span className="member-stats">
-                      {injured ? INJURY_NAMES.slice(0, p.injuries).join(' · ') : 'No injuries'}
-                    </span>
-                  </button>
+                  />
                 );
               })}
             </div>
-            <button className="leave-btn" onClick={() => setStage({ kind: 'choices' })}>Back</button>
-          </div>
+          </PickStage>
         )}
 
         {stage.kind === 'result' && (

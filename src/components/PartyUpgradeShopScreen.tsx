@@ -4,6 +4,7 @@ import type { Slot } from '../constants';
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { ShopFrame } from './ShopFrame';
+import { MemberPick, MemberStatLine } from './MemberList';
 
 interface PartyUpgradeShopScreenProps {
   run: Run;
@@ -45,24 +46,19 @@ export function PartyUpgradeShopScreen({ run, act, onDone }: PartyUpgradeShopScr
       </div>
 
       <div className="member-row">
-        {run.party.map((p, slot) => {
-          const d = memberDefAt(run.party, slot);
-          return (
-            <button
-              key={slot}
-              className="member-pick"
-              disabled={!selectedOffer}
-              onClick={() => {
-                if (selected == null) return;
-                act((r) => r.buyPartyOffer(selected, slot as Slot));
-                setSelected(null);
-              }}
-            >
-              <span className="member-name">{d.name}</span>
-              <span className="member-stats">HP {p.maxHP} · DMG {p.damage} · ABL +{p.abilityPower}</span>
-            </button>
-          );
-        })}
+        {run.party.map((p, slot) => (
+          <MemberPick
+            key={slot}
+            name={memberDefAt(run.party, slot).name}
+            stats={<MemberStatLine maxHP={p.maxHP} damage={p.damage} abilityPower={p.abilityPower} />}
+            disabled={!selectedOffer}
+            onClick={() => {
+              if (selected == null) return;
+              act((r) => r.buyPartyOffer(selected, slot as Slot));
+              setSelected(null);
+            }}
+          />
+        ))}
       </div>
       {selectedOffer && <p className="shop-hint">Choose a member to apply {selectedOffer.def.name}.</p>}
     </ShopFrame>
