@@ -1,4 +1,5 @@
 import type { Game } from '../engine';
+import { Icon } from './Icon';
 
 interface EnemyPanelProps {
   game: Game;
@@ -44,12 +45,12 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
             <span className="turn-chip" title="The current turn. The standing telegraph resolves at the end of it.">Turn {game.turn}</span>
           )}
           {intent && <span className="enemy-intent">Intends: {intent}</span>}
-          {e.poison > 0 ? <span title={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}> ☠ Poison {e.poison}</span> : ''}
+          {e.poison > 0 ? <span className="enemy-poison" title={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}><Icon name="poison" /> Poison {e.poison}</span> : ''}
         </div>
         {channel && (
           <div className="cast-bar" title={`${channel.channelName}: ${channel.damage} damage on resolve`}>
             <span className="cast-label">
-              ⚡ {channel.channelName} — resolves in {castTurns} turn{castTurns === 1 ? '' : 's'} ({channel.damage})
+              <Icon name="bolt" /> {channel.channelName} — resolves in {castTurns} turn{castTurns === 1 ? '' : 's'} ({channel.damage})
             </span>
             <div className="cast-track">
               {/* fills as the wind-up nears resolve (1 turn left ≈ full) */}

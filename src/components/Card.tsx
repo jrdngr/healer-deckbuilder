@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { MODIFIERS } from '../constants';
 import type { CardId, ResolvedCard } from '../constants';
+import { Icon } from './Icon';
 
 // Visual family of each card, for the edge tint: heals green, protective wards
 // gold, mana economy blue, aggressive power plays red-purple. Presentation only.
@@ -117,11 +118,11 @@ export function Card({ card, affordable, ineligible = false, selected, onClick, 
     >
       {channeling && (
         <div className="channel-badge" title="This card's channel is active — playing any card cancels it.">
-          ⚡ channeling · {channelingTurns} left
+          <Icon name="bolt" /> channeling · {channelingTurns} left
         </div>
       )}
       <div className="cost">{card.cost}</div>
-      {card.heal != null && <div className="heal" title="Healing">{card.heal}</div>}
+      {card.heal != null && <div className="heal" title="Healing"><Icon name="heart" /> {card.heal}</div>}
       <div className="cname">{card.name}</div>
       <div className="cdesc">{card.desc}</div>
       {card.upgrades.length > 0 && (

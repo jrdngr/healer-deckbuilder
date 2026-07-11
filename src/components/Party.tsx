@@ -1,4 +1,5 @@
 import { MemberCard } from './MemberCard';
+import { Icon } from './Icon';
 import type { Slot } from '../constants';
 import type { Game } from '../engine';
 import type { BattleView, MemberReactState } from '../useGame';
@@ -19,7 +20,7 @@ export function Party({ game, view, reacts, animating, isValidTarget, onMemberCl
     <section className="party">
       {game.wounded && (
         <div className="hex-banner" title="A Hex halves all healing until it fades. Cleanse removes it.">
-          ☠ Hexed — healing halved ({game.woundTurns})
+          <Icon name="poison" /> Hexed — healing halved ({game.woundTurns})
         </div>
       )}
       {game.members.map((m) => {

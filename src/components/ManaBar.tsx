@@ -1,4 +1,5 @@
 import type { Game } from '../engine';
+import { Icon } from './Icon';
 
 export function ManaBar({ game, animating }: { game: Game; animating: boolean }) {
   const live = !animating && game.status === 'playing';
@@ -19,8 +20,8 @@ export function ManaBar({ game, animating }: { game: Game; animating: boolean })
           {refresh > 0 && <div className="seg refresh-pending" style={{ left: `${mpPct}%`, width: `${(refresh / max) * 100}%` }} />}
         </div>
         <span className="bar-label">MP {game.mp} / {max}</span>
-        {game.refresh > 0 && <span className="refresh-pill">⟳ +{game.refresh}</span>}
-        {siphon > 0 && <span className="siphon-pill" title="The enemy will drain this much MP next turn.">⤵ −{siphon}</span>}
+        {game.refresh > 0 && <span className="refresh-pill"><Icon name="plus" /> +{game.refresh}</span>}
+        {siphon > 0 && <span className="siphon-pill" title="The enemy will drain this much MP next turn."><Icon name="drop" /> −{siphon}</span>}
       </div>
     </section>
   );

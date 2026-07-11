@@ -1,6 +1,7 @@
 import { CARDS } from '../constants';
 import type { Game } from '../engine';
 import { channelEffectLine } from '../channelView';
+import { Icon } from './Icon';
 
 interface ChannelBannerProps {
   game: Game;
@@ -29,7 +30,7 @@ export function ChannelBanner({ game }: ChannelBannerProps) {
   return (
     <div className="cast-bar channel-banner" title="Playing any card cancels this channel.">
       <span className="cast-label channel-label">
-        ⚡ Channeling {def.name}
+        <Icon name="bolt" /> Channeling {def.name}
         {bound && <span className="channel-target"> → {bound.name}</span>}
         {' — '}
         {turns} turn{turns === 1 ? '' : 's'} left

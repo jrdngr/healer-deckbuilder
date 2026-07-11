@@ -6,6 +6,7 @@ import {
 import type { Member } from '../engine';
 import type { MemberReactKind } from '../animations';
 import type { MemberReactState } from '../useGame';
+import { Icon } from './Icon';
 
 // How long each one-shot reaction class stays on the card (matches the CSS
 // animation lengths in styles.css).
@@ -125,34 +126,35 @@ export function MemberCard({
       )}
       {incapacitated && (
         <div className="incap-overlay" title="A 4th scar took this member out of the run. Heal a scar at an Infirmary (or Field Hospital / Mending Totem) to restore them.">
-          <span className="incap-title">☠ Incapacitated</span>
+          <span className="incap-title">Incapacitated</span>
           <span className="incap-hint">heal a scar to restore</span>
         </div>
       )}
-      <div className="atk" title="Attack"><span>{liveDamage}</span></div>
+      <div className="atk" title="Attack"><Icon name="sword" /><span>{liveDamage}</span></div>
       <h3>{m.name}</h3>
       <div className="bar">
         <div className="bar-track">
-          <div className="seg hp" style={{ left: 0, width: `${hpPct}%` }} />
+          {/* Fill shifts warmer as HP drops (gold 25–50%, danger <25%) — presentation only. */}
+          <div className={`seg hp${hpFrac <= 0.25 ? ' low' : hpFrac <= 0.5 ? ' mid' : ''}`} style={{ left: 0, width: `${hpPct}%` }} />
         </div>
         <span className="bar-label">{displayHp} / {m.maxHP}</span>
       </div>
       <div className="badges">
-        {m.shield && <span className="badge shield" title={`Shield — fully blocks the next damaging hit; fades unused in ${m.shieldTurns} enemy turn(s).`}>🛡 Shield</span>}
-        {m.brace && <span className="badge shield" title={`Brace — the next damaging hit deals 2 less (consumed); fades unused in ${m.braceTurns} enemy turn(s).`}>🧱 Brace</span>}
-        {m.ward > 0 && <span className="badge shield" title={`Ward — absorbs the next ${m.ward} damage, point for point.`}>💠 Ward {m.ward}</span>}
-        {m.regen > 0 && <span className="badge regen" title={`Regen — heals ${m.regen} at the start of your turn, then decays by 1 each turn (${m.regen} tick(s) left).`}>♻ Regen {m.regen}</span>}
-        {m.defense > 0 && <span className="badge defense" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}>🪖 Def {m.defenseAmount}·{m.defense}t</span>}
-        {m.taunt > 0 && <span className="badge taunt" title={`Taunt — aimed attacks funnel onto this member for ${m.taunt} more enemy turn(s).`}>⚔ Taunt {m.taunt}</span>}
+        {m.shield && <span className="badge shield" title={`Shield — fully blocks the next damaging hit; fades unused in ${m.shieldTurns} enemy turn(s).`}><Icon name="shield" /> Shield</span>}
+        {m.brace && <span className="badge shield" title={`Brace — the next damaging hit deals 2 less (consumed); fades unused in ${m.braceTurns} enemy turn(s).`}><Icon name="shield" /> Brace</span>}
+        {m.ward > 0 && <span className="badge shield" title={`Ward — absorbs the next ${m.ward} damage, point for point.`}><Icon name="shield" /> Ward {m.ward}</span>}
+        {m.regen > 0 && <span className="badge regen" title={`Regen — heals ${m.regen} at the start of your turn, then decays by 1 each turn (${m.regen} tick(s) left).`}><Icon name="leaf" /> Regen {m.regen}</span>}
+        {m.defense > 0 && <span className="badge defense" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}><Icon name="shield" /> Def {m.defenseAmount}·{m.defense}t</span>}
+        {m.taunt > 0 && <span className="badge taunt" title={`Taunt — aimed attacks funnel onto this member for ${m.taunt} more enemy turn(s).`}><Icon name="target" /> Taunt {m.taunt}</span>}
         {injuryBadges(m.injuries).map((inj, i) => (
-          <span key={`injury-${i}`} className="badge injury" title={`${inj.name} — ${inj.detail}`}>🩹 {inj.name}</span>
+          <span key={`injury-${i}`} className="badge injury" title={`${inj.name} — ${inj.detail}`}>{inj.name}</span>
         ))}
-        {m.boarHp > 0 && <span className="badge shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}>🐗 Boar {m.boarHp}·{m.boarTurns}t</span>}
+        {m.boarHp > 0 && <span className="badge shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}><Icon name="shield" /> Boar {m.boarHp}·{m.boarTurns}t</span>}
       </div>
-      {m.id === 'mage' && <div className="charge">⚡ Charge {mageCharge}/{CHARGE_MAX}</div>}
+      {m.id === 'mage' && <div className="charge"><Icon name="bolt" /> Charge {mageCharge}/{CHARGE_MAX}</div>}
       {berserkerBands && (
         <div className={`charge rage-${rageTier}`} title={`Rage bands: +${BERSERKER_BAND_BONUS} at HP ≤ ${berserkerBands[0]}, +${BERSERKER_BAND_BONUS * 2} at HP ≤ ${berserkerBands[1]}.`}>
-          🔥 {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg
+          <Icon name="sword" /> {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg
         </div>
       )}
     </div>
