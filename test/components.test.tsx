@@ -17,6 +17,7 @@ import { StartScreen } from '../src/components/StartScreen';
 import { DraftScreen } from '../src/components/DraftScreen';
 import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen';
 import { Actions } from '../src/components/Actions';
+import { BattleScreen } from '../src/components/BattleScreen';
 import { Hand } from '../src/components/Hand';
 import { Card } from '../src/components/Card';
 import { MemberCard, injuryBadges } from '../src/components/MemberCard';
@@ -199,6 +200,21 @@ async function render(el: React.ReactElement): Promise<string> {
     <Actions game={spent} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
   );
   check('below the cap the button advertises the rest MP', spentText.includes(`Rest & End Turn (+${spent.restAmount()} MP)`), spentText);
+}
+
+// --- BattleScreen groups the MP bar and the turn button in one row (#80) --------
+{
+  const game = new Game(3, defaultBattleConfig()).start();
+  const view = { enemyHp: game.enemy.hp, memberHp: [10, 10, 10], memberDead: [false, false, false] };
+  await render(
+    <BattleScreen
+      game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
+      playCard={() => {}} skipTurn={() => {}} endTurn={() => {}} onWinFx={() => 0} onBattleEnd={() => {}}
+    />,
+  );
+  const row = rootEl.querySelector('.mana-row');
+  check('mana-row wraps the mp bar beside the primary turn button',
+    !!row && !!row.querySelector('.mp-bar') && !!row.querySelector('button.primary'));
 }
 
 // --- Incapacitated member shows a distinct overlay, not plain DEAD (#33) --------

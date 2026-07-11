@@ -1,6 +1,6 @@
 # Issue 80 — Small UI tweaks batch (button placement / topbar height / banner theme)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** post-demo (UI polish)   **Size:** S (batch of small fixes, all in one commit)
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** intake 2026-07-11 — "Small UI tweaks" (all sub-bullets in one issue)

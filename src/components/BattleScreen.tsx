@@ -249,7 +249,19 @@ export function BattleScreen({
         isValidTarget={isValidTarget}
         onMemberClick={onMemberClick}
       />
-      <ManaBar game={game} animating={animating} />
+      {/* The MP bar and the primary turn button share one row: Rest / End Turn
+          sits to the right of the mana bar (#80). */}
+      <div className="mana-row">
+        <ManaBar game={game} animating={animating} />
+        <Actions
+          game={game}
+          animating={animating}
+          hasSelection={!!selected}
+          onSkip={onSkip}
+          onEndTurn={onEndTurn}
+          onCancel={() => setSelected(null)}
+        />
+      </div>
       {/* Persistent channel feedback (#78): banner sits between the mana bar and the
           hand while a player-cast channel runs; clears when it ends/cancels. */}
       <ChannelBanner game={game} />
@@ -261,14 +273,6 @@ export function BattleScreen({
         onCardClick={onCardClick}
         onCardPointerDown={onCardPointerDown}
         draggingUid={dragView?.uid ?? null}
-      />
-      <Actions
-        game={game}
-        animating={animating}
-        hasSelection={!!selected}
-        onSkip={onSkip}
-        onEndTurn={onEndTurn}
-        onCancel={() => setSelected(null)}
       />
       <CombatLog game={game} />
       {/* The standing telegraph would flash the *next* turn's lines mid-sequence. */}
