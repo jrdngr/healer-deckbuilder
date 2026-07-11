@@ -288,6 +288,19 @@ section.enemy {
   50% { box-shadow: 0 0 0 6px rgba(239,106,80,.35), var(--shadow-card); }
 }
 
+/* ---- Character art blobs (War-Torn set) -----------------------------------
+   A CharacterBlob renders a 96×104 tile of absolutely-positioned layers scaled
+   to `size`. The wrapper owns the idle bob so the inner tile's scale transform is
+   left untouched; overflow stays visible for crowns/spikes/side minions. */
+.char-blob {
+  position: relative; flex: none; overflow: visible;
+  animation: blob-bob 3.6s ease-in-out infinite;
+}
+.char-blob-tile { position: absolute; left: 0; top: 0; transform-origin: top left; }
+@keyframes blob-bob { 50% { transform: translateY(-5px); } }
+/* On the party card the blob sits top-center above the name. */
+.member .char-blob { margin: 2px auto 0; }
+
 /* ---- Persistent status auras --------------------------------------------
    Statuses read from across the screen as light on the card itself; the badge
    pills keep the exact numbers. Aura layers are absolutely-positioned children
@@ -922,7 +935,7 @@ main.drag-board .enemy, main.drag-board .party {
   .fx-card-ghost { animation: fx-fade-out var(--dur, 420ms) ease-out forwards; }
   /* Ambient motion goes still; auras stay visible at a fixed strength so the
      status information survives without the pulse. */
-  section.enemy, .member, .member.hp-low, .member.hp-crit { animation: none; }
+  section.enemy, .member, .member.hp-low, .member.hp-crit, .char-blob { animation: none; }
   .member.hp-low, .member.hp-crit { border-color: var(--danger); }
   .aura-rim, .aura-taunt { animation: none; opacity: .7; }
   .aura-motes span { animation: none; opacity: .6; transform: translateY(-30px); }
