@@ -1,6 +1,6 @@
 # Issue 84 — Split `src/constants.ts` into `src/data/*` modules behind a barrel
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete
 - **Phase:** refactor / navigability   **Size:** L
 - **Depends on:** —   **Blocks:** —   **Note:** behavior-preserving; no balance change
 - **Addresses:** cleanup pass 2026-07-11 — the constants split was **attempted and reverted** because a

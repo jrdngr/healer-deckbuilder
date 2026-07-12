@@ -67,4 +67,3 @@ _(empty — all current notes written up as issues #79–#83 on 2026-07-11.)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 84 | 📋 Open | [Split constants.ts into src/data modules behind a barrel](issues/84-split-constants-modules.md) | refactor | — | cleanup 2026-07-11 (attempted+reverted: module-init cycle) |
