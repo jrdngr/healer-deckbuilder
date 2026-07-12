@@ -14,7 +14,7 @@ import {
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
   GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS, HEAL_TUNING, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
-  SHOP_SIZE, CARD_REWARD_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
+  SHOP_SIZE, SHOP_SALE_OFF, CARD_REWARD_SIZE, EVENT_CARD_OFFER_SIZE, MAX_UPGRADE_SLOTS,
   PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD,
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
@@ -943,9 +943,21 @@ export class Run {
       CARD_POOL.map((id): [CardId, number] => [id, RARITY_WEIGHT[CARD_RARITY[id]]]),
       SHOP_SIZE.cardShop,
     );
-    return ids.map((cardId): CardOffer => ({
+    const offers = ids.map((cardId): CardOffer => ({
       cardId, rarity: CARD_RARITY[cardId], price: this.discountedPrice(RARITY_PRICE[CARD_RARITY[cardId]]),
     }));
+    // One offer is always on sale: its list price is struck through and the
+    // reduced price shown beside it (25% off, never below 1g). The sale slot is
+    // picked from a sub-seed hashed off the rolled ids, NOT the run's rng stream,
+    // so marking the sale never perturbs the fight/encounter rolls the stream drives.
+    if (offers.length > 0) {
+      let h = this.seed >>> 0;
+      for (const id of ids) for (let k = 0; k < id.length; k++) h = Math.imul(h ^ id.charCodeAt(k), 0x01000193) >>> 0;
+      const i = Math.floor(makeRng(h)() * offers.length);
+      const listPrice = offers[i].price;
+      offers[i] = { ...offers[i], listPrice, price: Math.max(1, Math.round(listPrice * (1 - SHOP_SALE_OFF))) };
+    }
+    return offers;
   }
 
   rollCardUpgradeShop(): ModifierOffer[] {

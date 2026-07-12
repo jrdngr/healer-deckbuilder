@@ -350,7 +350,11 @@ import { check, eq, results } from './harness';
   //     no HP/policy change: F0/F1 ~unchanged (199/198), F2 178->182, F3 178->179, F4 175->173,
   //     F5 165->164, F6 160->164, F7 159->162, F8 153->153. All band/CI/boss gates below still
   //     hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 198, 182, 179, 173, 164, 164, 162, 153]));
+  //   • Shop sale (2026-07-12): the card shop always marks one offer 25% off. The sale slot is
+  //     picked from a hashed sub-seed, so the map/fight stream is untouched — but the cheaper
+  //     card is bought in a few runs, marginally shifting only the hardest fight: F8 153->152.
+  //     All other fights unchanged; band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 198, 182, 179, 173, 164, 164, 162, 152]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

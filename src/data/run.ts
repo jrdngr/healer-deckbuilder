@@ -542,6 +542,9 @@ export const ENEMY_ENRAGE_TURN_BY_FIGHT: number[] = [
 // Storefront sizes per shop type.
 export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4 } as const;
 
+// The card shop always puts one item on sale at this fraction off its list price.
+export const SHOP_SALE_OFF = 0.25;
+
 // Rarity of each existing card (new cards are a separate design task).
 export const CARD_RARITY: Record<CardId, Rarity> = {
   lowHeal: 'common',

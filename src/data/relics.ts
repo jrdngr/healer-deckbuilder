@@ -244,8 +244,10 @@ export const CARD_REWARD_SIZE = 3;       // cards offered after every won fight 
 export const RELIQUARY_STOCK = 3;        // relics stocked by a Reliquary visit
 export const RELIQUARY_REMOVALS_MAX = 2; // card removals per Reliquary visit (at CARD_REMOVAL_PRICE)
 
-// Shop offer shapes (a rolled storefront entry plus its gold price).
-export interface CardOffer { cardId: CardId; rarity: Rarity; price: number; }
+// Shop offer shapes (a rolled storefront entry plus its gold price). `listPrice`,
+// when set, is the pre-sale price to strike through: one card-shop offer is always
+// discounted, and its list price is shown crossed out beside the sale price.
+export interface CardOffer { cardId: CardId; rarity: Rarity; price: number; listPrice?: number; }
 export interface RelicOffer { relicId: RelicId; rarity: Rarity; price: number; }
 export interface ModifierOffer { modifier: ModifierId; rarity: Rarity; price: number; }
 export interface PartyUpgradeOffer { def: PartyUpgradeDef; price: number; }

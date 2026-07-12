@@ -29,7 +29,10 @@ export function CardShopScreen({ run, act, onDone }: CardShopScreenProps) {
                 selected={false}
                 onClick={() => { if (affordable) act((r) => r.buyCardOffer(i)); }}
               />
-              <div className={`offer-price ${offer.rarity}`}>⦿ {offer.price}</div>
+              <div className={`offer-price ${offer.rarity}${offer.listPrice != null ? ' on-sale' : ''}`}>
+                {offer.listPrice != null && <span className="price-was">⦿ {offer.listPrice}</span>}
+                <span className="price-now">⦿ {offer.price}</span>
+              </div>
             </div>
           );
         })}

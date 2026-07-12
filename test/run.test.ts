@@ -556,7 +556,8 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('card shop offers SHOP_SIZE.cardShop cards', offers.length, SHOP_SIZE.cardShop);
   const ids = new Set(offers.map((o) => o.cardId));
   eq('card offers are distinct', ids.size, offers.length);
-  check('card offer prices match rarity', offers.every((o) => o.price === RARITY_PRICE[CARD_RARITY[o.cardId]]));
+  // The sale offer's list price (not its discounted price) is the one that matches rarity.
+  check('card offer prices match rarity', offers.every((o) => (o.listPrice ?? o.price) === RARITY_PRICE[CARD_RARITY[o.cardId]]));
 }
 {
   const run = new Run(7);
@@ -1036,13 +1037,24 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const run = new Run(82);
   run.addRelic('hagglersCharm');
   check('Haggler discounts card-shop prices',
-    run.rollCardShop().every((o) => o.price === Math.max(HAGGLER_FLOOR, RARITY_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
+    // One offer is on sale (its list price is the haggler price); the rest sit at the haggler price.
+    run.rollCardShop().every((o) => (o.listPrice ?? o.price) === Math.max(HAGGLER_FLOOR, RARITY_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
   check('Haggler discounts reliquary prices',
     run.rollReliquary().every((o) => o.price === Math.max(HAGGLER_FLOOR,
       (RELICS[o.relicId].curse ? CURSE_PRICE : RELIC_PRICE[o.rarity]) - HAGGLER_DISCOUNT)));
   const plain = new Run(82);
   check('without the Charm prices are full',
-    plain.rollCardShop().every((o) => o.price === RARITY_PRICE[o.rarity]));
+    plain.rollCardShop().every((o) => (o.listPrice ?? o.price) === RARITY_PRICE[o.rarity]));
+}
+{
+  // The card shop always puts exactly one item on sale: 25% off its list price.
+  const run = new Run(91);
+  const offers = run.rollCardShop();
+  const onSale = offers.filter((o) => o.listPrice != null);
+  eq('exactly one card-shop item is on sale', onSale.length, 1);
+  const sale = onSale[0];
+  eq('sale price is 25% off the list price', sale.price, Math.max(1, Math.round(sale.listPrice! * 0.75)));
+  check('sale price is below the list price', sale.price < sale.listPrice!);
 }
 {
   // Exclusion list (Q9): the Lantern is dead once no remaining fight can roll a
