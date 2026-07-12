@@ -32,7 +32,7 @@ export function RecruitScreen({ run, act, onDone }: RecruitScreenProps) {
       {!done && (
         <div className="shop-offers draft-offers">
           {content.options.map((id) => (
-            <MemberOfferButton key={id} id={id} onClick={() => act((r) => r.recruitMember(id))} />
+            <MemberOfferButton key={id} id={id} onClick={() => { act((r) => r.recruitMember(id)); onDone(); }} />
           ))}
         </div>
       )}
