@@ -151,24 +151,28 @@ section.enemy {
 .cast-fill { height: 100%; background: var(--danger-grad); transition: width .3s ease; border-radius: 999px; }
 @keyframes pulse { 50% { opacity: .5; } }
 
-/* ---- Player channel banner (#78) ----------------------------------------
-   Persistent feedback for a player-cast channel, mounted between the mana bar
-   and the hand. Mirrors the enemy cast-bar language (.cast-bar) but tinted
-   arcane-blue so it reads as YOUR sustained effect, not the enemy's wind-up. */
+/* ---- Player channel indicator (#78) -------------------------------------
+   Persistent feedback for a player-cast channel. Lives in the fixed left gutter
+   of `.mana-row` (grid column 1) so it occupies reserved space instead of adding
+   a row that shoves the hand down. Compact — one label line + a depleting track —
+   to stay within the row's height. Mirrors the enemy cast-bar language
+   (.cast-bar) but tinted arcane-blue so it reads as YOUR effect, not the enemy's. */
 .channel-banner {
-  margin: 8px auto; width: 50%; padding: 10px 14px;
-  border: var(--bw-card) solid var(--mp); border-radius: var(--r-md);
+  grid-column: 1; justify-self: end; min-width: 0; max-width: 100%;
+  margin: 0; padding: 6px 12px;
+  border: var(--bw) solid var(--mp); border-radius: var(--r-md);
   background: color-mix(in srgb, var(--mp) 14%, var(--panel));
   box-shadow: var(--shadow-card);
   display: flex; flex-direction: column; gap: 4px;
   animation: pulse 1.8s infinite;
 }
-.channel-banner .channel-label { display: inline-flex; align-items: center; gap: 5px; color: var(--c-mp); font-weight: 800; }
+.channel-banner .channel-label {
+  display: flex; align-items: center; gap: 5px; color: var(--c-mp); font-weight: 800;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .channel-banner .channel-target { color: var(--ink); }
-.channel-effect { font-size: 12px; color: var(--muted); }
-.channel-banner .cast-track { background: var(--track); border-color: var(--ink); }
+.channel-banner .cast-track { background: var(--track); border-color: var(--ink); margin-top: 0; }
 .channel-banner .channel-fill { background: linear-gradient(180deg, var(--mp-hi), var(--mp)); }
-.channel-warn { font-size: 11px; color: var(--c-sys); font-weight: 800; }
 .enemy-status { margin-top: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); min-height: 18px; }
 .enemy-poison { display: inline-flex; align-items: center; gap: 5px; color: var(--fam-heal); font-weight: 800; }
 
@@ -414,8 +418,12 @@ section.enemy { animation: breathe 4.6s ease-in-out infinite; }
 /* Controls — centered MP bar at half width */
 .controls { display: flex; justify-content: center; }
 .mp-bar { width: 50%; height: 22px; }
-/* MP bar and the Rest / End Turn button share one centered row (#80). */
-.mana-row { display: flex; align-items: center; justify-content: center; gap: 16px; }
+/* MP bar and the Rest / End Turn button share one centered row (#80). Three
+   columns: the equal 1fr gutters keep the auto-sized center group (MP bar +
+   button) pinned to the middle regardless of the channel indicator, which sits
+   in the left gutter (#78) — so the bar and hand never move when a channel runs. */
+.mana-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
+.mana-center { grid-column: 2; display: flex; align-items: center; gap: 16px; }
 .mana-row .controls { flex: 0 0 auto; }
 .mana-row .mp-bar { width: 440px; max-width: 46vw; }
 .refresh-pill {

@@ -249,22 +249,24 @@ export function BattleScreen({
         isValidTarget={isValidTarget}
         onMemberClick={onMemberClick}
       />
-      {/* The MP bar and the primary turn button share one row: Rest / End Turn
-          sits to the right of the mana bar (#80). */}
+      {/* Three-column row: the MP bar and its primary turn button (#80) stay pinned
+          to the centered middle column, so they never move. The player-cast channel
+          feedback (#78) lives in the left gutter and clears when it ends/cancels —
+          occupying reserved space rather than pushing the hand down. */}
       <div className="mana-row">
-        <ManaBar game={game} animating={animating} />
-        <Actions
-          game={game}
-          animating={animating}
-          hasSelection={!!selected}
-          onSkip={onSkip}
-          onEndTurn={onEndTurn}
-          onCancel={() => setSelected(null)}
-        />
+        <ChannelBanner game={game} />
+        <div className="mana-center">
+          <ManaBar game={game} animating={animating} />
+          <Actions
+            game={game}
+            animating={animating}
+            hasSelection={!!selected}
+            onSkip={onSkip}
+            onEndTurn={onEndTurn}
+            onCancel={() => setSelected(null)}
+          />
+        </div>
       </div>
-      {/* Persistent channel feedback (#78): banner sits between the mana bar and the
-          hand while a player-cast channel runs; clears when it ends/cancels. */}
-      <ChannelBanner game={game} />
       <Hand
         game={game}
         disabled={animating}
