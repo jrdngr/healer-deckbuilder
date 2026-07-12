@@ -62,7 +62,7 @@ async function render(el: React.ReactElement): Promise<string> {
   text = await render(
     <StartScreen onBegin={noop} hasSave={false} savedFightIndex={null} onContinue={noop} />,
   );
-  check('fresh run invites the first-hero draft', text.includes('Draft your first hero'), text);
+  check('fresh run offers the begin button', text.includes('Begin your journey'), text);
   check('no continue button without a save', !text.includes('Continue your saved run'));
 }
 

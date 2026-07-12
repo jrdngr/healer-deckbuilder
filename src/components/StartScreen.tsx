@@ -33,9 +33,6 @@ export function StartScreen({ onBegin, hasSave, savedFightIndex, onContinue }: S
         </div>
       )}
       <div className="map-branch start-branch">
-        <div className="map-node">
-          <NodeTileBody icon={fight.icon} label="Draft your first hero" />
-        </div>
         <button className={hasSave ? 'map-take' : 'primary map-take'} onClick={onBegin}>
           {hasSave ? 'Start a new run instead' : 'Begin your journey'}
         </button>
