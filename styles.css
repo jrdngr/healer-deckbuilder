@@ -1087,6 +1087,12 @@ main.drag-board .enemy, main.drag-board .party {
   animation: node-in 340ms cubic-bezier(.3,1.3,.5,1) backwards;
   animation-delay: var(--d, 0ms);
 }
+/* The button is centered on its point with translate(-50%, -50%); the generic
+   button:hover/:active rules replace `transform` outright, which would drop that
+   centering and fling the button half its size away. Re-apply the offset here so
+   it only lifts/presses in place. */
+.map-canvas .map-take:hover:not(:disabled) { transform: translate(-50%, -50%) translateY(-2px); }
+.map-canvas .map-take:active:not(:disabled) { transform: translate(-50%, -50%) translateY(2px); }
 /* ---- Branch hub (the chosen path's stops) ---------------------------------
    Stops are .map-node tiles rendered as buttons: enter any, in any order, as
    often as you like, then commit to the fight. */
@@ -1120,6 +1126,12 @@ main.drag-board .enemy, main.drag-board .party {
 /* Card-shop offers: a card plus a price tag. */
 .shop-offer { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .offer-price { color: var(--gold); font-weight: 700; font-size: 13px; }
+/* Sale offer: the list price struck through in red, the sale price beside it. */
+.offer-price.on-sale { display: inline-flex; align-items: baseline; gap: 6px; }
+.offer-price .price-was {
+  color: var(--muted); font-weight: 600;
+  text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 2px;
+}
 
 /* Modifier / upgrade offers: a clickable info button. */
 .mod-offer {
@@ -1167,7 +1179,7 @@ main.drag-board .enemy, main.drag-board .party {
 .draft-member.chosen { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(240,168,50,.3); }
 .draft-member-name { font-weight: 700; }
 .draft-member-stats { font-size: 11px; color: var(--muted); }
-.draft-member-ability { font-size: 11px; color: var(--accent); }
+.draft-member-ability { font-size: 11px; color: var(--accent-ink); font-weight: 700; }
 .draft-weights { font-size: 12px; color: var(--muted); margin: 4px 0 12px; }
 
 /* ---- Deploy (pre-fight member selection, 2026-07) ------------------------ */
