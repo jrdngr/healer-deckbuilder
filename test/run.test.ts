@@ -902,7 +902,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // Act 2/3 rosters (#20): the later normal fights draw from their own named
   // rosters (boss tech at small scale), never from act-1-only filler.
-  const A2 = new Set(['ironmaw', 'needler', 'leech', 'swarm', 'cleaver']);
+  const A2 = new Set(['ironmaw', 'needler', 'leech', 'venomancer', 'swarm', 'cleaver']); // + Gloopy (#87)
   const A3 = new Set(['juggernaut', 'lancer', 'devourling', 'cleaver']);
   let a2ok = true, a3ok = true;
   const seen = new Set<string>();

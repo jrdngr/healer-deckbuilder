@@ -14,6 +14,7 @@ import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/c
 import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS, RELICS } from '../src/constants';
 import { THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD } from '../src/constants';
 import { HERO_POISON_BASE, HERO_POISON_TURNS, MARK_TURNS } from '../src/constants';
+import { ENEMY_MARKER, VENOMANCER_DEF, HEXWEAVER_PAYOFF_DMG, DOOMLING_PAYOFF_DMG, DEVOURER_SLUDGE_DMG } from '../src/constants';
 import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG } from '../src/constants';
 import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPEN_VEINS_DMG, TRANSFUSION_HP, TRANSFUSION_HEAL, BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS, GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
@@ -282,6 +283,55 @@ function payoffTelegraph(g: Game, damage: number, forTurn = 5): Telegraph {
   check('Payoff preview == applied across clear-mid-window (0 mismatches)', mismatches === 0, `${mismatches}`);
   check('Payoff property test exercised cleared Marks', clearedTurns > 20, `${clearedTurns}`);
   check('Payoff property test covered every member', checked > 200, `${checked}`);
+}
+
+// --- #87 enemy wiring: the new mechanics fire from the real rotations --------------
+function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
+  const cfg = defaultBattleConfig();
+  cfg.enemy = { maxHP: 60, boss: false, attackBonus: 0, def, enrageTurn: 14 };
+  return new Game(seed, cfg).start();
+}
+{
+  // Jinxweaver (#87): the rotation resolves Doom (curse, slot 3) then the adjacent
+  // Reckoning (payoff, slot 4) strikes the still-Marked heroes for HEXWEAVER_PAYOFF_DMG.
+  const g = hexweaverGame(30); g.start();
+  g.rotationIndex = 3; g.telegraph = g._generateTelegraph(5);
+  check('Jinxweaver slot 3 is the Doom curse', g.telegraph.cast === 'curse' && g.telegraph.name === 'Doom');
+  g.turn = 5; g._runEnemyPhase();                         // Doom resolves -> party Marked
+  check('Doom Marks the party', g.livingMembers().every((m) => m.markTurns > 0));
+  g.rotationIndex = 4; g.telegraph = g._generateTelegraph(6);
+  check('Jinxweaver slot 4 is the Reckoning payoff', g.telegraph.targetsMarked === true && g.telegraph.name === 'Reckoning');
+  const tank = g.tank; const before = tank.hp;
+  g.turn = 6; g._runEnemyPhase();                         // Reckoning resolves on the Marked tank
+  eq('Reckoning strikes the Marked tank for its payoff', before - tank.hp, HEXWEAVER_PAYOFF_DMG);
+  check('Reckoning consumes the Marks', g.livingMembers().every((m) => m.markTurns === 0));
+}
+{
+  // Gobbler (#87): phase-1 slot 5 is the Sludge Hero-Poison cast (no direct damage).
+  const g = devourerGame(31); g.start();
+  g.rotationIndex = 5; g.telegraph = g._generateTelegraph(5);
+  check('Gobbler slot 5 is the Sludge poison cast', g.telegraph.cast === 'poison' && g.telegraph.name === 'Sludge');
+  eq('Sludge previews no attack lines', g.attackTargets().length, 0);
+  g._resolveCast(g.telegraph);
+  check('Sludge poisons the party at its strength',
+    g.livingMembers().every((m) => m.poison === DEVOURER_SLUDGE_DMG && m.poisonTurns > 0));
+}
+{
+  // Doomling (#87): the act-1 Curse teacher — Whammy (slot 1) Marks, Kapow (slot 2) pays off.
+  const g = normalGame(32, ENEMY_MARKER);
+  g.rotationIndex = 1; g.telegraph = g._generateTelegraph(3);
+  check('Doomling slot 1 is the Whammy curse', g.telegraph.cast === 'curse' && g.telegraph.name === 'Whammy');
+  const step2 = g._telegraphFromStep(g._normalizeStep(ENEMY_MARKER.rotation![2]), 3);
+  check('Doomling slot 2 is the Kapow payoff', step2.targetsMarked === true && step2.name === 'Kapow');
+  eq('Kapow carries the act-1 payoff damage', step2.damage, DOOMLING_PAYOFF_DMG);
+}
+{
+  // Gloopy (#87): the act-2 Poison teacher — Ick lays a small stacking Hero Poison.
+  const g = normalGame(33, VENOMANCER_DEF);
+  g.rotationIndex = 2; g.telegraph = g._generateTelegraph(3);
+  check('Gloopy slot 2 is the Ick poison cast', g.telegraph.cast === 'poison' && g.telegraph.name === 'Ick');
+  g._resolveCast(g.telegraph);
+  check('Ick poisons the party', g.livingMembers().every((m) => m.poison > 0 && m.poisonTurns > 0));
 }
 
 // --- regen (#52): magnitude IS duration; decays each tick, capped at maxHP ----
@@ -1602,7 +1652,7 @@ function payoffTelegraph(g: Game, damage: number, forTurn = 5): Telegraph {
   }
   eq('exact Jinxweaver rotation (by intent name)',
     JSON.stringify(seq),
-    JSON.stringify(['Strike', 'Zinger', 'Jinx', 'Sweep', 'Zinger', 'Slurp']));
+    JSON.stringify(['Strike', 'Zinger', 'Jinx', 'Doom', 'Reckoning', 'Slurp'])); // #87: Curse/Mark replaced sweep + 2nd Zinger
   // A bare-string opener still announces by its generic intent name.
   g.rotationIndex = 0; g.telegraph = g._generateTelegraph(5);
   eq('plain opener announces generically', g.telegraphIntent(), ATTACK_INTENT_NAMES.single);

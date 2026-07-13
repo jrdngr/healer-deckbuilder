@@ -172,6 +172,23 @@ export const ENEMY_CLEAVER: EnemyDef = { // Cleave: occasional heavy single hit
   id: 'cleaver', name: 'Clobberer', boss: false,
   baseWeights: aw(58, 12, 7, 5, 18, 0), enragedWeights: aw(42, 18, 12, 5, 23, 0),
 };
+// SIGNATURE: Mark (#87). The act-1 teacher for the Jinxweaver's clear-or-die read: a
+// Whammy Marks the whole party (no damage), then the very next step Kapow strikes only
+// the still-Marked heroes. Answer it by clearing the Mark (Cleanse) OR by mitigation
+// (Shield fully blocks Kapow; Defense shaves it) — the small act-1 payoff teaches the
+// read without one-shotting. Mark and Kapow sit on ADJACENT slots so exactly one player
+// turn falls between them (MARK_TURNS survives the single decay).
+export const DOOMLING_PAYOFF_DMG = 5; // Kapow per-target damage (before attackBonus/enrage)
+export const ENEMY_MARKER: EnemyDef = { // Mark: telegraphed clear-or-die on the party
+  id: 'marker', name: 'Doomling', boss: false,
+  baseWeights: aw(60, 20, 10, 10, 0, 0), enragedWeights: aw(45, 28, 17, 10, 0, 0),
+  rotation: [
+    'single',
+    { type: 'cast', name: 'Whammy', cast: 'curse' },
+    { type: 'heavy', name: 'Kapow', damage: DOOMLING_PAYOFF_DMG, targetsMarked: true },
+    'two',
+  ],
+};
 
 // Boss 1 — Bouncer (issue 12). SIGNATURE: the clean teaching boss — a fixed,
 // learnable rotation + a periodic Haymaker channel that teaches telegraph-reading. Every 2nd cycle its heavy becomes Haymaker — a 2-turn
@@ -194,14 +211,21 @@ export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Bouncer', {
 //   • Slurp — a 'cast' that drains SIPHON_AMOUNT healer MP (you can't cast freely).
 // Opens on a plain single (a gentle turn-1 read), then cycles the three tricks
 // between whole-party pressure. Cleanse (added this issue) is its designed counter.
+// #87: Jinxweaver gains the boss-scale Curse/Mark climax (taught by the act-1 Doomling).
+// Doom Marks the whole party, then the adjacent Reckoning strikes every still-Marked hero
+// for heavy damage — clear-or-die at boss scale: Cleanse OR mitigation (Shield fully
+// blocks, Defense shaves below lethal). It REPLACES the sweep + the second Zinger, so all
+// of the boss's original tricks survive — pierce (Zinger), wound (Jinx), siphon (Slurp) —
+// and the Payoff takes over the sweep's party-wide-threat role, keeping the fight in budget.
 export const HEXWEAVER_PIERCER_DMG = 5; // Zinger per-hit damage (before attackBonus)
+export const HEXWEAVER_PAYOFF_DMG = 8;  // Reckoning per-target damage on the still-Marked (before attackBonus/enrage)
 export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Jinxweaver', {
   rotation: [
     'single',
     pierceStep('Zinger', HEXWEAVER_PIERCER_DMG),
     { type: 'cast', name: 'Jinx', cast: 'wound' },
-    'sweep',
-    pierceStep('Zinger', HEXWEAVER_PIERCER_DMG),
+    { type: 'cast', name: 'Doom', cast: 'curse' },
+    { type: 'heavy', name: 'Reckoning', damage: HEXWEAVER_PAYOFF_DMG, targetsMarked: true },
     { type: 'cast', name: 'Slurp', cast: 'siphon' },
   ],
 });
@@ -215,7 +239,14 @@ export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Jinxweaver', {
 //     channelled sweep at DEVOURER_MAW_DMG x3, recurring every ~4 turns — plus a
 //     tighter enrage. Enraged Big Chomp one-shots an unshielded squishy: race it down.
 // The phase threshold is edge-detected (fires once, even mid-Poison-tick).
-export const DEVOURER_MAW_DMG = 7; // Big Chomp per-target sweep damage (before enrage/attackBonus)
+// #87: the Gobbler gains boss-scale Hero Poison. Phase 1's trailing heavy becomes Sludge —
+// a stacking, cleansable DoT on the party (taught by the act-2 Gloopy) — so the race gains
+// a ramp: ignore it and it spikes into real burst on the squishies. Cleanse is the only
+// answer (it ticks raw, past Shield/Defense). Thematic next to Gulp: it eats its own poison
+// and spits some on you. Budget-neutral — a 0-direct-damage applier for a 7-damage heavy.
+export const DEVOURER_MAW_DMG = 7;    // Big Chomp per-target sweep damage (before enrage/attackBonus)
+export const DEVOURER_SLUDGE_DMG = 3; // Sludge per-turn hero-poison strength
+export const DEVOURER_SLUDGE_TURNS = 3; // Sludge hero-poison duration
 export const DEVOURER_DEF: EnemyDef = bossDef('devourer', 'Gobbler', {
   rotation: [
     'single',
@@ -223,7 +254,7 @@ export const DEVOURER_DEF: EnemyDef = bossDef('devourer', 'Gobbler', {
     'sweep',
     { type: 'cast', name: 'Gulp', cast: 'consume' },
     'two',
-    'heavy',
+    { type: 'cast', name: 'Sludge', cast: 'poison', castAmount: DEVOURER_SLUDGE_DMG, castTurns: DEVOURER_SLUDGE_TURNS },
   ],
   phase: {
     hpFraction: 0.5,
@@ -273,6 +304,20 @@ export const LEECH_DEF: EnemyDef = normalDef('leech', 'Leech', {
   rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Snack Time', cast: 'consume' }, 'two'],
 });
 
+// Act 2 — Gloopy. SIGNATURE: Poisoner (#87) — the act-2 teacher for the Gobbler's Sludge.
+// Its Ick cast lays a small, STACKING Hero Poison (raw ticks past mitigation) on the whole
+// party, so the party learns that Cleanse — not a shield — is the answer, before act 3
+// weaponises it. The plain cycle runs light; the DoT ramp is the threat.
+export const GLOOPY_POISON_DMG = 2;   // Ick per-turn hero-poison strength
+export const GLOOPY_POISON_TURNS = 3; // Ick hero-poison duration
+export const VENOMANCER_DEF: EnemyDef = normalDef('venomancer', 'Gloopy', {
+  rotation: [
+    'single', 'two',
+    { type: 'cast', name: 'Ick', cast: 'poison', castAmount: GLOOPY_POISON_DMG, castTurns: GLOOPY_POISON_TURNS },
+    'single', 'two',
+  ],
+});
+
 // Act 3 — Steamroller. SIGNATURE: Channeler (heavier) — Flatten is an 11-damage 2-turn
 // channel every 2nd cycle, over a single-heavy base cycle (the channel is the
 // threat; the cycle stays on budget).
@@ -295,8 +340,8 @@ export const DEVOURLING_DEF: EnemyDef = normalDef('devourling', 'Gobblet', {
 });
 
 export const NORMAL_ENEMY_DEFS: EnemyDef[] = [
-  ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER,
-  IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF,
+  ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER, ENEMY_MARKER,
+  IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, VENOMANCER_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF,
 ];
 export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
   Object.fromEntries(NORMAL_ENEMY_DEFS.map((d) => [d.id, d]));
@@ -306,11 +351,11 @@ export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
 // four; acts 2/3 lead with their own named rosters (#20) — the boss-tech
 // normals — with an act-1 body as occasional filler for texture.
 export const ENCOUNTER_TABLE: Array<Array<[string, number]>> = [
-  [['spammer', 70], ['swarm', 30]],                                       // fight 0 (A1)
-  [['spammer', 45], ['swarm', 30], ['stalker', 25]],                      // fight 1 (A1)
+  [['spammer', 55], ['swarm', 25], ['marker', 20]],                       // fight 0 (A1)
+  [['spammer', 35], ['swarm', 25], ['stalker', 20], ['marker', 20]],      // fight 1 (A1)
   [],                                                                      // fight 2 (A1 boss)
-  [['ironmaw', 30], ['needler', 30], ['leech', 20], ['swarm', 20]],       // fight 3 (A2)
-  [['ironmaw', 25], ['needler', 25], ['leech', 25], ['cleaver', 25]],     // fight 4 (A2)
+  [['ironmaw', 25], ['needler', 25], ['leech', 20], ['venomancer', 20], ['swarm', 10]],   // fight 3 (A2)
+  [['ironmaw', 22], ['needler', 22], ['leech', 22], ['venomancer', 22], ['cleaver', 12]], // fight 4 (A2)
   [],                                                                      // fight 5 (A2 boss)
   [['juggernaut', 30], ['lancer', 30], ['devourling', 20], ['cleaver', 20]], // fight 6 (A3)
   [['juggernaut', 25], ['lancer', 25], ['devourling', 25], ['cleaver', 25]], // fight 7 (A3)

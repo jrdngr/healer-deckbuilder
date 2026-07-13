@@ -41,7 +41,7 @@ for (const def of enemyDefs) {
   check(`enemy '${def.id}' uses the enemy body shape`,
     art.layers.some((l) => l.includes('40% 40% 32% 32%')));
 }
-check('all 15 enemy defs have art ids', ENEMY_ART_IDS.length === 15, String(ENEMY_ART_IDS.length));
+check('all 17 enemy defs have art ids', ENEMY_ART_IDS.length === 17, String(ENEMY_ART_IDS.length));
 check('every enemy def id has matching art', enemyDefs.every((d) => ENEMY_ART_IDS.includes(d.id)),
   enemyDefs.filter((d) => !ENEMY_ART_IDS.includes(d.id)).map((d) => d.id).join(', '));
 

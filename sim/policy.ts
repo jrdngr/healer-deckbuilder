@@ -443,8 +443,24 @@ function trySap(game: Game): boolean {
   return true;
 }
 
+// #87: proactively Cleanse a party-wide clear-or-die Mark (Doomling / Jinxweaver) or a
+// stacking Hero Poison ramp (Gloopy / Gobbler). One card clears the WHOLE party, so it
+// comes BEFORE the per-member lethal-shield guard — shielding every Marked hero one at a
+// time is far more expensive than a single Cleanse. Only fires when Cleanse is in hand and
+// affordable; otherwise mitigation (tryPreventLethal) and heals take over. Fires only in
+// mark/poison fights, so it does not perturb any other encounter.
+function tryCleanseThreat(game: Game): boolean {
+  const idx = handIndexOf(game, 'cleanse');
+  if (!affordable(game, idx)) return false;
+  const marked = game.livingMembers().some((m) => m.markTurns > 0);
+  const heavyPoison = game.livingMembers().some((m) => m.poisonTurns > 0 && m.poison * m.poisonTurns >= m.hp * 0.5);
+  if (!marked && !heavyPoison) return false;
+  game.playCard(idx, null);
+  return true;
+}
+
 const STICK_TACTICS: Tactic[] = [
-  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   // Hex before offense so the Vulnerability amplifies this phase's strikes (#39).
   tryHex, tryBolt, tryPoison, tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];
@@ -452,7 +468,7 @@ const STICK_TACTICS: Tactic[] = [
 // Optimal: the stick's survival core, then Vulnerability set-up (Hex/Sap) so every
 // downstream strike is amplified, then the damage race with Consume-aware poison.
 const OPTIMAL_TACTICS: Tactic[] = [
-  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   tryHex, trySap, tryBolt, tryConsumeAwarePoison,
   tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];

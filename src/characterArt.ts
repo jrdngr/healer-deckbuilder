@@ -44,6 +44,8 @@ const ENEMIES: Entity[] = [
   { id: 'leech', c: '#d8a0c0', boss: false },
   { id: 'lancer', c: '#7fa8c9', boss: false },
   { id: 'devourling', c: '#c07898', boss: false },
+  { id: 'marker', c: '#9a7fb8', boss: false },   // Doomling (#87): the act-1 Curse/Mark teacher
+  { id: 'venomancer', c: '#8fb87a', boss: false }, // Gloopy (#87): the act-2 Hero-Poison teacher
   { id: 'enemy', c: '#b0a89c', boss: false },
   { id: 'boss', c: '#8a8296', boss: true },
 ];
