@@ -817,23 +817,9 @@ export class Game {
   // Lines to draw for the standing telegraph. [] when the game is over / no telegraph.
   // Each entry: { slot, damage, hidden }. Hidden attacks fan out to every living
   // member with unknown (null) damage; known attacks hit their living targets.
-  // The slot a pending pre-blow Fortify tick will shield this enemy phase, or null.
-  // Both the normal once-per-round tick and Liturgy's dual-cadence tick (#73) apply
-  // Fortify's Shield before the telegraph resolves, but only on a fully held turn
-  // (cardsPlayedThisPhase === 0 — the same gate the enemy-phase tick uses). Folding
-  // that deterministic grant into the preview keeps preview == applied for the blow.
-  _pendingFortifyShieldSlot(): number | null {
-    if (this.channelCard !== 'fortify' || !this.channelActive()) return null;
-    if (this.cardsPlayedThisPhase !== 0) return null;
-    const slot = this.channelTarget;
-    const m = slot == null ? null : this.members[slot];
-    return m && m.alive ? slot : null;
-  }
-
   attackTargets(): AttackSpec[] {
     const t = this.telegraph;
     if (this.status !== 'playing' || !t) return [];
-    const fortifySlot = this._pendingFortifyShieldSlot();
     // A Stunned telegraph (#61) is cancelled: it strikes nothing, so the preview is
     // empty (preview == applied == 0) and the UI clears the incoming-attack lines.
     if (t.stunned) return [];
@@ -847,7 +833,7 @@ export class Game {
       // Defense -> Brace -> Shield pipeline folded in), keeping preview ==
       // applied for whichever target the attack turns out to have.
       return this.livingMembers().map((m): AttackSpec => (
-        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type, m.slot === fortifySlot).dmg, hidden: true }
+        { slot: m.slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: true }
       ));
     }
     // Resolve targets through the shared helper (#47), so the preview lines match
@@ -856,9 +842,8 @@ export class Game {
       .map((slot): AttackSpec => {
         const m = this.members[slot];
         // The preview runs the same Defense -> Brace -> Shield pipeline the
-        // resolver applies (telegraph == applied invariant). A pending pre-blow
-        // Fortify tick (#73) shields its target before the blow — folded in here.
-        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type, slot === fortifySlot).dmg, hidden: t.hidden };
+        // resolver applies (telegraph == applied invariant).
+        return { slot, damage: this._wardedDamage(m, t.damage, t.ignoreDefense, t.type).dmg, hidden: t.hidden };
       });
   }
 
@@ -1127,13 +1112,6 @@ export class Game {
         this._log(`Sap deepens the enemy's Vulnerability (+${Math.round(this.enemy.vulnerable * 100)}% damage taken).`, 'status');
         break;
       }
-      case 'fortify': {
-        const m = this.members[this.channelTarget as number];
-        m.shield = true; m.shieldTurns = SHIELD_TURNS;
-        this._log(`Fortify shields ${m.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
-        this._emit({ kind: 'shieldApplied', slot: m.slot });
-        break;
-      }
       default: break;
     }
     if (decrement) this.channelTurns -= 1;
@@ -1392,11 +1370,7 @@ export class Game {
   // still deals damage after the stages before it. Pure read — attackTargets()
   // and _resolveAttack() both compute damage through here, which is what keeps
   // the telegraph preview equal to the applied damage across the whole pipeline.
-  // `assumeShield` (preview only, #73): treat the member as Shielded even if it is not
-  // yet — the preview path passes it for the target of a pending pre-blow Fortify tick,
-  // whose deterministic Shield grant lands before the telegraph resolves (keeps
-  // preview == applied). _resolveAttack never passes it (the tick has already run).
-  _wardedDamage(m: Member, raw: number, ignoreDefense = false, _attackType?: AttackType, assumeShield = false):
+  _wardedDamage(m: Member, raw: number, ignoreDefense = false, _attackType?: AttackType):
       { dmg: number; spendsShield: boolean } {
     // Beast Warden's Boar (#29) stands in front of her slot and eats the WHOLE
     // instance, so the Warden takes 0 and none of her own wards are spent. Checked
@@ -1405,7 +1379,7 @@ export class Game {
     if (m.boarHp > 0) return { dmg: 0, spendsShield: false };
     let dmg = this._effectiveDamage(m, raw, ignoreDefense);
     let spendsShield = false;
-    if ((m.shield || assumeShield) && dmg > 0) {
+    if (m.shield && dmg > 0) {
       dmg = 0;
       spendsShield = true;
     }

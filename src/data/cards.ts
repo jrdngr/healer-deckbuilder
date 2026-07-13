@@ -1,7 +1,7 @@
 import type { CardId, CardType, CardDef, AbilityId } from './tuning';
 import { MOD_EFFICIENT_COST, MOD_POTENT_STRENGTH, MOD_LINGERING_TURNS, REFRESH_MP_CAP, REFRESH_TURNS } from './tuning';
 import {
-  BLOOD_BANNER_BONUS, BLOOD_BANNER_HP, BLOOD_BANNER_TURNS, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, CRIMSON_PACT_DRAW, CRIMSON_PACT_HP, DREAD_WHISPER_REDUCTION, EMPOWER_BONUS, EN_GARDE_TURNS, FONT_MP_CAP, FORTIFY_MAX_TURNS, GUARD_DR, GUARD_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SAP_MAX_TURNS, SAP_VULN_CAP, SAP_VULN_PER_TICK, SCARLET_WARD_HP, SHARPEN_BONUS, SHARPEN_TURNS, SPOREBURST_POISON, SUNRISE_VIGIL_HEAL, TRANSFUSION_HEAL, TRANSFUSION_HP
+  BLOOD_BANNER_BONUS, BLOOD_BANNER_HP, BLOOD_BANNER_TURNS, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, CRIMSON_PACT_DRAW, CRIMSON_PACT_HP, DREAD_WHISPER_REDUCTION, EMPOWER_BONUS, EN_GARDE_TURNS, FONT_MP_CAP, GUARD_DR, GUARD_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SAP_MAX_TURNS, SAP_VULN_CAP, SAP_VULN_PER_TICK, SCARLET_WARD_HP, SHARPEN_BONUS, SHARPEN_TURNS, SPOREBURST_POISON, SUNRISE_VIGIL_HEAL, TRANSFUSION_HEAL, TRANSFUSION_HP
 } from './tuning';
 import type { DeckCard, ResolvedCard } from './run';
 
@@ -147,9 +147,6 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   sap: { id: 'sap', name: 'Sap', cost: 2, target: 'none',
     channel: { maxTurns: SAP_MAX_TURNS },
     desc: `Channel: each turn make the enemy more Vulnerable (+${Math.round(SAP_VULN_PER_TICK * 100)}% up to +${Math.round(SAP_VULN_CAP * 100)}%), for up to ${SAP_MAX_TURNS} turns. Playing any card ends it.` },
-  fortify: { id: 'fortify', name: 'Fortify', cost: 2, target: 'single',
-    channel: { maxTurns: FORTIFY_MAX_TURNS, single: true },
-    desc: `Channel: grant a member a Shield each turn (up to ${FORTIFY_MAX_TURNS} turns). Ends if they die or you play a card.` },
   // --- hero buff card batch (#62): proactive per-hero buffs -------------------
   guard: { id: 'guard', name: 'Guard', cost: 1, target: 'single',
     desc: `A hero takes ${GUARD_DR} less damage per hit for ${GUARD_TURNS} enemy turns. Stacks with Defense, not with itself.` },
@@ -196,7 +193,6 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   // Iron — protection: shields, Defense, Taunt/Provoke.
   shield: 'iron', barrier: 'iron', phalanx: 'iron', provoke: 'iron',
   bolster: 'iron', guard: 'iron',
-  fortify: 'iron', /* channeled Iron shield (#64) */
   feint: 'iron', /* Iron mitigation web (#65) */
   enGarde: 'iron', /* Duelist's Provoke + persistent-Riposte stance (#74); Iron Ward's first-iron discount applies */
 };

@@ -70,7 +70,7 @@ const EXERCISE_DECK: CardId[] = [
   // Arcane support (#70): a splash enabler.
   'arcaneLens',
   // Channeled cards (#64).
-  'mendingStream', 'sap', 'fortify',
+  'mendingStream', 'sap',
   // Hero buff card batch (#62).
   'guard', 'sharpen', 'doubleStrike', 'empower', 'riposte',
 ];

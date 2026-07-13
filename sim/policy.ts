@@ -557,7 +557,7 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   // Arcane support (#70): no channel/arcane build for the best-3 policy.
   arcaneLens: 1,
   // Channeled cards (#64): no "commit the whole turn to a channel" line for the policy.
-  mendingStream: 1, sap: 1, fortify: 1,
+  mendingStream: 1, sap: 1,
   // Hero buff card batch (#62): no proactive-buff tactic for the best-3 policy.
   guard: 1, sharpen: 1, doubleStrike: 1, empower: 1, riposte: 1,
   // Ability cards (#44) — inserted per-fight, never bought.

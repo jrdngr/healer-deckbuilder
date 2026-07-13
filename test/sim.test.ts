@@ -384,7 +384,12 @@ import { check, eq, results } from './harness';
   //     above the >0.25 DR1 sacrifice signal. Wins vector: F0 195, F1 189->191, F2 152->155,
   //     F3 150->153, F4 144->150, F5 140->145, F6 140->142, F7 140->142, F8 134->139. All
   //     within ±5pp of baseline at N=1000; all band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 191, 155, 153, 150, 145, 142, 142, 139]));
+  //   • Fortify cut (2026-07-13): the Fortify channel card left CARD_POOL, so the reward/shop
+  //     pools shrink by one uncommon and every seeded shuffle downstream perturbs. No mechanic
+  //     changed — pure pool/rng drift: F0 195, F1 191->190, F2 155->152, F3 153->147, F4 150->145,
+  //     F5 145->140, F6 142->139, F7 142->139, F8 139->131. All band/CI/boss gates below still
+  //     hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 190, 152, 147, 145, 140, 139, 139, 131]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

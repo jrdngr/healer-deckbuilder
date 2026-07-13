@@ -56,8 +56,8 @@ export type CardId =
   // Arcane support (#70): a splash enabler.
   | 'arcaneLens'
   // Channeled cards (#64): hold an effect across turns while you play nothing else.
-  // Sap reads Shadow, Mending Stream Holy, Fortify Iron.
-  | 'mendingStream' | 'sap' | 'fortify'
+  // Sap reads Shadow, Mending Stream Holy.
+  | 'mendingStream' | 'sap'
   // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
   // Sharpen) decay over N enemy turns; the one-shots (Double Strike, Empower,
   // Riposte) are consumed on use.
@@ -94,7 +94,7 @@ export interface MemberDef {
 export interface CardChannelDef {
   maxTurns: number;  // ticks before the channel ends on its own (first tick on cast)
   single?: boolean;  // a single-target channel that remembers its target and ends
-                     // early if that member dies (Mending Stream, Fortify)
+                     // early if that member dies (Mending Stream)
 }
 
 export interface CardDef {
@@ -306,7 +306,6 @@ export const SAP_VULN_PER_TICK = 0.25;    // Sap: Vulnerability added to the ene
 export const SAP_VULN_CAP = 0.75;         // Sap: cap on the stacked Vulnerability from Sap
 export const SAP_VULN_TURNS = 3;          // Sap: enemy turns each tick keeps the Vulnerability alive
 export const SAP_MAX_TURNS = 4;           // Sap: ticks before it ends on its own
-export const FORTIFY_MAX_TURNS = 3;       // Fortify: ticks before it ends on its own (Shield/tick)
 
 // Short flavor of each member's ability — name + one-liner. Shown on the live
 // MemberCard AND the draft card (#37), so it lives here rather than in a component

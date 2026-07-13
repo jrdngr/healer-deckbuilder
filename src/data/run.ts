@@ -568,7 +568,7 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   fontOfMana: 'rare',
   barrier: 'rare',
   // Channeled cards (#64).
-  mendingStream: 'uncommon', sap: 'uncommon', fortify: 'uncommon',
+  mendingStream: 'uncommon', sap: 'uncommon',
   // Iron mitigation web (#65).
   feint: 'uncommon',
   // Regen conversions (#66).

@@ -19,7 +19,7 @@ export function ChannelBanner({ game }: ChannelBannerProps) {
 
   const def = CARDS[id];
   const turns = game.channelTurns;
-  // Single-target channels (Mending Stream, Fortify) remember their bound member;
+  // Single-target channels (Mending Stream) remember their bound member;
   // channelTarget is that member's slot index.
   const bound = game.channelTarget != null ? game.members[game.channelTarget] : null;
   // Depleting fill: full at cast, empties as ticks run out (turns / maxTurns),

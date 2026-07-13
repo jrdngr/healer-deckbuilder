@@ -27,8 +27,8 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   sunriseVigil: 'heal', consecration: 'heal',
   // Arcane support (#70): Arcane Lens turns a single-target heal into a splash heal (heal).
   arcaneLens: 'heal',
-  // Channeled cards (#64): Sap is aggressive, Mending Stream a heal, Fortify a ward.
-  sap: 'power', mendingStream: 'heal', fortify: 'ward',
+  // Channeled cards (#64): Sap is aggressive, Mending Stream a heal.
+  sap: 'power', mendingStream: 'heal',
   // Hero buff card batch (#62): defensive buffs gold, offensive buffs red-purple.
   guard: 'ward', sharpen: 'power', doubleStrike: 'power',
   empower: 'power', riposte: 'power',
