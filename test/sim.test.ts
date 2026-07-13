@@ -366,7 +366,15 @@ import { check, eq, results } from './harness';
   //     F2 195->150, F3 194->148, F4 191->144, F5 188->138, F6 184->138, F7 180->138,
   //     F8 170->130. Re-anchoring is explicitly a LATER balance pass, not #86; all
   //     band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([192, 188, 150, 148, 144, 138, 138, 138, 130]));
+  //   • #87 (Basher Executioner, 2026-07-13): the Basher (spammer) act-1 normal became a
+  //     scripted focus-fire (two targetLowest singles + a two) instead of a weight-spam.
+  //     The predictable, saveable hunt is slightly MORE answerable for the flawless line
+  //     than the old random hidden/aoe spread, and the fight's rng stream shifts, so the
+  //     wins vector ticks up where Basher appears and downstream: F0 192->195, F1 188->189,
+  //     F2 150->152, F3 148->150, F4 144 (unchanged), F5 138->140, F6 138->140, F7 138->140,
+  //     F8 130->134. All band/CI/boss gates below still hold (N=1000: F0 94.3 / F1 96.6,
+  //     both >> the 90% normal floor); re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 189, 152, 150, 144, 140, 140, 140, 134]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

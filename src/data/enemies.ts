@@ -139,25 +139,42 @@ const bossDef = (id: string, name: string, rest: Partial<EnemyDef>): EnemyDef =>
 // Four named normals (issue 09). Each is a distinct *shape* of the same total
 // threat as the old generic normal (~4.5 party-wide dmg/turn), not a difficulty
 // spike — the encounter tables keep per-fight winrates within ±5pp of baseline.
-export const ENEMY_SPAMMER: EnemyDef = { // single-spammer: relentless single hits
+// SIGNATURE: Executioner (#87). A scripted focus-fire — two single hits that both aim
+// at the lowest-HP living hero, so a wounded squishy keeps taking the blows and gets
+// finished off unless the party heals it up or Taunts the hunt away (targetLowest is
+// still funnelled by Taunt, so the tank can pull the execution onto itself). The closing
+// 'two' keeps the per-turn threat near the ~4.5 party-wide budget (identity, not a spike).
+export const ENEMY_SPAMMER: EnemyDef = { // Executioner: focus-fires the weakest hero
   id: 'spammer', name: 'Basher', boss: false,
   baseWeights: aw(78, 14, 4, 4, 0, 0), enragedWeights: aw(58, 24, 14, 4, 0, 0),
+  rotation: [
+    { type: 'single', name: 'Hunt', targetLowest: true },
+    { type: 'single', name: 'Hunt', targetLowest: true },
+    'two',
+  ],
 };
-export const ENEMY_SWARM: EnemyDef = { // swarm: leans more on multi-target blows
+// SIGNATURE: AoE-lite. A weight shape that leans on multi-target blows (two/aoe) — the
+// party takes spread chip damage, so the answer is party-wide topping-up, not saving one.
+export const ENEMY_SWARM: EnemyDef = { // AoE-lite: leans on multi-target blows
   id: 'swarm', name: 'Rabble', boss: false,
   baseWeights: aw(52, 26, 17, 5, 0, 0), enragedWeights: aw(35, 33, 27, 5, 0, 0),
 };
-export const ENEMY_STALKER: EnemyDef = { // stalker: leans on concealed (hidden) blows
+// SIGNATURE: Ambush. A weight shape heavy on 'hidden' — its concealed strike (unknown
+// target, magnitude revealed) is the read: keep a Shield or heal buffer ready for anyone.
+export const ENEMY_STALKER: EnemyDef = { // Ambush: leans on concealed (hidden) blows
   id: 'stalker', name: 'Skulker', boss: false,
   baseWeights: aw(52, 10, 8, 30, 0, 0), enragedWeights: aw(35, 18, 17, 30, 0, 0),
 };
-export const ENEMY_CLEAVER: EnemyDef = { // cleaver: occasional heavy single hit
+// SIGNATURE: Cleave. A weight shape carrying real 'heavy' weight — an occasional big
+// single blow you must mitigate (Defense/Shield) or heal through, unlike the other
+// act-1 normals' chip damage.
+export const ENEMY_CLEAVER: EnemyDef = { // Cleave: occasional heavy single hit
   id: 'cleaver', name: 'Clobberer', boss: false,
   baseWeights: aw(58, 12, 7, 5, 18, 0), enragedWeights: aw(42, 18, 12, 5, 23, 0),
 };
 
-// Boss 1 — Bouncer (issue 12): a fixed, learnable rotation that teaches
-// telegraph-reading. Every 2nd cycle its heavy becomes Haymaker — a 2-turn
+// Boss 1 — Bouncer (issue 12). SIGNATURE: the clean teaching boss — a fixed,
+// learnable rotation + a periodic Haymaker channel that teaches telegraph-reading. Every 2nd cycle its heavy becomes Haymaker — a 2-turn
 // channel at 12 (~1.7× heavy). Opens on single, complementing the turn-1 rule.
 // 14 keeps the read answerable (playtest finding): a defended tank takes 13, so
 // Taunt upkeep + topping the tank up survives it, while the ranger (11) and
@@ -168,7 +185,7 @@ export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Bouncer', {
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Haymaker' },
 });
 
-// Boss 2 — Jinxweaver (issue 13): the telegraphed taunt-punisher. It breaks the
+// Boss 2 — Jinxweaver (issue 13). SIGNATURE: the telegraphed debuff-punisher. It breaks the
 // permanent-taunt/turtle solve with three tools, all fully telegraphed:
 //   • Zinger — ignores Taunt AND Defense, aims at the lowest-HP member, so
 //     the tank can't soak it and the fragile DPS is the one under threat.
@@ -189,7 +206,7 @@ export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Jinxweaver', {
   ],
 });
 
-// Boss 3 — Gobbler (issue 14): "race or die". Turns the invisible enrage race
+// Boss 3 — Gobbler (issue 14). SIGNATURE: the two-phase "race or die" boss. Turns the invisible enrage race
 // into an explicit, fair one via a phase system:
 //   • Phase 1 (>50% HP): a heavy/sweep pool plus Gulp — a 'cast' that cleanses
 //     its OWN Poison and self-heals for every remaining tick, so poison stops being
@@ -232,14 +249,14 @@ export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURE
 // collide with a boss's (Haymaker / Zinger / Big Chomp / Gulp).
 // ---------------------------------------------------------------------------
 
-// Act 2 — Ironchomp (channeler): a learnable 3-step cycle whose 3rd step becomes
+// Act 2 — Ironchomp. SIGNATURE: Channeler — a learnable 3-step cycle whose 3rd step becomes
 // Jawbreaker every 2nd cycle — a 2-turn single-target channel at 9.
 export const IRONMAW_DEF: EnemyDef = normalDef('ironmaw', 'Ironchomp', {
   rotation: ['single', 'two', 'single'],
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 9, type: 'single', name: 'Jawbreaker' },
 });
 
-// Act 2 — Needler (piercer): one step per cycle is Needle Shot — a mini
+// Act 2 — Needler. SIGNATURE: Piercer — one step per cycle is Needle Shot — a mini
 // Zinger (ignores Taunt AND Defense, aims at the lowest-HP member) at 4.
 // Pierce-at-lowest is worth far more than its number (it bypasses the whole
 // taunt/Defense answer), so it appears once per 4-step cycle.
@@ -248,7 +265,7 @@ export const NEEDLER_DEF: EnemyDef = normalDef('needler', 'Needler', {
   rotation: ['single', pierceStep('Needle Shot', NEEDLER_PIERCE_DMG), 'two', 'single'],
 });
 
-// Act 2 — Leech (self-healer): a mini Gulp ('Snack Time') every 6th turn cleanses
+// Act 2 — Leech. SIGNATURE: Self-healer — a mini Gulp ('Snack Time') every 6th turn cleanses
 // its own Poison and self-heals the remaining ticks — poison timing matters on
 // normals now, not just on the Gobbler. Its plain cycle runs light because the
 // Snack Time value is real threat too.
@@ -256,7 +273,7 @@ export const LEECH_DEF: EnemyDef = normalDef('leech', 'Leech', {
   rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Snack Time', cast: 'consume' }, 'two'],
 });
 
-// Act 3 — Steamroller (channeler, heavier): Flatten is an 11-damage 2-turn
+// Act 3 — Steamroller. SIGNATURE: Channeler (heavier) — Flatten is an 11-damage 2-turn
 // channel every 2nd cycle, over a single-heavy base cycle (the channel is the
 // threat; the cycle stays on budget).
 export const JUGGERNAUT_DEF: EnemyDef = normalDef('juggernaut', 'Steamroller', {
@@ -264,13 +281,13 @@ export const JUGGERNAUT_DEF: EnemyDef = normalDef('juggernaut', 'Steamroller', {
   channel: { slot: 2, everyCycles: 2, turns: 2, damage: 11, type: 'single', name: 'Flatten' },
 });
 
-// Act 3 — Pokey (piercer, heavier): Skewer pierces at 5, once per 4-step cycle.
+// Act 3 — Pokey. SIGNATURE: Piercer (heavier) — Skewer pierces at 5, once per 4-step cycle.
 export const LANCER_PIERCE_DMG = 5;
 export const LANCER_DEF: EnemyDef = normalDef('lancer', 'Pokey', {
   rotation: ['single', pierceStep('Skewer', LANCER_PIERCE_DMG), 'single', 'two'],
 });
 
-// Act 3 — Gobblet (self-healer, hungrier): Snack Time every 6th turn over a
+// Act 3 — Gobblet. SIGNATURE: Self-healer (hungrier) — Snack Time every 6th turn over a
 // light cycle (long 150-HP fights sit near the enrage cliff, so every eaten
 // poison tick is expensive — the Snack Time itself is the difficulty).
 export const DEVOURLING_DEF: EnemyDef = normalDef('devourling', 'Gobblet', {

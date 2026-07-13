@@ -223,7 +223,7 @@ function payoffTelegraph(g: Game, damage: number, forTurn = 5): Telegraph {
   const mageHp = g.mage.hp, tankHp = g.tank.hp, rangerHp = g.ranger.hp;
   g.telegraph = payoffTelegraph(g, 9);
   g._resolveAttack(g.telegraph);
-  check('Shield fully blocks the Payoff', g.mage.hp === mageHp && g.mage.shield === false);
+  check('Shield fully blocks the Payoff', g.mage.hp === mageHp && !g.mage.shield);
   eq('Defense shaves the Payoff', tankHp - g.tank.hp, 6);
   eq('an unmitigated Marked hero eats it in full', rangerHp - g.ranger.hp, 9);
   check('the Payoff consumes every Mark', g.members.every((m) => m.markTurns === 0));
