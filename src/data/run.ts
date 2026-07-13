@@ -208,7 +208,7 @@ export function defaultParty(): PartyMemberConfig[] {
   return MEMBER_DEFS.map((d) => ({ maxHP: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0 }));
 }
 
-// The 6-card core deck as concrete instances (uid = position). Member ability
+// The 7-card core deck as concrete instances (uid = position). Member ability
 // cards are added on top per-fight (abilityCardsForParty), not stored here.
 // This is the Preserver preset (#63) — the run/sim/quick-play default opener.
 export function defaultDeck(): DeckCard[] {
@@ -239,21 +239,21 @@ export const STARTER_DECKS: Record<StarterDeckId, StarterDeckDef> = {
     id: 'standard', name: 'Standard', types: ['holy'],
     desc: 'A fixed heal-lean opener that keeps the party standing.',
   },
-  // Draft — build your own: start with two heals, then pick 1 of 3 cards each round.
+  // Draft — build your own: start with two heals and a revive, then pick 1 of 3 each round.
   draft: {
     id: 'draft', name: 'Draft', types: ['holy', 'nature', 'shadow', 'blood', 'arcane', 'iron'],
-    desc: 'Build your own deck — start with two heals, then pick 1 of 3 cards each round.',
+    desc: 'Build your own deck — start with two heals and a revive, then pick 1 of 3 cards each round.',
   },
 };
 
-// The Standard deck (the fixed heal-only six); quick-play/sim use this by default.
+// The Standard deck (the heal-only six + Resurrect, #86); quick-play/sim use this by default.
 export function buildStandardDeck(): DeckCard[] {
   return DECK_LIST.map((cid, i) => makeDeckCard(cid, i));
 }
 
-// The heals every draft opens with — the cards shared by all the old preset decks.
-export const DRAFT_BASE_HEALS: CardId[] = ['lowHeal', 'highHeal'];
-export const STARTER_DRAFT_PICKS = 4;        // pick-1-of-3 rounds to fill a 6-card deck
+// The base every draft opens with — the shared heals plus a Resurrect (#86).
+export const DRAFT_BASE_HEALS: CardId[] = ['lowHeal', 'highHeal', 'resurrect'];
+export const STARTER_DRAFT_PICKS = 3;        // pick-1-of-3 rounds to fill a 6-card deck
 export const STARTER_DRAFT_OFFER_SIZE = 3;   // cards shown per draft round (pick one)
 
 // Seed a fresh drafted deck with the base heals (uid = position); the picks append.

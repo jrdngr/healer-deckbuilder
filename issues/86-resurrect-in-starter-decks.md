@@ -1,6 +1,6 @@
 # Issue 86 — Resurrect in the Standard deck and every drafted deck
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-13 — Standard grew to 7 with Resurrect; Draft base seeds it, picks 4→3; sim baseline re-pinned, re-anchor left to a later balance pass)
 - **Phase:** rules (starter-deck composition)   **Size:** S
 - **Depends on:** —   **Blocks:** none (feeds the between-fight-healing balance picture)
 - **Addresses:** intake 2026-07-13 — "Resurrect should be in the Standard deck and all drafted

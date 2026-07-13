@@ -359,7 +359,14 @@ import { check, eq, results } from './harness';
   //     changed magnitude, so the STICK line's deck/economy shift and winrates rose across
   //     the board (rebalancing is explicitly out of scope for that pass). Re-pinned to the
   //     new measured baseline.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 195, 194, 191, 188, 184, 180, 170]));
+  //   • #86 (Resurrect in the opener, 2026-07-13): the Standard deck grew to 7 with a
+  //     seeded Resurrect (Draft: base 3 + 3 picks, still 6). A 4-MP situational card
+  //     dilutes the heal-dense opener AND the bigger fight deck perturbs the shuffle/rng
+  //     stream, so the wins vector drops across the board: F0 200->192, F1 200->188,
+  //     F2 195->150, F3 194->148, F4 191->144, F5 188->138, F6 184->138, F7 180->138,
+  //     F8 170->130. Re-anchoring is explicitly a LATER balance pass, not #86; all
+  //     band/CI/boss gates below still hold; re-pinned.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([192, 188, 150, 148, 144, 138, 138, 138, 130]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

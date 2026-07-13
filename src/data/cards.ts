@@ -222,15 +222,17 @@ export const CARDS_BY_TYPE: Record<CardType, CardId[]> = {
   blood: cardsOfType('blood'), arcane: cardsOfType('arcane'), iron: cardsOfType('iron'),
 };
 
-// The fixed 6-card core starting deck: the heal-only six (#51) —
-// 1× Group Heal / 3× Quick Heal / 2× Heal, and nothing else. This is the "Standard"
-// starter deck; the Draft alternative seeds Quick Heal + Heal and drafts the rest.
+// The fixed 7-card core starting deck (#86): the heal-only six (#51) —
+// 1× Group Heal / 3× Quick Heal / 2× Heal — plus Resurrect, since heroes are
+// expected to die fairly often. This is the "Standard" starter deck; the Draft
+// alternative seeds Quick Heal + Heal + Resurrect and drafts the rest.
 // The per-member ability cards are still inserted per deployed member at fight
-// lock-in (see abilityCardsForParty), so a full trio fights with 6 + 3 = 9.
+// lock-in (see abilityCardsForParty), so a full trio fights with 7 + 3 = 10.
 export const DECK_LIST: CardId[] = [
   'aoeHeal',
   'lowHeal', 'lowHeal', 'lowHeal',
   'highHeal', 'highHeal',
+  'resurrect',
 ];
 
 // The bound ability card for each ability (#44). Each member contributes exactly

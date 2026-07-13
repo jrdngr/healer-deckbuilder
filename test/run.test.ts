@@ -1802,11 +1802,16 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     STARTER_DECK_IDS.includes('standard') && STARTER_DECK_IDS.includes('draft'));
   check('the old presets are gone', !(STARTER_DECK_IDS as string[]).includes('reaper'));
 
-  // Standard = the fixed DECK_LIST; the base heals are Quick Heal + Heal.
+  // Standard = the fixed DECK_LIST (7 cards, one Resurrect, #86); the draft base
+  // seeds Quick Heal + Heal + Resurrect and picks are down to 3 so a finished
+  // drafted deck still lands at 6.
   eq('Standard deck is DECK_LIST',
     JSON.stringify(buildStandardDeck().map((c) => c.id)), JSON.stringify(DECK_LIST));
-  eq('draft base heals are Quick Heal + Heal',
-    JSON.stringify(DRAFT_BASE_HEALS), JSON.stringify(['lowHeal', 'highHeal']));
+  eq('Standard deck has 7 cards', DECK_LIST.length, 7);
+  eq('draft base is Quick Heal + Heal + Resurrect',
+    JSON.stringify(DRAFT_BASE_HEALS), JSON.stringify(['lowHeal', 'highHeal', 'resurrect']));
+  eq('draft picks are down to 3', STARTER_DRAFT_PICKS, 3);
+  eq('a finished drafted deck is still 6 cards', DRAFT_BASE_HEALS.length + STARTER_DRAFT_PICKS, 6);
 
   // Default path (no picker): a fresh Run defaults to Standard and its deck.
   const fresh = new Run(7);
@@ -1824,12 +1829,12 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     JSON.stringify(run.deck.map((c) => c.id)), JSON.stringify(DECK_LIST));
   eq('choosing Standard moves on to the draft', run.location.kind, 'draft');
 
-  // Draft path: seed base heals, then pick 1 of 3 for STARTER_DRAFT_PICKS rounds.
+  // Draft path: seed the base cards, then pick 1 of 3 for STARTER_DRAFT_PICKS rounds.
   const d = new Run(9);
   d.beginStarterDeck();
   d.chooseStarterMode('draft');
   eq('choosing Draft records it', d.starterDeck, 'draft');
-  eq('draft seeds the two base heals', d.deck.length, DRAFT_BASE_HEALS.length);
+  eq('draft seeds the three base cards', d.deck.length, DRAFT_BASE_HEALS.length);
   check('the draft picker is open', d.location.kind === 'starterDeck' && d.nodeContent?.type === 'starterDraft');
   for (let i = 0; i < STARTER_DRAFT_PICKS; i++) {
     check(`round ${i + 1} offers 3 cards`, d.nodeContent?.type === 'starterDraft' && d.nodeContent.offers.length === 3);

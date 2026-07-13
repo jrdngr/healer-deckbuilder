@@ -27,25 +27,33 @@ import {
 } from './factories';
 
 // --- deck composition -------------------------------------------------------
-// #51: the starter deck is exactly the heal-only six — 1× Group Heal, 3× Quick
-// Heal, 2× Heal, and nothing else. Regen/Refresh/Shield/Resurrect left the opener
+// #86: the starter deck is the heal-only six of #51 — 1× Group Heal, 3× Quick
+// Heal, 2× Heal — plus one Resurrect (heroes die often enough that a revive
+// belongs in the opening kit). Regen/Refresh/Shield stay out of the opener
 // (they remain reachable via rewards/shops). Per #44, each deployed member still
 // inserts their own bound ability card at fight lock-in (see the toBattleConfig
-// injection test in run.test.ts), so the core deck is 6 and a full trio fights 9.
-eq('deck has 6 core cards', DECK_LIST.length, 6);
+// injection test in run.test.ts), so the core deck is 7 and a full trio fights 10.
+eq('deck has 7 core cards', DECK_LIST.length, 7);
 {
   const counts: Record<string, number> = {};
   for (const c of DECK_LIST) counts[c] = (counts[c] || 0) + 1;
   eq('3 Quick Heal', counts.lowHeal, 3);
   eq('2 Heal', counts.highHeal, 2);
   eq('1 Group Heal', counts.aoeHeal, 1);
+  eq('1 Resurrect', counts.resurrect, 1);
   eq('no Regen in the starter', counts.regen, undefined);
   eq('no Refresh in the starter', counts.refresh, undefined);
   eq('no Shield in the starter', counts.shield, undefined);
-  eq('no Resurrect in the starter', counts.resurrect, undefined);
   eq('no generic Ability cards in the core deck', counts.ability, undefined);
-  // Exactly the six heal-only cards, no extras of any other id.
-  eq('starter has exactly 3 distinct card ids', Object.keys(counts).length, 3);
+  // Exactly the heals + the one revive, no extras of any other id.
+  eq('starter has exactly 4 distinct card ids', Object.keys(counts).length, 4);
+}
+{
+  // #86 play-level sanity: a game built from the default (Standard) deck carries
+  // the seeded Resurrect into the fight — it lands in the shuffled draw pile/hand.
+  const g = new Game(1).start();
+  const ids = [...g.drawPile, ...g.hand, ...g.discardPile].map((c) => c.id);
+  eq('the seeded Resurrect enters the fight deck', ids.filter((id) => id === 'resurrect').length, 1);
 }
 
 // --- card heal values -------------------------------------------------------
