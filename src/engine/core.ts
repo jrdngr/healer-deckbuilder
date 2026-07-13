@@ -582,6 +582,57 @@ export class Game {
     return ATTACK_INTENT_NAMES[this.telegraph.type];
   }
 
+  // A one-line, plain-language description of what the standing telegraph will do —
+  // the geometry, magnitude, and any modifiers of the coming action. Drives the
+  // intent tooltip so the player can read the threat, not just its name. Mirrors
+  // what attackTargets()/_resolveCast will actually do. null when nothing stands.
+  telegraphDetail(): string | null {
+    const t = this.telegraph;
+    if (this.status !== 'playing' || !t) return null;
+    // A Stunned move (#61) is cancelled — it resolves to nothing.
+    if (t.stunned) return 'Stunned — this action is cancelled and will not resolve.';
+
+    // Scripted no-damage casts describe their effect, not a hit.
+    if (t.cast) {
+      switch (t.cast) {
+        case 'wound':
+          return `Curses the party — all healing is halved for ${WOUND_TURNS} turns. Cleanse removes it.`;
+        case 'siphon':
+          return `Drains up to ${SIPHON_AMOUNT} MP from your mana pool.`;
+        case 'poison': {
+          const perTurn = t.castAmount ?? HERO_POISON_BASE;
+          const dur = t.castTurns ?? HERO_POISON_TURNS;
+          return `Poisons the party — ${perTurn} damage at the start of each of the next ${dur} enemy turns. Cleanse or mitigate it.`;
+        }
+        case 'curse': {
+          const dur = t.castTurns ?? MARK_TURNS;
+          return `Marks the party for ${dur} turns. Clear the Mark (Cleanse or mitigation) before it pays off, or the still-Marked heroes are struck.`;
+        }
+        case 'consume':
+          return `Feeds on its own Poison — clears its Poison and heals for every remaining tick.`;
+        default:
+          return 'Casts a spell.';
+      }
+    }
+
+    // A damaging blow: geometry + per-target damage + modifiers.
+    const shape =
+      t.type === 'two' ? 'two heroes' :
+      t.type === 'aoe' || t.type === 'sweep' ? 'the whole party' :
+      t.type === 'hidden' ? 'a hidden target' :
+      t.targetsMarked ? 'every still-Marked hero' :
+      'one hero';
+    const each = (t.type === 'two' || t.type === 'aoe' || t.type === 'sweep' || t.targetsMarked) ? ' each' : '';
+    const parts = [`Strikes ${shape} for ${t.damage}${each} damage.`];
+    if (t.channel) parts.push(`Channelling — resolves in ${t.turnsUntilResolve ?? 1} turn(s).`);
+    if (t.targetLowest) parts.push('Aimed at your lowest-HP hero.');
+    if (t.ignoreTaunt) parts.push('Cannot be pulled away by Taunt.');
+    if (t.ignoreDefense) parts.push('Ignores Defense.');
+    if (t.hidden && !this.hasRelic('lantern')) parts.push('Its target is concealed until it lands.');
+    if (t.enraged) parts.push('Enraged — it hits harder.');
+    return parts.join(' ');
+  }
+
   // The lowest-HP living member's slot (ties broken by slot order). Used to aim
   // the Hexweaver's Piercing Bolt at whoever is closest to dying.
   _lowestHpSlot(): Slot {

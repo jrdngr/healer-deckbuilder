@@ -1514,6 +1514,24 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   g.status = 'win';
   eq('no intent once the fight is over', g.telegraphIntent(), null);
 }
+{
+  // telegraphDetail spells out the standing telegraph for the intent tooltip.
+  const g = new Game(3);
+  g.start();
+  g.telegraph = { type: 'heavy', hidden: false, damage: 7, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn };
+  eq('detail for a single-target blow', g.telegraphDetail(), 'Strikes one hero for 7 damage.');
+  g.telegraph = { type: 'aoe', hidden: false, damage: 4, targets: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], enraged: false, forTurn: g.turn };
+  eq('detail for an AoE blow names "each"', g.telegraphDetail(), 'Strikes the whole party for 4 each damage.');
+  g.telegraph = { type: 'single', hidden: false, damage: 9, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn, ignoreDefense: true, ignoreTaunt: true };
+  check('detail surfaces Defense-ignoring modifier', g.telegraphDetail()!.includes('Ignores Defense.'));
+  check('detail surfaces Taunt-immune modifier', g.telegraphDetail()!.includes('Cannot be pulled away by Taunt.'));
+  g.telegraph = { type: 'cast', cast: 'siphon', hidden: false, damage: 0, targets: [], enraged: false, forTurn: g.turn };
+  check('detail describes a Siphon cast', g.telegraphDetail()!.includes(`${SIPHON_AMOUNT} MP`));
+  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: g.turn, stunned: true };
+  check('detail reports a Stunned move as cancelled', /cancelled/.test(g.telegraphDetail()!));
+  g.status = 'win';
+  eq('no detail once the fight is over', g.telegraphDetail(), null);
+}
 
 // --- member-identity refactor (issue 08) -----------------------------------
 {

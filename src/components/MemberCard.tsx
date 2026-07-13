@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import {
-  CHARGE_MAX, BERSERKER_BAND_BONUS,
+  CHARGE_MAX, BOLT_CHARGE_MULT, BERSERKER_BAND_BONUS,
   INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
 import type { ReactNode } from 'react';
@@ -163,7 +163,7 @@ export function MemberCard({
         ))}
         {m.boarHp > 0 && <StatusBadge cls="shield" icon="shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}>Boar {m.boarHp}·{m.boarTurns}t</StatusBadge>}
       </div>
-      {m.id === 'mage' && <div className="charge"><Icon name="bolt" /> Charge {mageCharge}/{CHARGE_MAX}</div>}
+      {m.id === 'mage' && <div className="charge" title={`Charge — builds as the Mage acts (max ${CHARGE_MAX}). Lightning Bolt spends it, adding ${BOLT_CHARGE_MULT} damage per Charge.`}><Icon name="bolt" /> Charge {mageCharge}/{CHARGE_MAX}</div>}
       {berserkerBands && (
         <div className={`charge rage-${rageTier}`} title={`Rage bands: +${BERSERKER_BAND_BONUS} at HP ≤ ${berserkerBands[0]}, +${BERSERKER_BAND_BONUS * 2} at HP ≤ ${berserkerBands[1]}.`}>
           <Icon name="sword" /> {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg

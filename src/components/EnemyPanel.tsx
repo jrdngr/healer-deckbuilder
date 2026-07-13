@@ -20,6 +20,7 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
   const untilEnrage = game.turnsUntilEnrage();
   const showCountdown = game.status === 'playing' && !e.enraged && untilEnrage > 0 && untilEnrage <= 4;
   const intent = game.telegraphIntent();
+  const intentDetail = game.telegraphDetail();
   // A channelled attack (Gatewarden's Crushing Blow, #12): show a cast bar that
   // fills as its wind-up nears resolve.
   const tel = game.telegraph;
@@ -30,7 +31,7 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
       <div className="enemy-head">
         <CharacterBlob id={game.enemyDef.id} size={86} isEnemy />
         <h2>
-          {game.enemyDef.name} {e.enraged && <span className="enrage">ENRAGED</span>}
+          {game.enemyDef.name} {e.enraged && <span className="enrage" title="Enraged — the enemy's attacks now hit harder for the rest of the fight.">ENRAGED</span>}
           {showCountdown && (
             <span className="enrage-countdown" title="The enemy's attacks grow heavier when it enrages.">
               Enrages in {untilEnrage}
@@ -44,7 +45,7 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
           {game.status === 'playing' && (
             <span className="turn-chip" title="The current turn. The standing telegraph resolves at the end of it.">Turn {game.turn}</span>
           )}
-          {intent && <span className="enemy-intent">Intends: {intent}</span>}
+          {intent && <span className="enemy-intent" title={intentDetail ?? undefined}>Intends: {intent}</span>}
           {e.poison > 0 ? <span className="enemy-poison" title={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}><Icon name="poison" /> Poison {e.poison}</span> : ''}
         </div>
         {channel && (
