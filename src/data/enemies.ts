@@ -75,6 +75,8 @@ export interface RotationStep {
   targetLowest?: boolean; // aim the (single-target) hit at the lowest-HP living member
   channelTurns?: number;  // >1 makes this a channel with that many enemy turns to resolve
   cast?: CastKind;        // for type 'cast': which scripted effect resolves
+  castAmount?: number;    // magnitude a scripted cast carries (e.g. hero-poison per-turn strength, #87)
+  castTurns?: number;     // duration a scripted cast carries (e.g. hero-poison turns, #87)
 }
 
 export type RotationEntry = AttackType | RotationStep;

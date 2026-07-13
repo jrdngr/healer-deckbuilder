@@ -70,8 +70,9 @@ export type CardId =
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
-// cleanses the enemy's own poison and self-heals for the remaining ticks.
-export type CastKind = 'wound' | 'siphon' | 'consume';
+// cleanses the enemy's own poison and self-heals for the remaining ticks; 'poison'
+// (#87) lays a stacking, cleansable damage-over-time on the heroes.
+export type CastKind = 'wound' | 'siphon' | 'consume' | 'poison';
 
 export interface MemberDef {
   slot: Slot;
@@ -180,6 +181,14 @@ export const CHARGE_MAX = 5;
 // baseline note in sim/run-sim.ts for the full numbers.
 export const POISON_BASE = 5;   // Poison strength: damage dealt per enemy turn.
 export const POISON_TURNS = 5;  // enemy turns Poison lasts
+// Hero Poison (#87): an ENEMY-applied damage-over-time on the party (the mirror of
+// the enemy-side poison above). It ticks its magnitude on each hero at the start of
+// the enemy phase, bypassing all mitigation — Cleanse is the sole answer. Re-applying
+// STACKS the per-turn magnitude and refreshes the duration to the LONGER of the two
+// (same rule as the shared _applyPoison enemy path). A 'poison' cast reads its own
+// per-turn strength / duration from the rotation step, falling back to these.
+export const HERO_POISON_BASE = 2;  // default hero-poison strength: damage per enemy turn
+export const HERO_POISON_TURNS = 3; // default enemy turns hero-poison lasts
 // Ferment (Plaguewright, #72): opens a window of `FERMENT_TURNS` enemy turns per cast
 // (recasts add another FERMENT_TURNS, additive). While it runs, each Poison tick deals
 // its current per-turn damage, then per-turn grows by FERMENT_GROWTH and the Poison

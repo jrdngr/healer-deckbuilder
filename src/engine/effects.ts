@@ -436,12 +436,15 @@ Game.prototype._applyCard = function (card, target) {
         break;
       }
       case 'cleanse': {
-        // Purge all negative party statuses. Today the only party-side status is the
-        // Hexweaver's party-wide Hex (#13), so clearing woundTurns lifts it; the effect
-        // is written as a general purge so new party debuffs are covered automatically.
+        // Purge all negative party statuses: the party-wide Hex (#13) plus the per-member
+        // Hero Poison (#87 — the sole answer to the Gobbler's Sludge and the venomous
+        // normal). Written as a general purge so new party/member debuffs are covered.
         // Always playable; a no-op if nothing is afflicted (the animator still gets an event).
-        const had = this.woundTurns > 0;
+        let had = this.woundTurns > 0;
         this.woundTurns = 0;
+        for (const m of this.members) {
+          if (m.poison > 0 || m.poisonTurns > 0) { had = true; m.poison = 0; m.poisonTurns = 0; }
+        }
         this._log(had ? 'Cleanse purges the party — all afflictions lifted.' : 'Cleanse finds nothing to purge.', 'status');
         this._emit({ kind: 'cleanse', slot: SLOT.CENTER });
         break;

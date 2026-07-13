@@ -23,6 +23,7 @@ import {
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
+  HERO_POISON_BASE, HERO_POISON_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
@@ -98,6 +99,9 @@ export interface Member {
                       // each tick until 0. Magnitude IS duration — a Regen R runs R ticks.
   bloomBurst: number; // pending Lifebloom burst: heals this much when the Regen ends alive (#16)
   taunt: number;   // taunt turns remaining (attributed to whoever cast Taunt)
+  poison: number;      // Hero Poison (#87): incoming DoT strength; ticks this raw (past all
+                       // mitigation) at the enemy phase, then decays. Stacks; Cleanse clears it.
+  poisonTurns: number; // enemy turns of Hero Poison remaining
   defense: number; // Defense turns remaining: incoming hits reduced by defenseAmount
   defenseAmount: number; // per-member Defense strength while defense > 0 (#17)
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
@@ -150,6 +154,8 @@ export interface Telegraph {
   ignoreDefense?: boolean;    // Defense reduction does not apply to this hit
   targetLowest?: boolean;     // aimed at the lowest-HP living member (locked at telegraph time)
   cast?: CastKind;            // a scripted no-damage effect resolves instead of a hit
+  castAmount?: number;        // magnitude a scripted cast carries (hero-poison per-turn strength, #87)
+  castTurns?: number;         // duration a scripted cast carries (hero-poison turns, #87)
   stunned?: boolean;          // Sentinel's Stun (#61): the move is cancelled — it deals no
                               // damage / runs no cast, is consumed (rotation advances,
                               // channel wind-up aborts), and a fresh action telegraphs next turn
@@ -188,6 +194,8 @@ export type GameEvent =
   | { kind: 'wound'; turns: number; slots: Slot[] }        // Hex: healing halved for `turns` (slots = living members it debuffs)
   | { kind: 'siphon'; amount: number; mp: number }         // Siphon: MP drained
   | { kind: 'consume'; heal: number; enemyHp: number }     // Devourer: self-heal off its own poison
+  | { kind: 'heroPoisonApplied'; slot: Slot; amount: number; poison: number } // Hero Poison laid on a member (#87)
+  | { kind: 'heroPoisonTick'; slot: Slot; amount: number; hp: number; killed: boolean } // Hero Poison ticks a member (#87)
   | { kind: 'phaseChange'; beat: string }                  // Devourer: transformation beat
   // `attackType` is the telegraph geometry that produced the hit, so the
   // animator can give each attack shape its own visual signature.
@@ -340,6 +348,7 @@ export class Game {
         regen: 0,      // Regen value (magnitude == remaining ticks; #52)
         bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
+        poison: 0, poisonTurns: 0, // no Hero Poison at fight start (#87)
         defense: 0,    // Defense turns remaining
         defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
@@ -673,6 +682,7 @@ export class Game {
         type: 'cast', hidden: false, damage: 0, targets: [],
         enraged, forTurn: turn, turnsUntilResolve: 1,
         name: step.name, cast: step.cast,
+        castAmount: step.castAmount, castTurns: step.castTurns, // hero-poison strength/turns (#87)
       };
     }
     const base = step.damage ?? ATTACK_BASE_DAMAGE[step.type];
@@ -885,6 +895,7 @@ export class Game {
     m.regen = 0;
     m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
     m.taunt = 0;
+    m.poison = 0; m.poisonTurns = 0; // death ends any Hero Poison (#87)
     m.defense = 0;
     m.defenseAmount = 0;
     m.charge = 0;
@@ -1196,6 +1207,43 @@ export class Game {
     this.enemy.poisonTurns = Math.max(this.enemy.poisonTurns, dur);
   }
 
+  // Hero Poison (#87): the hero-side mirror of _applyPoison. Applying poison to a member
+  // ADDS to its per-turn magnitude and takes the LONGER of the durations, so re-applying
+  // stacks into real burst if the party ignores it. Cleanse is the only removal.
+  _applyHeroPoison(m: Member, perTurn: number, turns: number): void {
+    if (!m.alive || perTurn <= 0 || turns <= 0) return;
+    m.poison += perTurn;
+    m.poisonTurns = Math.max(m.poisonTurns, turns);
+    this._emit({ kind: 'heroPoisonApplied', slot: m.slot, amount: perTurn, poison: m.poison });
+  }
+
+  // Hero Poison (#87) tick — mirrors the enemy poison tick, run at the enemy-phase
+  // boundary. Each poisoned living hero takes its magnitude RAW (past Defense/Guard/
+  // Shield — Cleanse is the only answer), then the duration decays and the magnitude
+  // resets at 0. A tick can down a hero and even wipe the party, so the caller returns
+  // early once status leaves 'playing'.
+  _tickHeroPoison(): void {
+    let anyDied = false;
+    for (const m of this.members) {
+      if (!m.alive || m.poisonTurns <= 0) continue;
+      const dmg = Math.min(m.poison, m.hp); // HP actually removed (for the event / log)
+      m.hp = Math.max(0, m.hp - m.poison);
+      this._log(`${m.name} suffers ${m.poison} Poison. (${m.hp}/${m.maxHP})`, 'hit');
+      if (m.hp <= 0) {
+        // _killMember zeroes the poison track itself (a Martyr save likewise strips it),
+        // so we neither decay nor reset here — the death path owns the cleanup.
+        const killed = this._killMember(m);
+        this._emit({ kind: 'heroPoisonTick', slot: m.slot, amount: dmg, hp: m.hp, killed });
+        if (killed) anyDied = true;
+        continue;
+      }
+      this._emit({ kind: 'heroPoisonTick', slot: m.slot, amount: dmg, hp: m.hp, killed: false });
+      m.poisonTurns -= 1;
+      if (m.poisonTurns === 0) m.poison = 0;
+    }
+    if (anyDied) this._checkWipe();
+  }
+
   // Retained as a no-op hook (the Sanguine Pact curse that surcharged Blood costs was
   // cut) so Penance's ability code and _bloodCost keep one call site for any future
   // blood-cost modifier.
@@ -1345,6 +1393,10 @@ export class Game {
       this.woundTurns -= 1;
       if (this.woundTurns === 0) this._log('The Jinx fades; healing is restored.', 'status');
     }
+    // Hero Poison (#87) ticks here too — raw, past all mitigation — mirroring the enemy
+    // poison tick above. A tick can down a hero and wipe the party, so bail if it did.
+    this._tickHeroPoison();
+    if (this.status === 'loss') return;
     // Channeled card (#64): tick here as long as the player HELD this turn (played no
     // card — a card play cancels the channel). The first tick already landed on the
     // cast turn in playCard, where cardsPlayedThisPhase >= 1 skips this. Placed after
@@ -1504,6 +1556,19 @@ export class Game {
         this.mp -= drained;
         this._log(`${this.enemyDef.name} Slurps up ${drained} MP. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'siphon', amount: drained, mp: this.mp });
+        break;
+      }
+      case 'poison': {
+        // Hero Poison (#87): lay a stacking, cleansable DoT on every living hero. The
+        // cast itself deals NO direct damage (like wound/siphon) — the threat is the
+        // ticks it plants, which land raw at the start of each coming enemy phase. Its
+        // per-turn strength/duration come from the step (Sludge on the Gobbler / the
+        // teaching normal), defaulting to the tuning constants.
+        const perTurn = t.castAmount ?? HERO_POISON_BASE;
+        const dur = t.castTurns ?? HERO_POISON_TURNS;
+        const name = t.name ?? 'Poison';
+        for (const m of this.livingMembers()) this._applyHeroPoison(m, perTurn, dur);
+        this._log(`${this.enemyDef.name} — ${name}! The party is poisoned (${perTurn}/turn for ${dur}).`, 'system');
         break;
       }
       case 'consume': {

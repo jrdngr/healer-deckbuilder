@@ -13,6 +13,7 @@ import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
 import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS, RELICS } from '../src/constants';
 import { THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD } from '../src/constants';
+import { HERO_POISON_BASE, HERO_POISON_TURNS } from '../src/constants';
 import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG } from '../src/constants';
 import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPEN_VEINS_DMG, TRANSFUSION_HP, TRANSFUSION_HEAL, BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS, GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
@@ -112,6 +113,73 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   eq('poison schedule sum', seq.reduce((a, b) => a + b, 0), POISON_BASE * POISON_TURNS);
   check('poison is flat 5,5,5,5,5 then 0', JSON.stringify(seq) === JSON.stringify([5, 5, 5, 5, 5, 0]),
     JSON.stringify(seq));
+}
+
+// --- Hero Poison (#87): enemy-applied, stacking, cleansable DoT on the party -------
+{
+  // A 'poison' cast lays the DoT on every living hero and deals NO direct damage:
+  // the applying telegraph previews zero attack lines (the threat is the ticks).
+  const g = new Game(7); g.start();
+  g.telegraph = { type: 'cast', hidden: false, damage: 0, targets: [], enraged: false,
+    forTurn: 3, cast: 'poison', castAmount: 3, castTurns: 3 };
+  eq('poison cast previews no attack lines', g.attackTargets().length, 0);
+  g._resolveCast(g.telegraph);
+  check('poison cast poisons every living hero',
+    g.livingMembers().every((m) => m.poison === 3 && m.poisonTurns === 3));
+}
+{
+  // Tick schedule: 3/turn for 3 turns = 9, then stops. Ticks land RAW — a Shield and
+  // Defense on the victim do not blunt them (Cleanse is the only answer).
+  const g = new Game(8); g.start();
+  g.mage.shield = true; g.mage.defense = 2; g.mage.defenseAmount = 2;
+  g.mage.hp = 30; // headroom so the schedule runs its full length
+  g._applyHeroPoison(g.mage, 3, 3);
+  const seq: number[] = [];
+  for (let i = 0; i < 4; i++) {
+    const before = g.mage.hp;
+    g._tickHeroPoison();
+    seq.push(before - g.mage.hp);
+  }
+  check('hero poison ticks raw 3,3,3 then 0', JSON.stringify(seq) === JSON.stringify([3, 3, 3, 0]),
+    JSON.stringify(seq));
+  check('hero poison does not spend the Shield', g.mage.shield === true);
+}
+{
+  // Stacking: re-applying ADDS magnitude and takes the LONGER duration.
+  const g = new Game(9); g.start();
+  g._applyHeroPoison(g.ranger, 2, 2);
+  g._applyHeroPoison(g.ranger, 3, 4);
+  eq('re-applied poison magnitude adds', g.ranger.poison, 5);
+  eq('re-applied poison duration is the max', g.ranger.poisonTurns, 4);
+}
+{
+  // Cleanse zeroes Hero Poison on every member (a running DoT, not just the Hex).
+  const g = new Game(10); g.start();
+  g._applyHeroPoison(g.tank, 4, 3);
+  g._applyHeroPoison(g.mage, 4, 3);
+  const idx = giveCard(g, 'cleanse');
+  g.phase = 'player';
+  g.playCard(idx, null);
+  check('Cleanse clears Hero Poison',
+    g.members.every((m) => m.poison === 0 && m.poisonTurns === 0));
+}
+{
+  // A tick can down a hero, routed through the normal death path (scars + wipe).
+  const g = new Game(11); g.start();
+  g.mage.hp = 3;
+  g._applyHeroPoison(g.mage, 5, 3);
+  g._tickHeroPoison();
+  check('lethal poison tick kills the hero', g.mage.alive === false && g.mage.diedThisFight === true);
+  check('dead hero carries no lingering poison', g.mage.poison === 0 && g.mage.poisonTurns === 0);
+}
+{
+  // Defaults come from tuning when the cast omits an explicit magnitude/duration.
+  const g = new Game(12); g.start();
+  g.telegraph = { type: 'cast', hidden: false, damage: 0, targets: [], enraged: false,
+    forTurn: 3, cast: 'poison' };
+  g._resolveCast(g.telegraph);
+  check('poison cast falls back to tuning defaults',
+    g.tank.poison === HERO_POISON_BASE && g.tank.poisonTurns === HERO_POISON_TURNS);
 }
 
 // --- regen (#52): magnitude IS duration; decays each tick, capped at maxHP ----
