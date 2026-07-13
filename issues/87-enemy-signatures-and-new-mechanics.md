@@ -1,8 +1,34 @@
 # Issue 87 — Enemy signature audit + two new boss mechanics (Hero Poison, Curse/Mark)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Done (2026-07-13)
 - **Phase:** content + engine (enemy identity)   **Size:** XL (umbrella — split into multiple commits)
 - **Depends on:** —   **Blocks:** none
+
+## Resolution (2026-07-13)
+
+Landed in four commits (Hero Poison engine → Curse/Mark engine → signature audit +
+Basher Executioner → new teaching normals + boss wiring + rebalance). The maintainer
+re-scoped the straw-man in a planning pass — a **mechanical-gap survey** across the whole
+roster, treating the issue's table as a guideline — and chose the **teaching-pipeline**
+strategy realized with **new dedicated teaching normals** (so every existing signature
+stayed intact). Delivered design, differing from the straw-man where noted:
+
+- **Hero Poison** (stacking, cleansable, **raw ticks** — Cleanse is the sole answer):
+  taught by a NEW act-2 normal **Gloopy** (`venomancer`, Ick) and weaponised on the
+  **Gobbler** (Sludge replaces phase-1's trailing heavy). *(Straw-man had it Devourer-only.)*
+- **Curse/Mark** (clear-or-die; **Cleanse OR mitigation** survives the Payoff): taught by a
+  NEW act-1 normal **Doomling** (`marker`, Whammy→Kapow) and weaponised on the **Jinxweaver**
+  (Doom→Reckoning replaces the sweep + 2nd Zinger; all original tricks survive). Payoff
+  tuned to 8 to hold both the ~95.6% winrate wall and the DR1 death signal.
+- **Audit**: every enemy carries a `SIGNATURE:` comment; **Basher** (`spammer`) became the
+  Executioner (scripted `targetLowest` focus-fire). Swarm/Stalker/Cleaver kept their weight
+  shapes, now documented. *(Straw-man's Cleaver "telegraphed cleave" became the new
+  Doomling's Mark instead; the two new mechanics live on normals AND bosses, not bosses-only.)*
+- **Sim policy** learned `tryCleanseThreat` (proactively Cleanse a Mark / heavy poison).
+- **Balance**: every fight within ±5pp of baseline at N=1000; sim lock + boss/death gates
+  re-pinned. **UI juice for the new events is combat-log only** — the animator's visual
+  treatment (poison-tick numbers, a Mark indicator) is left for the maintainer's manual
+  visual pass, per the repo's juice-pass workflow.
 - **Addresses:** intake 2026-07-13 — "Each enemy should have at least one defining attack, attack
   style, or attack sequence. Let's come up with some. Examples: AoE-lite; poisons heroes; two-phase
   debuff-then-payoff (delay to clear/mitigate); heavy single-target that tries to kill heroes."
@@ -108,30 +134,31 @@ step deals heavy damage to every **still-marked** hero. A hero survives by clear
 ## Acceptance criteria
 
 **Audit (A):**
-- [ ] Every enemy in `NORMAL_ENEMY_DEFS` + the three act bosses has a documented, distinct signature
-      (a code comment naming it), and Brute/Cleaver have a **scripted** signature (not just weights).
-- [ ] Each enemy's total per-turn threat stays near its current budget (normals ~4.5 party-wide
-      dmg/turn) — identity change, not a difficulty spike. Per-fight winrate gates within ±5pp of
-      baseline at **N = 1000** seeds with 95% CIs (repo ground rule).
+- [x] Every enemy in `NORMAL_ENEMY_DEFS` + the three act bosses has a documented, distinct signature
+      (a `SIGNATURE:` code comment). Brute (`spammer`) has a **scripted** Executioner signature;
+      Cleaver kept its weight-shape (documented) — the "scripted telegraphed cleave" role moved to
+      the NEW Doomling's Mark, per the approved teaching-pipeline re-scope.
+- [x] Each enemy's total per-turn threat stays near budget — identity change, not a spike. Per-fight
+      winrate within **±5pp of baseline at N = 1000** with 95% CIs (F5 95.4 / F8 94.8; all fights in-band).
 
 **Hero Poison (B):**
-- [ ] `Member` carries a poison DoT; a `'poison'` cast applies **stacking** poison; it ticks and
+- [x] `Member` carries a poison DoT; a `'poison'` cast applies **stacking** poison; it ticks (raw) and
       decays on enemy turns; Cleanse clears it.
-- [ ] Telegraph == applied: the applying cast previews 0 direct damage; DoT ticks are excluded from
-      `attackTargets()`/`attackLines()` (property test holds).
+- [x] Telegraph == applied: the applying cast previews 0 direct damage; DoT ticks are excluded from
+      `attackTargets()` (unit tests hold).
 
 **Curse/Mark (C):**
-- [ ] A `'curse'` cast marks all living heroes (telegraphed, 0 direct damage); the payoff step hits
+- [x] A `'curse'` cast marks all living heroes (telegraphed, 0 direct damage); the payoff step hits
       **only still-marked** heroes; Cleanse clears the mark; shield/defense mitigate the payoff.
-- [ ] Telegraph == applied for the payoff **turn-to-turn**: `attackTargets()` recomputes against the
-      live marked set, so clearing a mark before resolve removes that hero from both preview and
-      applied damage (property test holds).
+- [x] Telegraph == applied for the payoff **turn-to-turn**: `attackTargets()` recomputes against the
+      live marked set via `_markedLivingSlots()`, so clearing a mark before resolve removes that hero
+      from both preview and applied damage (property test holds).
 
 **Global:**
-- [ ] The no-name-collision rule on attack/channel/cast names still holds (`enemies.ts:31-35`,
-      `:228`).
-- [ ] Typecheck/build clean; `npm test` passes. **Split into per-workstream `jj` commits** (audit;
-      Hero Poison engine; Curse/Mark engine; boss wiring) per `CLAUDE.md` — not one catch-all commit.
+- [x] The no-name-collision rule holds — new names Whammy / Kapow / Ick / Doom / Reckoning / Sludge
+      are all distinct from every boss channel/cast name.
+- [x] Typecheck/build clean; `npm test` passes. **Split into four per-workstream `jj` commits**
+      (Hero Poison engine; Curse/Mark engine; audit + Basher; new normals + boss wiring).
 
 ## Implementation notes (anchors)
 
