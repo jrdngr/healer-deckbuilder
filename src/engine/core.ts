@@ -23,7 +23,7 @@ import {
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
-  HERO_POISON_BASE, HERO_POISON_TURNS,
+  HERO_POISON_BASE, HERO_POISON_TURNS, MARK_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
@@ -102,6 +102,8 @@ export interface Member {
   poison: number;      // Hero Poison (#87): incoming DoT strength; ticks this raw (past all
                        // mitigation) at the enemy phase, then decays. Stacks; Cleanse clears it.
   poisonTurns: number; // enemy turns of Hero Poison remaining
+  markTurns: number;   // Curse/Mark (#87): enemy turns this hero stays Marked; a Payoff step
+                       // hits only still-Marked heroes. Cleanse clears it; mitigation survives it.
   defense: number; // Defense turns remaining: incoming hits reduced by defenseAmount
   defenseAmount: number; // per-member Defense strength while defense > 0 (#17)
   charge: number;  // per-member Charge (feeds the Bolt ability); ticks each player phase
@@ -156,6 +158,8 @@ export interface Telegraph {
   cast?: CastKind;            // a scripted no-damage effect resolves instead of a hit
   castAmount?: number;        // magnitude a scripted cast carries (hero-poison per-turn strength, #87)
   castTurns?: number;         // duration a scripted cast carries (hero-poison turns, #87)
+  targetsMarked?: boolean;    // Curse/Mark Payoff (#87): strikes only currently-Marked living
+                              // heroes, recomputed live so a cleared Mark drops from preview + hit
   stunned?: boolean;          // Sentinel's Stun (#61): the move is cancelled — it deals no
                               // damage / runs no cast, is consumed (rotation advances,
                               // channel wind-up aborts), and a fresh action telegraphs next turn
@@ -196,6 +200,8 @@ export type GameEvent =
   | { kind: 'consume'; heal: number; enemyHp: number }     // Devourer: self-heal off its own poison
   | { kind: 'heroPoisonApplied'; slot: Slot; amount: number; poison: number } // Hero Poison laid on a member (#87)
   | { kind: 'heroPoisonTick'; slot: Slot; amount: number; hp: number; killed: boolean } // Hero Poison ticks a member (#87)
+  | { kind: 'curseApplied'; slots: Slot[]; turns: number }  // Curse/Mark laid on the heroes (#87)
+  | { kind: 'cursePayoff'; slots: Slot[] }                  // Curse/Mark Payoff struck these still-Marked heroes (#87)
   | { kind: 'phaseChange'; beat: string }                  // Devourer: transformation beat
   // `attackType` is the telegraph geometry that produced the hit, so the
   // animator can give each attack shape its own visual signature.
@@ -349,6 +355,7 @@ export class Game {
         bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
         poison: 0, poisonTurns: 0, // no Hero Poison at fight start (#87)
+        markTurns: 0, // not Marked at fight start (#87)
         defense: 0,    // Defense turns remaining
         defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
@@ -654,11 +661,22 @@ export class Game {
   // living member, so the enemy never wastes a whole swing whiffing on a corpse.
   // A no-target telegraph (a 'cast') strikes nothing.
   _resolvedTargets(t: Telegraph): Slot[] {
+    // Curse/Mark Payoff (#87): strike ONLY the still-Marked living heroes, recomputed
+    // here at call time — so a Mark cleared between telegraph and resolve drops that hero
+    // from both the preview (attackTargets) and the applied hit, and an all-clear leaves
+    // the Payoff hitting nobody. No corpse re-point: an unmarked party is simply spared.
+    if (t.targetsMarked) return this._markedLivingSlots();
     if (t.targets.length === 0) return [];
     const living = t.targets.filter((slot) => this.members[slot]?.alive);
     if (living.length > 0) return living;
     if (this.livingMembers().length === 0) return []; // party wiped — nothing to hit
     return [this._nearestLivingSlot(t.targets[0])];
+  }
+
+  // The slots of every living, still-Marked hero (Curse/Mark Payoff target set, #87).
+  // Pure read of live state, so the preview and the resolution always agree.
+  _markedLivingSlots(): Slot[] {
+    return this.livingMembers().filter((m) => m.markTurns > 0).map((m) => m.slot);
   }
 
   // The rotation the enemy is currently cycling. A phase transition (#14) swaps
@@ -689,13 +707,18 @@ export class Game {
     const primary = step.targetLowest ? this._lowestHpSlot()
       : this._pickPrimary(step.type, step.ignoreTaunt);
     const channelling = (step.channelTurns ?? 1) > 1;
+    // Curse/Mark Payoff (#87): its target set is the currently-Marked heroes, not the
+    // step's geometry. Seed `targets` with them for a legible telegraph; _resolvedTargets
+    // recomputes the live set at resolve, so the seed is only informational.
+    const targets = step.targetsMarked ? this._markedLivingSlots() : this._geometry(step.type, primary);
     return {
       type: step.type, hidden: step.type === 'hidden',
       damage: this.attackDamageOf(base, turn),
-      targets: this._geometry(step.type, primary),
+      targets,
       enraged, forTurn: turn, turnsUntilResolve: step.channelTurns ?? 1,
       name: step.name,
       ignoreTaunt: step.ignoreTaunt, ignoreDefense: step.ignoreDefense, targetLowest: step.targetLowest,
+      targetsMarked: step.targetsMarked,
       channel: channelling || undefined, channelName: channelling ? step.name : undefined,
     };
   }
@@ -803,8 +826,9 @@ export class Game {
   _standingTelegraphRedirectable(slot: Slot = SLOT.CENTER): boolean {
     const t = this.telegraph;
     // A Piercing-Bolt-style ignoreTaunt hit and a no-target 'cast' are never
-    // pulled onto the taunter; neither are AoE/sweep/hidden (see above).
-    if (!t || t.hidden || t.ignoreTaunt || t.cast || t.type === 'aoe' || t.type === 'sweep') return false;
+    // pulled onto the taunter; neither are AoE/sweep/hidden (see above), nor a
+    // Curse/Mark Payoff (#87 — it strikes the Marked set, not a pullable single).
+    if (!t || t.hidden || t.ignoreTaunt || t.cast || t.targetsMarked || t.type === 'aoe' || t.type === 'sweep') return false;
     return t.targets.some((s) => s !== slot && this.members[s]?.alive);
   }
 
@@ -896,6 +920,7 @@ export class Game {
     m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
     m.taunt = 0;
     m.poison = 0; m.poisonTurns = 0; // death ends any Hero Poison (#87)
+    m.markTurns = 0; // death clears a pending Mark (#87)
     m.defense = 0;
     m.defenseAmount = 0;
     m.charge = 0;
@@ -1393,6 +1418,15 @@ export class Game {
       this.woundTurns -= 1;
       if (this.woundTurns === 0) this._log('The Jinx fades; healing is restored.', 'status');
     }
+    // Curse/Mark (#87) decays at enemy-phase start too (like the Jinx), so a Mark placed
+    // last turn still stands for this turn's Payoff — decaying it after resolution would
+    // let it lapse a turn early. It otherwise clears on Cleanse or when a Payoff consumes it.
+    for (const m of this.members) {
+      if (m.markTurns > 0) {
+        m.markTurns -= 1;
+        if (m.markTurns === 0) this._log(`The Mark on ${m.name} fades.`, 'status');
+      }
+    }
     // Hero Poison (#87) ticks here too — raw, past all mitigation — mirroring the enemy
     // poison tick above. A tick can down a hero and wipe the party, so bail if it did.
     this._tickHeroPoison();
@@ -1571,6 +1605,19 @@ export class Game {
         this._log(`${this.enemyDef.name} — ${name}! The party is poisoned (${perTurn}/turn for ${dur}).`, 'system');
         break;
       }
+      case 'curse': {
+        // Curse/Mark (#87): Mark every living hero (no direct damage). A later Payoff
+        // step (targetsMarked) will strike whoever is STILL Marked, so this cast is the
+        // telegraph — the party has a turn to clear it (Cleanse) or armour up (Shield/
+        // Defense) before it lands.
+        const dur = t.castTurns ?? MARK_TURNS;
+        const name = t.name ?? 'Mark';
+        const marked = this.livingMembers();
+        for (const m of marked) m.markTurns = dur;
+        this._log(`${this.enemyDef.name} — ${name}! The party is Marked.`, 'system');
+        this._emit({ kind: 'curseApplied', slots: marked.map((m) => m.slot), turns: dur });
+        break;
+      }
       case 'consume': {
         // Gobbler (#14) / the act-2/3 self-healers (#20): cleanse the enemy's
         // own Poison and heal for every remaining tick, so poison stops being
@@ -1632,7 +1679,8 @@ export class Game {
     // dead targets and re-points a fully-dead aimed attack onto a living member,
     // so applied damage is bit-equal to attackTargets() and no swing is spent on a
     // corpse while a valid target lives.
-    for (const slot of this._resolvedTargets(t)) {
+    const struck = this._resolvedTargets(t);
+    for (const slot of struck) {
       const m = this.members[slot];
       if (!m || !m.alive) { // defensive — _resolvedTargets only returns living slots
         this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
@@ -1705,6 +1753,13 @@ export class Game {
           if (defeated) { this._emit({ kind: 'defeatEnemy' }); return; }
         }
       }
+    }
+    // Curse/Mark Payoff (#87): once it resolves, it CONSUMES every standing Mark (whether
+    // or not it connected — a fully mitigated hero has still answered it), so the threat
+    // doesn't linger to a phantom second payoff. Reported for the animator's benefit.
+    if (t.targetsMarked) {
+      for (const m of this.members) m.markTurns = 0;
+      this._emit({ kind: 'cursePayoff', slots: struck });
     }
   }
 

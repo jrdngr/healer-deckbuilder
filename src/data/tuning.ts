@@ -71,8 +71,9 @@ export type CardId =
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
 // cleanses the enemy's own poison and self-heals for the remaining ticks; 'poison'
-// (#87) lays a stacking, cleansable damage-over-time on the heroes.
-export type CastKind = 'wound' | 'siphon' | 'consume' | 'poison';
+// (#87) lays a stacking, cleansable damage-over-time on the heroes; 'curse' (#87)
+// Marks the heroes for a delayed clear-or-die Payoff.
+export type CastKind = 'wound' | 'siphon' | 'consume' | 'poison' | 'curse';
 
 export interface MemberDef {
   slot: Slot;
@@ -189,6 +190,13 @@ export const POISON_TURNS = 5;  // enemy turns Poison lasts
 // per-turn strength / duration from the rotation step, falling back to these.
 export const HERO_POISON_BASE = 2;  // default hero-poison strength: damage per enemy turn
 export const HERO_POISON_TURNS = 3; // default enemy turns hero-poison lasts
+// Curse / Mark (#87): a 'curse' cast Marks every living hero (no direct damage); a later
+// Payoff step (targetsMarked) hits ONLY the still-Marked heroes for heavy damage. A hero
+// survives by clearing the Mark (Cleanse) OR by mitigation (Shield fully blocks it,
+// Defense shaves it below lethal) — the Payoff runs the normal ward pipeline. MARK_TURNS
+// must outlast the gap to the Payoff: with Mark and Payoff on ADJACENT rotation slots the
+// Mark decays once (at the Payoff's enemy-phase start) before it lands, so 2 is the floor.
+export const MARK_TURNS = 2;        // enemy turns a Mark persists before it fades on its own
 // Ferment (Plaguewright, #72): opens a window of `FERMENT_TURNS` enemy turns per cast
 // (recasts add another FERMENT_TURNS, additive). While it runs, each Poison tick deals
 // its current per-turn damage, then per-turn grows by FERMENT_GROWTH and the Poison

@@ -444,6 +444,7 @@ Game.prototype._applyCard = function (card, target) {
         this.woundTurns = 0;
         for (const m of this.members) {
           if (m.poison > 0 || m.poisonTurns > 0) { had = true; m.poison = 0; m.poisonTurns = 0; }
+          if (m.markTurns > 0) { had = true; m.markTurns = 0; } // Curse/Mark cleared (#87)
         }
         this._log(had ? 'Cleanse purges the party — all afflictions lifted.' : 'Cleanse finds nothing to purge.', 'status');
         this._emit({ kind: 'cleanse', slot: SLOT.CENTER });

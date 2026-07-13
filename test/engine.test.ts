@@ -1,6 +1,6 @@
 // Engine test harness. Run with: npm test  (tsx test/engine.test.ts)
 import { Game } from '../src/engine';
-import type { GameEvent } from '../src/engine';
+import type { GameEvent, Telegraph } from '../src/engine';
 import { channelEffectLine } from '../src/channelView';
 import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
@@ -13,7 +13,7 @@ import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
 import { ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS, RELIC_IDS, RELICS } from '../src/constants';
 import { THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD } from '../src/constants';
-import { HERO_POISON_BASE, HERO_POISON_TURNS } from '../src/constants';
+import { HERO_POISON_BASE, HERO_POISON_TURNS, MARK_TURNS } from '../src/constants';
 import { UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG } from '../src/constants';
 import { CRIMSON_PACT_HP, CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_HP, OPEN_VEINS_DMG, TRANSFUSION_HP, TRANSFUSION_HEAL, BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS, GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS } from '../src/constants';
 import { CASCADE_DRAW, CASCADE_DISCOUNT_PER_ARCANE, NIGHTFALL_BASE, NIGHTFALL_PER_SHADOW, NIGHTFALL_CAP } from '../src/constants';
@@ -180,6 +180,108 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   g._resolveCast(g.telegraph);
   check('poison cast falls back to tuning defaults',
     g.tank.poison === HERO_POISON_BASE && g.tank.poisonTurns === HERO_POISON_TURNS);
+}
+
+// --- Curse / Mark (#87): delayed clear-or-die; Cleanse OR mitigation survives ------
+// Build a Mark cast and a Payoff step; the Payoff strikes only the still-Marked heroes.
+function markTelegraph(forTurn = 5): Telegraph {
+  return { type: 'cast', hidden: false, damage: 0, targets: [], enraged: false, forTurn,
+    cast: 'curse', name: 'Mark' };
+}
+function payoffTelegraph(g: Game, damage: number, forTurn = 5): Telegraph {
+  return { type: 'heavy', hidden: false, damage, targets: g._markedLivingSlots(), enraged: false,
+    forTurn, name: 'Payoff', targetsMarked: true };
+}
+{
+  // The Mark cast Marks every living hero and deals no direct damage (0 preview lines).
+  const g = new Game(20); g.start();
+  g.telegraph = markTelegraph();
+  eq('Mark cast previews no attack lines', g.attackTargets().length, 0);
+  g._resolveCast(g.telegraph);
+  check('Mark cast Marks every living hero', g.livingMembers().every((m) => m.markTurns === MARK_TURNS));
+}
+{
+  // Payoff hits the Marked heroes; a Cleanse before it lands drops the whole party out of
+  // BOTH the preview and the applied hit (telegraph == applied).
+  const g = new Game(21); g.start();
+  for (const m of g.livingMembers()) m.markTurns = MARK_TURNS;
+  g.telegraph = payoffTelegraph(g, 9);
+  check('Payoff previews every Marked hero', g.attackTargets().length === g.livingMembers().length);
+  // Cleanse: clear the Marks, then the preview and the resolution both target nobody.
+  for (const m of g.members) m.markTurns = 0;
+  eq('cleared Marks drop out of the Payoff preview', g.attackTargets().length, 0);
+  const hpBefore = g.members.map((m) => m.hp);
+  g._resolveAttack(g.telegraph);
+  check('an all-cleared Payoff hits nobody', g.members.every((m, i) => m.hp === hpBefore[i]));
+}
+{
+  // Mitigation survives the Payoff: a Shield fully blocks it, Defense shaves it below lethal.
+  const g = new Game(22); g.start();
+  for (const m of g.livingMembers()) { m.markTurns = MARK_TURNS; m.hp = 30; } // headroom so no hit caps at HP
+  g.mage.shield = true;               // full block
+  g.tank.defense = 3; g.tank.defenseAmount = 3; // shave (heavy 9 -> 6)
+  const mageHp = g.mage.hp, tankHp = g.tank.hp, rangerHp = g.ranger.hp;
+  g.telegraph = payoffTelegraph(g, 9);
+  g._resolveAttack(g.telegraph);
+  check('Shield fully blocks the Payoff', g.mage.hp === mageHp && g.mage.shield === false);
+  eq('Defense shaves the Payoff', tankHp - g.tank.hp, 6);
+  eq('an unmitigated Marked hero eats it in full', rangerHp - g.ranger.hp, 9);
+  check('the Payoff consumes every Mark', g.members.every((m) => m.markTurns === 0));
+}
+{
+  // A Mark decays one turn per enemy phase (like the Jinx), so with Mark and Payoff on
+  // adjacent slots it still stands when the Payoff lands (MARK_TURNS is the floor for that).
+  const g = new Game(23); g.start();
+  g.ranger.markTurns = MARK_TURNS;
+  g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.LEFT], enraged: false, forTurn: 5 };
+  g.turn = 5; g._runEnemyPhase();
+  check('Mark survives one enemy-phase decay', g.ranger.markTurns === MARK_TURNS - 1);
+}
+{
+  // Cleanse clears a Mark (the card, not just the Hex).
+  const g = new Game(24); g.start();
+  for (const m of g.livingMembers()) m.markTurns = MARK_TURNS;
+  const idx = giveCard(g, 'cleanse');
+  g.phase = 'player';
+  g.playCard(idx, null);
+  check('Cleanse clears every Mark', g.members.every((m) => m.markTurns === 0));
+}
+{
+  // A Payoff is not pulled onto the taunter — it strikes the Marked set, not a single.
+  const g = new Game(25); g.start();
+  for (const m of g.livingMembers()) m.markTurns = MARK_TURNS;
+  g.telegraph = payoffTelegraph(g, 9);
+  check('Payoff is not taunt-redirectable', g._standingTelegraphRedirectable(SLOT.CENTER) === false);
+}
+{
+  // Property: attackTargets() == applied for the Payoff across a clear-mid-window sequence.
+  // Each seed Marks the party, clears a random subset (Cleanse-mid-window), then compares
+  // the preview to the HP the Payoff actually removes — per member, zero mismatches.
+  let mismatches = 0, checked = 0, clearedTurns = 0;
+  for (let seed = 400; seed < 470; seed++) {
+    const g = new Game(seed); g.start();
+    for (const m of g.livingMembers()) { m.markTurns = MARK_TURNS; m.hp = 40; } // headroom: no lethal HP-cap
+    // Randomly clear the Mark on some living heroes (mid-window Cleanse of individuals).
+    for (const m of g.livingMembers()) if (g.rng() < 0.5) { m.markTurns = 0; clearedTurns++; }
+    // Randomize wards so the pipeline (Defense/Shield) is exercised under the preview too.
+    for (const m of g.livingMembers()) {
+      if (g.rng() < 0.4) { m.defense = 3; m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
+      if (g.rng() < 0.3) m.shield = true;
+    }
+    g.telegraph = payoffTelegraph(g, 8);
+    const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage] as const));
+    const before = new Map(g.members.map((m) => [m.slot, m.hp] as const));
+    g._resolveAttack(g.telegraph);
+    for (const m of g.members) {
+      const applied = (before.get(m.slot) ?? 0) - m.hp;
+      const shown = preview.get(m.slot) ?? 0;
+      if (applied !== shown) mismatches++;
+      checked++;
+    }
+  }
+  check('Payoff preview == applied across clear-mid-window (0 mismatches)', mismatches === 0, `${mismatches}`);
+  check('Payoff property test exercised cleared Marks', clearedTurns > 20, `${clearedTurns}`);
+  check('Payoff property test covered every member', checked > 200, `${checked}`);
 }
 
 // --- regen (#52): magnitude IS duration; decays each tick, capped at maxHP ----

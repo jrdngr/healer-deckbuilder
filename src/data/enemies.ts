@@ -77,6 +77,8 @@ export interface RotationStep {
   cast?: CastKind;        // for type 'cast': which scripted effect resolves
   castAmount?: number;    // magnitude a scripted cast carries (e.g. hero-poison per-turn strength, #87)
   castTurns?: number;     // duration a scripted cast carries (e.g. hero-poison turns, #87)
+  targetsMarked?: boolean;// Curse/Mark Payoff (#87): hits only currently-Marked living heroes,
+                          // recomputed at resolve (so clearing a Mark drops that hero live)
 }
 
 export type RotationEntry = AttackType | RotationStep;
