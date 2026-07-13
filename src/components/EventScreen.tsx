@@ -70,11 +70,6 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
           : `The coin bites — you lose ${-delta} gold.`);
         break;
       }
-      case 'safeGold': {
-        const { delta } = act((r) => r.safeGold());
-        finish(`You pocket the safe cut — ${delta} gold.`);
-        break;
-      }
       case 'addCardOffer':
         setStage({ kind: 'addCard', offers: run.eventCardOffer() });
         break;
@@ -104,13 +99,6 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
       case 'duplicateCard':
         setStage({ kind: 'duplicateCard' });
         break;
-      case 'purgeRandom': {
-        const purged = act((r) => r.purgeRandomCard());
-        finish(purged
-          ? `The well swallows your ${CARDS[purged.id].name}.`
-          : 'The well finds nothing to take.');
-        break;
-      }
       case 'bloodAltar':
         setStage({ kind: 'bloodAltar' });
         break;

@@ -9,7 +9,7 @@ import {
   CURSED_CHEST_GOLD, MERCENARY_PRICE, MERCENARY_DAMAGE, DUPLICATE_PRICE,
   BLOOD_ALTAR_HP, BLOOD_ALTAR_DAMAGE, BLOOD_ALTAR_MIN_HP,
   SPOILS_OFFER_SIZE, CARD_REWARD_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX, RELIC_PRICE,
-  HAGGLER_DISCOUNT, HAGGLER_FLOOR, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
+  HAGGLER_DISCOUNT_PCT, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
   DRAFT_POOL, partyFromMembers, DRAFT_OFFER_SIZE, isAbilityCard,
@@ -18,7 +18,7 @@ import {
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   HERO_HEAL_PCT, INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE,
   SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
-  STARTER_DECKS, STARTER_DECK_IDS, DEFAULT_STARTER_DECK, buildStarterDeck, DECK_LIST,
+  STARTER_DECKS, STARTER_DECK_IDS, DEFAULT_STARTER_DECK, buildStandardDeck, DRAFT_BASE_HEALS, STARTER_DRAFT_PICKS, DECK_LIST,
 } from '../src/constants';
 import type { RunLocation } from '../src/run';
 import { emptyStats, recordRunEnd } from '../src/stats';
@@ -746,7 +746,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
 {
   // Event catalog & rollEvent stay within the defined set (3 -> 8 in #19, + the
   // DR1 Field Hospital = 9).
-  eq('nine events (incl. DR1 Field Hospital)', EVENTS.length, 9);
+  eq('eight events (Purge Well cut in the content-cut pass)', EVENTS.length, 8);
   check('the Field Hospital tends injuries',
     EVENTS.find((e) => e.id === 'fieldHospital')!.choices.some((c) => c.kind === 'healInjury'));
   const ids = new Set(EVENTS.map((e) => e.id));
@@ -797,31 +797,20 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   }));
 }
 {
-  // The Duplicator: a paid, unupgraded copy of a chosen card.
+  // The Duplicator: a paid copy of a chosen card, upgrades included.
   const run = new Run(62);
   run.gold = DUPLICATE_PRICE;
   const target = run.deck.find((c) => c.id === 'highHeal')!;
-  target.upgrades.push('efficient'); // the copy must NOT inherit this
+  target.upgrades.push('efficient'); // the copy INHERITS this now
   const before = run.deck.length;
   const copy = run.duplicateCard(target.uid);
   check('duplicator returns the copy', copy !== null);
   eq('deck grows by one', run.deck.length, before + 1);
   eq('the copy shares the id', copy!.id, 'highHeal');
-  eq('the copy is unupgraded', copy!.upgrades.length, 0);
+  eq('the copy inherits the upgrades', JSON.stringify(copy!.upgrades), JSON.stringify(['efficient']));
   check('the copy has a fresh uid', copy!.uid !== target.uid);
   eq('the commission is paid', run.gold, 0);
   eq('a second copy is unaffordable', run.duplicateCard(target.uid), null);
-}
-{
-  // Purge Well: free removal, but the well chooses; seed-deterministic.
-  const run = new Run(63);
-  const before = run.deck.length;
-  const goldBefore = run.gold;
-  const purged = run.purgeRandomCard();
-  check('the well takes a card', purged !== null);
-  eq('free — no gold moves', run.gold, goldBefore);
-  eq('deck shrinks by one', run.deck.length, before - 1);
-  eq('well victim is seed-deterministic', new Run(63).purgeRandomCard()!.uid, purged!.uid);
 }
 {
   // Blood Altar: permanent maxHP -> damage trade, floored so it never cripples.
@@ -879,14 +868,10 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('deck shrank by one', run.deck.length, defaultDeck().length - 1);
 }
 {
-  // Casino now offers a guaranteed cut alongside the flip.
+  // Casino offers only the flip now (the guaranteed safe cut was cut).
   const casino = EVENTS.find((e) => e.id === 'casino')!;
-  check('casino has a safe-gold branch', casino.choices.some((c) => c.kind === 'safeGold'));
-  const run = new Run(3);
-  const g0 = run.gold;
-  const { delta, gold } = run.safeGold();
-  eq('safe cut pays the fixed amount', delta, CASINO_SAFE_GOLD);
-  eq('safe cut adds to gold', gold, g0 + CASINO_SAFE_GOLD);
+  check('casino has a flip branch', casino.choices.some((c) => c.kind === 'gambleGold'));
+  check('casino offers only flip + leave', casino.choices.every((c) => c.kind === 'gambleGold' || c.kind === 'leave'));
 }
 
 // --- issue 09: named normals + encounter tables ----------------------------
@@ -1033,15 +1018,15 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   }
 }
 {
-  // Haggler's Charm discounts every storefront at roll time (floor 5).
+  // Haggler's Charm discounts every storefront at roll time (−10%, rounded down).
+  const hag = (base: number) => Math.floor(base * (1 - HAGGLER_DISCOUNT_PCT));
   const run = new Run(82);
   run.addRelic('hagglersCharm');
   check('Haggler discounts card-shop prices',
     // One offer is on sale (its list price is the haggler price); the rest sit at the haggler price.
-    run.rollCardShop().every((o) => (o.listPrice ?? o.price) === Math.max(HAGGLER_FLOOR, RARITY_PRICE[o.rarity] - HAGGLER_DISCOUNT)));
+    run.rollCardShop().every((o) => (o.listPrice ?? o.price) === hag(RARITY_PRICE[o.rarity])));
   check('Haggler discounts reliquary prices',
-    run.rollReliquary().every((o) => o.price === Math.max(HAGGLER_FLOOR,
-      (RELICS[o.relicId].curse ? CURSE_PRICE : RELIC_PRICE[o.rarity]) - HAGGLER_DISCOUNT)));
+    run.rollReliquary().every((o) => o.price === hag(RELICS[o.relicId].curse ? CURSE_PRICE : RELIC_PRICE[o.rarity])));
   const plain = new Run(82);
   check('without the Charm prices are full',
     plain.rollCardShop().every((o) => (o.listPrice ?? o.price) === RARITY_PRICE[o.rarity]));
@@ -1081,10 +1066,8 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   eq('the shrine pays for the burden', run.gold, goldBefore + CURSE_SHRINE_GOLD);
   const c2 = run.shrineAcceptCurse();
   const c3 = run.shrineAcceptCurse();
-  const c4 = run.shrineAcceptCurse(); // Sanguine Pact (#68) is the fourth curse
-  const c5 = run.shrineAcceptCurse(); // Beggar's Bowl (#71) is the fifth curse
-  check('five distinct curses exist', new Set([c1, c2, c3, c4, c5]).size === 5);
-  eq('a sixth burden does not exist', run.shrineAcceptCurse(), null);
+  check('three distinct curses exist', new Set([c1, c2, c3]).size === 3);
+  eq('a fourth burden does not exist', run.shrineAcceptCurse(), null);
   check('the shrine event offers the burden',
     EVENTS.find((e) => e.id === 'shrine')!.choices.some((c) => c.kind === 'shrineCurse'));
 }
@@ -1100,15 +1083,15 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('spoils never offer a curse', clean);
 }
 {
-  // Once-per-run relic state: spent ids thread into the next BattleConfig and
-  // survive the save/resume roundtrip.
+  // spentRelics plumbing (threads into BattleConfig + survives save) still holds,
+  // though no once-per-run relic remains after the content-cut pass — Martyr's Icon
+  // is now once per FIGHT and never marks itself spent.
   const run = new Run(91);
-  run.addRelic('duskChime');
-  run.markRelicsSpent(['duskChime']);
-  check('spent relics reach the battle config', run.toBattleConfig().spentRelics!.includes('duskChime'));
+  run.markRelicsSpent(['lantern']);
+  check('spent relics reach the battle config', run.toBattleConfig().spentRelics!.includes('lantern'));
   const restored = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
-  check('spent relics survive the snapshot', restored.spentRelics.includes('duskChime'));
-  run.markRelicsSpent(['duskChime']);
+  check('spent relics survive the snapshot', restored.spentRelics.includes('lantern'));
+  run.markRelicsSpent(['lantern']);
   eq('marking twice never duplicates', run.spentRelics.length, 1);
 }
 {
@@ -1811,65 +1794,59 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('HP heal refuses off an Infirmary node', !run.infirmaryHealHP(0));
 }
 
-// --- preset starter decks (#63, Part C) -------------------------------------
+// --- starter deck: Standard or Draft (content-cut pass) ---------------------
 {
-  // Each preset builds exactly its declared card list (in order).
-  for (const id of STARTER_DECK_IDS) {
-    const built = buildStarterDeck(id).map((c) => c.id);
-    eq(`${id} builds its declared list`, JSON.stringify(built), JSON.stringify(STARTER_DECKS[id].list));
-  }
-  // #82: the maintainer-locked, heal-forward preset compositions — each preset is
-  // exactly its decided six ids (size 6, per-card counts), Preserver unchanged.
-  const countOf = (list: readonly CardId[]) =>
-    list.reduce<Record<string, number>>((m, c) => ((m[c] = (m[c] ?? 0) + 1), m), {});
-  for (const id of STARTER_DECK_IDS) {
-    eq(`${id} preset is size 6`, STARTER_DECKS[id].list.length, 6);
-  }
-  eq('Reaper preset is the decided six',
-    JSON.stringify(countOf(STARTER_DECKS.reaper.list)),
-    JSON.stringify(countOf(['shadowBolt', 'siphonLife', 'grimHarvest', 'lowHeal', 'highHeal', 'transfusion'])));
-  check('Reaper has transfusion', STARTER_DECKS.reaper.list.includes('transfusion'));
-  check('Reaper drops bloodTithe', !STARTER_DECKS.reaper.list.includes('bloodTithe'));
-  eq('Reaper keeps a single shadowBolt',
-    STARTER_DECKS.reaper.list.filter((c) => c === 'shadowBolt').length, 1);
-  eq('Warden preset is the decided six',
-    JSON.stringify(countOf(STARTER_DECKS.warden.list)),
-    JSON.stringify(countOf(['shield', 'brace', 'refresh', 'lowHeal', 'highHeal', 'mendingStream'])));
-  check('Warden has mendingStream', STARTER_DECKS.warden.list.includes('mendingStream'));
-  check('Warden drops phalanx', !STARTER_DECKS.warden.list.includes('phalanx'));
-  check('Warden drops channel', !STARTER_DECKS.warden.list.includes('channel'));
-  eq('Preserver preset is unchanged (DECK_LIST)',
-    JSON.stringify(STARTER_DECKS.preserver.list), JSON.stringify(DECK_LIST));
-  // Default path (no picker): a fresh Run defaults to Preserver and its deck.
-  const fresh = new Run(7);
-  eq('a fresh run defaults to Preserver', fresh.starterDeck, DEFAULT_STARTER_DECK);
-  eq('the default deck is the Preserver list',
-    JSON.stringify(fresh.deck.map((c) => c.id)), JSON.stringify(STARTER_DECKS.preserver.list));
+  // Two options only: the fixed Standard deck, or a Draft.
+  eq('two starter options', STARTER_DECK_IDS.length, 2);
+  check('Standard and Draft are the options',
+    STARTER_DECK_IDS.includes('standard') && STARTER_DECK_IDS.includes('draft'));
+  check('the old presets are gone', !(STARTER_DECK_IDS as string[]).includes('reaper'));
 
-  // The picker: start -> starterDeck -> choose builds that deck, then enters the draft.
+  // Standard = the fixed DECK_LIST; the base heals are Quick Heal + Heal.
+  eq('Standard deck is DECK_LIST',
+    JSON.stringify(buildStandardDeck().map((c) => c.id)), JSON.stringify(DECK_LIST));
+  eq('draft base heals are Quick Heal + Heal',
+    JSON.stringify(DRAFT_BASE_HEALS), JSON.stringify(['lowHeal', 'highHeal']));
+
+  // Default path (no picker): a fresh Run defaults to Standard and its deck.
+  const fresh = new Run(7);
+  eq('a fresh run defaults to Standard', fresh.starterDeck, DEFAULT_STARTER_DECK);
+  eq('the default deck is DECK_LIST',
+    JSON.stringify(fresh.deck.map((c) => c.id)), JSON.stringify(DECK_LIST));
+
+  // Standard path: begin -> pick standard -> builds DECK_LIST, then enters the draft.
   const run = new Run(7);
   run.beginStarterDeck();
   eq('beginStarterDeck opens the picker', run.location.kind, 'starterDeck');
-  run.chooseStarterDeck('reaper');
-  eq('choosing a preset records it', run.starterDeck, 'reaper');
-  eq('choosing a preset builds its deck',
-    JSON.stringify(run.deck.map((c) => c.id)), JSON.stringify(STARTER_DECKS.reaper.list));
-  eq('choosing a preset moves on to the draft', run.location.kind, 'draft');
+  run.chooseStarterMode('standard');
+  eq('choosing Standard records it', run.starterDeck, 'standard');
+  eq('choosing Standard builds DECK_LIST',
+    JSON.stringify(run.deck.map((c) => c.id)), JSON.stringify(DECK_LIST));
+  eq('choosing Standard moves on to the draft', run.location.kind, 'draft');
 
-  // The chosen preset round-trips through save/resume.
+  // Draft path: seed base heals, then pick 1 of 3 for STARTER_DRAFT_PICKS rounds.
+  const d = new Run(9);
+  d.beginStarterDeck();
+  d.chooseStarterMode('draft');
+  eq('choosing Draft records it', d.starterDeck, 'draft');
+  eq('draft seeds the two base heals', d.deck.length, DRAFT_BASE_HEALS.length);
+  check('the draft picker is open', d.location.kind === 'starterDeck' && d.nodeContent?.type === 'starterDraft');
+  for (let i = 0; i < STARTER_DRAFT_PICKS; i++) {
+    check(`round ${i + 1} offers 3 cards`, d.nodeContent?.type === 'starterDraft' && d.nodeContent.offers.length === 3);
+    const offer = (d.nodeContent as { type: 'starterDraft'; offers: CardId[] }).offers[0];
+    d.pickStarterDraftCard(offer);
+  }
+  eq('the drafted deck is full (base + picks)', d.deck.length, DRAFT_BASE_HEALS.length + STARTER_DRAFT_PICKS);
+  eq('finishing the draft enters the hero draft', d.location.kind, 'draft');
+
+  // The chosen mode round-trips through save/resume.
   const resumed = Run.fromJSON(JSON.parse(JSON.stringify(run.toJSON())));
-  eq('starter preset survives save/resume', resumed.starterDeck, 'reaper');
+  eq('starter mode survives save/resume', resumed.starterDeck, 'standard');
 
-  // An old save with no starterDeck field loads as Preserver.
-  const legacy = run.toJSON();
-  delete (legacy as { starterDeck?: string }).starterDeck;
-  const rebuilt = Run.fromJSON(legacy);
-  eq('an old save with no preset loads as Preserver', rebuilt.starterDeck, DEFAULT_STARTER_DECK);
-
-  // Quick-play/sim path: beginDraft() straight from 'start' keeps the Preserver default.
+  // Quick-play/sim path: beginDraft() straight from 'start' keeps the Standard default.
   const sim = new Run(7);
   sim.beginDraft();
-  eq('beginDraft from start keeps Preserver', sim.starterDeck, DEFAULT_STARTER_DECK);
+  eq('beginDraft from start keeps Standard', sim.starterDeck, DEFAULT_STARTER_DECK);
   eq('beginDraft from start still enters the draft', sim.location.kind, 'draft');
 }
 

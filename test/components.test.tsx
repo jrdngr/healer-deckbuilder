@@ -157,11 +157,11 @@ async function render(el: React.ReactElement): Promise<string> {
 {
   // A roster where every member differs from the classic Ranger/Tank/Mage.
   const hallRun = new Run(7);
-  hallRun.roster = partyFromMembers(['mage', 'skald', 'graveAugur']);
+  hallRun.roster = partyFromMembers(['mage', 'skald', 'sentinel']);
   hallRun.nodeContent = { type: 'partyUpgrade', offers: [] };
   const hallAct = <T,>(fn: (r: Run) => T): T => fn(hallRun);
   const hallText = await render(<PartyUpgradeShopScreen run={hallRun} act={hallAct} onDone={() => {}} />);
-  check('Training Hall shows roster names', hallText.includes('Skald') && hallText.includes('Grave Augur'), hallText);
+  check('Training Hall shows roster names', hallText.includes('Skald') && hallText.includes('Sentinel'), hallText);
   check('Training Hall does not show classic-trio names for a non-trio roster',
     !hallText.includes('Ranger') && !hallText.includes('Tank'), hallText);
 }

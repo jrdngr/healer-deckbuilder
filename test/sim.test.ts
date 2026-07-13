@@ -354,7 +354,12 @@ import { check, eq, results } from './harness';
   //     picked from a hashed sub-seed, so the map/fight stream is untouched — but the cheaper
   //     card is bought in a few runs, marginally shifting only the hardest fight: F8 153->152.
   //     All other fights unchanged; band/CI/boss gates below still hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([199, 198, 182, 179, 173, 164, 164, 162, 152]));
+  //   • Content-cut pass (2026-07-13): a large round of card/relic/hero/event cuts +
+  //     changes and the Standard/Draft starter rework. Pools shrank and several relics
+  //     changed magnitude, so the STICK line's deck/economy shift and winrates rose across
+  //     the board (rebalancing is explicitly out of scope for that pass). Re-pinned to the
+  //     new measured baseline.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([200, 200, 195, 194, 191, 188, 184, 180, 170]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
@@ -414,7 +419,7 @@ import { check, eq, results } from './harness';
     // #44: the trio's bound ability cards (Imbue Venom / Bolster / Unleash) stand in
     // for the old three generic Ability cards.
     const ids: CardId[] = ['imbuePoison', 'bolster', 'unleash', 'highHeal', 'highHeal', 'lowHeal', 'lowHeal',
-      'aoeHeal', 'shield', 'shield', 'cleanse', 'cleanse', 'regen', 'refresh'];
+      'aoeHeal', 'shield', 'shield', 'cleanse', 'cleanse', 'regen', 'fontOfMana'];
     cfg.deck = ids.map((id, i) => makeDeckCard(id, i));
     cfg.enemy = { maxHP: 135, boss: true, attackBonus: 0, def: HEXWEAVER_DEF, enrageTurn: 11 };
     return new Game(seed, cfg);
@@ -507,7 +512,7 @@ import { check, eq, results } from './harness';
   const N = 60;
   for (let s = 1; s <= N; s++) {
     const cfg = defaultBattleConfig();
-    cfg.party = partyFromMembers(['berserker', 'graveAugur', 'mage']);
+    cfg.party = partyFromMembers(['berserker', 'sentinel', 'mage']);
     cfg.enemy = { ...cfg.enemy, maxHP: 75 };
     const g = new Game(s, cfg);
     playFight(g);
@@ -543,7 +548,7 @@ import { check, eq, results } from './harness';
   let everHexed = false;
   for (let s = 1; s <= 40; s++) {
     const cfg = defaultBattleConfig();
-    setParty(cfg, ['warlock', 'mage', 'graveAugur']); // #44: rebuild ability cards for the party
+    setParty(cfg, ['warlock', 'mage', 'skald']); // #44: rebuild ability cards for the party
     cfg.enemy = { ...cfg.enemy, maxHP: 200 }; // a wall, so the fight lasts several turns
     const g = new Game(s, cfg);
     playFight(g, 12);
@@ -555,7 +560,7 @@ import { check, eq, results } from './harness';
   // so a member that does NOT have the Taunt ability ends up holding Taunt.
   {
     const cfg = defaultBattleConfig();
-    cfg.party = partyFromMembers(['ranger', 'mage', 'graveAugur']); // no tank
+    cfg.party = partyFromMembers(['ranger', 'mage', 'skald']); // no tank
     // Ensure a Provoke is in hand to play (the deck is the policy's, so seed it).
     cfg.deck = [...cfg.deck.slice(0, cfg.deck.length - 1), makeDeckCard('provoke', 999)];
     cfg.enemy = { ...cfg.enemy, boss: true, maxHP: 200 };

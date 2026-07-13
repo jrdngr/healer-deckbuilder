@@ -94,11 +94,6 @@ export interface Member {
   alive: boolean;
   shield: boolean;      // pending shield (blocks the next damaging instance)
   shieldTurns: number;  // enemy turns the pending Shield lasts before fading unused
-  brace: boolean;       // pending Brace: next damaging instance reduced by braceAmount (#17)
-  braceTurns: number;   // enemy turns the pending Brace lasts before fading unused
-  braceAmount: number;  // per-member Brace strength (#69): normal Brace = BRACE_AMOUNT; Absolution
-                        // sets it to the overheal it captured (variable, uncapped). Only read
-                        // while brace is true.
   regen: number;      // Regen value (#52): heals this much this tick, then decays by 1
                       // each tick until 0. Magnitude IS duration — a Regen R runs R ticks.
   bloomBurst: number; // pending Lifebloom burst: heals this much when the Regen ends alive (#16)
@@ -111,29 +106,11 @@ export interface Member {
   strikeTurns: number; // enemy turns strikeBonus lasts before it decays
   guardDR: number;     // Guard (#62): incoming damage reduced by this while guardTurns > 0
   guardTurns: number;  // enemy turns guardDR lasts before it decays
-  // Interlock (#65): Guard grants that stack FREELY (relaxing Guard's no-self-stack
-  // rule). Each element is one grant's remaining enemy turns; the total extra DR is
-  // (number of live grants × INTERLOCK_GUARD_DR), and each timer decays on its own.
-  interlockGuardTurns: number[];
-  // Anvil Stance (#65): a persistent (fight-long) mark; while set AND the member holds
-  // a Shield or Brace, their autos deal +ANVIL_STANCE_BONUS. The condition, not a timer,
-  // gates the bonus — dropping/regaining the hold toggles it.
-  anvilStance: boolean;
-  // Whetstone of the Patient (#65): true if this member took real damage during the
-  // last enemy phase. Set in the damage pipeline, cleared at enemy-phase start; a
-  // fully-blocked (Shield/Ward) hit deals 0 and leaves it false ("untouched").
-  tookDamageLastEnemyPhase: boolean;
-  // Thornskin (#66): a mark with NO timer of its own — its lifetime IS the member's
-  // current Regen. While set AND regen > 0, incoming hits take THORNSKIN_REDUCTION
-  // less; the mark is cleared the moment that Regen ends (_onRegenEnded), so one
-  // Thornskin arms one Regen lifetime (recast to re-arm on a fresh Regen).
-  thornskin: boolean;
   empowerBonus: number; // Empower (#62): +abilityPower on the next ability this hero fires (one-shot)
   riposte: boolean;    // Riposte (#62): counter the next attack that hits this hero (consumed)
   riposteTurns: number; // En Garde (#74): enemy turns of PERSISTENT Riposte — while > 0, this
                         // hero counters EVERY hit that strikes it (fully blocked included) and the
                         // one-shot `riposte` above is neither consumed nor double-triggered.
-  ward: number;    // Aegis Font (#22): damage buffer from cast-heal overheal (max WARD_MAX)
   boarHp: number;   // Beast Warden (#29): standing Boar's HP (0 = no Boar); it soaks whole hits
   boarTurns: number; // Beast Warden (#29): enemy turns the Boar has left before it returns to the wild
   diedThisFight: boolean; // DR1: went to 0 HP at any point this fight (a later Resurrect
@@ -153,8 +130,6 @@ export interface Enemy {
   maxHP: number;
   poison: number;      // Poison strength: damage dealt per turn while active
   poisonTurns: number; // enemy turns of Poison remaining
-  fermentTurns: number; // Ferment (#72) window: enemy turns Poison compounds instead of decaying
-  fermentGrowth: number; // per-turn Poison growth applied after each fermented tick (set at cast)
   vulnerable: number;      // Vulnerability (Warlock's Hex, #39): party damage is x(1 + this)
   vulnerableTurns: number; // enemy turns of Vulnerability remaining
   enraged: boolean;
@@ -230,7 +205,6 @@ export type GameEvent =
   | { kind: 'regenApplied'; slot: Slot; stack: number }
   | { kind: 'shieldApplied'; slot: Slot }
   | { kind: 'defenseApplied'; slot: Slot; amount: number } // Phalanx (#17)
-  | { kind: 'braceApplied'; slot: Slot }                   // Brace (#17)
   | { kind: 'resurrect'; slot: Slot; hp: number }
   | { kind: 'refreshPrimed'; stack: number }
   // Player-cast channels (#64): start / per-turn tick / broken-by-a-card / natural end.
@@ -239,10 +213,7 @@ export type GameEvent =
   | { kind: 'channelCancel'; card: CardId }
   | { kind: 'channelEnd'; card: CardId }
   | { kind: 'draw'; count: number }
-  | { kind: 'surge' }                                      // next card this turn costs 0 (#16)
   | { kind: 'lensArmed' }                                  // Arcane Lens: next single-target heal splashes (#70)
-  | { kind: 'wardApplied'; slot: Slot; amount: number }    // Aegis Font ward gained (#22)
-  | { kind: 'chime' }                                      // Dusk Chime delays the telegraph (#22)
   | { kind: 'martyrSave'; slot: Slot }                     // Martyr's Icon refuses a death (#22)
   | { kind: 'hymn'; bonus: number; slots: Slot[] }         // autos buffed +bonus over these members (#16)
   | { kind: 'bloodPay'; slot: Slot; amount: number; hp: number } // Blood card HP cost paid (#16)
@@ -257,7 +228,6 @@ export type GameEvent =
   | { kind: 'boarHit'; slot: Slot; amount: number; boarHp: number; killed: boolean } // Boar soaks a hit (#29)
   | { kind: 'boarExpire'; slot: Slot } // Boar returns to the wild (#29)
   | { kind: 'stun'; slot: Slot; intent: string } // Sentinel cancels the standing telegraph (#61)
-  | { kind: 'ferment'; slot: Slot; turns: number; growth: number } // Plaguewright ferments enemy Poison (#72)
   | { kind: 'enGarde'; slot: Slot; turns: number } // Duelist grants persistent Riposte (#74)
   | { kind: 'penance'; slot: Slot; bonus: number; died: boolean; slots: Slot[] } // Flagellant pays HP for a party +auto (#75); slots = living members buffed
   // --- terminal flourishes ---
@@ -292,30 +262,22 @@ export class Game {
   channelCard: CardId | null;
   channelTarget: number | null;
   channelTurns: number;
-  // Liturgy (#73): the active channel has dual cadence — it also ticks at the start
-  // of the enemy phase (before the blow) for its remaining duration. Channel state,
-  // cleared whenever the channel ends for any reason. Per-fight, never serialized.
-  channelDualCadence: boolean;
   // Channel keep-alive (#70): card INSTANCE uids whose play is exempt from breaking a
   // running channel. Attunement stamps its own uid and the card it draws. Per-fight.
   channelExemptUids: Set<number>;
   woundTurns: number;     // party-wide Hex remaining (halves all healing while > 0); Cleanse clears it
-  surgePending: boolean;  // Surge (#16): the next card played this turn costs 0 MP
   lensArmed: boolean;     // Arcane Lens (#70): the next single-target heal this turn also splashes to the most wounded other
   hymnBonus: number;      // Battle Hymn (#16): damage added to each living auto this party phase
-  penanceBonus: number;   // Penance (#75): +auto for every living member this party phase; ADDITIVE with hymnBonus (own field so it stacks with Battle Hymn)
+  penanceBonus: number;   // Penance (#75): +auto for every living member; ADDITIVE with hymnBonus (own field so it stacks with Battle Hymn)
+  penanceTurns: number;   // Penance (#75): enemy turns the party-wide +auto buff lasts (decays in _decayBuffs)
   bloodBannerTurns: number; // Blood Banner (#68): enemy turns the party-wide +auto buff lasts
   // Delayed player-phase-start effects (#69): a generic FIFO fired at the START of the
   // player phase (after the Regen tick, before the draw). Per-fight; cleared at fight
   // start. Sunrise Vigil pushes one entry per cast (two casts -> two heals).
   delayedStartEffects: DelayedStartEffect[];
   relics: Set<RelicId>;   // run-long passives (#21); empty set = fully inert
-  echoUsed: boolean;      // Echo Locket: its once-per-fight return has fired
-  stormglassUsed: boolean;// Stormglass Mirror: its once-per-fight negate has fired
   titheGained: number;    // Tithe Candle MP granted this fight (capped per fight)
-  chimeUsed: boolean;     // Dusk Chime (#22): its once-per-RUN delay has fired
-  martyrUsed: boolean;    // Martyr's Icon (#22): its once-per-RUN save has fired
-  taperFired: boolean;    // First-Light Taper (#22): the discount fired this turn
+  martyrUsed: boolean;    // Martyr's Icon (#22): its once-per-FIGHT save has fired
   drawPile: DeckCard[];
   discardPile: DeckCard[];
   hand: DeckCard[];
@@ -375,9 +337,6 @@ export class Game {
         hp: down ? 0 : Math.min(maxHP, p.hp ?? maxHP), alive: !down,
         shield: false, // pending shield (blocks the next damaging instance)
         shieldTurns: 0,
-        brace: false,  // pending Brace (one-shot damage reduction)
-        braceTurns: 0,
-        braceAmount: 0, // Brace strength while active (#69); default BRACE_AMOUNT on a normal Brace
         regen: 0,      // Regen value (magnitude == remaining ticks; #52)
         bloomBurst: 0, // no Lifebloom burst pending
         taunt: 0,      // taunt turns remaining (attributed to the caster)
@@ -385,14 +344,11 @@ export class Game {
         defenseAmount: 0, // Defense strength while active
         charge: 0,     // per-member Charge
         drumPrimed: false, // no War Drum / Double Strike beat pending
-        strikeBonus: 0, strikeTurns: 0, // no Sharpen/Embolden buff (#62)
+        strikeBonus: 0, strikeTurns: 0, // no Sharpen buff (#62)
         guardDR: 0, guardTurns: 0,       // no Guard buff (#62)
-        interlockGuardTurns: [], anvilStance: false, tookDamageLastEnemyPhase: false, // Iron mitigation web (#65)
-        thornskin: false, // no Thornskin mark armed (#66)
         empowerBonus: 0, // no Empower pending (#62)
         riposte: false,  // no Riposte pending (#62)
         riposteTurns: 0, // no En Garde stance running (#74)
-        ward: 0,       // no Aegis Ward standing
         boarHp: 0,     // no Boar summoned yet (#29)
         boarTurns: 0,
         diedThisFight: false, // no death yet this fight
@@ -404,7 +360,7 @@ export class Game {
 
     this.enemy = {
       hp: config.enemy.maxHP, maxHP: config.enemy.maxHP,
-      poison: 0, poisonTurns: 0, fermentTurns: 0, fermentGrowth: 0,
+      poison: 0, poisonTurns: 0,
       vulnerable: 0, vulnerableTurns: 0, enraged: false,
     };
 
@@ -424,27 +380,18 @@ export class Game {
     this.channelCard = null;   // no channel running at fight start (#64)
     this.channelTarget = null;
     this.channelTurns = 0;
-    this.channelDualCadence = false; // Liturgy (#73) is off until cast on a channel
     this.channelExemptUids = new Set(); // no channel-exempt cards at fight start (#70)
     this.woundTurns = 0;    // no Hex active at fight start
-    this.surgePending = false;
     this.lensArmed = false; // no Arcane Lens armed at fight start (#70)
     this.hymnBonus = 0;
-    this.penanceBonus = 0; // no Penance buff at fight start (#75)
+    this.penanceBonus = 0; this.penanceTurns = 0; // no Penance buff at fight start (#75)
     this.bloodBannerTurns = 0; // no Blood Banner buff at fight start (#68)
     this.delayedStartEffects = []; // no queued delayed effects at fight start (#69)
     this.relics = new Set(config.relics ?? []);
-    this.echoUsed = false;
-    this.stormglassUsed = false;
     this.titheGained = 0;
-    const spent = new Set(config.spentRelics ?? []);
-    this.chimeUsed = spent.has('duskChime');   // once per RUN (#22)
-    this.martyrUsed = spent.has('martyrsIcon'); // once per RUN (#22)
-    this.taperFired = false;
-    // Cracked Hourglass (#22): the race starts earlier, whoever the enemy is.
-    if (this.relics.has('crackedHourglass')) {
-      this.enrageTurn = Math.min(this.enrageTurn, CRACKED_HOURGLASS_ENRAGE);
-    }
+    // Martyr's Icon (#22) is now once per FIGHT — reset each fight, not read from the
+    // run-level spent set.
+    this.martyrUsed = false;
 
     // Battle uses fresh instances of the run deck (shuffled) — never the run's
     // own array — so reshuffles here don't disturb the persistent deck.
@@ -527,24 +474,13 @@ export class Game {
     }
     // Lone Wolf Totem (#42): a small fielded party hits harder per body.
     const lone = this.hasRelic('loneWolf') && this.fieldedPartySize() <= SMALL_PARTY_MAX ? LONE_WOLF_DMG : 0;
-    // Sharpen / Embolden (#62): a standing +damage buff on this hero, decays in _decayBuffs.
+    // Sharpen (#62): a standing +damage buff on this hero, decays in _decayBuffs.
     const strike = m.strikeTurns > 0 ? m.strikeBonus : 0;
-    // Anvil Stance (#65): while marked AND holding a Shield or Brace, autos hit harder.
-    // Stateful-conditional — the hold, not a timer, gates it (Fortify/Rootbind extending
-    // the Shield extends the payoff; losing the hold drops it, regaining it restores it).
-    const anvil = m.anvilStance && (m.shield || m.brace) ? ANVIL_STANCE_BONUS : 0;
-    // Whetstone of the Patient (#65): a member untouched last enemy phase strikes +1.
-    const whet = this.hasRelic('whetstone') && !m.tookDamageLastEnemyPhase ? WHETSTONE_BONUS : 0;
-    // Blood Banner (#68): a party-wide standing +auto buff, additive with Hymn/Embolden.
+    // Blood Banner (#68): a party-wide standing +auto buff, additive with Hymn.
     const bloodBanner = this.bloodBannerTurns > 0 ? BLOOD_BANNER_BONUS : 0;
-    // Sanguine Pact (#68 curse): while any living member is below the threshold, the
-    // whole party's autos gain +bonus (the Berserker/Flagellant hold it open naturally).
-    const sanguine = this.hasRelic('sanguinePact')
-      && this.livingMembers().some((x) => x.hp < x.maxHP * SANGUINE_PACT_THRESHOLD)
-      ? SANGUINE_PACT_AUTO_BONUS : 0;
-    // Penance (#75): a one-phase party-wide +auto, its OWN field so it stacks additively
-    // with Battle Hymn's hymnBonus (both summed here) rather than max-ing against it.
-    return base + this.hymnBonus + this.penanceBonus + banner + lone + strike + anvil + whet + bloodBanner + sanguine;
+    // Penance (#75): a party-wide +auto (lasts penanceTurns enemy turns), its OWN field so
+    // it stacks additively with Battle Hymn's hymnBonus (both summed here).
+    return base + this.hymnBonus + this.penanceBonus + banner + lone + strike + bloodBanner;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -946,11 +882,8 @@ export class Game {
     }
     m.shield = false;
     m.shieldTurns = 0;
-    m.brace = false;
-    m.braceTurns = 0;
     m.regen = 0;
     m.bloomBurst = 0; // death forfeits a pending Lifebloom burst (#16)
-    m.thornskin = false; // death drops the Thornskin mark (#66) — no Regen left to ride
     m.taunt = 0;
     m.defense = 0;
     m.defenseAmount = 0;
@@ -960,7 +893,6 @@ export class Game {
     m.guardDR = 0; m.guardTurns = 0;
     m.empowerBonus = 0; m.riposte = false;
     m.riposteTurns = 0; // death ends the En Garde stance (#74)
-    m.ward = 0;
     m.boarHp = 0;    // the Boar has no summoner left (#29)
     m.boarTurns = 0;
     if (saved) {
@@ -1015,15 +947,7 @@ export class Game {
   // enemy debuff (Vulnerability / Poison) and more the deeper its Vulnerability —
   // capped. The global Vulnerability multiplier in _damageEnemy still applies ON
   // TOP (a debuff-first line pays off twice), so the cap bounds only the base roll.
-  _doomDamage(): number {
-    const vulnActive = this.enemy.vulnerableTurns > 0;
-    const poisonActive = this.enemy.poisonTurns > 0;
-    const debuffs = (vulnActive ? 1 : 0) + (poisonActive ? 1 : 0);
-    const vulnBonus = vulnActive ? Math.floor(this.enemy.vulnerable * DOOM_PER_VULN) : 0;
-    return Math.min(DOOM_CAP, DOOM_BASE + DOOM_PER_DEBUFF * debuffs + vulnBonus);
-  }
-
-  // A healer-cast enemy nuke (Shadow Bolt / Doom) has no member source; attribute
+  // A healer-cast enemy nuke has no member source; attribute
   // the visual flourish to the first living member so the animator has an origin.
   _emitEnemyNuke(amount: number, killed: boolean): void {
     const m = this.livingMembers()[0];
@@ -1047,10 +971,6 @@ export class Game {
   // only SKIPS the cancel step; it never ticks the channel (the enemy-phase tick is
   // still gated on a fully restrained turn) and never re-enables Rest / passive MP.
   _channelExempt(dc: DeckCard): boolean {
-    // Liturgy (#73) enhances the running channel, so it must not break it — it is
-    // always exempt (like an Attunement-stamped play). canPlay already gates it on
-    // an active channel, and _fireAbility flips dualCadence on the surviving channel.
-    if (resolveCard(dc).id === 'liturgy') return true;
     if (this.hasRelic('chantersIdol') && this.cardsPlayedThisPhase === 1) return true;
     return this.channelExemptUids.has(dc.uid);
   }
@@ -1064,7 +984,6 @@ export class Game {
     this.channelCard = card.id;
     this.channelTarget = ch.single ? target : null;
     this.channelTurns = ch.maxTurns;
-    this.channelDualCadence = false; // a fresh channel starts on normal cadence (#73)
     this._log(`${card.name} begins channeling (up to ${ch.maxTurns} turns).`, 'status');
     this._emit({ kind: 'channelStart', card: card.id, slot: (ch.single ? target : null) as Slot | null, turns: ch.maxTurns });
     this._tickChannel(); // first tick is immediate, like a cast
@@ -1077,7 +996,6 @@ export class Game {
     this._log(`The ${CARDS[id].name} channel is broken.`, 'status');
     this._emit({ kind: 'channelCancel', card: id });
     this.channelCard = null; this.channelTarget = null; this.channelTurns = 0;
-    this.channelDualCadence = false; // dual cadence dies with the channel (#73)
   }
 
   // End the active channel on its own terms (ticks spent, or a single-target
@@ -1088,7 +1006,6 @@ export class Game {
     this._log(`The ${CARDS[id].name} channel ends (${reason}).`, 'status');
     this._emit({ kind: 'channelEnd', card: id });
     this.channelCard = null; this.channelTarget = null; this.channelTurns = 0;
-    this.channelDualCadence = false; // dual cadence dies with the channel (#73)
   }
 
   // Apply one tick of the active channel (its per-turn payoff, keyed by card id),
@@ -1107,29 +1024,6 @@ export class Game {
       if (!m || !m.alive) { this._endChannel('target down'); return; }
     }
     switch (id) {
-      case 'drain': {
-        // Deal direct damage; if the tick actually dealt damage, return 1-2 MP —
-        // the only MP a channeling player receives.
-        const before = this.enemy.hp;
-        const killed = this._damageEnemy(DRAIN_DMG, 'Drain');
-        this._emitEnemyNuke(DRAIN_DMG, killed);
-        if (before - this.enemy.hp > 0 && this.mp < this.maxMana) {
-          const roll = DRAIN_MP_MIN + Math.floor(this.rng() * (DRAIN_MP_MAX - DRAIN_MP_MIN + 1));
-          const gained = Math.min(roll, this.maxMana - this.mp);
-          this.mp += gained;
-          this._log(`Drain returns ${gained} MP. (MP ${this.mp})`, 'mp');
-          this._emit({ kind: 'refreshTick', amount: gained, mp: this.mp });
-        }
-        break;
-      }
-      case 'refresh': {
-        const before = this.mp;
-        this.mp = Math.min(this.maxMana, this.mp + REFRESH_CHANNEL_MP);
-        const gained = this.mp - before;
-        this._log(`Refresh restores ${gained} MP. (MP ${this.mp})`, 'mp');
-        this._emit({ kind: 'refreshTick', amount: gained, mp: this.mp });
-        break;
-      }
       case 'mendingStream': {
         const m = this.members[this.channelTarget as number];
         const healed = this._healMember(m, MENDING_STREAM_HEAL, true);
@@ -1149,7 +1043,6 @@ export class Game {
       case 'fortify': {
         const m = this.members[this.channelTarget as number];
         m.shield = true; m.shieldTurns = SHIELD_TURNS;
-        m.brace = false; m.braceTurns = 0; // a member holds Shield OR Brace (#17)
         this._log(`Fortify shields ${m.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
@@ -1198,17 +1091,6 @@ export class Game {
     const healed = m.hp - before;
     const overheal = effective - healed;
     const reachedFull = before < m.maxHP && m.hp === m.maxHP;
-    // Aegis Font (#22): direct-cast overheal becomes a Ward buffer — capped,
-    // larger-replaces (no stacking), independent of Shield. Skipped when the caller
-    // captures the overheal itself (Absolution, #69): it converts first, Font sees none.
-    if (direct && !captureOverheal && overheal > 0 && this.hasRelic('aegisFont')) {
-      const over = Math.min(WARD_MAX, overheal);
-      if (over > m.ward) {
-        m.ward = over;
-        this._log(`The Aegis Font wells up: Ward ${m.ward} on ${m.name}.`, 'status');
-        this._emit({ kind: 'wardApplied', slot: m.slot, amount: m.ward });
-      }
-    }
     // Beacon of the Second Sun (#69): a card-driven heal that TOPS A MEMBER OFF draws a
     // card (uncapped). `direct` gates out the Regen tick; a member already full (before ==
     // max) is not a heal-to-full, so no draw. Twin Censer's splash and #76 Radiance route
@@ -1297,21 +1179,8 @@ export class Game {
   // — with Deep Roots — leaves the member Braced. The Lifebloom burst and Deep Roots
   // both fire on expiry: intended double-dip. Death does NOT route here (the kill
   // path zeroes Regen directly), so a dead member never triggers Deep Roots.
-  _onRegenEnded(m: Member, consumed: boolean): void {
+  _onRegenEnded(m: Member, _consumed: boolean): void {
     this._endRegenBurst(m); // a pending Lifebloom burst rides any end path
-    m.thornskin = false;    // one Thornskin per Regen lifetime — recast on a fresh Regen
-    if (m.alive && this.hasRelic('deepRoots')) {
-      // Brace 2, respecting the Shield-OR-Brace replacement rule (#17): the fresh
-      // Brace replaces any standing Shield.
-      m.brace = true;
-      m.braceAmount = BRACE_AMOUNT; // standard Brace strength (#69)
-      m.braceTurns = BRACE_TURNS;
-      m.shield = false;
-      m.shieldTurns = 0;
-      const how = consumed ? 'spent' : 'faded';
-      this._log(`Deep Roots: ${m.name}'s ${how} Regen hardens into Brace ${BRACE_AMOUNT}.`, 'status');
-      this._emit({ kind: 'braceApplied', slot: m.slot });
-    }
   }
 
   // Wave-wide poison stacking rule (#66, shared with #67/#72). The enemy has a SINGLE
@@ -1327,53 +1196,15 @@ export class Game {
     this.enemy.poisonTurns = Math.max(this.enemy.poisonTurns, dur);
   }
 
-  // Umbral Feast (#67): the count of active effects in play, read at cast time.
-  // Published inventory (#69's Benediction reuses the per-member buff-count logic):
-  //   party side, per living member — Shield, Brace, Guard, Defense, Taunt, Regen,
-  //   Sharpen/strike bonus, Empower, Riposte, Ward, Boar (each active effect counts 1;
-  //   Guard folds the base Guard and Interlock grants into one);
-  //   enemy side — Poison, Vulnerability.
-  // Anvil Stance / Charge / War-Drum / Lifebloom-burst / Thornskin are NOT on the list
-  // (Enraged is not a debuff, so it is excluded). A pure read — no side effects.
-  _activeEffectCount(): number {
-    let n = 0;
-    for (const m of this.livingMembers()) n += this._memberEffectCount(m);
-    if (this.enemy.poisonTurns > 0) n += 1;
-    if (this.enemy.vulnerableTurns > 0) n += 1;
-    return n;
-  }
-
-  // The per-member half of _activeEffectCount (#69's Benediction reads it directly): the
-  // count of active buffs on ONE member — Shield, Brace, Guard (base + Interlock folded
-  // to one), Defense, Taunt, Regen, strike bonus, Empower, Riposte, Ward, Boar. A pure
-  // read, no side effects. Anvil Stance / Charge / War-Drum / Lifebloom-burst / Thornskin
-  // are NOT on the list.
-  _memberEffectCount(m: Member): number {
-    let n = 0;
-    if (m.shield) n += 1;
-    if (m.brace) n += 1;
-    if (m.guardTurns > 0 || m.interlockGuardTurns.some((t) => t > 0)) n += 1;
-    if (m.defense > 0) n += 1;
-    if (m.taunt > 0) n += 1;
-    if (m.regen > 0) n += 1;
-    if (m.strikeTurns > 0) n += 1;
-    if (m.empowerBonus > 0) n += 1;
-    if (m.riposte) n += 1;
-    if (m.ward > 0) n += 1;
-    if (m.boarHp > 0) n += 1;
-    return n;
-  }
-
-  // Sanguine Pact (#68 curse): every Blood-card HP cost pays +SURCHARGE while owned;
-  // 0 when unowned (the curse is fully inert). Derived, so the ">N HP" gates and the
-  // payment both read the SAME effective cost with no per-card hardcoding.
+  // Retained as a no-op hook (the Sanguine Pact curse that surcharged Blood costs was
+  // cut) so Penance's ability code and _bloodCost keep one call site for any future
+  // blood-cost modifier.
   _sanguineSurcharge(): number {
-    return this.hasRelic('sanguinePact') ? SANGUINE_PACT_SURCHARGE : 0;
+    return 0;
   }
 
-  // The EFFECTIVE HP a Blood card's `selfDamage` costs right now: its base plus the
-  // Sanguine Pact surcharge. canPlay gates targets at or below this, and the payment
-  // uses it too — under the Pact, Crimson Pact (base 4) needs >6 HP and takes 6.
+  // The EFFECTIVE HP a Blood card's `selfDamage` costs right now (its base). canPlay
+  // gates targets at or below this, and the payment uses it too.
   _bloodCost(card: ResolvedCard): number {
     if (card.selfDamage == null) return 0;
     return card.selfDamage + this._sanguineSurcharge();
@@ -1423,18 +1254,10 @@ export class Game {
     if (ignoreDefense) return raw; // Piercing-Bolt-style hits bypass Defense AND Guard
     let dmg = raw;
     if (m.defense > 0) dmg = Math.max(0, dmg - m.defenseAmount);
-    // Guard (#62): its own DR field, so it stacks with Defense (Bulwark, Taunt) but
-    // not with itself (a second Guard just refreshes the timer). A pure read, so
+    // Guard (#62): its own DR field, so it stacks with Defense (Taunt) but not with
+    // itself (a second Guard just refreshes the timer). A pure read, so
     // attackTargets() previews it exactly (telegraph == applied).
     if (m.guardTurns > 0) dmg = Math.max(0, dmg - m.guardDR);
-    // Interlock (#65): each live Guard grant adds its own DR on top — freely stacking
-    // with the Guard card, with itself, and with Defense. A pure read, so it previews.
-    const interlock = m.interlockGuardTurns.filter((t) => t > 0).length * INTERLOCK_GUARD_DR;
-    if (interlock > 0) dmg = Math.max(0, dmg - interlock);
-    // Thornskin (#66): while the mark is armed AND the member still has Regen running,
-    // each hit takes THORNSKIN_REDUCTION less — its duration is the Regen itself, not a
-    // timer. A pure read of regen (stable across the enemy phase), so it previews exactly.
-    if (m.thornskin && m.regen > 0) dmg = Math.max(0, dmg - THORNSKIN_REDUCTION);
     return dmg;
   }
 
@@ -1449,48 +1272,26 @@ export class Game {
   // yet — the preview path passes it for the target of a pending pre-blow Fortify tick,
   // whose deterministic Shield grant lands before the telegraph resolves (keeps
   // preview == applied). _resolveAttack never passes it (the tick has already run).
-  _wardedDamage(m: Member, raw: number, ignoreDefense = false, attackType?: AttackType, assumeShield = false):
-      { dmg: number; spendsBrace: boolean; spendsShield: boolean; spendsStormglass: boolean; wardSpent: number } {
+  _wardedDamage(m: Member, raw: number, ignoreDefense = false, _attackType?: AttackType, assumeShield = false):
+      { dmg: number; spendsShield: boolean } {
     // Beast Warden's Boar (#29) stands in front of her slot and eats the WHOLE
     // instance, so the Warden takes 0 and none of her own wards are spent. Checked
     // FIRST so the preview (attackTargets) equals the applied damage — the boar's
     // own HP loss is resolved in _resolveAttack, not here (this stays a pure read).
-    if (m.boarHp > 0) return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: false, wardSpent: 0 };
+    if (m.boarHp > 0) return { dmg: 0, spendsShield: false };
     let dmg = this._effectiveDamage(m, raw, ignoreDefense);
-    let spendsBrace = false;
     let spendsShield = false;
-    // Stormglass Mirror (#21): once per fight, the first single-target hit of
-    // 6+ (measured after Defense, before Brace/Shield) is negated outright.
-    const singleTarget = attackType === 'single' || attackType === 'hidden' || attackType === 'heavy';
-    if (!this.stormglassUsed && this.hasRelic('stormglass') && singleTarget && dmg >= STORMGLASS_MIN_HIT) {
-      return { dmg: 0, spendsBrace: false, spendsShield: false, spendsStormglass: true, wardSpent: 0 };
-    }
-    if (m.brace && dmg > 0) {
-      dmg = Math.max(0, dmg - m.braceAmount); // #69: variable Brace strength (Absolution's overheal)
-      spendsBrace = true;
-    }
     if ((m.shield || assumeShield) && dmg > 0) {
       dmg = 0;
       spendsShield = true;
     }
-    // Grounding Rod (#21): multi-target hits lose 1 off the FINAL number.
-    if (dmg > 0 && this.hasRelic('groundingRod') && (attackType === 'aoe' || attackType === 'sweep')) {
-      dmg = Math.max(0, dmg - GROUNDING_ROD_REDUCTION);
-    }
-    // Aegis Ward (#22): the standing buffer eats what is left, point for point.
-    const wardSpent = Math.min(m.ward, dmg);
-    dmg -= wardSpent;
-    return { dmg, spendsBrace, spendsShield, spendsStormglass: false, wardSpent };
+    return { dmg, spendsShield };
   }
 
   // ---- enemy phase ---------------------------------------------------------
 
   _runEnemyPhase(): void {
     this._emit({ kind: 'enemyPhase' });
-    // Whetstone of the Patient (#65): reset the per-member "took damage" flags at the
-    // START of the enemy phase, so this phase's hits set a fresh reading that the NEXT
-    // party phase's autos read (a member untouched here strikes +1 next turn).
-    for (const m of this.members) m.tookDamageLastEnemyPhase = false;
     if (this.turn === this.enrageTurn && !this.enemy.enraged) {
       this.enemy.enraged = true;
       this._log('The enemy ENRAGES! Its attacks grow heavier.', 'system');
@@ -1499,34 +1300,14 @@ export class Game {
 
     // 1) start-of-turn status ticks: Poison -> Refresh. (Regen ticks at the start
     // of the player phase instead, so its heal lands after the enemy's blow.)
-    const fermenting = this.enemy.fermentTurns > 0;
     if (this.enemy.poisonTurns > 0) {
       const dmg = this.enemy.poison;
       const killed = this._damageEnemy(dmg, `Poison (${this.enemy.poison})`);
       this._emit({ kind: 'poisonTick', amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
       if (killed) this._emit({ kind: 'defeatEnemy' });
-      // Ferment (#72): tick order is damage -> grow -> (skip duration decrement). While
-      // the window runs, the per-turn value grows and the duration is frozen, so Poison
-      // compounds instead of expiring; once the window closes, normal decay resumes at
-      // the inflated per-turn rate. Growth was scaled by the caster's power at cast.
-      if (fermenting) {
-        this.enemy.poison += this.enemy.fermentGrowth;
-        this._log(`The enemy's Poison ferments — ${dmg}/turn grows to ${this.enemy.poison}/turn (${this.enemy.poisonTurns} turns held).`, 'status');
-      } else {
-        this.enemy.poisonTurns -= 1;
-        if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
-      }
+      this.enemy.poisonTurns -= 1;
+      if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
       if (this.status === 'win') return; // poison can finish the enemy
-    }
-    // The ferment window itself decrements once per enemy phase regardless of whether
-    // any Poison stood this turn — an empty window still burns down while it waits for
-    // Poison to arrive (poison applied mid-window compounds from its first tick).
-    if (this.enemy.fermentTurns > 0) {
-      this.enemy.fermentTurns -= 1;
-      if (this.enemy.fermentTurns === 0) {
-        this.enemy.fermentGrowth = 0;
-        this._log('The fermentation subsides; the enemy\'s Poison decays normally again.', 'status');
-      }
     }
     // Vulnerability (Warlock's Hex, #39) counts down here, after Poison this turn is
     // amplified — so a cast Hex amplifies HEX_TURNS full party phases before fading.
@@ -1535,16 +1316,6 @@ export class Game {
       if (this.enemy.vulnerableTurns === 0) {
         this.enemy.vulnerable = 0;
         this._log('The Hex fades; the enemy is no longer Vulnerable.', 'status');
-        // Embermark (#67): every natural Vulnerability expiry pays out EMBERMARK_DMG.
-        // This fires only on the timer reaching 0 here — Sap re-upping vulnerableTurns
-        // keeps it > 0, so it never reaches this branch until the window truly closes.
-        // Routed through _damageEnemy AFTER Vulnerability is cleared, so the payout is
-        // not self-amplified (the window that just closed does not multiply it).
-        if (this.hasRelic('embermark')) {
-          const killed = this._damageEnemy(EMBERMARK_DMG, 'Embermark');
-          this._emitEnemyNuke(EMBERMARK_DMG, killed);
-          if (this.status === 'win') return; // the ember can finish the enemy
-        }
       }
     }
     // A channel (#64) suppresses all passive/over-time MP income — including Font of
@@ -1579,16 +1350,8 @@ export class Game {
     // cast turn in playCard, where cardsPlayedThisPhase >= 1 skips this. Placed after
     // the Vulnerability decay so Sap's fresh Vulnerability survives its own tick turn.
     if (this.channelActive() && this.cardsPlayedThisPhase === 0) {
-      // Liturgy dual cadence (#73): the extra enemy-phase tick fires FIRST — a full
-      // tick that does NOT advance the duration — so Fortify's shield is up before the
-      // blow, Sap stacks a second step, and Drain doubles its damage/return this round.
-      // The normal tick below still owns the single per-round duration decrement.
-      if (this.channelDualCadence) {
-        this._tickChannel(false);
-        if (this.status === 'win') return; // a Drain cadence tick can finish the enemy
-      }
       this._tickChannel(true);
-      if (this.status === 'win') return; // a Drain tick can finish the enemy
+      if (this.status === 'win') return; // a channel tick can finish the enemy
     }
 
     // 2) resolve the standing telegraph — unless it is a channel still winding up,
@@ -1618,22 +1381,6 @@ export class Game {
       // The channel keeps standing (no rotation advance, no re-telegraph), but the
       // turn counter still ticks so enrage/rotation timing across a wind-up is
       // unchanged from the pre-#26 order (the counter used to live in endTurn).
-      this.turn += 1;
-      return;
-    }
-
-    // Dusk Chime (#22): once per fight, a big telegraph is delayed one full
-    // turn at the moment it would land — it stays standing (like a channel
-    // wind-up) and the enemy loses the turn. Checked against the telegraphed
-    // magnitude across its targets; casts are never delayed (nothing to blunt).
-    if (t && !t.cast && !this.chimeUsed && this.hasRelic('duskChime')
-        && t.damage * Math.max(1, t.targets.length) >= DUSK_CHIME_MIN) {
-      this.chimeUsed = true;
-      this._log(`The Dusk Chime tolls — ${this.telegraphIntent() ?? 'the attack'} is delayed a turn.`, 'system');
-      this._emit({ kind: 'chime' });
-      this._decayBuffs();
-      // As with a channel wind-up, the telegraph keeps standing but the turn
-      // counter still advances (see #26 note above).
       this.turn += 1;
       return;
     }
@@ -1707,15 +1454,6 @@ export class Game {
           this._log(`Guard fades from ${m.name}.`, 'status');
         }
       }
-      // Interlock (#65): each stacked Guard grant counts down on its own timer, so
-      // grants from different turns expire independently.
-      if (m.alive && m.interlockGuardTurns.length > 0) {
-        const before = m.interlockGuardTurns.length;
-        m.interlockGuardTurns = m.interlockGuardTurns.map((t) => t - 1).filter((t) => t > 0);
-        if (m.interlockGuardTurns.length === 0 && before > 0) {
-          this._log(`The Interlock lets go of ${m.name}.`, 'status');
-        }
-      }
       // An unused Shield fades after SHIELD_TURNS enemy turns (it is consumed —
       // not decayed — the moment it blocks a damaging hit).
       if (m.alive && m.shield && m.shieldTurns > 0) {
@@ -1723,14 +1461,6 @@ export class Game {
         if (m.shieldTurns === 0) {
           m.shield = false;
           this._log(`Shield fades from ${m.name}.`, 'status');
-        }
-      }
-      // An unused Brace fades the same way (#17).
-      if (m.alive && m.brace && m.braceTurns > 0) {
-        m.braceTurns -= 1;
-        if (m.braceTurns === 0) {
-          m.brace = false;
-          this._log(`Brace fades from ${m.name}.`, 'status');
         }
       }
       // The Boar (#29) returns to the wild after BOAR_TURNS enemy turns (or the
@@ -1749,6 +1479,12 @@ export class Game {
     if (this.bloodBannerTurns > 0) {
       this.bloodBannerTurns -= 1;
       if (this.bloodBannerTurns === 0) this._log('The Blood Banner falls.', 'status');
+    }
+    // Penance (#75): the party-wide +auto buff also decays engine-level, clearing the
+    // bonus when its window closes.
+    if (this.penanceTurns > 0) {
+      this.penanceTurns -= 1;
+      if (this.penanceTurns === 0) { this.penanceBonus = 0; this._log('The Penance fervor subsides.', 'status'); }
     }
   }
 
@@ -1850,58 +1586,26 @@ export class Game {
         this._emit({ kind: 'boarHit', slot, amount: t.damage, boarHp: m.boarHp, killed: boarDied });
         continue;
       }
-      // Defense -> Brace -> Shield (#17); the same pipeline attackTargets()
-      // previews. Brace and Shield only spend on a still-damaging instance.
+      // Defense -> Shield (#17); the same pipeline attackTargets() previews. Shield
+      // only spends on a still-damaging instance.
       const w = this._wardedDamage(m, t.damage, t.ignoreDefense, t.type);
       // En Garde (#74): capture the counter magnitude NOW — before this hit spends any
-      // Shield/Brace — so Anvil Stance's "+2 while shielded" (memberDamage reads the live
-      // hold) counts even on the very hit that consumes the block. Sharpen, Battle Hymn,
-      // Lone Wolf, injuries etc. all fold in through the one auto-damage seam. 0 when the
-      // holder isn't En Garde; a corpse never counters (guarded at each fire site).
+      // Shield — so the live auto-damage seam (Sharpen, Battle Hymn, Lone Wolf, injuries)
+      // is read even on the very hit that consumes the block. 0 when the holder isn't
+      // En Garde; a corpse never counters (guarded at each fire site).
       const engardeCounter = m.riposteTurns > 0 ? this.memberDamage(m) : 0;
-      if (w.spendsStormglass) {
-        this.stormglassUsed = true;
-        this._log(`The Stormglass Mirror shatters the blow aimed at ${m.name}.`, 'shield');
-        this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
-        continue;
-      }
       if (w.spendsShield) {
         m.shield = false;
         m.shieldTurns = 0;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
-        // Bulwark Core (#65): a FULL Shield block leaves the member Braced (the Shield
-        // was just consumed, so this cleanly replaces it). Only full blocks trigger it —
-        // a Brace/Guard/Defense-reduced hit takes the ordinary-damage path below.
-        if (this.hasRelic('bulwarkCore')) {
-          m.brace = true;
-          m.braceAmount = BRACE_AMOUNT; // standard Brace strength (#69)
-          m.braceTurns = BULWARK_BRACE_TURNS;
-          this._log(`The Bulwark Core holds — ${m.name} braces (${BRACE_AMOUNT}).`, 'shield');
-          this._emit({ kind: 'braceApplied', slot: m.slot });
-        }
         this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
         // En Garde (#74): a fully Shield-blocked hit STILL counters — the stance rewards
-        // blocking. The member took no damage (Whetstone still sees them as untouched),
-        // yet the blow that struck their guard is answered in kind (with the Anvil-while-
-        // shielded payoff, captured above before the Shield was spent).
+        // blocking; the blow that struck their guard is answered in kind.
         if (m.riposteTurns > 0 && this._dealEnGardeCounter(m, engardeCounter)) return;
         continue;
       }
-      if (w.spendsBrace) {
-        m.brace = false;
-        m.braceTurns = 0;
-        this._log(`${m.name} braces — the hit is blunted by ${BRACE_AMOUNT}.`, 'shield');
-      }
-      if (w.wardSpent > 0) {
-        m.ward -= w.wardSpent;
-        this._log(`${m.name}'s Ward absorbs ${w.wardSpent}. (Ward ${m.ward})`, 'shield');
-      }
-      const hpBefore = m.hp; // Ossuary Bell (#66): the 50% crossing is measured across this hit
+      const hpBefore = m.hp; // Ossuary Bell (#66): the crossing is measured across this hit
       m.hp = Math.max(0, m.hp - w.dmg);
-      // Whetstone of the Patient (#65): only a hit that deals real damage marks the
-      // member as touched this enemy phase — a 0-damage (fully blocked/absorbed) hit
-      // never reaches here, so blocking well keeps the +1 auto.
-      if (w.dmg > 0) m.tookDamageLastEnemyPhase = true;
       this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       // The Martyr's Icon (#22) may veto the death — resolve that BEFORE the
       // event is emitted so the animator never stages a death that didn't happen.
@@ -1935,16 +1639,6 @@ export class Game {
           this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(counter), enemyHp: this.enemy.hp });
           if (defeated) { this._emit({ kind: 'defeatEnemy' }); return; }
         }
-      }
-      // Tithe Candle (#21): post-mitigation enemy damage tithes 1 MP back
-      // (a 0-damage hit gives nothing; capped at max mana AND per fight — every
-      // MP engine in this game is bounded, the flaw-#7 law).
-      if (w.dmg > 0 && this.hasRelic('titheCandle') && this.mp < this.maxMana
-          && this.titheGained < TITHE_CANDLE_FIGHT_CAP) {
-        this.mp = Math.min(this.maxMana, this.mp + TITHE_CANDLE_MP);
-        this.titheGained += TITHE_CANDLE_MP;
-        this._log(`The Tithe Candle burns: +${TITHE_CANDLE_MP} MP. (MP ${this.mp})`, 'mp');
-        this._emit({ kind: 'refreshTick', amount: TITHE_CANDLE_MP, mp: this.mp });
       }
     }
   }
@@ -2002,10 +1696,7 @@ export class Game {
     for (const m of this.members) {
       if (m.alive) m.charge = Math.min(CHARGE_MAX, m.charge + 1);
     }
-    // The First-Light Taper (#22) pays for its free card in card flow — the
-    // turn AFTER the discount fires draws one fewer ("it burns what it lit").
-    this._drawTo(Math.max(1, this.handSize - (this.taperFired ? 1 : 0)));
-    this.taperFired = false;
+    this._drawTo(this.handSize);
     this.cardsPlayedThisPhase = 0;
     this.typePlayedThisTurn = Game._zeroTypeCounts(); // per-turn type counters reset (#63)
     this.phase = 'player';
@@ -2025,13 +1716,6 @@ export class Game {
         this._log(`The Prayer Beads turn: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
       }
-      // Grimoire of Turning (#68): every reshuffle deals GRIMOIRE_DMG to the enemy
-      // (uncapped — the reshuffle cadence is itself the throttle). Routes through
-      // _damageEnemy, so Vulnerability applies and a killing blow ends the fight.
-      if (this.hasRelic('grimoireOfTurning') && this.status === 'playing') {
-        const killed = this._damageEnemy(GRIMOIRE_DMG, 'Grimoire of Turning');
-        this._emitEnemyNuke(GRIMOIRE_DMG, killed);
-      }
     }
     return this.drawPile.shift() ?? null;
   }
@@ -2044,30 +1728,11 @@ export class Game {
     }
   }
 
-  // What a card costs to play right now: 0 while a Surge (#16) is pending,
-  // TAPER_DISCOUNT less (min 0) for the First-Light Taper's (#22) first cheap
-  // non-engine card of the turn, otherwise its resolved cost. The UI's
-  // affordability check reads this too.
+  // What a card costs to play right now: its resolved cost (the Surge / First-Light
+  // Taper / Iron Ward / Cascade discounts were all removed in the content-cut pass).
+  // The UI's affordability check reads this too.
   effectiveCost(card: ResolvedCard): number {
-    if (this.surgePending) return 0;
-    let cost = card.cost;
-    if (this.hasRelic('firstLightTaper') && this.cardsPlayedThisPhase === 0
-        && cost <= TAPER_MAX_COST && !isEngineCard(card.id)) {
-      cost = Math.max(0, cost - TAPER_DISCOUNT);
-    }
-    // Iron Ward (#63): the FIRST Iron card each turn costs less. "First" reads the
-    // per-turn Iron counter (0 until an Iron card is played), so later Iron cards
-    // pay full price. effectiveCost runs before the counter is bumped in playCard.
-    if (this.hasRelic('ironWard') && cardType(card.id) === 'iron' && this.typePlayedThisTurn.iron === 0) {
-      cost = Math.max(0, cost - IRON_RELIC_DISCOUNT);
-    }
-    // Cascade (#63): 1 MP cheaper per Arcane card already played this turn (floor 0).
-    // The per-turn Arcane counter is bumped after a card resolves, so it reflects the
-    // prior Arcane plays this turn — not Cascade itself.
-    if (card.id === 'cascade') {
-      cost = Math.max(0, cost - CASCADE_DISCOUNT_PER_ARCANE * this.typePlayedThisTurn.arcane);
-    }
-    return cost;
+    return card.cost;
   }
 
   // Validate whether a hand card can currently be played. Returns null if ok,
@@ -2159,25 +1824,10 @@ export class Game {
     this.events = [];
     const dc = this.hand[handIndex];
     const card = resolveCard(dc);
-    // Note a Taper discount firing (Surge takes precedence and is not the Taper).
-    if (!this.surgePending && this.hasRelic('firstLightTaper') && this.cardsPlayedThisPhase === 0
-        && card.cost <= TAPER_MAX_COST && !isEngineCard(card.id) && card.cost > 0) {
-      this.taperFired = true;
-    }
     this.mp -= this.effectiveCost(card);
-    // A pending Surge is spent by the next card played, whatever it is — even a
-    // card that was already free (strict "next card" rule; Surge->Surge is a
-    // legal strict loss, since the case below re-arms it after this consume).
-    this.surgePending = false;
     this.hand.splice(handIndex, 1);
     this.discardPile.push(dc);
     this.cardsPlayedThisPhase += 1;
-
-    // Attunement (#70) stamps its OWN instance uid so its play is channel-exempt too —
-    // stamp BEFORE the cancel check (the draw it does, in _applyCard, stamps the drawn
-    // card afterward, for a later play). "neither Attunement nor the card it draws breaks
-    // your channel."
-    if (card.id === 'attunement') this.channelExemptUids.add(dc.uid);
 
     // Channeled cards (#64): playing ANY other card breaks a running channel — it
     // does not tick this turn (the enemy-phase tick is also gated on 0 cards played).
@@ -2199,25 +1849,6 @@ export class Game {
     this.typePlayedThisTurn[ct] += 1;
     this.typePlayedThisFight[ct] += 1;
 
-    // Shadow Sigil (#63): after a Shadow card resolves, chip the enemy. Party->enemy
-    // damage through _damageEnemy (Vulnerability applies; no enemy telegraph touched).
-    if (this.status === 'playing' && ct === 'shadow' && this.hasRelic('shadowSigil')) {
-      const killed = this._damageEnemy(SHADOW_RELIC_DMG, 'Shadow Sigil');
-      this._emitEnemyNuke(SHADOW_RELIC_DMG, killed);
-    }
-
-    // Echo Locket (#21): once per fight, the first Poison or Bolt ability card cast
-    // (#44: Imbue Venom / Unleash) returns to hand (its MP was paid; a replay pays again).
-    if (!this.echoUsed && this.hasRelic('echoLocket') && (card.ability === 'poison' || card.ability === 'bolt')) {
-      this.echoUsed = true;
-      const i = this.discardPile.lastIndexOf(dc);
-      if (i >= 0) {
-        this.discardPile.splice(i, 1);
-        this.hand.push(dc);
-        this._log('The Echo Locket hums — the ability card returns to your hand.', 'status');
-        this._emit({ kind: 'draw', count: 1 });
-      }
-    }
     return { ok: true };
   }
 
@@ -2302,7 +1933,6 @@ export class Game {
   }
 
   _endTurnInternal(): void {
-    this.surgePending = false; // Surge is "this turn" only — an unspent one fizzles
     this.lensArmed = false;    // Arcane Lens (#70) is "this turn" only — an unspent arming fizzles
 
     // Discard the hand from the end (same ordering the prototype used, so existing
@@ -2360,16 +1990,13 @@ export class Game {
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }
     this.hymnBonus = 0; // Battle Hymn only buffs the phase it was sung in
-    this.penanceBonus = 0; // Penance only buffs the phase it was cast in (#75)
+    // Penance (#75) now persists penanceTurns enemy turns — decayed in _decayBuffs, not here.
   }
 
-  // Once-per-RUN relics this fight consumed (#22) — the run layer records these
-  // so the next fight's BattleConfig arrives with them pre-spent.
+  // Once-per-RUN relics this fight consumed (#22). None remain after the content-cut
+  // pass (Dusk Chime cut; Martyr's Icon is now once per FIGHT, not persisted).
   spentRelicIds(): RelicId[] {
-    const out: RelicId[] = [];
-    if (this.chimeUsed && this.hasRelic('duskChime')) out.push('duskChime');
-    if (this.martyrUsed && this.hasRelic('martyrsIcon')) out.push('martyrsIcon');
-    return out;
+    return [];
   }
 
   // Slots of members that DIED this fight (DR1), even if later Resurrected. The

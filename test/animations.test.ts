@@ -32,7 +32,7 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
 
 // --- every identity has a working signature ----------------------------------
 {
-  const ids = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden'] as const;
+  const ids = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'sentinel', 'beastWarden'] as const;
   for (const memberId of ids) {
     const tl = buildTimeline([{ kind: 'partyAttack', slot: 1, memberId, amount: 4, enemyHp: 90 }]);
     check(`${memberId}: strike patches enemy HP`, tl.entries.some((e) => e.patch?.enemyHp === 90));
@@ -263,14 +263,10 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
     [{ kind: 'regenApplied', slot: 0, stack: 2 }],
     [{ kind: 'shieldApplied', slot: 1 }],
     [{ kind: 'defenseApplied', slot: 0, amount: 1 }],
-    [{ kind: 'braceApplied', slot: 2 }],
     [{ kind: 'resurrect', slot: 1, hp: 4 }],
     [{ kind: 'refreshPrimed', stack: 2 }],
     [{ kind: 'draw', count: 2 }],
-    [{ kind: 'surge' }],
     [{ kind: 'lensArmed' }],
-    [{ kind: 'wardApplied', slot: 0, amount: 3 }],
-    [{ kind: 'chime' }],
     [{ kind: 'martyrSave', slot: 1 }],
     [{ kind: 'hymn', bonus: 2, slots: [0, 1, 2] }],
     [{ kind: 'penance', slot: 0, bonus: 2, died: false, slots: [0, 1, 2] }],
@@ -356,8 +352,6 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
       (f) => f.type === 'float').map((f) => (f as { text: string }).text));
   check('shield floats a label', labelFor({ kind: 'shieldApplied', slot: 1 }).length > 0);
   check('defense floats a label', labelFor({ kind: 'defenseApplied', slot: 1, amount: 2 }).some((s) => s.includes('DEF')));
-  check('brace floats a label', labelFor({ kind: 'braceApplied', slot: 1 }).some((s) => s.includes('BRACE')));
-  check('ward floats a label', labelFor({ kind: 'wardApplied', slot: 1, amount: 3 }).some((s) => s.includes('WARD')));
   check('taunt floats a label', labelFor({ kind: 'taunt', slot: 1, turns: 2 }).some((s) => s.includes('TAUNT')));
   check('regen floats a label', labelFor({ kind: 'regenApplied', slot: 1, stack: 2 }).length > 0);
   check('en garde floats a label', labelFor({ kind: 'enGarde', slot: 1, turns: 2 }).some((s) => s.includes('GARDE')));

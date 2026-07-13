@@ -20,72 +20,53 @@ export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 export type CardType = 'holy' | 'nature' | 'shadow' | 'blood' | 'arcane' | 'iron';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'graveAugur' | 'beastWarden' | 'sentinel' | 'plaguewright' | 'hierophant' | 'duelist' | 'flagellant' | 'lightkeeper';
+export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'beastWarden' | 'sentinel' | 'duelist' | 'flagellant';
 // 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
 // damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
 // controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
-// 'rampage' (Berserker) doubles his current strike at an HP cost; 'graveChill'
-// (Augur) weakens the standing telegraph; 'callBoar' (Beast Warden) summons a pet
-// that soaks whole hits; 'stun' (Sentinel, #61) cancels the enemy's standing
-// telegraph — the move is consumed (rotation advances, channel wind-up aborts) and
-// a fresh action telegraphs next turn; 'ferment' (Plaguewright, #72) opens a window
-// in which enemy Poison compounds — each tick deals its damage, then the per-turn
-// value GROWS and the duration does NOT count down (investment over drip);
-// 'liturgy' (Hierophant, #73) gives the active channel DUAL CADENCE — for its
-// remaining duration it also ticks at the start of the enemy phase (after party
-// autos, before the telegraph resolves), doubling total ticks while the duration
-// still counts down only once per round; 'enGarde' (Duelist, #74) grants a chosen
-// member PERSISTENT Riposte — for EN_GARDE_TURNS enemy turns they counter EVERY hit
-// that strikes them (fully blocked hits included) for their live auto damage, not
-// consumed on the first trigger like the one-shot Riposte card. It is the first
-// target 'single' ability card — the stance can be placed on any member, self
-// included. Each fires via that member's own ability card (#44), inserted into the
-// deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'graveChill' | 'callBoar' | 'stun' | 'ferment' | 'liturgy' | 'enGarde' | 'penance' | 'radiance';
+// 'rampage' (Berserker) doubles his current strike at an HP cost; 'callBoar' (Beast
+// Warden) summons a pet that soaks whole hits; 'stun' (Sentinel, #61) cancels the
+// enemy's standing telegraph — the move is consumed (rotation advances, channel
+// wind-up aborts) and a fresh action telegraphs next turn; 'enGarde' (Duelist, #74)
+// Provokes a chosen member (Taunt) and grants them PERSISTENT Riposte — for
+// EN_GARDE_TURNS enemy turns they counter EVERY hit that strikes them (fully blocked
+// hits included) for their live auto damage, not consumed on the first trigger like
+// the one-shot Riposte card. It is a target 'single' ability card — the stance can be
+// placed on any member, self included. Each fires via that member's own ability card
+// (#44), inserted into the deck when they are deployed.
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'callBoar' | 'stun' | 'enGarde' | 'penance';
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
-  | 'regen' | 'shield' | 'resurrect' | 'refresh' | 'cleanse'
-  | 'overgrowth' | 'cultivate' | 'bloom' | 'fontOfMana' | 'inspiration'
-  | 'lifebloom' | 'surge' | 'battleHymn' | 'barrier'
-  | 'bloodTithe' | 'martyrsGift' | 'grimHarvest'
-  | 'phalanx' | 'brace' | 'provoke'
+  | 'regen' | 'shield' | 'resurrect' | 'cleanse'
+  | 'bloom' | 'fontOfMana' | 'inspiration'
+  | 'lifebloom' | 'battleHymn' | 'barrier'
+  | 'bloodTithe' | 'martyrsGift'
+  | 'phalanx' | 'provoke'
   // Iron mitigation web (#65): steer telegraphed hits, get paid for blocking.
-  | 'feint' | 'anvilStance' | 'interlock'
-  // Regen conversions (#66): turn Regen into damage reduction / enemy Poison.
-  | 'thornskin' | 'sporeburst'
+  | 'feint'
+  // Regen conversions (#66): turn Regen into enemy Poison.
+  | 'sporeburst'
   // Status-window management (#67): manage enemy Poison / Vulnerability windows.
-  | 'hemorrhage' | 'umbralFeast' | 'dreadWhisper'
-  // Blood + cycling (#68): HP as a spendable resource — draw, shields, damage,
+  | 'hemorrhage' | 'dreadWhisper'
+  // Blood + cycling (#68): HP as a spendable resource — draw, shields,
   // redistribution, and party offense, all priced in HP the healer manages.
-  | 'crimsonPact' | 'scarletWard' | 'openVeins' | 'transfusion' | 'bloodBanner'
-  // Holy overheal & board-state payoffs (#69): a healthy party becomes a plan —
-  // overheal -> mitigation, full HP -> offense, topping off pays cards, buff density
-  // is a stat. Rootbind (Nature) is the generic timed-effect duration extender.
-  | 'benediction' | 'sunriseVigil' | 'consecration' | 'absolution' | 'rootbind'
-  // Channel archetype rescue + arcane support (#70): keep-alive draw + a splash
-  // enabler so a "channel + cheap cards" deck is a real archetype.
-  | 'attunement' | 'arcaneLens'
-  // Shadow cards (#63, Part A′): healer-castable direct damage / debuff payoff.
-  | 'shadowBolt' | 'siphonLife' | 'doom'
-  // Count-based payoff cards (#63, Part B): scale with the per-type counters.
-  | 'cascade' | 'nightfall'
-  // Channeled cards (#64): hold an effect across turns while you play nothing else
-  // (Refresh, below, is reworked into one). Drain/Sap read Shadow, Mending Stream
-  // Holy, Fortify Iron.
-  | 'drain' | 'mendingStream' | 'sap' | 'fortify'
-  // Small-party cards (#42): stronger the fewer members you field.
-  | 'rally' | 'focus' | 'channel' | 'holdTheLine'
+  | 'crimsonPact' | 'scarletWard' | 'transfusion' | 'bloodBanner'
+  // Holy board-state payoffs (#69): a healthy party becomes a plan.
+  | 'sunriseVigil' | 'consecration'
+  // Arcane support (#70): a splash enabler.
+  | 'arcaneLens'
+  // Channeled cards (#64): hold an effect across turns while you play nothing else.
+  // Sap reads Shadow, Mending Stream Holy, Fortify Iron.
+  | 'mendingStream' | 'sap' | 'fortify'
   // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
-  // Sharpen, Embolden, Goad) decay over N enemy turns; the one-shots (Double
-  // Strike, Empower, Riposte) are consumed on use. (Goad = a full Taunt from a
-  // card, Embolden = a standing party damage buff — named apart from the existing
-  // `provoke`/`rally` cards they resemble, which stay their tuned selves.)
-  | 'guard' | 'sharpen' | 'goad' | 'doubleStrike' | 'embolden' | 'empower' | 'riposte'
+  // Sharpen) decay over N enemy turns; the one-shots (Double Strike, Empower,
+  // Riposte) are consumed on use.
+  | 'guard' | 'sharpen' | 'doubleStrike' | 'empower' | 'riposte'
   // Per-member ability cards (#44): one bound card per member, inserted into the
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
   | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'hush' | 'beckon' | 'stagger' | 'ferment' | 'liturgy' | 'enGarde' | 'penance' | 'radiance';
+  | 'conduct' | 'incite' | 'beckon' | 'stagger' | 'enGarde' | 'penance';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -253,7 +234,7 @@ export const SHARPEN_TURNS = 3;    // enemy turns Sharpen lasts
 export const EMBOLDEN_BONUS = 1;   // Embolden (issue "Rally"): +auto damage to every fielded hero
 export const EMBOLDEN_TURNS = 3;   // enemy turns Embolden lasts
 export const EMPOWER_BONUS = 1;    // Empower: +abilityPower on a hero's next ability (one-shot)
-export const EN_GARDE_TURNS = 2;   // Duelist's En Garde (#74): enemy turns the persistent Riposte stance holds
+export const EN_GARDE_TURNS = 3;   // Duelist's En Garde (#74): enemy turns the Provoke + persistent Riposte stance holds
 // Penance (#75): the Flagellant's Blood ability. The ONE blood effect that breaks the
 // never-lethal clamp — the payment is a raw drain (engine _drainMember), so at PENANCE_HP
 // or less HP the cast KILLS him (a real death: scars, permadeath, ability-card removal),
@@ -262,7 +243,8 @@ export const EN_GARDE_TURNS = 2;   // Duelist's En Garde (#74): enemy turns the 
 // too (a deliberate scope call: curse costs apply to blood ABILITY cards, not just hand
 // Blood cards — see _fireAbility's penance case).
 export const PENANCE_HP = 4;           // Penance: HP the Flagellant pays — NO clamp; <= this kills him
-export const PENANCE_STRIKE_BONUS = 2; // Penance: +auto damage every living member gets this turn
+export const PENANCE_STRIKE_BONUS = 2; // Penance: +auto damage every living member gets
+export const PENANCE_STRIKE_TURNS = 2; // Penance: enemy turns the party +auto buff lasts
 // Radiance (#76): the Lightkeeper's Holy ability. Heals EVERY living member this much;
 // each member's OVERHEAL converts to Brace (the #69 heal-result struct supplies it).
 // Radiance's Brace is ADDITIVE (brace += overheal, one timer refreshed) — the deliberate

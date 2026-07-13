@@ -9,7 +9,7 @@
 import {
   ENEMY_HP_BY_FIGHT, ENEMY_ATTACK_BONUS, ENEMY_ENRAGE_TURN_BY_FIGHT, isActBoss, actOfFight,
   ENEMY_MAX_HP, ENRAGE_TURN, defaultDeck, defaultParty, DEFAULT_HEALER, makeDeckCard, abilityCardsForParty,
-  DEFAULT_STARTER_DECK, buildStarterDeck,
+  DEFAULT_STARTER_DECK, buildStandardDeck, buildDraftBaseDeck, STARTER_DRAFT_PICKS, STARTER_DRAFT_OFFER_SIZE,
   canApplyModifier, MODIFIERS, MODIFIER_IDS, RARITY_PRICE, RARITY_WEIGHT,
   CARD_RARITY, CARD_POOL, PARTY_UPGRADES, HEALER_UPGRADES, EVENTS,
   NODE_TYPE_WEIGHTS, FIGHT_COUNT, FORK_COUNT, BRANCHES_PER_FORK, NODES_PER_BRANCH,
@@ -21,7 +21,7 @@ import {
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
-  HAGGLER_DISCOUNT, HAGGLER_FLOOR, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
+  HAGGLER_DISCOUNT_PCT, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   injuryRecordCap, injuryIncapacitates, injuryKills,
@@ -76,6 +76,7 @@ export type NodeContent =
   | { type: 'healerBoon'; offers: HealerUpgradeOffer[] }              // free healer-upgrade pick, all four (#83)
   | { type: 'reliquary'; offers: RelicOffer[]; removalsLeft: number } // relic shop (#21)
   | { type: 'draft'; options: MemberId[] }                            // pick-one member draft (2026-07)
+  | { type: 'starterDraft'; offers: CardId[]; picksLeft: number }     // pick-1-of-3 to build the drafted starter deck
   | { type: 'recruit'; options: MemberId[]; done: boolean }           // Recruit node: add one member, once
   | { type: 'infirmary' };                                            // heal HP / shed a scar for gold (#58)
 
@@ -110,7 +111,7 @@ export type NodeContent =
 // {type:'healerBoon'} node content sit between boss spoils and the fork, and old saves
 // can hold a 'healerUpgrade' node/location or a map with a Sanctum stop, so they are
 // discarded rather than resumed against a node type that no longer exists.
-export const RUN_SAVE_VERSION = 16;
+export const RUN_SAVE_VERSION = 17;
 
 export interface RunSnapshot {
   version: number;
@@ -304,14 +305,45 @@ export class Run {
     this.location = { kind: 'starterDeck' };
   }
 
-  // Lock in the chosen preset and build its deck, then move on to the first-hero draft.
-  // Ignores an unknown id / wrong location so a crude UI can't wedge the run.
-  chooseStarterDeck(id: StarterDeckId): void {
+  // Pick the run-start deck path. 'standard' locks in the fixed Standard deck and moves
+  // straight to the first-hero draft; 'draft' seeds the base heals and opens the
+  // pick-1-of-3 card draft (resolved by pickStarterDraftCard). Ignores a wrong location.
+  chooseStarterMode(id: StarterDeckId): void {
     if (this.location.kind !== 'starterDeck') return;
     this.starterDeck = id;
-    this.deck = buildStarterDeck(id);
-    this.nextUid = this.deck.length; // continue the uid sequence past the new deck
-    this.beginDraft();
+    if (id === 'standard') {
+      this.deck = buildStandardDeck();
+      this.nextUid = this.deck.length; // continue the uid sequence past the new deck
+      this.beginDraft();
+      return;
+    }
+    // Draft: seed with the shared base heals, then offer the first pick-1-of-3 round.
+    this.deck = buildDraftBaseDeck();
+    this.nextUid = this.deck.length;
+    this.nodeContent = {
+      type: 'starterDraft',
+      offers: this.eventCardOffer(STARTER_DRAFT_OFFER_SIZE),
+      picksLeft: STARTER_DRAFT_PICKS,
+    };
+  }
+
+  // Resolve one pick-1-of-3 round of the starter draft: append the chosen card, then
+  // re-roll the next offer or (when the deck is full) advance to the first-hero draft.
+  pickStarterDraftCard(cardId: CardId): void {
+    if (this.location.kind !== 'starterDeck' || this.nodeContent?.type !== 'starterDraft') return;
+    if (!this.nodeContent.offers.includes(cardId)) return;
+    this.addCard(cardId);
+    const picksLeft = this.nodeContent.picksLeft - 1;
+    if (picksLeft <= 0) {
+      this.nodeContent = null;
+      this.beginDraft();
+      return;
+    }
+    this.nodeContent = {
+      type: 'starterDraft',
+      offers: this.eventCardOffer(STARTER_DRAFT_OFFER_SIZE),
+      picksLeft,
+    };
   }
 
   beginDraft(): void {
@@ -996,10 +1028,11 @@ export class Run {
     for (const id of ids) if (!this.spentRelics.includes(id)) this.spentRelics.push(id);
   }
 
-  // Haggler's Charm: every storefront price drops, floored. Applied at roll
-  // time, so offers already on the table keep the price they were rolled at.
+  // Haggler's Charm: every storefront price drops by a flat percentage (rounded
+  // down). Applied at roll time, so offers already on the table keep the price they
+  // were rolled at.
   discountedPrice(base: number): number {
-    return this.hasRelic('hagglersCharm') ? Math.max(HAGGLER_FLOOR, base - HAGGLER_DISCOUNT) : base;
+    return this.hasRelic('hagglersCharm') ? Math.floor(base * (1 - HAGGLER_DISCOUNT_PCT)) : base;
   }
 
   // Relics dead for the REMAINDER of the run, recomputed at each spoils roll
@@ -1189,12 +1222,6 @@ export class Run {
     );
   }
 
-  // Casino Cart: decline the flip for a guaranteed payout (flaw #18).
-  safeGold(): { delta: number; gold: number } {
-    this.gold += CASINO_SAFE_GOLD;
-    return { delta: CASINO_SAFE_GOLD, gold: this.gold };
-  }
-
   // Casino Cart: free flip — 50% +75g, 25% +25g, 25% −25g (gold floored at 0).
   gambleGold(): { delta: number; gold: number } {
     const roll = weightedPick(
@@ -1298,23 +1325,14 @@ export class Run {
     return { slot, amount: MERCENARY_DAMAGE };
   }
 
-  // The Duplicator: add an UNUPGRADED copy of the chosen card (the letters, not
-  // the gilding — full-upgrade copies would trivialize the modifier economy).
+  // The Duplicator: add a copy of the chosen card, UPGRADES INCLUDED (the copy
+  // carries the source card's modifiers).
   duplicateCard(uid: number): DeckCard | null {
     if (this.gold < DUPLICATE_PRICE) return null;
     const card = this.deck.find((c) => c.uid === uid);
     if (!card) return null;
     this.gold -= DUPLICATE_PRICE;
-    return this.addCard(card.id);
-  }
-
-  // Purge Well: free removal, but the WELL chooses (seeded-uniform). The 20g
-  // chosen-removal economy (flaw #17) is undercut only by giving up the choice.
-  purgeRandomCard(): DeckCard | null {
-    if (this.deck.length === 0) return null;
-    const card = this.deck[Math.floor(this.rng() * this.deck.length)];
-    this.removeCard(card.uid);
-    return card;
+    return this.addCard(card.id, [...card.upgrades]);
   }
 
   // Blood Altar: a permanent max-HP-for-damage trade on a chosen member. A

@@ -8,47 +8,35 @@ import { Icon } from './Icon';
 // gold, mana economy blue, aggressive power plays red-purple. Presentation only.
 const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   lowHeal: 'heal', highHeal: 'heal', aoeHeal: 'heal',
-  regen: 'heal', shield: 'ward', resurrect: 'heal', refresh: 'mana', cleanse: 'heal',
-  overgrowth: 'heal', cultivate: 'heal', bloom: 'heal', fontOfMana: 'mana', inspiration: 'mana',
-  lifebloom: 'heal', surge: 'mana', battleHymn: 'power', barrier: 'ward',
-  bloodTithe: 'mana', martyrsGift: 'heal', grimHarvest: 'power',
-  phalanx: 'ward', brace: 'ward', provoke: 'ward',
-  // Iron mitigation web (#65): Feint steers (ward), Anvil Stance turns blocking into
-  // offense (power), Interlock blankets the party in Guard (ward).
-  feint: 'ward', anvilStance: 'power', interlock: 'ward',
-  // Regen conversions (#66): Thornskin turns Regen into mitigation (ward), Sporeburst
-  // spends it into enemy Poison (power).
-  thornskin: 'ward', sporeburst: 'power',
-  // Shadow cards (#63): direct damage / debuff plays.
-  shadowBolt: 'power', siphonLife: 'power', doom: 'power',
-  // Status-window management (#67): Hemorrhage/Umbral Feast cash out into damage (power),
+  regen: 'heal', shield: 'ward', resurrect: 'heal', cleanse: 'heal',
+  bloom: 'heal', fontOfMana: 'mana', inspiration: 'mana',
+  lifebloom: 'heal', battleHymn: 'power', barrier: 'ward',
+  bloodTithe: 'mana', martyrsGift: 'heal',
+  phalanx: 'ward', provoke: 'ward',
+  // Iron mitigation web (#65): Feint steers the telegraph (ward).
+  feint: 'ward',
+  // Regen conversions (#66): Sporeburst spends Regen into enemy Poison (power).
+  sporeburst: 'power',
+  // Status-window management (#67): Hemorrhage cashes out into damage (power),
   // Dread Whisper shaves the telegraph (ward).
-  hemorrhage: 'power', umbralFeast: 'power', dreadWhisper: 'ward',
+  hemorrhage: 'power', dreadWhisper: 'ward',
   // Blood + cycling (#68): Crimson Pact is draw economy (mana), Scarlet Ward a shield
-  // (ward), Transfusion a redistribution heal (heal), Open Veins / Blood Banner offense.
-  crimsonPact: 'mana', scarletWard: 'ward', openVeins: 'power', transfusion: 'heal', bloodBanner: 'power',
-  // Holy overheal & board-state payoffs (#69): the heals are green; Absolution hardens
-  // overheal into Brace (ward) and Rootbind extends defensive timers (ward).
-  benediction: 'heal', sunriseVigil: 'heal', consecration: 'heal', absolution: 'ward', rootbind: 'ward',
-  // Channel archetype rescue + arcane support (#70): Attunement is card-draw economy
-  // (mana), Arcane Lens turns a single-target heal into a splash heal (heal).
-  attunement: 'mana', arcaneLens: 'heal',
-  // Count-based payoff cards (#63): Cascade is card-draw economy, Nightfall a nuke.
-  cascade: 'mana', nightfall: 'power',
-  // Channeled cards (#64): Drain/Sap are aggressive, Mending Stream a heal, Fortify a ward.
-  drain: 'power', sap: 'power', mendingStream: 'heal', fortify: 'ward',
-  // Small-party cards (#42).
-  rally: 'power', focus: 'heal', channel: 'mana', holdTheLine: 'ward',
+  // (ward), Transfusion a redistribution heal (heal), Blood Banner offense (power).
+  crimsonPact: 'mana', scarletWard: 'ward', transfusion: 'heal', bloodBanner: 'power',
+  // Holy board-state payoffs (#69): the heals are green.
+  sunriseVigil: 'heal', consecration: 'heal',
+  // Arcane support (#70): Arcane Lens turns a single-target heal into a splash heal (heal).
+  arcaneLens: 'heal',
+  // Channeled cards (#64): Sap is aggressive, Mending Stream a heal, Fortify a ward.
+  sap: 'power', mendingStream: 'heal', fortify: 'ward',
   // Hero buff card batch (#62): defensive buffs gold, offensive buffs red-purple.
-  guard: 'ward', sharpen: 'power', goad: 'ward', doubleStrike: 'power',
-  embolden: 'power', empower: 'power', riposte: 'power',
+  guard: 'ward', sharpen: 'power', doubleStrike: 'power',
+  empower: 'power', riposte: 'power',
   // Per-member ability cards (#44): the healer enabling an aggressive move — power.
   imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
-  conduct: 'mana', incite: 'power', hush: 'ward', beckon: 'ward', stagger: 'ward', ferment: 'power',
-  liturgy: 'mana', // channel-economy ability card (#73)
-  enGarde: 'ward', // Duelist's Iron counter-stance (#74)
+  conduct: 'mana', incite: 'power', beckon: 'ward', stagger: 'ward',
+  enGarde: 'ward', // Duelist's Iron Provoke + counter-stance (#74)
   penance: 'power', // Flagellant pays HP for a party-wide +auto (#75)
-  radiance: 'heal', // Lightkeeper's party heal that hardens overheal into Brace (#76)
 };
 
 interface CardProps {

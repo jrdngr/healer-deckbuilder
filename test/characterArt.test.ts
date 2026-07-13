@@ -29,7 +29,7 @@ for (const id of memberIds) {
   check(`hero '${id}' uses the hero body shape`,
     art.layers.some((l) => l.includes('42% 42% 36% 36%')));
 }
-check('all 14 heroes have signature art ids', HERO_ART_IDS.length === 14, String(HERO_ART_IDS.length));
+check('all 10 heroes have signature art ids', HERO_ART_IDS.length === 10, String(HERO_ART_IDS.length));
 check('every member id has matching hero art', memberIds.every((id) => HERO_ART_IDS.includes(id)),
   memberIds.filter((id) => !HERO_ART_IDS.includes(id)).join(', '));
 

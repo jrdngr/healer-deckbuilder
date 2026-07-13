@@ -61,7 +61,15 @@ through this list and, for each note:
 3. **Add its row** to the [Issues table](#issues-implementation-order) below.
 4. **Remove the note** from this Intake list once it has become an issue.
 
-_(empty — all current notes written up as issues #79–#83 on 2026-07-11.)_
+- Some of the content naming doesn't match the cartoony theme. Let's go through all of the named entities in the game and ensure that the names don't feel dark or serious. This issue should use Fable and not Opus. If you're asked to resolve this issue with Opus, ask the user before proceeding
+- Resurrect should be in the Standard deck and all drafted decks. Reduce number of drafted cards by 1 to compensate. I expect heroes to die fairly often in combat
+- Each enemy should have at least one defining attack, attack style, or attack sequence. Let's come up with some. Examples
+  - Leans more toward AoE attacks that do less damage than single target attacks
+  - Poisons heroes
+  - Two-phase attacks. First phase puts a debuff on all heroes, second phase does big damage if the debuff is still present. Some amount of delay between the two phases so the player has a chance to clear the debuff or mitigate. We can probably come up with multiple variations of this pattern
+  - Leans more toward heavy single-target attacks. Tries to kill heroes more aggressively
+
+
 
 ## Issues (implementation order)
 

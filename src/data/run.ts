@@ -221,41 +221,44 @@ export function defaultDeck(): DeckCard[] {
 // non-ability cards (ability cards are still injected per deployed member). The
 // lists/names are tunable — a later balance pass owns deep starter tuning.
 // ---------------------------------------------------------------------------
-export type StarterDeckId = 'preserver' | 'reaper' | 'warden';
+// Run start offers two paths: take the fixed Standard deck, or DRAFT one — seed with
+// the shared heals, then pick 1-of-3 cards a few times (#content-cut). The old three
+// preset decks (Preserver/Reaper/Warden) are gone.
+export type StarterDeckId = 'standard' | 'draft';
 export interface StarterDeckDef {
   id: StarterDeckId;
   name: string;
   desc: string;
-  types: CardType[];  // the 1-2 types the preset leans on (for the picker UI)
-  list: CardId[];
+  types: CardType[];  // the types the option leans on (for the picker UI)
 }
-export const DEFAULT_STARTER_DECK: StarterDeckId = 'preserver';
-export const STARTER_DECK_IDS: StarterDeckId[] = ['preserver', 'reaper', 'warden'];
+export const DEFAULT_STARTER_DECK: StarterDeckId = 'standard';
+export const STARTER_DECK_IDS: StarterDeckId[] = ['standard', 'draft'];
 export const STARTER_DECKS: Record<StarterDeckId, StarterDeckDef> = {
-  // Preserver — the current heal-lean opener (today's default), Holy/Nature.
-  preserver: {
-    id: 'preserver', name: 'Preserver', types: ['holy', 'nature'],
-    desc: 'Holy & Nature — a heal-lean opener that keeps the party standing.',
-    list: DECK_LIST,
+  // Standard — the fixed heal-lean opener (the renamed Preserver), Holy.
+  standard: {
+    id: 'standard', name: 'Standard', types: ['holy'],
+    desc: 'A fixed heal-lean opener that keeps the party standing.',
   },
-  // Reaper — damage + sacrifice tempo, Shadow/Blood.
-  reaper: {
-    id: 'reaper', name: 'Reaper', types: ['shadow', 'blood'],
-    desc: 'Shadow & Blood — burn the enemy down and pay in blood.',
-    list: ['shadowBolt', 'siphonLife', 'grimHarvest', 'lowHeal', 'highHeal', 'transfusion'],
-  },
-  // Warden — protection + economy, Iron/Arcane.
-  warden: {
-    id: 'warden', name: 'Warden', types: ['iron', 'arcane'],
-    desc: 'Iron & Arcane — shields and mana to outlast the fight.',
-    list: ['shield', 'brace', 'refresh', 'lowHeal', 'highHeal', 'mendingStream'],
+  // Draft — build your own: start with two heals, then pick 1 of 3 cards each round.
+  draft: {
+    id: 'draft', name: 'Draft', types: ['holy', 'nature', 'shadow', 'blood', 'arcane', 'iron'],
+    desc: 'Build your own deck — start with two heals, then pick 1 of 3 cards each round.',
   },
 };
 
-// Build a starter deck as concrete DeckCard instances (uid = position). The chosen
-// preset replaces defaultDeck() at run start; quick-play/sim keep the Preserver default.
-export function buildStarterDeck(id: StarterDeckId): DeckCard[] {
-  return STARTER_DECKS[id].list.map((cid, i) => makeDeckCard(cid, i));
+// The Standard deck (the fixed heal-only six); quick-play/sim use this by default.
+export function buildStandardDeck(): DeckCard[] {
+  return DECK_LIST.map((cid, i) => makeDeckCard(cid, i));
+}
+
+// The heals every draft opens with — the cards shared by all the old preset decks.
+export const DRAFT_BASE_HEALS: CardId[] = ['lowHeal', 'highHeal'];
+export const STARTER_DRAFT_PICKS = 4;        // pick-1-of-3 rounds to fill a 6-card deck
+export const STARTER_DRAFT_OFFER_SIZE = 3;   // cards shown per draft round (pick one)
+
+// Seed a fresh drafted deck with the base heals (uid = position); the picks append.
+export function buildDraftBaseDeck(): DeckCard[] {
+  return DRAFT_BASE_HEALS.map((cid, i) => makeDeckCard(cid, i));
 }
 
 // The per-fight ability cards for a battle party (#44): one bound card per seated
@@ -484,8 +487,8 @@ export const INFIRMARY_INJURY_PRICE = 45;  // shed one death-scar from a chosen 
 // together make fielding fewer a real gold decision, not a rounding error.
 export const MEMBER_BASE_SALARY: Record<MemberId, number> = {
   ranger: 18, tank: 13, mage: 20,          // classic trio: 18 + 13 + 20 = 51
-  warlock: 14, skald: 15, berserker: 13, graveAugur: 18, beastWarden: 15, sentinel: 15,
-  plaguewright: 17, hierophant: 16, duelist: 15, flagellant: 14, lightkeeper: 15,
+  warlock: 14, skald: 15, berserker: 13, beastWarden: 15, sentinel: 15,
+  duelist: 15, flagellant: 14,
 };
 export const SALARY_PER_UPGRADE = 4; // each permanent stat upgrade raises a member's salary
 export const SALARY_PER_INJURY = 3;  // each scar lowers it (a damaged hero is cheaper to field)
@@ -549,19 +552,14 @@ export const SHOP_SALE_OFF = 0.25;
 export const CARD_RARITY: Record<CardId, Rarity> = {
   lowHeal: 'common',
   regen: 'common',
-  cultivate: 'common',
   battleHymn: 'common',
-  brace: 'common',
   cleanse: 'uncommon',
   highHeal: 'uncommon',
   aoeHeal: 'uncommon',
   shield: 'uncommon',
-  refresh: 'uncommon',
-  overgrowth: 'uncommon',
   bloom: 'uncommon',
   inspiration: 'uncommon',
   lifebloom: 'uncommon',
-  surge: 'uncommon',
   bloodTithe: 'uncommon',
   martyrsGift: 'uncommon',
   phalanx: 'uncommon',
@@ -569,35 +567,28 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   resurrect: 'rare',
   fontOfMana: 'rare',
   barrier: 'rare',
-  grimHarvest: 'rare',
-  // Shadow cards (#63): Doom is the rare of the set.
-  shadowBolt: 'common', siphonLife: 'uncommon', doom: 'rare',
-  // Count-based payoff cards (#63).
-  cascade: 'uncommon', nightfall: 'uncommon',
   // Channeled cards (#64).
-  drain: 'uncommon', mendingStream: 'uncommon', sap: 'uncommon', fortify: 'uncommon',
+  mendingStream: 'uncommon', sap: 'uncommon', fortify: 'uncommon',
   // Iron mitigation web (#65).
-  feint: 'uncommon', anvilStance: 'uncommon', interlock: 'uncommon',
+  feint: 'uncommon',
   // Regen conversions (#66).
-  thornskin: 'common', sporeburst: 'uncommon',
+  sporeburst: 'uncommon',
   // Status-window management (#67).
-  hemorrhage: 'rare', umbralFeast: 'uncommon', dreadWhisper: 'common',
+  hemorrhage: 'rare', dreadWhisper: 'common',
   // Blood + cycling (#68): Blood Banner is the rare of the set.
-  crimsonPact: 'uncommon', scarletWard: 'uncommon', openVeins: 'common', transfusion: 'uncommon', bloodBanner: 'rare',
-  // Holy overheal & board-state payoffs (#69): Consecration / Rootbind are the rares.
-  benediction: 'uncommon', sunriseVigil: 'common', consecration: 'rare', absolution: 'uncommon', rootbind: 'rare',
-  // Channel archetype rescue + arcane support (#70): Arcane Lens is the rare.
-  attunement: 'uncommon', arcaneLens: 'rare',
-  // Small-party cards (#42).
-  rally: 'uncommon', focus: 'common', channel: 'uncommon', holdTheLine: 'rare',
+  crimsonPact: 'uncommon', scarletWard: 'uncommon', transfusion: 'uncommon', bloodBanner: 'rare',
+  // Holy board-state payoffs (#69): Consecration is the rare.
+  sunriseVigil: 'common', consecration: 'rare',
+  // Arcane support (#70): Arcane Lens is the rare.
+  arcaneLens: 'rare',
   // Hero buff card batch (#62): Double Strike is the rare of the set.
-  guard: 'common', sharpen: 'common', goad: 'uncommon', doubleStrike: 'rare',
-  embolden: 'uncommon', empower: 'uncommon', riposte: 'uncommon',
+  guard: 'common', sharpen: 'common', doubleStrike: 'rare',
+  empower: 'uncommon', riposte: 'uncommon',
   // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
   // rarity is required by the Record type but inert for these.
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
-  conduct: 'uncommon', incite: 'uncommon', hush: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
-  ferment: 'uncommon', liturgy: 'uncommon', enGarde: 'uncommon', penance: 'uncommon', radiance: 'uncommon',
+  conduct: 'uncommon', incite: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
+  enGarde: 'uncommon', penance: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
@@ -658,13 +649,11 @@ export type EventChoiceKind =
   | 'addCardOffer'  // show a few card offers; player picks one to add (free)
   | 'removeCard'    // deck picker; remove the chosen card (costs CARD_REMOVAL_PRICE gold)
   | 'gambleGold'    // resolve a random gold outcome
-  | 'safeGold'      // take the guaranteed payout instead of the flip
   | 'shrineCard'    // pick an eligible card; apply a random eligible modifier (free)
   | 'shrineParty'   // pick a member; apply a random stat boost (free)
   | 'cursedChest'   // +gold, but a RANDOM card leaves the deck (#19)
   | 'mercenary'     // pay gold; a RANDOM member gains +1 damage (#19)
-  | 'duplicateCard' // deck picker; add an unupgraded copy of the chosen card (#19)
-  | 'purgeRandom'   // free removal, but the well chooses the card (#19)
+  | 'duplicateCard' // deck picker; add a copy of the chosen card, upgrades included (#19)
   | 'bloodAltar'    // pick a member: -2 max HP for +1 damage, permanent (#19)
   | 'shrineCurse'   // accept a random curse for gold (#22)
   | 'healInjury'    // pick a member: clear one death-scar, free (DR1)
@@ -693,7 +682,7 @@ export const CURSE_SHRINE_GOLD = 50;
 // Events-expansion (#19) magnitudes. Duplication costs more than removal (20g)
 // so copy/purge stay one coherent economy; the free Purge Well removal pays its
 // discount in randomness (the well picks the card, not the player).
-export const CURSED_CHEST_GOLD = 80;  // the chest's payout; a random card is the price
+export const CURSED_CHEST_GOLD = 100; // the chest's payout; a random card is the price
 export const MERCENARY_PRICE = 45;    // hire fee for +1 damage on a random member
 export const MERCENARY_DAMAGE = 1;
 export const DUPLICATE_PRICE = 30;    // add an unupgraded copy of a chosen card
@@ -718,7 +707,6 @@ export const EVENTS: EventDef[] = [
     text: 'A gambler flips a golden coin. "Care to test your luck, healer? No ante — but the coin bites."',
     choices: [
       { label: 'Flip the coin', kind: 'gambleGold', detail: '50% +75g · 25% +25g · 25% −25g.' },
-      { label: 'Take the safe cut', kind: 'safeGold', detail: `Decline the flip for a guaranteed +${CASINO_SAFE_GOLD}g.` },
       { label: 'Walk away', kind: 'leave' },
     ],
   },
@@ -740,6 +728,7 @@ export const EVENTS: EventDef[] = [
     text: 'A gilded chest sits in the roots of a dead tree, humming softly. Gold glints through the seam — but so does something hungrier.',
     choices: [
       { label: 'Pry it open', kind: 'cursedChest', detail: `+${CURSED_CHEST_GOLD}g — but a random card leaves your deck.` },
+      // (CURSED_CHEST_GOLD is 100 after the content-cut pass.)
       { label: 'Leave it buried', kind: 'leave' },
     ],
   },
@@ -755,20 +744,10 @@ export const EVENTS: EventDef[] = [
   {
     id: 'duplicator',
     title: 'The Duplicator',
-    text: 'A scribe with ink-stained fingers studies your deck. "Any page can be copied — the letters, not the gilding."',
+    text: 'A scribe with ink-stained fingers studies your deck. "Any page can be copied — gilding and all."',
     choices: [
-      { label: 'Commission a copy', kind: 'duplicateCard', detail: `${DUPLICATE_PRICE}g: add an unupgraded copy of a chosen card.` },
+      { label: 'Commission a copy', kind: 'duplicateCard', detail: `${DUPLICATE_PRICE}g: add a copy of a chosen card (upgrades included).` },
       { label: 'Move on', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'purgeWell',
-    title: 'Purge Well',
-    text: 'Black water swallows whatever is thrown in. The well keeps what it takes — and it is not picky, unless you pay it to be.',
-    choices: [
-      { label: 'Feed it a burden', kind: 'removeCard', detail: `Choose a card to remove (${CARD_REMOVAL_PRICE}g).` },
-      { label: 'Let the well choose', kind: 'purgeRandom', detail: 'Free — a random card is removed.' },
-      { label: 'Step away', kind: 'leave' },
     ],
   },
   {

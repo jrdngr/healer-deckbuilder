@@ -1,7 +1,7 @@
 import type { MemberId, MemberDef } from './tuning';
 import type { PartyMemberConfig } from './run';
 import {
-  BERSERKER_BAND_BONUS, BOAR_HP, BOAR_STRIKE_BONUS, BOAR_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, CRESCENDO_DRAW, DEFENSE_AMOUNT, EN_GARDE_TURNS, FERMENT_GROWTH, FERMENT_TURNS, GRAVE_CHILL_REDUCTION, HEX_TURNS, HEX_VULN_BY_SIZE, PENANCE_HP, PENANCE_STRIKE_BONUS, POISON_BASE, POISON_TURNS, RADIANCE_HEAL, RAMPAGE_SELF_DMG, SKALD_DMG_CAP, SKALD_DMG_PER_CARD, TAUNT_TURNS
+  BERSERKER_BAND_BONUS, BOAR_HP, BOAR_STRIKE_BONUS, BOAR_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, CRESCENDO_DRAW, DEFENSE_AMOUNT, EN_GARDE_TURNS, FERMENT_GROWTH, FERMENT_TURNS, GRAVE_CHILL_REDUCTION, HEX_TURNS, HEX_VULN_BY_SIZE, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, POISON_BASE, POISON_TURNS, RADIANCE_HEAL, RAMPAGE_SELF_DMG, SKALD_DMG_CAP, SKALD_DMG_PER_CARD, TAUNT_TURNS
 } from './tuning';
 
 export const MEMBER_DEFS: MemberDef[] = [
@@ -29,11 +29,8 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
   skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
-  // Roster wave 2 (#28). Berserker: strongest at LOW HP — healing him is friendly
-  // fire. Grave Augur: shrinks the standing telegraph (the taunt-less draft's
-  // redirection substitute).
+  // Roster wave 2 (#28). Berserker: strongest at LOW HP — healing him is friendly fire.
   berserker: { slot: 0, id: 'berserker', name: 'Berserker', maxHP: 16, damage: 2, ability: 'rampage' },
-  graveAugur: { slot: 2, id: 'graveAugur', name: 'Grave Augur', maxHP: 10, damage: 4, ability: 'graveChill' },
   // Roster wave 3 (#29). Beast Warden: 9 HP / 1 dmg, but Call Boar summons a pet on
   // her slot that soaks whole hits and lends her its strike — the most invasive
   // member (a new board entity).
@@ -42,33 +39,15 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // standing telegraph — a control member. Low damage; the value is the lost enemy
   // turn. Home slot 0 (front line).
   sentinel: { slot: 0, id: 'sentinel', name: 'Sentinel', maxHP: 13, damage: 2, ability: 'stun' },
-  // Plaguewright (#72): a second poison hero. A mid-line caster body (Ranger-adjacent,
-  // one less HP) whose Ferment turns enemy Poison from a fire-and-forget drip into an
-  // investment — while the window runs, each tick deals its damage, then the per-turn
-  // value grows and the duration stops counting down (compounds instead of expiring).
-  plaguewright: { slot: 2, id: 'plaguewright', name: 'Plaguewright', maxHP: 10, damage: 3, ability: 'ferment' },
-  // Hierophant (#73): the channel archetype anchor. A fragile support body (Mage-tier
-  // HP, low auto) whose Liturgy gives the active channel DUAL CADENCE — an extra
-  // enemy-phase tick each round for the channel's remaining duration. Home slot 2
-  // (back line), like the other caster bodies.
-  hierophant: { slot: 2, id: 'hierophant', name: 'Hierophant', maxHP: 9, damage: 2, ability: 'liturgy' },
   // Duelist (#74): a front-line skirmisher who converts being attacked well into
-  // damage. Her En Garde grants a chosen member PERSISTENT Riposte — for a couple of
-  // enemy turns they counterattack EVERY hit that lands on them (fully blocked hits
-  // included) for their live auto damage. Between Tank and Ranger on the body curve.
-  // Home slot 0 (front line), where the hits — and the counters — land.
+  // damage. Her En Garde Provokes a chosen member (Taunt) and grants them PERSISTENT
+  // Riposte — for a few enemy turns they counterattack EVERY hit that lands on them
+  // (fully blocked hits included) for their live auto damage. Home slot 0 (front line).
   duelist: { slot: 0, id: 'duelist', name: 'Duelist', maxHP: 12, damage: 3, ability: 'enGarde' },
   // Flagellant (#75): the blood battery. A big body, weak swing (Berserker-adjacent
   // chassis) whose HP is the party's fuel — his Penance pays 4 HP (NO clamp, it can
-  // kill him) to buff every living member's auto +2 this turn. High HP holds Sanguine
-  // Pact's below-50% window open and bankrolls the Blood web (#68). Home slot 0.
+  // kill him) to buff every living member's auto +2 for 2 enemy turns. Home slot 0.
   flagellant: { slot: 0, id: 'flagellant', name: 'Flagellant', maxHP: 15, damage: 2, ability: 'penance' },
-  // Lightkeeper (#76): the overheal-as-mitigation member. A support body (Mage-tier
-  // HP, weak auto) whose Radiance heals the WHOLE party and converts every point of
-  // overheal into Brace — on a topped party that is party-wide −2 mitigation, and it
-  // STACKS (repeat casts pile Brace higher). She executes the wave's "party at full
-  // HP" plan (#69) and feeds Anvil Stance / Bulwark / Beacon / Benediction. Home slot 1.
-  lightkeeper: { slot: 1, id: 'lightkeeper', name: 'Lightkeeper', maxHP: 11, damage: 2, ability: 'radiance' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -89,7 +68,7 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 export const PARTY_SIZE = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist', 'flagellant', 'lightkeeper'];
+export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'beastWarden', 'sentinel', 'duelist', 'flagellant'];
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
@@ -100,15 +79,15 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 // Conservative damage rating per member (the review's numbers), used only by the
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
 export const DRAFT_RATING: Record<MemberId, number> = {
-  ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, graveAugur: 4, beastWarden: 3, sentinel: 2,
-  plaguewright: 3, hierophant: 2, duelist: 3, flagellant: 2, lightkeeper: 2,
+  ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, beastWarden: 3, sentinel: 2,
+  duelist: 3, flagellant: 2,
 };
 
 // Members healing works "conventionally" on. The Warlock burns himself regardless
 // and the Berserker wants to STAY low (healing him is friendly fire), so neither
 // counts toward the healable floor.
 export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
-  ['ranger', 'tank', 'mage', 'skald', 'graveAugur', 'beastWarden', 'sentinel', 'plaguewright', 'hierophant', 'duelist', 'flagellant', 'lightkeeper'],
+  ['ranger', 'tank', 'mage', 'skald', 'beastWarden', 'sentinel', 'duelist', 'flagellant'],
 );
 
 export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
@@ -183,14 +162,10 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   warlock: `Hex — curse the enemy with Vulnerability: the party deals +${Math.round(HEX_VULN_BY_SIZE[1] * 100)}% damage solo / +${Math.round(HEX_VULN_BY_SIZE[3] * 100)}% in a full party, for ${HEX_TURNS} turns.`,
   skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
   berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
-  graveAugur: `Grave Chill — shave ${GRAVE_CHILL_REDUCTION} damage per target off the enemy's telegraphed attack.`,
   beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
   sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
-  plaguewright: `Ferment — for ${FERMENT_TURNS} enemy turns the enemy's Poison compounds: each tick deals its damage, then +${FERMENT_GROWTH}/turn and its duration is frozen. Recasts extend the window.`,
-  hierophant: `Liturgy — your active channel gains dual cadence: for its remaining duration it also ticks at the start of the enemy phase, before the blow lands.`,
-  duelist: `En Garde — a chosen member gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
-  flagellant: `Penance — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn (him included if he survives; the buff lands even if he dies).`,
-  lightkeeper: `Radiance — heal every living member ${RADIANCE_HEAL}; each member's overheal hardens into Brace (adds to existing Brace, no cap). A Shield is kept, not overwritten.`,
+  duelist: `En Garde — a chosen member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
+  flagellant: `Penance — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns (him included if he survives; the buff lands even if he dies).`,
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity

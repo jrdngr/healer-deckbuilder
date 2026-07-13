@@ -23,13 +23,12 @@ import { Game } from '../src/engine';
 import type { Telegraph } from '../src/engine';
 import { Run } from '../src/run';
 import {
-  CARDS, RELIC_IDS, RELICS, SLOT, RARITY_PRICE, GROUNDING_ROD_REDUCTION,
-  POISON_BASE, RUSTY_CROWN_ATTACK, CRACKED_HOURGLASS_ENRAGE, injuryRecordCap,
+  CARDS, RELIC_IDS, RELICS, SLOT, RARITY_PRICE,
+  POISON_BASE, RUSTY_CROWN_ATTACK,
   DEFAULT_ENEMY_DEF, HEXWEAVER_DEF, makeDeckCard, resolveCard, defaultBattleConfig, isAbilityCard,
   MEMBER_POOL, LONE_WOLF_DMG, FOCUS_STONE_MP, WARBAND_HP_PER_SEAT,
-  SHADOW_BOLT_DMG, HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
-  WHETSTONE_BONUS, OSSUARY_REGEN, POISON_TURNS, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
-  GRIMOIRE_DMG, OPEN_VEINS_HP, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS,
+  HOLY_RELIC_HEAL,
+  OSSUARY_REGEN, POISON_TURNS, VENOM_GLAND_BONUS_TURNS,
   BEACON_DRAW, TWIN_CENSER_SPLASH, BEGGARS_BOWL_REWARD_SIZE,
 } from '../src/constants';
 import type {
@@ -53,33 +52,27 @@ const ALL_ABILITIES: AbilityId[] = ['poison', 'taunt', 'bolt'];
 // Cultivate/Bloom (which require an active Regen on their target) always have fodder.
 const EXERCISE_DECK: CardId[] = [
   'imbuePoison', 'bolster', 'unleash',
-  'regen', 'regen', 'lifebloom', 'overgrowth', 'cultivate', 'bloom',
-  'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'refresh', 'cleanse',
-  'fontOfMana', 'inspiration', 'surge', 'battleHymn', 'barrier',
-  'bloodTithe', 'martyrsGift', 'grimHarvest', 'phalanx', 'brace', 'provoke',
+  'regen', 'regen', 'lifebloom', 'bloom',
+  'lowHeal', 'highHeal', 'highHeal', 'aoeHeal', 'shield', 'resurrect', 'cleanse',
+  'fontOfMana', 'inspiration', 'battleHymn', 'barrier',
+  'bloodTithe', 'martyrsGift', 'phalanx', 'provoke',
   // Iron mitigation web (#65).
-  'feint', 'anvilStance', 'interlock',
-  // Regen conversions (#66): both consume/read an active Regen (the seeded Regen fodder above).
-  'thornskin', 'sporeburst',
+  'feint',
+  // Regen conversion (#66): consumes an active Regen (the seeded Regen fodder above).
+  'sporeburst',
   // Status-window management (#67): Hemorrhage needs enemy poison (imbuePoison seeds it),
-  // Umbral Feast reads the board, Dread Whisper shaves the telegraph.
-  'hemorrhage', 'umbralFeast', 'dreadWhisper',
-  // Blood + cycling (#68): HP-priced draw/shield/damage/redistribution/offense.
-  'crimsonPact', 'scarletWard', 'openVeins', 'transfusion', 'bloodBanner',
-  // Holy overheal & board-state payoffs (#69): overheal->Brace, full-HP->offense, a
-  // delayed party heal, buff-density heal, and the timed-effect duration extender.
-  'benediction', 'sunriseVigil', 'consecration', 'absolution', 'rootbind',
-  // Channel archetype rescue + arcane support (#70): a keep-alive draw and a splash enabler.
-  'attunement', 'arcaneLens',
-  // Shadow cards (#63).
-  'shadowBolt', 'siphonLife', 'doom',
-  // Count-based payoff cards (#63).
-  'cascade', 'nightfall',
-  // Channeled cards (#64): Refresh (above) is reworked into one; these are the four new.
-  'drain', 'mendingStream', 'sap', 'fortify',
-  'rally', 'focus', 'channel', 'holdTheLine',
+  // Dread Whisper shaves the telegraph.
+  'hemorrhage', 'dreadWhisper',
+  // Blood + cycling (#68): HP-priced draw/shield/redistribution/offense.
+  'crimsonPact', 'scarletWard', 'transfusion', 'bloodBanner',
+  // Holy board-state payoffs (#69): a delayed party heal and full-HP->offense.
+  'sunriseVigil', 'consecration',
+  // Arcane support (#70): a splash enabler.
+  'arcaneLens',
+  // Channeled cards (#64).
+  'mendingStream', 'sap', 'fortify',
   // Hero buff card batch (#62).
-  'guard', 'sharpen', 'goad', 'doubleStrike', 'embolden', 'empower', 'riposte',
+  'guard', 'sharpen', 'doubleStrike', 'empower', 'riposte',
 ];
 
 // A generous healer + a high-HP, low-threat enemy, so a fight lasts long enough
@@ -166,13 +159,8 @@ function exerciseOnePlay(game: Game, cov: Coverage): boolean {
 // Log substrings that only appear when a relic's effect actually resolves in a
 // live fight — so scanning the fight log proves the relic fired.
 const RELIC_LOG_MARK: Partial<Record<RelicId, string>> = {
-  titheCandle: 'Tithe Candle',
   warDrum: 'War Drum',
   prayerBeads: 'Prayer Beads',
-  echoLocket: 'Echo Locket',
-  stormglass: 'Stormglass Mirror',
-  aegisFont: 'Aegis Font',
-  duskChime: 'Dusk Chime',
   martyrsIcon: "Martyr's Icon",
 };
 
@@ -251,11 +239,6 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const run = new Run(3); run.addRelic('hagglersCharm');
     return run.rollCardShop().every((o) => o.price < RARITY_PRICE[o.rarity]);
   },
-  titheCandle: () => {
-    const g = probeGame(['titheCandle']); g.start(); g.mp = 0;
-    g.telegraph = single(3, SLOT.CENTER); g._resolveAttack();
-    return g.mp > 0;
-  },
   fieldTriage: () => {
     const g = probeGame(['fieldTriage']); g.start(); g.tank.hp = 3;
     const before = g.tank.hp; g.playCard(give(g, 'lowHeal'), SLOT.CENTER);
@@ -267,50 +250,15 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     g.endTurn(); // the party phase resolves the doubled auto
     return g.log.some((e) => e.text.includes('War Drum'));
   },
-  groundingRod: () => {
-    const g = probeGame(['groundingRod']); g.start();
-    g.telegraph = sweep(3);
-    return g.attackTargets()[0]?.damage === 3 - GROUNDING_ROD_REDUCTION;
-  },
   prayerBeads: () => {
     const g = probeGame(['prayerBeads']); g.start(); g.mp = 0;
     g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -1));
     g._drawOne();
     return g.mp > 0;
   },
-  echoLocket: () => {
-    const g = probeGame(['echoLocket']); g.start();
-    const i = give(g, 'imbuePoison'); const uid = g.hand[i].uid;
-    g.playCard(i); // Poison — the Locket returns it
-    return g.hand.some((c) => c.uid === uid);
-  },
-  stormglass: () => {
-    const g = probeGame(['stormglass']); g.start(); g.tank.hp = g.tank.maxHP;
-    g.telegraph = single(7, SLOT.CENTER, 'heavy');
-    const before = g.tank.hp; g._resolveAttack();
-    return g.tank.hp === before && g.stormglassUsed;
-  },
   vanguardsBanner: () => {
     const g = probeGame(['vanguardsBanner']); g.start(); g.tank.hp = g.tank.maxHP;
     return g.memberDamage(g.tank) > g.tank.damage;
-  },
-  aegisFont: () => {
-    const g = probeGame(['aegisFont']); g.start(); g.tank.hp = g.tank.maxHP - 1;
-    g.playCard(give(g, 'highHeal'), SLOT.CENTER); // heal 4, overheal 3 -> Ward
-    return g.tank.ward > 0;
-  },
-  firstLightTaper: () => {
-    const g = probeGame(['firstLightTaper']); g.start();
-    const i = give(g, 'regen'); // cost 2, non-engine -> free as the first play
-    return g.effectiveCost(resolveCard(g.hand[i])) === 0;
-  },
-  duskChime: () => {
-    const g = probeGame(['duskChime']); g.start();
-    for (const m of g.members) m.hp = m.maxHP;
-    g.telegraph = sweep(5); // 5x3 = 15 >= the delay threshold
-    const before = g.members.map((m) => m.hp);
-    g._runEnemyPhase();
-    return g.chimeUsed && g.members.every((m, i) => m.hp === before[i]);
   },
   martyrsIcon: () => {
     const g = probeGame(['martyrsIcon']); g.start();
@@ -320,12 +268,6 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
   pactOfSilence: () => {
     const g = probeGame(['pactOfSilence']); g.start();
     return g.canSkip() === false; // the Pact forbids Rest
-  },
-  crackedHourglass: () => {
-    const g = probeGame(['crackedHourglass']); g.start();
-    if (g.enrageTurn > CRACKED_HOURGLASS_ENRAGE) return false;
-    g._fireAbility(g.ranger);
-    return g.enemy.poison > POISON_BASE; // +2 power
   },
   rustyCrown: () => {
     const base = new Game(7, defaultBattleConfig()).attackDamage('single', 1);
@@ -353,42 +295,10 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const before = g.tank.hp; g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // Holy heal
     return g.tank.hp - before === (CARDS.lowHeal.heal ?? 0) + HOLY_RELIC_HEAL;
   },
-  shadowSigil: () => {
-    const g = probeGame(['shadowSigil']); g.start(); g.enemy.hp = 999;
-    const before = g.enemy.hp; g.playCard(give(g, 'shadowBolt')); // Shadow card
-    return before - g.enemy.hp === SHADOW_BOLT_DMG + SHADOW_RELIC_DMG;
-  },
-  ironWard: () => {
-    const g = probeGame(['ironWard']); g.start();
-    const i = give(g, 'shield'); // Iron, cost 3 -> the first Iron card is cheaper
-    return g.effectiveCost(resolveCard(g.hand[i])) === CARDS.shield.cost - IRON_RELIC_DISCOUNT;
-  },
-  // --- Iron mitigation web relics (#65) -----------------------------------------
-  whetstone: () => {
-    const g = probeGame(['whetstone']); g.start();
-    // A member untouched last enemy phase strikes +1 (the opener may have marked
-    // some; clear the flag to observe the bonus on an untouched member).
-    g.tank.tookDamageLastEnemyPhase = false;
-    return g.memberDamage(g.tank) === g.tank.damage + WHETSTONE_BONUS;
-  },
-  bulwarkCore: () => {
-    const g = probeGame(['bulwarkCore']); g.start();
-    g.tank.shield = true; g.tank.shieldTurns = 3;
-    g.telegraph = single(4, SLOT.CENTER); // fully blocked by the Shield
-    g._resolveAttack();
-    return !g.tank.shield && g.tank.brace; // Shield consumed -> Brace left behind
-  },
-  // --- Regen conversions relics (#66) -------------------------------------------
-  deepRoots: () => {
-    const g = probeGame(['deepRoots']); g.start();
-    g.tank.regen = 1; // a one-tick Regen that expires next player phase
-    g._startPlayerPhase(); // ticks Regen to 0 -> _onRegenEnded fires Deep Roots
-    return g.tank.brace; // the spent Regen hardened into Brace
-  },
   ossuaryBell: () => {
     const g = probeGame(['ossuaryBell']); g.start();
-    // Start full behind no ward so the hit is a clean downward crossing of the threshold.
-    g.tank.hp = g.tank.maxHP; g.tank.shield = false; g.tank.brace = false; g.tank.defense = 0;
+    // Start full behind no shield so the hit is a clean downward crossing of the threshold.
+    g.tank.hp = g.tank.maxHP; g.tank.shield = false; g.tank.defense = 0;
     g.telegraph = single(g.tank.maxHP - 1, SLOT.CENTER); // full -> 1 HP: below the threshold, non-lethal
     g._resolveAttack();
     return g.tank.alive && g.tank.regen >= OSSUARY_REGEN;
@@ -398,32 +308,6 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const g = probeGame(['venomGland']); g.start();
     g._applyPoison(POISON_BASE, POISON_TURNS); // an application lasts +1 turn while owned
     return g.enemy.poisonTurns === POISON_TURNS + VENOM_GLAND_BONUS_TURNS;
-  },
-  embermark: () => {
-    const g = probeGame(['embermark']); g.start();
-    g.enemy.hp = 999; g.telegraph = null; // no incoming blow — isolate the expiry payout
-    g.enemy.vulnerable = 0.5; g.enemy.vulnerableTurns = 1; // expires this enemy phase
-    const before = g.enemy.hp;
-    g._runEnemyPhase();
-    return before - g.enemy.hp === EMBERMARK_DMG; // the ember fired flat on natural expiry
-  },
-  // --- Blood + cycling relics (#68) ---------------------------------------------
-  grimoireOfTurning: () => {
-    const g = probeGame(['grimoireOfTurning']); g.start(); g.enemy.hp = 999;
-    g.drawPile = []; g.discardPile.push(makeDeckCard('lowHeal', -1)); // force a reshuffle on the next draw
-    const before = g.enemy.hp;
-    g._drawOne();
-    return before - g.enemy.hp === GRIMOIRE_DMG; // the reshuffle dealt its flat damage
-  },
-  sanguinePact: () => {
-    const g = probeGame(['sanguinePact']); g.start();
-    for (const m of g.members) m.hp = m.maxHP; // all full -> no auto bonus
-    const full = g.memberDamage(g.ranger);
-    g.tank.hp = 1; // a member below 50% -> party autos +bonus
-    const wounded = g.memberDamage(g.ranger);
-    // Surcharge half: Open Veins' effective HP cost rises by the surcharge under the Pact.
-    const cost = g._bloodCost(resolveCard(makeDeckCard('openVeins', -1)));
-    return wounded - full === SANGUINE_PACT_AUTO_BONUS && cost === OPEN_VEINS_HP + SANGUINE_PACT_SURCHARGE;
   },
   // --- Holy overheal & board-state relics (#69) ---------------------------------
   beaconOfSecondSun: () => {
@@ -448,7 +332,7 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
   // --- Channel archetype rescue relic (#70) -------------------------------------
   chantersIdol: () => {
     const g = probeGame(['chantersIdol']); g.start();
-    g.playCard(give(g, 'drain'));       // start a Drain channel (this turn's 1st play)
+    g.playCard(give(g, 'sap'));          // start a Sap channel (this turn's 1st play)
     if (!g.channelActive()) return false;
     g.cardsPlayedThisPhase = 0;         // a fresh turn with the channel still running
     g.playCard(give(g, 'lowHeal'), SLOT.CENTER); // the turn's FIRST card -> Idol keeps the channel

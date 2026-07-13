@@ -71,17 +71,12 @@ export function runRelicLine(relic: RelicId | null, n: number, firstSeed = 1): R
 // The relics the #35 battery tracks (the phase-B rule-changers + curses, plus the
 // two phase-A passives the playtest flagged as drifted traps).
 const BATTERY: RelicId[] = [
-  'aegisFont', 'firstLightTaper', 'duskChime', 'martyrsIcon',
-  'pactOfSilence', 'crackedHourglass', 'rustyCrown',
-  // Iron mitigation web relics (#65) — gated ≤ +9pp.
-  'whetstone', 'bulwarkCore',
+  'martyrsIcon',
+  'pactOfSilence', 'rustyCrown',
   // Regen conversions relics (#66) — gated ≤ +9pp.
-  'deepRoots', 'ossuaryBell',
+  'ossuaryBell',
   // Status-window management relics (#67) — gated ≤ +9pp.
-  'venomGland', 'embermark',
-  // Blood + cycling relics (#68) — gated ≤ +9pp (measure the Sanguine Pact curse too:
-  // its net should read as a real trade, not a strict trap).
-  'grimoireOfTurning', 'sanguinePact',
+  'venomGland',
   // Holy overheal & board-state relics (#69) — gated ≤ +9pp.
   'beaconOfSecondSun', 'twinCenser',
   // Channel archetype rescue relic (#70) — gated ≤ +9pp.

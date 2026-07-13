@@ -238,20 +238,6 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return first + 110 + 240;
   },
-  graveAugur: (ev, push, t) => {
-    // A cold, lobbed omen; shards sleet down where it lands.
-    const c = '#7fd0ff';
-    push({ at: t, fx: [
-      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 0.9, dur: 320 },
-    ] });
-    const impact = t + 320;
-    push({ at: impact, shake: 4, patch: { enemyHp: ev.enemyHp }, fx: [
-      { type: 'ring', at: 'enemy', color: c },
-      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 52, mode: 'fall' },
-      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
-    ] });
-    return impact + 200;
-  },
   beastWarden: (ev, push, t) => {
     // A feral strike — the claw rakes across on arrival.
     const c = '#7fe6a4';
@@ -281,34 +267,6 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
     ] });
     return impact + 240;
   },
-  hierophant: (ev, push, t) => {
-    // A swung censer: a warm consecrated arc that rings the enemy on impact.
-    const c = '#e8d48a';
-    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 240 }] });
-    push({ at: t + 180, fx: [
-      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 1.0, dur: 300 },
-    ] });
-    const impact = t + 180 + 300;
-    push({ at: impact, shake: 4, patch: { enemyHp: ev.enemyHp }, fx: [
-      { type: 'ring', at: 'enemy', color: c },
-      { type: 'burst', at: 'enemy', color: c, count: 10, spread: 50, mode: 'rise' },
-      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
-    ] });
-    return impact + 220;
-  },
-  plaguewright: (ev, push, t) => {
-    // A lobbed vial of toxin that bursts into a lingering sickly-green cloud.
-    const c = '#8fbf4d';
-    push({ at: t, fx: [
-      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 0.95, dur: 300 },
-    ] });
-    const impact = t + 300;
-    push({ at: impact, shake: 4, patch: { enemyHp: ev.enemyHp }, fx: [
-      { type: 'burst', at: 'enemy', color: c, count: 12, spread: 46, mode: 'fall' },
-      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
-    ] });
-    return impact + 220;
-  },
   duelist: (ev, push, t) => {
     // A fencer's lunge: a fast, straight thrust that pierces on the point.
     const c = '#e06b8b';
@@ -336,20 +294,6 @@ const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number)
       { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
     ] });
     return impact + 220;
-  },
-  lightkeeper: (ev, push, t) => {
-    // A soft mote of holy light lobbed at the enemy — she is a healer, not a striker (#76).
-    const c = '#ffe9a8';
-    push({ at: t, fx: [{ type: 'glow', at: ev.slot, color: c, dur: 240 }] });
-    push({ at: t + 120, fx: [
-      { type: 'projectile', from: ev.slot, to: 'enemy', color: c, variant: 'arc', scale: 0.85, dur: 260 },
-    ] });
-    const impact = t + 120 + 260;
-    push({ at: impact, shake: 3, patch: { enemyHp: ev.enemyHp }, fx: [
-      { type: 'burst', at: 'enemy', color: c, count: 10, spread: 44 },
-      { type: 'float', at: 'enemy', text: `-${ev.amount}`, color: c },
-    ] });
-    return impact + 200;
   },
 };
 
@@ -601,16 +545,6 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
-      case 'braceApplied': {
-        // Brace (#17): a one-shot blunting ward, visually a lighter Shield.
-        push({ at: t, react: [{ slot: ev.slot, kind: 'block' }], fx: [
-          { type: 'shield', at: ev.slot, color: C.smoke },
-          { type: 'float', at: ev.slot, text: 'BRACE', color: C.white },
-        ] });
-        t += 380;
-        break;
-      }
-
       case 'resurrect': {
         push({ at: t, shake: 4, fx: [
           { type: 'pillar', at: ev.slot, color: C.taunt },
@@ -634,26 +568,6 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         break;
       }
 
-      case 'wardApplied': {
-        // Aegis Font (#22): overheal crystallizes into a Ward buffer.
-        push({ at: t, react: [{ slot: ev.slot, kind: 'block' }], fx: [
-          { type: 'shield', at: ev.slot, color: C.hp },
-          { type: 'float', at: ev.slot, text: `WARD ${ev.amount}`, color: C.hp },
-        ] });
-        t += 380;
-        break;
-      }
-
-      case 'chime': {
-        // Dusk Chime (#22): the incoming blow hangs in the air a turn longer.
-        push({ at: t, shake: 3, fx: [
-          { type: 'ring', at: 'enemy', color: C.mp },
-          { type: 'float', at: 'enemy', text: 'DELAYED', color: C.mp, big: true },
-        ] });
-        t += 520;
-        break;
-      }
-
       case 'martyrSave': {
         // Martyr's Icon (#22): a death refused — the biggest save in the game.
         push({ at: t, shake: 8, fx: [
@@ -662,17 +576,6 @@ export function buildTimeline(events: GameEvent[]): Timeline {
           { type: 'float', at: ev.slot, text: 'SPARED', color: C.taunt, big: true },
         ] });
         t += 700;
-        break;
-      }
-
-      case 'surge': {
-        // Surge (#16): the next card is free — flare the mana bar.
-        push({ at: t, fx: [
-          { type: 'glow', at: 'mp', color: C.mp },
-          { type: 'ring', at: 'mp', color: C.mp },
-          { type: 'float', at: 'mp', text: 'NEXT CARD FREE', color: C.mp },
-        ] });
-        t += 380;
         break;
       }
 

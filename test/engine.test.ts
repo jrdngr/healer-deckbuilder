@@ -53,9 +53,9 @@ eq('Quick Heal heals 2', CARDS.lowHeal.heal, 2);
 eq('Heal heals 4', CARDS.highHeal.heal, 4);
 eq('Group Heal heals 2', CARDS.aoeHeal.heal, 2);
 eq('Regen card applies +2 (#52)', CARDS.regen.regen, 2);
-// Refresh is reworked to a channel (#64); Font of Mana stays the buff-style engine.
-eq('Refresh is a channel', CARDS.refresh.channel?.maxTurns, REFRESH_CHANNEL_MAX_TURNS);
-eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
+// Font of Mana (renamed "Refresh") stays the buff-style MP engine.
+eq('Refresh (Font of Mana) strength 3', CARDS.fontOfMana.refresh, 3);
+eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
 
 // --- enrage damage rounds up ------------------------------------------------
 {
@@ -364,39 +364,6 @@ eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
   check('#54: living members\' ability cards are in the fight', all.includes('bolster') && all.includes('unleash'));
 }
 
-// --- #42: small-party cards scale on empty deploy seats -------------------------
-{
-  const mkEmpty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
-  // A DUO (ranger + mage, one empty seat) — fielded size 2, one empty.
-  const duo = () => {
-    const cfg = defaultBattleConfig();
-    cfg.party = [partyFromMembers(['ranger'])[0], partyFromMembers(['mage'])[0], mkEmpty()];
-    const g = new Game(21, cfg); g.start(); g.mp = 10; g.enemy.hp = 999;
-    return g;
-  };
-  {
-    // Rally: +RALLY_DMG_PER_SEAT per empty seat (a duo has 1 empty).
-    const g = duo();
-    g.playCard(giveCard(g, 'rally'));
-    eq('Rally buffs autos by RALLY_DMG_PER_SEAT × empty seats', g.hymnBonus, RALLY_DMG_PER_SEAT * 1);
-  }
-  {
-    // Focus: heals FOCUS_HEAL + FOCUS_SMALL_BONUS while fielding <= SMALL_PARTY_MAX.
-    const g = duo();
-    g.members[0].hp = 1;
-    g.playCard(giveCard(g, 'focus'), SLOT.LEFT);
-    eq('Focus heals the small-party amount', g.members[0].hp, Math.min(g.members[0].maxHP, 1 + FOCUS_HEAL + FOCUS_SMALL_BONUS));
-  }
-  {
-    // Hold the Line shields a small party; a full trio gets nothing.
-    const g = duo();
-    g.playCard(giveCard(g, 'holdTheLine'));
-    check('Hold the Line shields a small party', g.members[0].shield && g.members[1].shield);
-    const trio = new Game(21, defaultBattleConfig()); trio.start(); trio.mp = 10;
-    trio.playCard(giveCard(trio, 'holdTheLine'));
-    check('Hold the Line does nothing for a full trio', !trio.members[0].shield);
-  }
-}
 
 // --- shield absorbs next instance, does not stack --------------------------
 {
@@ -553,10 +520,9 @@ eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
   eq('mage revived to 50% (ceil 9/2=5)', mage.hp, Math.ceil(mage.maxHP / 2));
   check('mage alive again', mage.alive);
   eq('charge cleared on res', g.mageCharge, 0);
-  // Rework (#18): 4 MP, and the revive comes back behind a fresh Shield.
+  // Rework (#18): 4 MP. (The return-behind-a-Shield rider was removed in the content-cut pass.)
   eq('Resurrect costs 4 (rework, #18)', CARDS.resurrect.cost, 4);
-  check('revived member comes back behind a Shield', mage.shield);
-  eq('the revive Shield carries the full fuse', mage.shieldTurns, SHIELD_TURNS);
+  check('revived member no longer comes back behind a Shield', !mage.shield);
 }
 
 // --- skip regen +5, only before a card is played ---------------------------
@@ -1194,7 +1160,7 @@ eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
   // folds into the applied regen amount rather than a separate turn count.
   eq('lingering +regen magnitude (#52)', resolveCard(makeDeckCard('regen', 1, ['lingering'])).regen, (CARDS.regen.regen ?? 0) + 1);
   eq('potent + lingering both deepen regen', resolveCard(makeDeckCard('regen', 1, ['potent', 'lingering'])).regen, (CARDS.regen.regen ?? 0) + 2);
-  eq('lingering +refresh turns', resolveCard(makeDeckCard('refresh', 1, ['lingering'])).refreshTurns, REFRESH_TURNS + 1);
+  eq('lingering +refresh turns', resolveCard(makeDeckCard('fontOfMana', 1, ['lingering'])).refreshTurns, REFRESH_TURNS + 1);
 }
 {
   // Eligibility gating and slot limits.
@@ -1206,8 +1172,8 @@ eq('Font of Mana strength 3', CARDS.fontOfMana.refresh, 3);
   check('retain eligible on shield', MODIFIERS.retain.eligible('shield'));
   check('retain eligible on lowHeal', MODIFIERS.retain.eligible('lowHeal'));
   check('retain refuses a per-member ability card', !MODIFIERS.retain.eligible('bolster'));
-  check('retain refuses the engine card Refresh', !MODIFIERS.retain.eligible('refresh'));
-  check('Refresh is engine-tagged', isEngineCard('refresh'));
+  check('retain refuses the engine card Refresh', !MODIFIERS.retain.eligible('fontOfMana'));
+  check('Refresh is engine-tagged', isEngineCard('fontOfMana'));
   check('Quick Heal is not engine-tagged', !isEngineCard('lowHeal'));
   // Efficient refuses 0-cost cards (there are none today; all base costs are > 0).
   check('efficient eligible on a costed card', MODIFIERS.efficient.eligible('highHeal'));
@@ -1818,19 +1784,13 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
 }
 {
   const g = new Game(1); g.start();
-  g.devPlayCard('refresh');
-  check('devPlayCard refresh starts a channel', g.channelActive() && g.channelCard === 'refresh');
+  g.devPlayCard('sap');
+  check('devPlayCard sap starts a channel', g.channelActive() && g.channelCard === 'sap');
 }
 
-// --- card set phase A: Overgrowth / Cultivate / Bloom / Font of Mana / Inspiration (issue 15) ---
+// --- card set phase A: Bloom / Font of Mana / Inspiration (issue 15) ---
 {
   // Definitions: costs, strengths, rarities (shop prices follow rarity 25/50/75).
-  eq('Overgrowth costs 3', CARDS.overgrowth.cost, 3);
-  eq('Overgrowth regen strength 1', CARDS.overgrowth.regen, 1);
-  eq('Overgrowth targets all', CARDS.overgrowth.target, 'all');
-  eq('Overgrowth is uncommon', CARD_RARITY.overgrowth, 'uncommon');
-  eq('Cultivate costs 1', CARDS.cultivate.cost, 1);
-  eq('Cultivate is common', CARD_RARITY.cultivate, 'common');
   eq('Bloom costs 2', CARDS.bloom.cost, 2);
   eq('Bloom is uncommon', CARD_RARITY.bloom, 'uncommon');
   eq('Font of Mana costs 3', CARDS.fontOfMana.cost, 3);
@@ -1839,40 +1799,13 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Inspiration costs 2', CARDS.inspiration.cost, 2);
   eq('Inspiration draws 2', CARDS.inspiration.draw, 2);
   eq('Inspiration is uncommon', CARD_RARITY.inspiration, 'uncommon');
-  check('all five phase-A cards joined the shop pool',
-    (['overgrowth', 'cultivate', 'bloom', 'fontOfMana', 'inspiration'] as CardId[])
+  check('the phase-A survivors joined the shop pool',
+    (['bloom', 'fontOfMana', 'inspiration'] as CardId[])
       .every((id) => CARD_POOL.includes(id)));
 }
 {
-  // Overgrowth (#52): Regen +1 to every living member, additive onto any running
-  // Regen (magnitude == duration); the dead are skipped.
-  const g = new Game(60); g.start();
-  const [ranger, tank, mage] = g.members;
-  tank.regen = 2; // an existing Regen
-  g._killMember(mage);
-  g.playCard(giveCard(g, 'overgrowth'), null);
-  eq('Overgrowth grants Regen 1 to a clean target', ranger.regen, 1);
-  eq('Overgrowth adds to a running Regen', tank.regen, 2 + 1);
-  eq('Overgrowth skips the dead', mage.regen, 0);
-  // Potent-ineligible (a +1 would be x3 members); Lingering still applies.
-  check('Overgrowth is Potent-ineligible', !MODIFIERS.potent.eligible('overgrowth'));
-  check('Overgrowth still takes Lingering', MODIFIERS.lingering.eligible('overgrowth'));
-}
-{
-  // Cultivate (#52): dead without an active Regen; adds to the single value IN
-  // PLACE, so it heals more AND lasts a tick longer.
-  const g = new Game(61); g.start();
-  const tank = g.tank;
-  const idx = giveCard(g, 'cultivate');
-  eq('Cultivate is dead without an active Regen', g.canPlay(idx, SLOT.CENTER), 'target must have an active Regen');
-  tank.regen = 1;
-  eq('Cultivate is playable with an active Regen', g.canPlay(idx, SLOT.CENTER), null);
-  g.playCard(idx, SLOT.CENTER);
-  eq('Cultivate adds to the Regen value in place', tank.regen, 1 + CULTIVATE_STRENGTH);
-}
-{
-  // Bloom: dead without an active Regen; consumes it, healing per remaining tick
-  // (== the Regen value, #52).
+  // Bloom: dead without an active Regen; consumes it, healing its full remaining
+  // amount at once (== the Regen value, #52).
   const g = new Game(62); g.start();
   const tank = g.tank;
   tank.hp = 5;
@@ -1880,7 +1813,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Bloom is dead without an active Regen', g.canPlay(idx, SLOT.CENTER), 'target must have an active Regen');
   tank.regen = 3;
   g.playCard(idx, SLOT.CENTER);
-  eq('Bloom heals 2 per remaining tick', tank.hp, 5 + BLOOM_HEAL_PER_TURN * 3);
+  eq('Bloom heals its full remaining amount at once', tank.hp, 5 + 3);
   eq('Bloom consumes the Regen', tank.regen, 0);
 }
 {
@@ -1940,14 +1873,12 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('Inspiration comes back to hand off the reshuffle', g.hand.some((c) => c.id === 'inspiration'));
 }
 
-// --- card set phase B: Lifebloom / Surge / Battle Hymn / Barrier / Blood (issue 16) ---
+// --- card set phase B: Lifebloom / Battle Hymn / Barrier / Blood (issue 16) ---
 {
   // Definitions: costs, blood costs, rarities (shop prices follow rarity 25/50/75).
   eq('Lifebloom costs 3', CARDS.lifebloom.cost, 3);
   eq('Lifebloom regen strength 2', CARDS.lifebloom.regen, 2);
   eq('Lifebloom is uncommon', CARD_RARITY.lifebloom, 'uncommon');
-  eq('Surge costs 2', CARDS.surge.cost, 2);
-  eq('Surge is uncommon', CARD_RARITY.surge, 'uncommon');
   eq('Battle Hymn costs 1', CARDS.battleHymn.cost, 1);
   eq('Battle Hymn is common', CARD_RARITY.battleHymn, 'common');
   eq('Barrier costs 4', CARDS.barrier.cost, 4);
@@ -1958,11 +1889,8 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Martyr\'s Gift costs 2', CARDS.martyrsGift.cost, 2);
   eq('Martyr\'s Gift blood cost 3', CARDS.martyrsGift.selfDamage, 3);
   eq('Martyr\'s Gift heals others 4', CARDS.martyrsGift.heal, 4);
-  eq('Grim Harvest costs 2', CARDS.grimHarvest.cost, 2);
-  eq('Grim Harvest blood cost 4', CARDS.grimHarvest.selfDamage, 4);
-  eq('Grim Harvest is rare', CARD_RARITY.grimHarvest, 'rare');
-  check('all seven phase-B cards joined the shop pool',
-    (['lifebloom', 'surge', 'battleHymn', 'barrier', 'bloodTithe', 'martyrsGift', 'grimHarvest'] as CardId[])
+  check('the phase-B survivors joined the shop pool',
+    (['lifebloom', 'battleHymn', 'barrier', 'bloodTithe', 'martyrsGift'] as CardId[])
       .every((id) => CARD_POOL.includes(id)));
 }
 {
@@ -2003,49 +1931,19 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER); // Regen 2
   const hpBefore = tank.hp;
   g.playCard(giveCard(g, 'bloom'), SLOT.CENTER);
-  eq('Bloom on Lifebloom heals consume + burst', tank.hp, hpBefore + BLOOM_HEAL_PER_TURN * 2 + LIFEBLOOM_BURST);
+  eq('Bloom on Lifebloom heals consume + burst', tank.hp, hpBefore + 2 + LIFEBLOOM_BURST);
   eq('the Regen is consumed', tank.regen, 0);
   eq('the burst is spent', tank.bloomBurst, 0);
 }
 {
-  // Death forfeits; Cultivate keeps the burst pending (in-place, no overwrite).
+  // Death forfeits the pending burst (no posthumous heal).
   const g = new Game(73); g.start();
   const tank = g.tank;
   g.playCard(giveCard(g, 'lifebloom'), SLOT.CENTER);
-  g.playCard(giveCard(g, 'cultivate'), SLOT.CENTER);
-  eq('Cultivate keeps the burst pending', tank.bloomBurst, LIFEBLOOM_BURST);
-  eq('Cultivate still modifies in place', tank.regen, 2 + CULTIVATE_STRENGTH);
+  eq('Lifebloom arms the burst', tank.bloomBurst, LIFEBLOOM_BURST);
   g._killMember(tank);
   eq('death forfeits the burst', tank.bloomBurst, 0);
   eq('no posthumous heal', tank.hp, 0);
-}
-{
-  // Surge: the next card this turn costs 0; consumed by exactly one play.
-  const g = new Game(74); g.start();
-  g.mp = 5;
-  g.playCard(giveCard(g, 'surge'), null);
-  eq('Surge costs its own 2 MP', g.mp, 3);
-  check('Surge is pending', g.surgePending);
-  const idx = giveCard(g, 'highHeal');
-  eq('effectiveCost is 0 under Surge', g.effectiveCost(resolveCard(g.hand[idx])), 0);
-  g.members[SLOT.LEFT].hp = 1;
-  g.playCard(idx, SLOT.LEFT);
-  eq('the surged card spent no MP', g.mp, 3);
-  check('Surge is consumed by one play', !g.surgePending);
-}
-{
-  // Surge makes an otherwise-unaffordable card playable; Surge->Surge is legal.
-  const g = new Game(75); g.start();
-  g.mp = 2;
-  g.playCard(giveCard(g, 'surge'), null); // -> 0 MP, surge pending
-  const heal = giveCard(g, 'highHeal');
-  eq('canPlay allows a 3-cost card at 0 MP under Surge', g.canPlay(heal, SLOT.CENTER), null);
-  const surge2 = giveCard(g, 'surge');
-  g.playCard(surge2, null); // consumes the pending surge, re-arms it: a strict loss
-  eq('Surge->Surge spends no MP', g.mp, 0);
-  check('Surge->Surge leaves a surge pending', g.surgePending);
-  g.endTurn();
-  check('an unspent Surge fizzles at end of turn', !g.surgePending);
 }
 {
   // Battle Hymn: +2 on every living auto THIS party phase; resets after.
@@ -2113,34 +2011,22 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Gift: mage heals 4', mage.hp, 7);
 }
 {
-  // Grim Harvest: the target pays 4; the enemy takes 10 (can trigger phase/kill).
-  const g = new Game(81); g.start();
-  const tank = g.tank;
-  const hpBefore = tank.hp;
-  const ehp = g.enemy.hp;
-  g.playCard(giveCard(g, 'grimHarvest'), SLOT.CENTER);
-  eq('Harvest deals 10 to the enemy', ehp - g.enemy.hp, GRIM_HARVEST_DMG);
-  eq('Harvest: the target pays 4', tank.hp, hpBefore - 4);
-}
-{
   // Blood is never lethal: even bypassing canPlay (dev path), the payment
   // clamps to leave 1 HP.
   const g = new Game(82); g.start();
   const tank = g.tank;
   tank.hp = 2;
-  g.devPlayCard('grimHarvest', SLOT.CENTER);
+  g.devPlayCard('bloodTithe', SLOT.CENTER);
   eq('Blood pay clamps to leave 1 HP', tank.hp, 1);
   check('the member survives the payment', tank.alive);
 }
 
-// --- card set phase C: Phalanx / Brace + the Defense pipeline (issue 17) ----
+// --- card set phase C: Phalanx + the Defense pipeline (issue 17) ----
 {
   eq('Phalanx costs 2', CARDS.phalanx.cost, 2);
   eq('Phalanx is uncommon', CARD_RARITY.phalanx, 'uncommon');
-  eq('Brace costs 1', CARDS.brace.cost, 1);
-  eq('Brace is common', CARD_RARITY.brace, 'common');
-  check('both phase-C cards joined the shop pool',
-    (['phalanx', 'brace'] as CardId[]).every((id) => CARD_POOL.includes(id)));
+  check('Phalanx joined the shop pool',
+    (['phalanx'] as CardId[]).every((id) => CARD_POOL.includes(id)));
 }
 {
   // Phalanx: Defense 2 for 2 enemy turns; Defense-exclusive (its no-stack rule)
@@ -2173,43 +2059,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Taunt still refreshes the Defense duration', tank.defense, DEFENSE_TURNS);
 }
 {
-  // Shield / Brace exclusivity: a member holds one; the newest replaces.
-  const g = new Game(94); g.start();
-  const mage = g.mage;
-  g.playCard(giveCard(g, 'shield'), SLOT.RIGHT);
-  g.playCard(giveCard(g, 'brace'), SLOT.RIGHT);
-  check('Brace replaces a standing Shield', mage.brace && !mage.shield);
-  eq('Brace carries its fade fuse', mage.braceTurns, BRACE_TURNS);
-  g.playCard(giveCard(g, 'shield'), SLOT.RIGHT);
-  check('Shield replaces a standing Brace', mage.shield && !mage.brace);
-}
-{
-  // Pipeline order Defense -> Brace: preview and applied agree; Brace only
-  // spends on a hit that still damages after Defense.
-  const g = new Game(95); g.start();
-  const tank = g.tank;
-  tank.hp = tank.maxHP;
-  tank.defense = 2; tank.defenseAmount = 2;
-  tank.brace = true; tank.braceAmount = BRACE_AMOUNT; tank.braceTurns = BRACE_TURNS;
-  g.telegraph = { type: 'single', hidden: false, damage: 5, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
-  eq('preview folds Defense then Brace', g.attackTargets()[0]?.damage, 5 - 2 - BRACE_AMOUNT);
-  const before = tank.hp;
-  g._resolveAttack();
-  eq('applied equals the preview', before - tank.hp, 5 - 2 - BRACE_AMOUNT);
-  check('Brace is consumed by the damaging hit', !tank.brace);
-}
-{
-  // A hit Defense already absorbs to 0 leaves the Brace standing.
-  const g = new Game(96); g.start();
-  const tank = g.tank;
-  tank.defense = 2; tank.defenseAmount = 4;
-  tank.brace = true; tank.braceAmount = BRACE_AMOUNT; tank.braceTurns = BRACE_TURNS;
-  g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
-  eq('Defense alone absorbs the hit', g.attackTargets()[0]?.damage, 0);
-  g._resolveAttack();
-  check('Brace not spent on a 0-damage hit', tank.brace);
-}
-{
   // Pipeline order Defense -> Shield: a partially-reduced hit still blocks (and
   // spends) the Shield; preview shows 0.
   const g = new Game(97); g.start();
@@ -2225,21 +2074,9 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('Shield is spent by the still-damaging hit', !tank.shield);
 }
 {
-  // Unused Brace fades after BRACE_TURNS enemy turns.
-  const g = new Game(98); g.start();
-  const tank = g.tank;
-  g.playCard(giveCard(g, 'brace'), SLOT.CENTER);
-  for (let i = 0; i < BRACE_TURNS; i++) {
-    g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
-    g._runEnemyPhase();
-  }
-  check('unused Brace fades after its fuse', !tank.brace);
-  eq('faded Brace clears its fuse', tank.braceTurns, 0);
-}
-{
   // PROPERTY: previewed per-target damage == applied damage through the full
-  // Defense -> Brace -> Shield pipeline, across seeds and randomized ward
-  // states (the #15/#17 telegraph invariant).
+  // Defense -> Shield pipeline, across seeds and randomized ward states (the
+  // #15/#17 telegraph invariant).
   let checked = 0;
   let mismatches = 0;
   for (let seed = 200; seed < 260; seed++) {
@@ -2250,9 +2087,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     for (const m of g.members) {
       m.hp = m.maxHP;
       if (g.rng() < 0.5) { m.defense = 1 + Math.floor(g.rng() * 3); m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
-      const r = g.rng();
-      if (r < 0.3) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
-      else if (r < 0.6) { m.brace = true; m.braceAmount = BRACE_AMOUNT; m.braceTurns = BRACE_TURNS; }
+      if (g.rng() < 0.4) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
     }
     const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
     const hpBefore = g.members.map((m) => m.hp);
@@ -2378,27 +2213,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     eq('without the Lantern the fan-out stays', g2.attackTargets().length, g2.livingMembers().length);
   }
 
-  // Tithe Candle: +1 MP per damaging enemy hit; nothing on 0 damage; per-fight cap.
-  {
-    const g = relicGame(302, ['titheCandle']);
-    g.start();
-    g.mp = 0;
-    g.telegraph = singleAt(2, SLOT.CENTER);
-    g._resolveAttack();
-    eq('Tithe Candle pays on a damaging hit', g.mp, TITHE_CANDLE_MP);
-    g.tank.defense = 2; g.tank.defenseAmount = 5;
-    g.telegraph = singleAt(4, SLOT.CENTER);
-    g._resolveAttack();
-    eq('a fully-mitigated hit pays nothing', g.mp, TITHE_CANDLE_MP);
-    g.tank.defense = 0; g.tank.defenseAmount = 0;
-    for (let i = 0; i < TITHE_CANDLE_FIGHT_CAP + 3; i++) {
-      g.tank.hp = g.tank.maxHP;
-      g.telegraph = singleAt(1, SLOT.CENTER);
-      g._resolveAttack();
-    }
-    eq('the Candle stops at its per-fight cap', g.mp, TITHE_CANDLE_FIGHT_CAP);
-  }
-
   // Field Triage Kit: heals on members below half max HP heal harder.
   {
     const g = relicGame(303, ['fieldTriage']);
@@ -2423,23 +2237,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     check('the beat is spent', !g.tank.drumPrimed);
   }
 
-  // Grounding Rod: aoe/sweep hits lose 1 off the final number; singles untouched;
-  // the preview shows the same reduced value (preview == applied).
-  {
-    const g = relicGame(305, ['groundingRod']);
-    g.start();
-    for (const m of g.members) m.hp = m.maxHP;
-    g.telegraph = singleAt(3, SLOT.CENTER, 'aoe');
-    const preview = g.attackTargets();
-    check('Rod-reduced preview', preview.every((l) => l.damage === 3 - GROUNDING_ROD_REDUCTION));
-    const before = g.members.map((m) => m.hp);
-    g._resolveAttack();
-    check('Rod-reduced applied matches the preview',
-      g.members.every((m, i) => before[i] - m.hp === 3 - GROUNDING_ROD_REDUCTION));
-    g.telegraph = singleAt(3, SLOT.CENTER);
-    eq('singles are untouched by the Rod', g.attackTargets()[0]?.damage, 3);
-  }
-
   // Prayer Beads: each reshuffle restores MP.
   {
     const g = relicGame(306, ['prayerBeads']);
@@ -2449,53 +2246,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     g.discardPile.push(makeDeckCard('lowHeal', -60));
     g._drawOne(); // forces the reshuffle
     eq('the Beads pay on a reshuffle', g.mp, PRAYER_BEADS_MP);
-  }
-
-  // Echo Locket: once per fight the first Poison/Bolt Ability returns to hand.
-  {
-    const g = relicGame(307, ['echoLocket']);
-    g.start();
-    const idx = giveAbility(g, SLOT.LEFT);
-    const uid = g.hand[idx].uid;
-    g.playCard(idx); // Poison — the Locket fires
-    check('the Ability card returns to hand', g.hand.some((c) => c.uid === uid));
-    check('the return is spent for the fight', g.echoUsed);
-    const idx2 = giveAbility(g, SLOT.LEFT);
-    const uid2 = g.hand[idx2].uid;
-    g.mp = 10;
-    g.playCard(idx2);
-    check('a second cast stays discarded', !g.hand.some((c) => c.uid === uid2));
-    // Taunt is neither Poison nor Bolt: it never triggers the Locket.
-    const g2 = relicGame(308, ['echoLocket']);
-    g2.start();
-    const i3 = giveAbility(g2, SLOT.CENTER);
-    const uid3 = g2.hand[i3].uid;
-    g2.playCard(i3);
-    check('Taunt does not trigger the Locket', !g2.echoUsed && !g2.hand.some((c) => c.uid === uid3));
-  }
-
-  // Stormglass Mirror: once per fight the first 6+ single-target hit is negated,
-  // and the preview already shows the 0 (preview == applied).
-  {
-    const g = relicGame(309, ['stormglass']);
-    g.start();
-    g.tank.hp = g.tank.maxHP;
-    g.telegraph = singleAt(7, SLOT.CENTER, 'heavy');
-    eq('the Mirror previews the negate', g.attackTargets()[0]?.damage, 0);
-    const before = g.tank.hp;
-    g._resolveAttack();
-    eq('the negated hit deals nothing', g.tank.hp, before);
-    check('the Mirror is spent', g.stormglassUsed);
-    g.telegraph = singleAt(7, SLOT.CENTER, 'heavy');
-    g._resolveAttack();
-    eq('the second big hit lands in full', g.tank.hp, before - 7);
-    // Below the threshold it never fires.
-    const g2 = relicGame(310, ['stormglass']);
-    g2.start();
-    g2.tank.hp = g2.tank.maxHP;
-    g2.telegraph = singleAt(STORMGLASS_MIN_HIT - 1, SLOT.CENTER);
-    g2._resolveAttack();
-    check('a small hit passes the Mirror', !g2.stormglassUsed);
   }
 
   // Vanguard's Banner: full-HP members swing harder.
@@ -2508,34 +2258,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     eq('the Banner ignores the wounded', g.memberDamage(g.tank), g.tank.damage);
   }
 
-  // PROPERTY: preview == applied still holds with the preview-touching relics
-  // live (Grounding Rod + Stormglass Mirror), across seeds and ward states.
-  {
-    let checked = 0;
-    let mismatches = 0;
-    for (let seed = 320; seed < 370; seed++) {
-      const g = relicGame(seed, ['groundingRod', 'stormglass']);
-      g.start();
-      for (const m of g.members) {
-        m.hp = m.maxHP;
-        if (g.rng() < 0.5) { m.defense = 1 + Math.floor(g.rng() * 3); m.defenseAmount = 1 + Math.floor(g.rng() * 3); }
-        const r = g.rng();
-        if (r < 0.3) { m.shield = true; m.shieldTurns = SHIELD_TURNS; }
-        else if (r < 0.6) { m.brace = true; m.braceAmount = BRACE_AMOUNT; m.braceTurns = BRACE_TURNS; }
-      }
-      const preview = new Map(g.attackTargets().map((s) => [s.slot, s.damage]));
-      const hpBefore = g.members.map((m) => m.hp);
-      g._runEnemyPhase();
-      for (const m of g.members) {
-        const taken = hpBefore[m.slot] - m.hp;
-        if (taken === 0) continue;
-        checked++;
-        if (taken !== preview.get(m.slot)) mismatches++;
-      }
-    }
-    check('property: preview == applied with Rod + Mirror live', mismatches === 0, `${mismatches} mismatches`);
-    check('relic property test exercised real hits', checked > 15, `${checked} hits checked`);
-  }
 }
 
 // --- relics phase B: rule-changers + curses (issue 22) ------------------------
@@ -2547,110 +2269,9 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     return new Game(seed, cfg);
   };
 
-  // Aegis Font: DIRECT cast-heal overheal converts to a Ward (capped, larger
-  // replaces); a Regen tick's overheal never converts (the §3.6.3 broken combo).
-  {
-    const g = relicGame(400, ['aegisFont']);
-    g.start();
-    const tank = g.tank;
-    tank.hp = tank.maxHP - 1;
-    g.playCard(giveCard(g, 'highHeal'), SLOT.CENTER); // heals 1, overheals 3
-    eq('cast overheal becomes a Ward (capped)', tank.ward, WARD_MAX);
-    tank.hp = tank.maxHP - 1;
-    tank.ward = 2;
-    g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // heals 1, overheals 1 < standing 2
-    eq('a smaller overheal never shrinks the Ward', tank.ward, 2);
-    const g2 = relicGame(401, ['aegisFont']);
-    g2.start();
-    const tank2 = g2.tank;
-    tank2.hp = tank2.maxHP;
-    tank2.regen = 1; // a one-tick Regen whose whole heal overheals
-    g2._startPlayerPhase(); // the whole tick overheals
-    eq('Regen-tick overheal never converts', tank2.ward, 0);
-  }
-  {
-    // The Ward absorbs at the end of the pipeline, and the preview shows it.
-    const g = relicGame(402, ['aegisFont']);
-    g.start();
-    const tank = g.tank;
-    tank.hp = tank.maxHP;
-    tank.ward = 2;
-    g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
-    eq('the preview folds the Ward in', g.attackTargets()[0]?.damage, 2);
-    const before = tank.hp;
-    g._resolveAttack();
-    eq('the Ward-reduced hit matches the preview', before - tank.hp, 2);
-    eq('the Ward is consumed point for point', tank.ward, 0);
-  }
-
-  // First-Light Taper (#35): the first cheap non-engine card each turn costs
-  // TAPER_DISCOUNT less (min 0), not free; the NEXT turn draws one fewer only when
-  // the discount actually fired.
-  {
-    const g = relicGame(403, ['firstLightTaper']);
-    g.start();
-    eq('turn 1 draws a full hand (nothing fired yet)', g.hand.length, g.handSize);
-    const cheap = giveCard(g, 'regen'); // cost 2 <= TAPER_MAX_COST, non-engine
-    eq('a cost-2 card drops to 0 under the −2 discount',
-      g.effectiveCost(resolveCard(g.hand[cheap])), Math.max(0, CARDS.regen.cost - TAPER_DISCOUNT));
-    // A cost-3 card is discounted by TAPER_DISCOUNT (to 1), NOT zeroed — the #35 nerf.
-    const mid = giveCard(g, 'highHeal'); // cost 3
-    eq('a cost-3 card is discounted, not free',
-      g.effectiveCost(resolveCard(g.hand[mid])), CARDS.highHeal.cost - TAPER_DISCOUNT);
-    check('the discount really is partial (> 0)', CARDS.highHeal.cost - TAPER_DISCOUNT > 0);
-    const mp = g.mp;
-    g.playCard(cheap, SLOT.CENTER);
-    eq('the free cheap card spends no MP', g.mp, mp);
-    const idx2 = giveCard(g, 'regen');
-    eq('the second card costs full price', g.effectiveCost(resolveCard(g.hand[idx2])), 2);
-    g.endTurn();
-    if (g.status === 'playing') {
-      eq('the turn after a fired Taper draws one fewer', g.hand.length, g.handSize - 1);
-    }
-    const g2 = relicGame(404, ['firstLightTaper']);
-    g2.start();
-    const r = giveCard(g2, 'refresh'); // engine-tagged
-    eq('engine cards never taper', g2.effectiveCost(resolveCard(g2.hand[r])), CARDS.refresh.cost);
-    const b = giveCard(g2, 'barrier'); // cost 4 > TAPER_MAX_COST
-    eq('expensive cards never taper', g2.effectiveCost(resolveCard(g2.hand[b])), CARDS.barrier.cost);
-    check('the Taper ceiling is 3', TAPER_MAX_COST === 3);
-  }
-
-  // Dusk Chime: once per RUN, a telegraph totalling DUSK_CHIME_MIN+ is delayed
-  // one turn — the enemy loses the swing this phase and it lands next phase.
-  {
-    const g = relicGame(405, ['duskChime']);
-    g.start();
-    for (const m of g.members) m.hp = m.maxHP;
-    const big = { type: 'sweep' as const, hidden: false, damage: 5, targets: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], enraged: false, forTurn: 2 };
-    g.telegraph = { ...big };
-    const hpBefore = g.members.map((m) => m.hp);
-    g._runEnemyPhase();
-    check('the Chime delays the blow (nobody is hit)', g.members.every((m, i) => m.hp === hpBefore[i]));
-    check('the Chime is spent', g.chimeUsed);
-    check('the telegraph keeps standing', g.telegraph !== null && g.telegraph.damage === 5);
-    g._runEnemyPhase();
-    check('the delayed blow lands next phase', g.members.some((m, i) => m.hp < hpBefore[i]));
-    check('the fight reports the spent Chime', g.spentRelicIds().includes('duskChime'));
-    // Once per RUN: a later fight arrives with the Chime pre-spent.
-    const g2 = relicGame(406, ['duskChime'], ['duskChime']);
-    g2.start();
-    for (const m of g2.members) m.hp = m.maxHP;
-    g2.telegraph = { ...big };
-    const hp2 = g2.members.map((m) => m.hp);
-    g2._runEnemyPhase();
-    check('a spent Chime never fires again', g2.members.some((m, i) => m.hp < hp2[i]));
-    // Small telegraphs never trigger it.
-    const g3 = relicGame(407, ['duskChime']);
-    g3.start();
-    g3.telegraph = { type: 'single', hidden: false, damage: DUSK_CHIME_MIN - 1, targets: [SLOT.CENTER], enraged: false, forTurn: 2 };
-    g3.tank.hp = g3.tank.maxHP;
-    g3._runEnemyPhase();
-    check('a small blow passes the Chime', !g3.chimeUsed);
-  }
-
-  // Martyr's Icon: the first death of the RUN becomes survival at 1 HP with
+  // Martyr's Icon: the first death of the FIGHT becomes survival at 1 HP with
   // statuses stripped; the wipe check sees the survivor; later deaths are real.
+  // (Now once per FIGHT — it resets each fight, and is not persisted to spentRelics.)
   {
     const g = relicGame(408, ['martyrsIcon']);
     g.start();
@@ -2661,13 +2282,13 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     eq('the spared member stands at 1 HP', tank.hp, 1);
     eq('the brush with death strips statuses', tank.regen + tank.taunt, 0);
     check('no wipe with the survivor standing', !g.allDead());
-    check('the fight reports the spent Icon', g.spentRelicIds().includes('martyrsIcon'));
+    check('the once-per-fight save is not persisted to the run', !g.spentRelicIds().includes('martyrsIcon'));
     const died2 = g._killMember(tank);
-    check('the second death is real', died2 && !tank.alive);
-    // Pre-spent from an earlier fight: the save never fires.
-    const g2 = relicGame(409, ['martyrsIcon'], ['martyrsIcon']);
+    check('the second death this fight is real', died2 && !tank.alive);
+    // A FRESH fight re-arms the save (once per fight, not once per run).
+    const g2 = relicGame(409, ['martyrsIcon']);
     g2.start();
-    check('a spent Icon never fires again', g2._killMember(g2.tank) && !g2.tank.alive);
+    check('a fresh fight re-arms the Icon', !g2._killMember(g2.tank) && g2.tank.alive);
   }
 
   // Pact of Silence: Rest is gone; the pact pays passive MP instead.
@@ -2678,21 +2299,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     g.mp = 0;
     g._startPlayerPhase();
     eq('the Pact pays its passive MP', g.mp, PACT_PASSIVE_MP);
-  }
-
-  // Cracked Hourglass: enrage on turn 9; Poison & Bolt +2; Taunt's Defense untouched.
-  {
-    const g = relicGame(411, ['crackedHourglass']);
-    eq('the Hourglass drags enrage to turn 9', g.enrageTurn, CRACKED_HOURGLASS_ENRAGE);
-    g.start();
-    g._fireAbility(g.ranger);
-    eq('Poison gains the Hourglass bonus', g.enemy.poison, POISON_BASE + HOURGLASS_POWER_BONUS);
-    g._fireAbility(g.tank);
-    eq("Taunt's Defense is unaffected", g.tank.defenseAmount, DEFENSE_AMOUNT + g.tank.abilityPower);
-    const ehp = g.enemy.hp;
-    g.mage.charge = 0;
-    g._fireAbility(g.mage);
-    eq('Bolt gains the Hourglass bonus', ehp - g.enemy.hp, BOLT_BASE + HOURGLASS_POWER_BONUS);
   }
 
   // Rusty Crown: normal enemies hit +1; the bosses are exempt.
@@ -2802,7 +2408,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('Poison is not engine-tagged', !isEngineAbility('poison'));
 }
 
-// --- party roster wave 2: Berserker + Grave Augur (#28) ---------------------
+// --- party roster wave 2: Berserker (#28) -----------------------------------
 {
   // Berserker damage bands: 2 / 4 / 6 as HP falls past the fight-relative thresholds.
   const cfg = defaultBattleConfig();
@@ -2844,25 +2450,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g._fireAbility(b);
   check('Rampage clamps — Berserker survives at 1 HP', b.alive && b.hp === 1);
   check('Rampage still struck', g.enemy.hp < ehp2);
-}
-{
-  // Grave Chill shaves damage off the standing telegraph, and the preview follows.
-  const cfg = defaultBattleConfig();
-  cfg.party = partyFromMembers(['ranger', 'tank', 'graveAugur']);
-  const g = new Game(4, cfg); g.start();
-  const augur = g.members[2];
-  eq('Grave Augur seated in slot 2', augur.id, 'graveAugur');
-  // Force a known telegraph to chill.
-  g.telegraph = { type: 'single', hidden: false, damage: 7, targets: [1], enraged: false, forTurn: 1, turnsUntilResolve: 1 };
-  g._fireAbility(augur);
-  eq('Grave Chill reduces telegraph damage by the reduction', g.telegraph.damage, 7 - GRAVE_CHILL_REDUCTION);
-  const preview = g.attackTargets().find((s) => s.slot === 1);
-  eq('the preview reflects the chilled damage', preview?.damage, 7 - GRAVE_CHILL_REDUCTION);
-
-  // abilityPower scales the shave; damage floors at 0.
-  augur.abilityPower = 2; g.telegraph.damage = 3;
-  g._fireAbility(augur);
-  eq('Grave Chill floors telegraph damage at 0', g.telegraph.damage, 0);
 }
 
 finish();

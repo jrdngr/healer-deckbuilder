@@ -295,7 +295,7 @@ function tryRegenTank(game: Game): boolean {
 // is the preferred prime when both are in hand.
 function tryRefresh(game: Game): boolean {
   if (game.refreshTurns > 0 || game.turn > REFRESH_TURN_GATE) return false;
-  for (const id of ['fontOfMana', 'refresh'] as CardId[]) {
+  for (const id of ['fontOfMana'] as CardId[]) {
     const idx = handIndexOf(game, id);
     if (!affordable(game, idx)) continue;
     if (game.mp - cardCost(game, idx) < 1) continue; // don't strand ourselves at 0 MP
@@ -349,19 +349,6 @@ function tryCrescendo(game: Game): boolean {
   return true;
 }
 
-// Grave Chill timing (#28): the Augur's telegraph shave is the taunt-less draft's
-// mitigation. Spend it on a genuinely big standing blow (a heavy/sweep), not a chip
-// attack — one cast per pass, and the damage-floor stops it once the blow is blunted.
-function tryGraveChill(game: Game): boolean {
-  const augur = memberByAbility(game, 'graveChill');
-  if (!augur) return false;
-  const t = game.telegraph;
-  if (!t || t.cast || t.damage < 5) return false; // only worth blunting a real threat
-  const idx = abilityCardIndex(game, 'graveChill');
-  if (!affordable(game, idx)) return false;
-  game.playCard(idx);
-  return true;
-}
 
 // Berserker band-riding (#28): Rampage doubles his CURRENT strike, so it is worth
 // most in a rage band (low HP). Fire it for a kill, or when he is in a band and we
@@ -449,78 +436,24 @@ function trySap(game: Game): boolean {
   if (game.channelActive()) return false;
   if (game.enemy.vulnerable >= SAP_VULN_CAP) return false;
   if (channelThreatUnanswered(game)) return false;
-  const hasPayoff = handIndexOf(game, 'doom') >= 0 || game.config.enemy.boss;
-  if (!hasPayoff) return false;
+  if (!game.config.enemy.boss) return false; // only worth amplifying a boss now
   const idx = handIndexOf(game, 'sap');
   if (!affordable(game, idx)) return false;
   game.playCard(idx);
   return true;
 }
 
-// Doom: a nuke that scales with how debuffed the enemy is and double-dips Vulnerability
-// (the base cap bounds only the roll; the global vuln multiplier applies on top). Fire it
-// once the enemy is amplified (Vulnerable, or carrying poison), so the debuff-first line
-// pays off — a naked Doom is weak. Target 'none'.
-function tryDoom(game: Game): boolean {
-  const idx = handIndexOf(game, 'doom');
-  if (!affordable(game, idx)) return false;
-  if (channelThreatUnanswered(game)) return false;
-  if (game.enemy.vulnerableTurns <= 0 && game.enemy.poisonTurns <= 0) return false;
-  game.playCard(idx);
-  return true;
-}
-
-// Nightfall: damage that scales with Shadow cards played this fight (base 3, +2 each, cap
-// 14) and is amplified by Vulnerability. Worth a card once the count has built. Target
-// 'none'.
-function tryNightfall(game: Game): boolean {
-  const idx = handIndexOf(game, 'nightfall');
-  if (!affordable(game, idx)) return false;
-  if (channelThreatUnanswered(game)) return false;
-  if (game.typePlayedThisFight.shadow < 2) return false; // payoff too small to spend on yet
-  game.playCard(idx);
-  return true;
-}
-
-// Cheap Shadow chip: Shadow Bolt (cost 1) is efficient damage that also builds the Shadow
-// count for Nightfall and a debuff footprint for Doom. Keep an MP reserve so it never
-// starves the heals/answers below it.
-function tryShadowChip(game: Game): boolean {
-  if (channelThreatUnanswered(game)) return false;
-  const idx = handIndexOf(game, 'shadowBolt');
-  if (!affordable(game, idx)) return false;
-  if (game.mp - cardCost(game, idx) < 2) return false; // keep a reserve for answers/heals
-  game.playCard(idx);
-  return true;
-}
-
-// Siphon Life: chip damage that also heals the most-hurt member — efficient when someone
-// is below the comfort line, otherwise held (don't burn it as pure chip).
-function trySiphon(game: Game): boolean {
-  if (channelThreatUnanswered(game)) return false;
-  const idx = handIndexOf(game, 'siphonLife');
-  if (!affordable(game, idx)) return false;
-  const hurt = [...game.livingMembers()]
-    .filter((m) => m.hp < m.maxHP * SAFE_FRACTION)
-    .sort((a, b) => a.hp / a.maxHP - b.hp / b.maxHP)[0];
-  if (!hurt) return false;
-  if (game.mp - cardCost(game, idx) < 1) return false;
-  game.playCard(idx, hurt.slot);
-  return true;
-}
-
 const STICK_TACTICS: Tactic[] = [
-  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   // Hex before offense so the Vulnerability amplifies this phase's strikes (#39).
   tryHex, tryBolt, tryPoison, tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];
 
 // Optimal: the stick's survival core, then Vulnerability set-up (Hex/Sap) so every
-// downstream strike is amplified, the Doom/Nightfall burst, the damage race with
-// Consume-aware poison, and cheap Shadow chip that keeps an MP reserve.
+// downstream strike is amplified, then the damage race with Consume-aware poison.
 const OPTIMAL_TACTICS: Tactic[] = [
-  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryGraveChill, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
-  tryHex, trySap, tryDoom, tryNightfall, tryBolt, tryConsumeAwarePoison, trySiphon, tryShadowChip,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryHex, trySap, tryBolt, tryConsumeAwarePoison,
   tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
 ];
 
@@ -591,48 +524,28 @@ export function playFight(game: Game, turnCap = 40, profile: SkillProfile = STIC
 // Buy-value of each card the shops can sell (higher = buy first). Refresh feeds
 // the MP economy. Per-member ability cards (#44) are never shopped (0, inert).
 const CARD_BUY_VALUE: Record<CardId, number> = {
-  fontOfMana: 8, refresh: 7, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2,
-  // Phase-A/B cards (#15/#16) the fight policy has no tactic for yet stay below
-  // the buy threshold — a card the policy never plays is dead deck weight.
-  overgrowth: 2, bloom: 2, inspiration: 2, cultivate: 1, lowHeal: 1,
-  lifebloom: 2, surge: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2, grimHarvest: 2,
-  phalanx: 2, brace: 2, provoke: 2,
-  // Iron mitigation web (#65): the best-3 sim policy has no steer-and-block line, so
-  // these stay dead-deck weight (they are for a human's Iron mitigation build).
-  feint: 1, anvilStance: 1, interlock: 1,
-  // Regen conversions (#66): the best-3 sim policy has no Regen-currency line, so these
-  // stay dead-deck weight (they are for a human's Regen-conversion build).
-  thornskin: 1, sporeburst: 1,
-  // Status-window management (#67): the best-3 policy has no poison/vuln-window line, so
-  // these stay dead-deck weight (a human's status-management build).
-  hemorrhage: 1, umbralFeast: 1, dreadWhisper: 1,
-  // Blood + cycling (#68): the best-3 sim policy has no HP-as-a-resource line, so these
-  // stay dead-deck weight (they are for a human's knife-edge Blood build).
-  crimsonPact: 1, scarletWard: 1, openVeins: 1, transfusion: 1, bloodBanner: 1,
-  // Holy overheal & board-state payoffs (#69): the best-3 policy already tops the party
-  // off with heal spam and has no overheal/buff-density line, so these stay dead-deck
-  // weight (they are for a human's healthy-party build).
-  benediction: 1, sunriseVigil: 1, consecration: 1, absolution: 1, rootbind: 1,
-  // Channel archetype rescue + arcane support (#70): the best-3 policy has no
-  // channel-deck line, so both stay dead-deck weight (a human's channel/arcane build).
-  attunement: 1, arcaneLens: 1,
-  // Shadow cards (#63): the best-3 sim policy has no debuff-first tactic, so these
-  // stay dead-deck weight (they are a human's Shadow build; Doom wants setup).
-  shadowBolt: 2, siphonLife: 2, doom: 1,
-  // Count-based payoff cards (#63): the best-3 policy has no type-count line, so both
-  // stay dead-deck weight.
-  cascade: 1, nightfall: 1,
-  // Channeled cards (#64): the best-3 sim policy has no "commit the whole turn to a
-  // channel" line, so these stay dead-deck weight (Refresh below keeps its own value).
-  drain: 1, mendingStream: 1, sap: 1, fortify: 1,
-  // Small-party cards (#42): the best-3 policy never fields small, so it has no
-  // tactic for them — low buy value (they're for a human's undermanned build).
-  rally: 1, focus: 1, channel: 1, holdTheLine: 1,
-  // Hero buff card batch (#62): the best-3 sim policy has no tactic for proactive
-  // hero buffs (they're for a human's setup turns), so they stay dead-deck weight.
-  guard: 1, sharpen: 1, goad: 1, doubleStrike: 1, embolden: 1, empower: 1, riposte: 1,
+  fontOfMana: 8, highHeal: 6, shield: 5, cleanse: 5, aoeHeal: 4, regen: 3, resurrect: 2,
+  bloom: 2, inspiration: 2, lowHeal: 1,
+  lifebloom: 2, battleHymn: 2, barrier: 2, bloodTithe: 2, martyrsGift: 2,
+  phalanx: 2, provoke: 2,
+  // Iron mitigation web (#65): the best-3 sim policy has no steer-and-block line.
+  feint: 1,
+  // Regen conversion (#66): no Regen-currency line for the best-3 policy.
+  sporeburst: 1,
+  // Status-window management (#67): no poison/vuln-window line for the best-3 policy.
+  hemorrhage: 1, dreadWhisper: 1,
+  // Blood + cycling (#68): no HP-as-a-resource line for the best-3 policy.
+  crimsonPact: 1, scarletWard: 1, transfusion: 1, bloodBanner: 1,
+  // Holy board-state payoffs (#69): the best-3 policy already tops off with heal spam.
+  sunriseVigil: 1, consecration: 1,
+  // Arcane support (#70): no channel/arcane build for the best-3 policy.
+  arcaneLens: 1,
+  // Channeled cards (#64): no "commit the whole turn to a channel" line for the policy.
+  mendingStream: 1, sap: 1, fortify: 1,
+  // Hero buff card batch (#62): no proactive-buff tactic for the best-3 policy.
+  guard: 1, sharpen: 1, doubleStrike: 1, empower: 1, riposte: 1,
   // Ability cards (#44) — inserted per-fight, never bought.
-  imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, hush: 0, beckon: 0, stagger: 0, ferment: 0, liturgy: 0, enGarde: 0, penance: 0, radiance: 0,
+  imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, beckon: 0, stagger: 0, enGarde: 0, penance: 0,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 
@@ -732,32 +645,22 @@ function shopModifierNode(run: Run): void {
 // steady damage top the list (the levers the balance passes found mattered);
 // the Lantern trails (hidden attacks are rare and already magnitude-revealed).
 const RELIC_VALUE: Record<RelicId, number> = {
-  titheCandle: 9, vanguardsBanner: 8, prayerBeads: 7, warDrum: 7,
-  fieldTriage: 6, groundingRod: 6, stormglass: 5, echoLocket: 5,
+  vanguardsBanner: 8, prayerBeads: 7, warDrum: 7,
+  fieldTriage: 6,
   hagglersCharm: 4, lantern: 2,
-  // Phase-B rule-changers (#22). The Taper's hand 3->2 starves this policy's
-  // tactic engine, so it never takes one; the others are solid defensive picks.
-  martyrsIcon: 6, duskChime: 6, aegisFont: 4, firstLightTaper: 0,
+  // Phase-B rule-changers (#22): a solid defensive pick.
+  martyrsIcon: 6,
   // Curses are deliberate player trades; the fixed policy never buys one.
-  pactOfSilence: 0, crackedHourglass: 0, rustyCrown: 0,
+  pactOfSilence: 0, rustyCrown: 0,
   // Small-party relics (#42): the best-3 policy never fields small, so it can't use
   // these — value 0 (they're a human undermanned-build reward, exercised via #42's gate).
   loneWolf: 0, focusStone: 0, warband: 0,
-  // Card-type synergy relics (#63): the best-3 policy has no type-themed line (it never
-  // banks the Shadow/Iron cards, and its heal spam already tops off), so value 0.
-  reliquaryOfLight: 0, shadowSigil: 0, ironWard: 0,
-  // Iron mitigation web relics (#65): the best-3 policy has no steer-and-block line, so
-  // it can't leverage these — value 0 (they're a human Iron-build reward).
-  whetstone: 0, bulwarkCore: 0,
-  // Regen conversions relics (#66): the best-3 policy has no Regen-currency line, so it
-  // can't leverage these — value 0 (they're a human Regen-conversion reward).
-  deepRoots: 0, ossuaryBell: 0,
-  // Status-window management relics (#67): the best-3 policy has no poison/vuln-window
-  // line, so it can't leverage these — value 0 (a human status-management reward).
-  venomGland: 0, embermark: 0,
-  // Blood + cycling relics (#68): the best-3 policy has no HP-as-a-resource / reshuffle
-  // line, so it can't leverage these — value 0 (Sanguine Pact is a curse besides).
-  grimoireOfTurning: 0, sanguinePact: 0,
+  // Card-type synergy relics (#63): the best-3 policy has no type-themed line, so value 0.
+  reliquaryOfLight: 0,
+  // Regen conversions relics (#66): the best-3 policy has no Regen-currency line, so value 0.
+  ossuaryBell: 0,
+  // Status-window management relics (#67): no poison/vuln-window line — value 0.
+  venomGland: 0,
   // Holy overheal & board-state relics (#69): the best-3 policy tops off with heal spam
   // (so Beacon's heal-to-full draw and Twin Censer's splash rarely fire on a healthy
   // party) and has no build for them — value 0 (a human healthy-party reward).

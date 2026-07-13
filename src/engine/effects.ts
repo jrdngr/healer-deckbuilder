@@ -16,7 +16,7 @@ import {
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
   TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE,
   GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS,
-  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, RADIANCE_HEAL,
+  EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, RADIANCE_HEAL,
   SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL,
   DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP, cardType,
   HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT,
@@ -97,19 +97,7 @@ Game.prototype._applyCard = function (card, target) {
         this._log(`Group Heal: all living members heal up to ${card.heal}.`, 'heal');
         break;
       }
-      // --- Holy overheal & board-state payoffs (#69) --------------------------
-      case 'benediction': {
-        // Heal a flat base + BENEDICTION_PER_BUFF per active buff on the TARGET (the
-        // per-member buff count, #67). No cap — buff density is the payoff.
-        const m = this.members[target as number];
-        const buffs = this._memberEffectCount(m);
-        const amount = BENEDICTION_HEAL + BENEDICTION_PER_BUFF * buffs + this._holyHealBonus(card);
-        const healed = this._healMember(m, amount, true);
-        this._log(`Benediction: ${m.name} heals ${healed} (${buffs} buff${buffs === 1 ? '' : 's'}). (${m.hp}/${m.maxHP})`, 'heal');
-        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
-        break;
-      }
+      // --- Holy board-state payoffs (#69) -------------------------------------
       case 'sunriseVigil': {
         // Queue a delayed party heal — it fires at the START of the next player phase
         // (after the Regen tick, before the draw; see _startPlayerPhase). Each cast
@@ -138,47 +126,6 @@ Game.prototype._applyCard = function (card, target) {
         if (atFullSlots.length > 0) this._emit({ kind: 'hymn', bonus: CONSECRATION_STRIKE_BONUS, slots: atFullSlots });
         break;
       }
-      case 'absolution': {
-        // Heal, then convert any OVERHEAL into Brace on the target (uncapped, respecting
-        // the Shield-OR-Brace rule, #17). captureOverheal suppresses Aegis Font's own
-        // conversion this cast — Absolution converts first, the Font gets nothing.
-        const m = this.members[target as number];
-        const amount = ABSOLUTION_HEAL + this._holyHealBonus(card);
-        const res = this._applyHeal(m, amount, true, true);
-        this._emit({ kind: 'heal', slot: m.slot, amount: res.healed, hp: m.hp });
-        if (res.overheal > 0) {
-          m.brace = true;
-          m.braceAmount = res.overheal; // variable Brace strength (#69)
-          m.braceTurns = BRACE_TURNS;
-          m.shield = false; m.shieldTurns = 0; // newest ward replaces (#17)
-          this._log(`Absolution: ${m.name} heals ${res.healed}; ${res.overheal} overheal hardens into Brace ${res.overheal}.`, 'status');
-          this._emit({ kind: 'braceApplied', slot: m.slot });
-        } else {
-          this._log(`Absolution: ${m.name} heals ${res.healed}. (${m.hp}/${m.maxHP})`, 'heal');
-        }
-        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
-        break;
-      }
-      case 'rootbind': {
-        // Extend every FRIENDLY timed effect by ROOTBIND_BONUS_TURNS. Published field list
-        // (#69): regen (magnitude == duration), shieldTurns, braceTurns, guardTurns,
-        // defense, strikeTurns, taunt. Effects at 0 (absent) are untouched. Enemy statuses
-        // (#67), channels (turn-gated), Interlock grants, and once-armed flags
-        // (Empower/Riposte/drumPrimed, Anvil Stance, Thornskin) carry no member timer here
-        // and are deliberately excluded.
-        let extended = 0;
-        for (const m of this.livingMembers()) {
-          if (m.regen > 0) { m.regen += ROOTBIND_BONUS_TURNS; extended += 1; }
-          if (m.shieldTurns > 0) { m.shieldTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
-          if (m.braceTurns > 0) { m.braceTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
-          if (m.guardTurns > 0) { m.guardTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
-          if (m.defense > 0) { m.defense += ROOTBIND_BONUS_TURNS; extended += 1; }
-          if (m.strikeTurns > 0) { m.strikeTurns += ROOTBIND_BONUS_TURNS; extended += 1; }
-          if (m.taunt > 0) { m.taunt += ROOTBIND_BONUS_TURNS; extended += 1; }
-        }
-        this._log(`Rootbind: ${extended} friendly timed effect${extended === 1 ? '' : 's'} last +${ROOTBIND_BONUS_TURNS} turn.`, 'status');
-        break;
-      }
       case 'regen': {
         const m = this.members[target as number];
         // Additive (#52): the card's amount adds to any existing Regen — magnitude
@@ -193,8 +140,6 @@ Game.prototype._applyCard = function (card, target) {
         const m = this.members[target as number];
         m.shield = true; // does not stack
         m.shieldTurns = SHIELD_TURNS; // re-raising refreshes the fuse
-        m.brace = false; // a member holds Shield OR Brace — newest replaces (#17)
-        m.braceTurns = 0;
         this._log(`Shield raised on ${m.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
@@ -203,18 +148,14 @@ Game.prototype._applyCard = function (card, target) {
         const m = this.members[target as number];
         m.alive = true;
         m.hp = Math.ceil(m.maxHP / 2);
-        m.brace = false; m.braceTurns = 0;
-        m.regen = 0; m.bloomBurst = 0; m.thornskin = false; // #66 mark cleared on revive
+        m.regen = 0; m.bloomBurst = 0;
         m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
         m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
-        m.interlockGuardTurns = []; m.anvilStance = false; // #65 buffs/marks cleared on revive
-        m.empowerBonus = 0; m.riposte = false; m.riposteTurns = 0; // En Garde stance cleared on revive (#74)
-        // Reworked (#18): the revive comes back behind a fresh Shield so the
-        // standing telegraph can't immediately undo the 4 MP investment.
-        m.shield = true; m.shieldTurns = SHIELD_TURNS;
-        this._log(`${m.name} is resurrected to ${m.hp} HP behind a Shield.`, 'status');
+        m.empowerBonus = 0; m.riposte = false; m.riposteTurns = 0; // Riposte / En Garde stance cleared on revive
+        // Reworked (#18): 6 MP -> 4, revive to 50% max HP. (The return-behind-a-Shield
+        // rider was removed in the content-cut pass.)
+        this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
-        this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
       }
       case 'fontOfMana': {
@@ -230,31 +171,11 @@ Game.prototype._applyCard = function (card, target) {
         this._emit({ kind: 'refreshPrimed', stack: this.refresh });
         break;
       }
-      case 'overgrowth': {
-        // Party-wide Regen with the single-target card's additive semantics per
-        // member (#52): the card's amount adds to each member's existing Regen.
-        for (const m of this.livingMembers()) {
-          m.regen += card.regen ?? 0;
-          this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
-        }
-        this._log(`Overgrowth: Regen +${card.regen} on all living members (decays each turn).`, 'status');
-        break;
-      }
-      case 'cultivate': {
-        const m = this.members[target as number];
-        // Modify the active Regen IN PLACE (canPlay guarantees one): add to the
-        // single value, so it heals more AND lasts a tick longer (#52), and any
-        // pending Lifebloom burst (#16) rides along untouched.
-        m.regen += CULTIVATE_STRENGTH;
-        this._log(`Cultivate: ${m.name}'s Regen grows to ${m.regen} (decays each turn).`, 'status');
-        this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
-        break;
-      }
       case 'bloom': {
         const m = this.members[target as number];
-        // Consume the Regen: heal per remaining tick (== the Regen value, #52),
-        // then it's gone.
-        const healed = this._healMember(m, BLOOM_HEAL_PER_TURN * m.regen, true);
+        // Consume the Regen: heal its full remaining amount at once (magnitude == the
+        // Regen value, #52), then it's gone.
+        const healed = this._healMember(m, m.regen, true);
         m.regen = 0;
         this._log(`Bloom consumes ${m.name}'s Regen: heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
         this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
@@ -263,10 +184,7 @@ Game.prototype._applyCard = function (card, target) {
         this._onRegenEnded(m, true);
         break;
       }
-      // Cascade (#63) shares Inspiration's draw effect; its Arcane count payoff is a
-      // cost discount, resolved in effectiveCost (the counter is read there).
-      case 'inspiration':
-      case 'cascade': {
+      case 'inspiration': {
         const before = this.hand.length;
         for (let i = 0; i < (card.draw ?? 0); i++) {
           const c = this._drawOne();
@@ -278,22 +196,6 @@ Game.prototype._applyCard = function (card, target) {
         this._emit({ kind: 'draw', count: drawn });
         break;
       }
-      case 'attunement': {
-        // Draw 1; the drawn instance's uid is stamped channel-exempt so its later play
-        // (this turn or any later turn) won't break a channel either (#70). Attunement's
-        // own uid was already stamped in playCard, before the cancel check. Engine-tagged,
-        // so Retain/Efficient never touch it. When both piles are empty the draw no-ops.
-        const c = this._drawOne();
-        if (c != null) {
-          this.hand.push(c);
-          this.channelExemptUids.add(c.uid);
-          this._log("Attunement: draw 1 (it won't break your channel).", 'status');
-          this._emit({ kind: 'draw', count: 1 });
-        } else {
-          this._log('Attunement: nothing left to draw.', 'status');
-        }
-        break;
-      }
       case 'arcaneLens': {
         // Arm a one-shot turn flag (mirrors Surge's next-card flag, #16): the next
         // single-target heal this turn also heals the most wounded OTHER member for the
@@ -301,14 +203,6 @@ Game.prototype._applyCard = function (card, target) {
         this.lensArmed = true;
         this._log('Arcane Lens: your next single-target heal also refracts to the most wounded ally.', 'status');
         this._emit({ kind: 'lensArmed' });
-        break;
-      }
-      case 'nightfall': {
-        // A Shadow nuke that grows with Shadow cards played THIS FIGHT (the per-fight
-        // counter is bumped after this resolves, so it reads the plays before it), capped.
-        const dmg = Math.min(NIGHTFALL_CAP, NIGHTFALL_BASE + NIGHTFALL_PER_SHADOW * this.typePlayedThisFight.shadow);
-        const killed = this._damageEnemy(dmg, 'Nightfall');
-        this._emitEnemyNuke(dmg, killed);
         break;
       }
       case 'lifebloom': {
@@ -320,12 +214,6 @@ Game.prototype._applyCard = function (card, target) {
         m.bloomBurst = LIFEBLOOM_BURST;
         this._log(`Lifebloom on ${m.name} (Regen ${m.regen}, decays each turn; bursts ${LIFEBLOOM_BURST} when it ends).`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
-        break;
-      }
-      case 'surge': {
-        this.surgePending = true; // consumed by the next play; cleared at end of turn
-        this._log('Surge: the next card this turn costs 0 MP.', 'status');
-        this._emit({ kind: 'surge' });
         break;
       }
       case 'battleHymn': {
@@ -341,8 +229,6 @@ Game.prototype._applyCard = function (card, target) {
         for (const m of this.livingMembers()) {
           m.shield = true;
           m.shieldTurns = Math.max(m.shieldTurns, BARRIER_TURNS);
-          m.brace = false; // newest ward replaces (#17)
-          m.braceTurns = 0;
           this._emit({ kind: 'shieldApplied', slot: m.slot });
         }
         this._log('Barrier: every living member gains a Shield (fades after the next enemy phase).', 'status');
@@ -368,15 +254,6 @@ Game.prototype._applyCard = function (card, target) {
         this._log(`Martyr's Gift: ${m.name} pays ${paid} HP; the others heal up to ${card.heal}.`, 'heal');
         break;
       }
-      case 'grimHarvest': {
-        const m = this.members[target as number];
-        const paid = this._bloodPay(m, this._bloodCost(card));
-        this._log(`Grim Harvest: ${m.name} pays ${paid} HP.`, 'status');
-        const killed = this._damageEnemy(GRIM_HARVEST_DMG, 'Grim Harvest');
-        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(GRIM_HARVEST_DMG), enemyHp: this.enemy.hp });
-        if (killed) this._emit({ kind: 'defeatEnemy' });
-        break;
-      }
       // --- Blood + cycling (#68): HP as a spendable resource -------------------
       case 'crimsonPact': {
         // Pay HP, then draw through the normal draw path — a reshuffle mid-draw fires
@@ -400,19 +277,8 @@ Game.prototype._applyCard = function (card, target) {
         // A normal Shield (replaces Brace, fades in SHIELD_TURNS enemy turns).
         m.shield = true;
         m.shieldTurns = SHIELD_TURNS;
-        m.brace = false;
-        m.braceTurns = 0;
         this._log(`Scarlet Ward: ${m.name} pays ${paid} HP for a Shield (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'shieldApplied', slot: m.slot });
-        break;
-      }
-      case 'openVeins': {
-        const m = this.members[target as number];
-        const paid = this._bloodPay(m, this._bloodCost(card));
-        this._log(`Open Veins: ${m.name} pays ${paid} HP.`, 'status');
-        const killed = this._damageEnemy(OPEN_VEINS_DMG, 'Open Veins');
-        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(OPEN_VEINS_DMG), enemyHp: this.enemy.hp });
-        if (killed) this._emit({ kind: 'defeatEnemy' });
         break;
       }
       case 'transfusion': {
@@ -440,31 +306,6 @@ Game.prototype._applyCard = function (card, target) {
         this._emit({ kind: 'hymn', bonus: BLOOD_BANNER_BONUS, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
-      // --- Shadow cards (#63): party->enemy damage through _damageEnemy, so
-      // Vulnerability applies and no enemy telegraph is perturbed. ---------------
-      case 'shadowBolt': {
-        const killed = this._damageEnemy(SHADOW_BOLT_DMG, 'Shadow Bolt');
-        this._emitEnemyNuke(SHADOW_BOLT_DMG, killed);
-        break;
-      }
-      case 'siphonLife': {
-        const m = this.members[target as number];
-        // Damage routes through the enemy pipeline (Vulnerability applies); the heal
-        // routes through the heal pipeline (Field Triage / Hex etc. apply).
-        const killed = this._damageEnemy(SIPHON_LIFE_DMG, 'Siphon Life');
-        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(SIPHON_LIFE_DMG), enemyHp: this.enemy.hp });
-        const healed = this._healMember(m, SIPHON_LIFE_HEAL, true);
-        this._log(`Siphon Life: ${m.name} drains ${healed} HP from the enemy.`, 'heal');
-        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        if (killed) this._emit({ kind: 'defeatEnemy' });
-        break;
-      }
-      case 'doom': {
-        const dmg = this._doomDamage();
-        const killed = this._damageEnemy(dmg, 'Doom');
-        this._emitEnemyNuke(dmg, killed);
-        break;
-      }
       // --- Status-window management (#67) --------------------------------------
       case 'hemorrhage': {
         // Cash the enemy's whole Poison out in one hit: per-turn × turns left. canPlay's
@@ -476,15 +317,6 @@ Game.prototype._applyCard = function (card, target) {
         this.enemy.poisonTurns = 0;
         const killed = this._damageEnemy(total, 'Hemorrhage');
         this._emitEnemyNuke(total, killed);
-        break;
-      }
-      case 'umbralFeast': {
-        // 1 damage per active effect in play (party buffs + enemy debuffs), counted at
-        // cast time by the published helper. Uncapped. Routes through _damageEnemy so
-        // Vulnerability (itself one of the counted effects) multiplies it.
-        const dmg = this._activeEffectCount() * UMBRAL_FEAST_PER_EFFECT;
-        const killed = this._damageEnemy(dmg, 'Umbral Feast');
-        this._emitEnemyNuke(dmg, killed);
         break;
       }
       case 'dreadWhisper': {
@@ -512,26 +344,13 @@ Game.prototype._applyCard = function (card, target) {
         this._emit({ kind: 'defenseApplied', slot: m.slot, amount: PHALANX_DEFENSE });
         break;
       }
-      case 'brace': {
-        const m = this.members[target as number];
-        m.brace = true;
-        m.braceAmount = BRACE_AMOUNT; // standard Brace strength (#69)
-        m.braceTurns = BRACE_TURNS;
-        m.shield = false; // a member holds Shield OR Brace — newest replaces
-        m.shieldTurns = 0;
-        this._log(`${m.name} Braces: the next hit deals ${BRACE_AMOUNT} less (fades in ${BRACE_TURNS} enemy turns).`, 'status');
-        this._emit({ kind: 'braceApplied', slot: m.slot });
-        break;
-      }
       case 'provoke': {
-        // Taunt-lite (#31): make any member the enemy's aim, with a light bundled
-        // Defense. Like the Tank's Taunt, future telegraphs auto-aim at them (via
-        // _pickPrimary); the standing blow is not redirected for free.
+        // Taunt-lite (#31): make any member the enemy's aim (no bundled Defense — that
+        // was removed in the content-cut pass). Like the Tank's Taunt, future telegraphs
+        // auto-aim at them (via _pickPrimary); the standing blow is not redirected for free.
         const m = this.members[target as number];
         m.taunt = TAUNT_LITE_TURNS;
-        m.defense = TAUNT_LITE_TURNS;
-        m.defenseAmount = Math.max(m.defense > 0 ? m.defenseAmount : 0, TAUNT_LITE_DEFENSE);
-        this._log(`${m.name} Provokes — the enemy turns to them (Defense ${TAUNT_LITE_DEFENSE}) for ${TAUNT_LITE_TURNS} enemy turns.`, 'status');
+        this._log(`${m.name} Provokes — the enemy turns to them for ${TAUNT_LITE_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_LITE_TURNS });
         break;
       }
@@ -554,39 +373,7 @@ Game.prototype._applyCard = function (card, target) {
         }
         break;
       }
-      case 'anvilStance': {
-        // Mark the member: while they hold a Shield or Brace, their autos deal
-        // +ANVIL_STANCE_BONUS. The mark persists for the fight — the CONDITION gates it,
-        // checked at auto time in memberDamage.
-        const m = this.members[target as number];
-        m.anvilStance = true;
-        this._log(`${m.name} takes an Anvil Stance — +${ANVIL_STANCE_BONUS} damage while holding a Shield or Brace.`, 'status');
-        this._emit({ kind: 'braceApplied', slot: m.slot });
-        break;
-      }
-      case 'interlock': {
-        // Grant every living member a Guard that stacks FREELY (relaxing Guard's
-        // no-self-stack rule): push one grant with its own timer, so repeat casts and
-        // pre-existing Guard all add up and each expires independently.
-        for (const m of this.livingMembers()) {
-          m.interlockGuardTurns = [...m.interlockGuardTurns, INTERLOCK_GUARD_TURNS];
-          this._emit({ kind: 'defenseApplied', slot: m.slot, amount: INTERLOCK_GUARD_DR });
-        }
-        this._log(`Interlock: every living member gains Guard ${INTERLOCK_GUARD_DR} for ${INTERLOCK_GUARD_TURNS} enemy turns.`, 'status');
-        break;
-      }
       // --- Regen conversions (#66) ---------------------------------------------
-      case 'thornskin': {
-        // Arm the Thornskin mark on the target (canPlay's needsRegen gate guarantees
-        // an active Regen). The reduction has no timer of its own — it rides the Regen
-        // and is checked in _effectiveDamage; _onRegenEnded clears the mark when the
-        // Regen ends. A recast onto the same Regen is a harmless no-op (already armed).
-        const m = this.members[target as number];
-        m.thornskin = true;
-        this._log(`${m.name}'s skin hardens like bark — ${THORNSKIN_REDUCTION} less from each hit while their Regen lasts.`, 'status');
-        this._emit({ kind: 'braceApplied', slot: m.slot });
-        break;
-      }
       case 'sporeburst': {
         // Consume the full remaining Regen (canPlay's needsRegen gate guarantees > 0)
         // and convert every consumed tick into a turn of enemy Poison via the wave-wide
@@ -599,49 +386,6 @@ Game.prototype._applyCard = function (card, target) {
         this._log(`Sporeburst consumes ${m.name}'s Regen — the enemy is poisoned ${SPOREBURST_POISON}/turn for ${ticks} turn${ticks === 1 ? '' : 's'}. (${this.enemy.poison}/turn for ${this.enemy.poisonTurns})`, 'status');
         this._emit({ kind: 'poisonApplied', slot: m.slot, amount: SPOREBURST_POISON, poison: this.enemy.poison });
         this._onRegenEnded(m, true);
-        break;
-      }
-      // --- small-party cards (#42) ---------------------------------------------
-      case 'rally': {
-        // Every attack this turn deals more, scaled by empty deploy seats — a lone
-        // striker swings for a lot; a full party gains nothing.
-        const empty = 3 - this.fieldedPartySize();
-        this.hymnBonus = Math.max(this.hymnBonus, RALLY_DMG_PER_SEAT * empty);
-        this._log(`Rally: every attack this turn deals +${RALLY_DMG_PER_SEAT * empty} (${empty} empty seat${empty === 1 ? '' : 's'}).`, 'status');
-        this._emit({ kind: 'hymn', bonus: this.hymnBonus, slots: this.livingMembers().map((x) => x.slot) });
-        break;
-      }
-      case 'focus': {
-        // A concentrated heal: more efficient when there are fewer bodies to spread across.
-        const m = this.members[target as number];
-        const amount = (card.heal ?? FOCUS_HEAL) + (this.fieldedPartySize() <= SMALL_PARTY_MAX ? FOCUS_SMALL_BONUS : 0) + this._holyHealBonus(card);
-        const healed = this._healMember(m, amount, true);
-        this._log(`Focus: ${m.name} heals ${healed}. (${m.hp}/${m.maxHP})`, 'heal');
-        this._emit({ kind: 'heal', slot: m.slot, amount: healed, hp: m.hp });
-        this._healCardSplash(m, amount); // #69 Twin Censer + #70 Arcane Lens
-        break;
-      }
-      case 'channel': {
-        const empty = 3 - this.fieldedPartySize();
-        const before = this.mp;
-        this.mp = Math.min(this.maxMana, this.mp + CHANNEL_MP + empty);
-        this._log(`Channel restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
-        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
-        break;
-      }
-      case 'holdTheLine': {
-        // A mass Shield, but only a small party can hold it — a reward for undermanning.
-        if (this.fieldedPartySize() <= SMALL_PARTY_MAX) {
-          for (const m of this.livingMembers()) {
-            m.shield = true;
-            m.shieldTurns = SHIELD_TURNS;
-            m.brace = false; m.braceTurns = 0;
-            this._emit({ kind: 'shieldApplied', slot: m.slot });
-          }
-          this._log('Hold the Line — the small party braces behind Shields.', 'status');
-        } else {
-          this._log('Hold the Line finds too many bodies to shield (field 2 or fewer).', 'status');
-        }
         break;
       }
       // --- hero buff card batch (#62) ------------------------------------------
@@ -663,30 +407,6 @@ Game.prototype._applyCard = function (card, target) {
         m.strikeTurns = SHARPEN_TURNS;
         this._log(`Sharpen on ${m.name}: +${SHARPEN_BONUS} damage for ${SHARPEN_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'hymn', bonus: SHARPEN_BONUS, slots: [m.slot] });
-        break;
-      }
-      case 'embolden': {
-        // +EMBOLDEN_BONUS auto damage to EVERY fielded hero, decaying over N turns.
-        // A standing party buff (unlike the one-phase `rally` card's hymnBonus).
-        for (const m of this.livingMembers()) {
-          m.strikeBonus = Math.max(m.strikeTurns > 0 ? m.strikeBonus : 0, EMBOLDEN_BONUS);
-          m.strikeTurns = EMBOLDEN_TURNS;
-        }
-        this._log(`Embolden: every fielded hero deals +${EMBOLDEN_BONUS} for ${EMBOLDEN_TURNS} enemy turns.`, 'status');
-        this._emit({ kind: 'hymn', bonus: EMBOLDEN_BONUS, slots: this.livingMembers().map((x) => x.slot) });
-        break;
-      }
-      case 'goad': {
-        // The same Taunt(+Defense) the Tank's ability grants, from a card on any hero.
-        // Defense strength scales on the target's abilityPower and keeps a stronger
-        // Defense already standing (floored at 0, mirroring the taunt ability).
-        const m = this.members[target as number];
-        const strength = Math.max(0, DEFENSE_AMOUNT + m.abilityPower);
-        m.defenseAmount = m.defense > 0 ? Math.max(m.defenseAmount, strength) : strength;
-        m.taunt = TAUNT_TURNS;
-        m.defense = DEFENSE_TURNS;
-        this._log(`${m.name} is Goaded to the front — Taunt and Defense ${strength} for ${TAUNT_TURNS} enemy turns.`, 'status');
-        this._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_TURNS });
         break;
       }
       case 'doubleStrike': {
@@ -712,15 +432,17 @@ Game.prototype._applyCard = function (card, target) {
         const m = this.members[target as number];
         m.riposte = true;
         this._log(`${m.name} sets a Riposte — the next hit will be answered in kind.`, 'status');
-        this._emit({ kind: 'braceApplied', slot: m.slot });
+        this._emit({ kind: 'enGarde', slot: m.slot, turns: 1 });
         break;
       }
       case 'cleanse': {
-        // Removes the Hexweaver's party-wide Hex (#13). Always playable; a no-op if
-        // nothing is Wounded (the animator still gets an event to acknowledge it).
+        // Purge all negative party statuses. Today the only party-side status is the
+        // Hexweaver's party-wide Hex (#13), so clearing woundTurns lifts it; the effect
+        // is written as a general purge so new party debuffs are covered automatically.
+        // Always playable; a no-op if nothing is afflicted (the animator still gets an event).
         const had = this.woundTurns > 0;
         this.woundTurns = 0;
-        this._log(had ? 'Cleanse lifts the Hex — healing is restored.' : 'Cleanse finds no curse to lift.', 'status');
+        this._log(had ? 'Cleanse purges the party — all afflictions lifted.' : 'Cleanse finds nothing to purge.', 'status');
         this._emit({ kind: 'cleanse', slot: SLOT.CENTER });
         break;
       }
@@ -743,10 +465,9 @@ Game.prototype._fireAbility = function (m, target = null) {
     }
     switch (m.ability) {
       case 'poison': {
-        const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
         // Floored at 1: a Broken member (DR1) can carry negative abilityPower, but
         // an ability never resolves to 0-or-below damage.
-        const strength = Math.max(1, POISON_BASE + m.abilityPower + hourglass);
+        const strength = Math.max(1, POISON_BASE + m.abilityPower);
         // Re-applying refreshes the duration and keeps the stronger value (no stacking).
         // Venom Gland (#67) extends the window by VENOM_GLAND_BONUS_TURNS at apply time,
         // like every poison application (Sporeburst rides the same bonus in _applyPoison).
@@ -781,10 +502,9 @@ Game.prototype._fireAbility = function (m, target = null) {
       }
       case 'bolt': {
         // Bolt scales on the *caster's* Charge.
-        const hourglass = this.hasRelic('crackedHourglass') ? HOURGLASS_POWER_BONUS : 0;
         // Floored at 1 (DR1): see the poison note — a Broken member still bolts for
         // at least its Charge scaling.
-        const base = Math.max(1, BOLT_BASE + m.abilityPower + hourglass);
+        const base = Math.max(1, BOLT_BASE + m.abilityPower);
         const dmg = base + BOLT_CHARGE_MULT * m.charge;
         this._log(`${m.name} casts Lightning Bolt (base ${base} + ${BOLT_CHARGE_MULT}×Charge ${m.charge}).`, 'status');
         m.charge = 0;
@@ -833,22 +553,6 @@ Game.prototype._fireAbility = function (m, target = null) {
         this._bloodPay(m, RAMPAGE_SELF_DMG);
         break;
       }
-      case 'graveChill': {
-        // The Grave Augur (#28) shaves GRAVE_CHILL_REDUCTION (+abilityPower) damage per
-        // target off the standing telegraph (floor 0) — the taunt-less redirection
-        // substitute. Modifies the telegraph in place, so attackTargets() previews it.
-        const t = this.telegraph;
-        const reduce = Math.max(0, GRAVE_CHILL_REDUCTION + m.abilityPower);
-        if (t && !t.cast && t.damage > 0) {
-          const before = t.damage;
-          t.damage = Math.max(0, t.damage - reduce);
-          this._log(`${m.name} chills the ${this.telegraphIntent() ?? 'attack'}: ${before} → ${t.damage} per target.`, 'status');
-          this._emit({ kind: 'graveChill', slot: m.slot, amount: before - t.damage });
-        } else {
-          this._log(`${m.name} reaches for the telegraph, but there is nothing to chill.`, 'status');
-        }
-        break;
-      }
       case 'callBoar': {
         // The Beast Warden (#29) summons a Boar on her slot: it soaks whole hits
         // aimed at her, lends her its strike, and lasts BOAR_TURNS enemy turns.
@@ -877,44 +581,17 @@ Game.prototype._fireAbility = function (m, target = null) {
         }
         break;
       }
-      case 'ferment': {
-        // The Plaguewright (#72) opens a fermentation window: for the next FERMENT_TURNS
-        // enemy turns, Poison compounds (see the tick in _runEnemyPhase). Recasts extend
-        // the remaining window additively — no cap. The per-tick growth is captured at
-        // cast time (the tick has no caster) and scaled by the caster's ability power
-        // (Empower / injury penalty). Floored at 0 so a Broken member can't SHRINK Poison
-        // (mirrors the taunt/poison DR1 floors); no upper cap. The window opens even with
-        // no Poison standing — it ferments whatever arrives before it closes.
-        const growth = Math.max(0, FERMENT_GROWTH + m.abilityPower);
-        this.enemy.fermentTurns += FERMENT_TURNS;
-        this.enemy.fermentGrowth = growth;
-        this._log(`${m.name} Ferments the enemy's Poison — it compounds (+${growth}/turn, duration frozen) for the next ${this.enemy.fermentTurns} enemy turns.`, 'status');
-        this._emit({ kind: 'ferment', slot: m.slot, turns: this.enemy.fermentTurns, growth });
-        break;
-      }
-      case 'liturgy': {
-        // The Hierophant (#73) gives the active channel DUAL CADENCE: for its remaining
-        // duration it also ticks at the start of the enemy phase (see _runEnemyPhase),
-        // before the blow lands. canPlay's needsChannel gate guarantees a channel is
-        // running, and Liturgy is channel-exempt so playing it never broke that channel.
-        // Idempotent: recasting while already dual-cadenced just re-affirms the flag.
-        if (this.channelActive()) {
-          const already = this.channelDualCadence;
-          this.channelDualCadence = true;
-          this._log(already
-            ? `${m.name}'s Liturgy already sustains the ${CARDS[this.channelCard as CardId].name} channel's dual cadence.`
-            : `${m.name} intones a Liturgy — the ${CARDS[this.channelCard as CardId].name} channel gains dual cadence (an extra enemy-phase tick each round).`, 'status');
-        }
-        break;
-      }
       case 'enGarde': {
-        // The Duelist (#74) grants a CHOSEN member the persistent Riposte stance. This is
-        // the first target 'single' ability card, so `target` is the picked slot (canPlay's
-        // 'single' branch already validated a living member); it defaults to the Duelist
-        // herself if somehow unset. Recasting refreshes the duration (no stacking).
+        // The Duelist (#74) Provokes a CHOSEN member (Taunt — the enemy aims at them) and
+        // grants them the persistent Riposte stance for EN_GARDE_TURNS enemy turns. Target
+        // 'single', so `target` is the picked slot (canPlay's 'single' branch already
+        // validated a living member); it defaults to the Duelist herself if unset.
+        // Recasting refreshes the duration (no stacking).
         const holder = (target != null && this.members[target]?.alive) ? this.members[target] : m;
+        holder.taunt = EN_GARDE_TURNS;
         holder.riposteTurns = EN_GARDE_TURNS;
-        this._log(`${m.name} sets ${holder === m ? 'her own' : `${holder.name}'s`} guard — En Garde: every hit is answered for ${EN_GARDE_TURNS} enemy turns.`, 'status');
+        this._log(`${m.name} sets ${holder === m ? 'her own' : `${holder.name}'s`} guard — En Garde: ${holder.name} Provokes and counters every hit for ${EN_GARDE_TURNS} enemy turns.`, 'status');
+        this._emit({ kind: 'taunt', slot: holder.slot, turns: EN_GARDE_TURNS });
         this._emit({ kind: 'enGarde', slot: holder.slot, turns: EN_GARDE_TURNS });
         break;
       }
@@ -934,52 +611,15 @@ Game.prototype._fireAbility = function (m, target = null) {
         const cost = PENANCE_HP + this._sanguineSurcharge();
         this._drainMember(m, cost);
         const died = !m.alive;
+        // The buff now lasts 2 enemy turns (was cast-turn only): penanceBonus is the
+        // standing +auto and penanceTurns its timer, decremented on the enemy phase.
         this.penanceBonus = Math.max(this.penanceBonus, PENANCE_STRIKE_BONUS);
+        this.penanceTurns = PENANCE_STRIKE_TURNS;
         this._log(died
-          ? `${m.name} spends the last of his blood — Penance is paid. Every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`
-          : `${m.name} scourges himself (-${cost} HP) — Penance: every living member's auto deals +${PENANCE_STRIKE_BONUS} this turn.`, 'status');
+          ? `${m.name} spends the last of his blood — Penance is paid. Every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`
+          : `${m.name} scourges himself (-${cost} HP) — Penance: every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died,
           slots: this.livingMembers().map((x) => x.slot) });
-        break;
-      }
-      case 'radiance': {
-        // The Lightkeeper (#76) heals EVERY living member and turns each member's OVERHEAL
-        // into Brace — the wave's "party at full HP" payoff (#69). The heal routes through
-        // the normal pipeline (_applyHeal): Field Triage, Reliquary of Light (via the holy
-        // bonus below), and Beacon's heal-to-full draw all apply, and #69's result struct
-        // (healed/overheal/reachedFull) supplies the overheal — no separate overheal math.
-        // abilityPower (Empower / injury) scales the heal (and therefore the possible Brace),
-        // keeping one lever; it was already bumped by Empower at the top of _fireAbility.
-        //   - ADDITIVE carve-out: Radiance's Brace ADDS to any existing Brace (brace +=
-        //     overheal) and refreshes the single timer — deliberately unlike the Brace card's
-        //     newest-replaces rule, so repeat casts pile it up. No cap.
-        //   - SHIELD asymmetry (the one documented exception): a member holding a Shield keeps
-        //     it — the conversion is SKIPPED for them (a full block already beats Brace 2;
-        //     silently downgrading a Shield would be a feel-bad trap). The heal still lands.
-        // Reliquary of Light: radiance is a holy card, so its +1 holy heal rides the amount —
-        // on topped members that becomes +1 more Brace (intended relic chemistry).
-        const reliquary = this.hasRelic('reliquaryOfLight') ? HOLY_RELIC_HEAL : 0;
-        const amount = Math.max(0, RADIANCE_HEAL + m.abilityPower) + reliquary;
-        let braced = 0;
-        for (const t of this.livingMembers()) {
-          // captureOverheal=true: Radiance claims the overheal for Brace, so Aegis Font
-          // gets NO share of it (the #69 ordering rule — no double-convert), exactly as
-          // Absolution does. Beacon's heal-to-full draw still fires (it ignores the flag).
-          const res = this._applyHeal(t, amount, true, true);
-          this._emit({ kind: 'heal', slot: t.slot, amount: res.healed, hp: t.hp });
-          // Shield-holders skip the conversion (Shield preserved); everyone else's overheal
-          // hardens into additive Brace with the timer refreshed.
-          if (res.overheal > 0 && !t.shield) {
-            t.brace = true;
-            t.braceAmount += res.overheal; // additive carve-out (#76): 0 (no prior) -> overheal, or pile onto existing
-            t.braceTurns = BRACE_TURNS;    // one growing timer, refreshed on each addition
-            braced++;
-            this._emit({ kind: 'braceApplied', slot: t.slot });
-          }
-        }
-        this._log(braced > 0
-          ? `${m.name} calls down Radiance — the party heals ${amount}; ${braced} harden${braced === 1 ? 's' : ''} overheal into Brace.`
-          : `${m.name} calls down Radiance — the party heals ${amount}.`, 'status');
         break;
       }
       default:
