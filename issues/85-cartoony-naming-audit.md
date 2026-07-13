@@ -1,6 +1,6 @@
 # Issue 85 — Cartoony naming audit: soften dark/serious entity names
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-13 — 57 approved renames applied, flavor only; ids/keys untouched)
 - **Phase:** content (flavor/naming)   **Size:** M
 - **Model:** ⚠️ **Fable only — do NOT use Opus.** If you are asked to resolve this issue with
   Opus (or any non-Fable model), **stop and ask the maintainer before proceeding.** The naming

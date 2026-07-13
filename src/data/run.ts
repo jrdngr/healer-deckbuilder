@@ -761,11 +761,11 @@ export const EVENTS: EventDef[] = [
   },
   {
     id: 'bloodAltar',
-    title: 'Blood Altar',
-    text: 'The stone drinks. Old carvings promise strength for vitality — a bargain struck in the flesh, and never unstruck.',
+    title: 'The Grindstone',
+    text: 'An old grindstone hums in the clearing. Put a hero to it and they come away sharper — and a little worn down. The wheel only turns one way.',
     choices: [
-      { label: 'Offer a hero\'s blood', kind: 'bloodAltar', detail: `Chosen member: −${BLOOD_ALTAR_HP} max HP, +${BLOOD_ALTAR_DAMAGE} damage (permanent).` },
-      { label: 'Keep your blood', kind: 'leave' },
+      { label: 'Put a hero to the stone', kind: 'bloodAltar', detail: `Chosen member: −${BLOOD_ALTAR_HP} max HP, +${BLOOD_ALTAR_DAMAGE} damage (permanent).` },
+      { label: 'Leave it be', kind: 'leave' },
     ],
   },
 ];

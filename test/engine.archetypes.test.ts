@@ -1,5 +1,5 @@
-// Engine archetype/roster suites (Beast Warden, Sentinel, Plaguewright, channels,
-// Hierophant, Duelist, Flagellant, Lightkeeper, cross-cutting). Split from
+// Engine archetype/roster suites (Beast Warden, Showstopper, Plaguewright, channels,
+// Hierophant, Duelist, Strongman, Lightkeeper, cross-cutting). Split from
 // engine.test.ts for navigability; shares test/harness.ts + test/factories.ts.
 import { Game } from '../src/engine';
 import type { GameEvent } from '../src/engine';
@@ -108,25 +108,25 @@ function wardenGame(seed: number) {
   check('the lone Warden survives behind the Boar', w.alive && g.status === 'playing');
 }
 
-// --- party roster: Sentinel + Stun (#61) ------------------------------------
-// A boss game seating the Sentinel in slot 0, so the Stun can cancel a scripted
+// --- party roster: Showstopper + Stun (#61) ------------------------------------
+// A boss game seating the Showstopper in slot 0, so the Stun can cancel a scripted
 // rotation step / channel wind-up / cast.
 {
-  // Data: the Sentinel is a sturdy bruiser carrying Stun; the bound card is Stagger
+  // Data: the Showstopper is a sturdy bruiser carrying Stun; the bound card is Halt!
   // (5 MP, no target), and it maps through ABILITY_CARD like every other member card.
   const s = MEMBER_POOL.sentinel;
-  eq('Sentinel HP 13', s.maxHP, 13);
-  eq('Sentinel damage 2', s.damage, 2);
-  eq('Sentinel ability is stun', s.ability, 'stun');
-  eq('stun binds to the Stagger card', ABILITY_CARD.stun, 'stagger');
-  eq('Stagger costs 5 MP (the balance lever)', CARDS.stagger.cost, 5);
-  eq('Stagger takes no target', CARDS.stagger.target, 'none');
-  eq('Stagger fires the stun ability', CARDS.stagger.ability, 'stun');
-  check('Stagger is a per-member ability card', isAbilityCard('stagger'));
-  check('the Sentinel has ability flavor', MEMBER_ABILITY_FLAVOR.sentinel.length > 0);
+  eq('Showstopper HP 13', s.maxHP, 13);
+  eq('Showstopper damage 2', s.damage, 2);
+  eq('Showstopper ability is stun', s.ability, 'stun');
+  eq('stun binds to the Halt! card', ABILITY_CARD.stun, 'stagger');
+  eq('Halt! costs 5 MP (the balance lever)', CARDS.stagger.cost, 5);
+  eq('Halt! takes no target', CARDS.stagger.target, 'none');
+  eq('Halt! fires the stun ability', CARDS.stagger.ability, 'stun');
+  check('Halt! is a per-member ability card', isAbilityCard('stagger'));
+  check('the Showstopper has ability flavor', MEMBER_ABILITY_FLAVOR.sentinel.length > 0);
 }
 {
-  // Playing Stagger cancels the standing telegraph: the coming enemy resolution
+  // Playing Halt! cancels the standing telegraph: the coming enemy resolution
   // deals NO damage, the MP is spent, and a fresh telegraph stands afterward.
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
@@ -137,7 +137,7 @@ function wardenGame(seed: number) {
   g.mp = 5;
   g.playCard(giveCard(g, 'stagger'), null);
   check('the telegraph is flagged Stunned', g.telegraph.stunned === true);
-  eq('Stagger spent its 5 MP', g.mp, 0);
+  eq('Halt! spent its 5 MP', g.mp, 0);
   eq('a Stunned telegraph previews nothing', g.attackTargets().length, 0);
   const hpBefore = victim.hp;
   const turnBefore = g.turn;
@@ -153,7 +153,7 @@ function wardenGame(seed: number) {
   g.rotationIndex = 0;                       // 'single'
   g.telegraph = g._generateTelegraph(g.turn);
   eq('the standing step is the single', g.telegraph.type, 'single');
-  g._fireAbility(g.members[0]);             // Sentinel Stuns
+  g._fireAbility(g.members[0]);             // Showstopper Stuns
   check('the single is flagged Stunned', g.telegraph.stunned === true);
   g._runEnemyPhase();
   eq('the rotation advanced past the stunned step', g.rotationIndex, 1);
@@ -164,7 +164,7 @@ function wardenGame(seed: number) {
   // Stunning a channel wind-up ABORTS it: it never lands and does not resume — the
   // rotation advances past the channel slot to the next plain step.
   const g = sentinelBossGame(3);
-  g.rotationIndex = 6;                       // Crushing Blow channel slot (cycle 2)
+  g.rotationIndex = 6;                       // Haymaker channel slot (cycle 2)
   g.telegraph = g._generateTelegraph(g.turn);
   check('a channel is standing', g.telegraph.channel === true);
   const target = g.telegraph.targets[0];
@@ -174,16 +174,16 @@ function wardenGame(seed: number) {
   eq('the aborted channel dealt no damage', g.members[target].hp, 50);
   eq('the rotation advanced past the channel', g.rotationIndex, 7);
   check('the channel did not resume/stand', g.telegraph.channel !== true);
-  // Drive a full extra cycle: the consumed Crushing Blow does not re-stand this cycle.
+  // Drive a full extra cycle: the consumed Haymaker does not re-stand this cycle.
   for (let i = 0; i < 3; i++) g._runEnemyPhase();
   check('the consumed channel is not repeated within the cycle',
-    g.telegraph.channelName !== 'Crushing Blow' || g.rotationIndex % 8 !== 6);
+    g.telegraph.channelName !== 'Haymaker' || g.rotationIndex % 8 !== 6);
 }
 {
-  // A 'cast' telegraph (Hexweaver's Hex) is likewise consumed with NO scripted
+  // A 'cast' telegraph (Jinxweaver's Jinx) is likewise consumed with NO scripted
   // effect — no healing-reduction Wound is applied.
   const g = sentinelBossGame(4, HEXWEAVER_DEF);
-  g.rotationIndex = 2;                       // Hex ('cast' -> 'wound') slot
+  g.rotationIndex = 2;                       // Jinx ('cast' -> 'wound') slot
   g.telegraph = g._generateTelegraph(g.turn);
   check('the standing telegraph is a cast', g.telegraph.cast != null);
   eq('no Wound is active yet', g.woundTurns, 0);
@@ -228,16 +228,16 @@ function wardenGame(seed: number) {
   eq('the turn counter advanced through the stunned turn', g.turn, ENRAGE_TURN + 1);
 }
 {
-  // The Stagger card is unplayable while the Sentinel is down (the #44/#54 path),
+  // The Halt! card is unplayable while the Showstopper is down (the #44/#54 path),
   // and firing Stun with nothing to interrupt is a harmless no-op.
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['sentinel', 'tank', 'mage']);
   const g = new Game(7, cfg); g.start();
   g.mp = 10;
   const idx = giveCard(g, 'stagger');
-  check('Stagger is playable with a living Sentinel', g.canPlay(idx, null) === null);
+  check('Halt! is playable with a living Showstopper', g.canPlay(idx, null) === null);
   g._killMember(g.members[0]);
-  check('Stagger is disabled once the Sentinel is down', g.canPlay(idx, null) !== null);
+  check('Halt! is disabled once the Showstopper is down', g.canPlay(idx, null) !== null);
   // Idempotent: stunning an already-stunned telegraph does not double-consume.
   const cfg2 = defaultBattleConfig();
   cfg2.party = partyFromMembers(['sentinel', 'tank', 'mage']);
@@ -344,11 +344,11 @@ function wardenGame(seed: number) {
 {
   const empty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
 
-  // The 5 survivors are shop/reward-eligible; Double Strike is the rare of the set.
+  // The 5 survivors are shop/reward-eligible; Encore is the rare of the set.
   // (Goad and Embolden were cut in the content-cut pass.)
   const batch: CardId[] = ['guard', 'sharpen', 'doubleStrike', 'empower', 'riposte'];
   check('all 5 hero-buff cards are shop/reward-eligible', batch.every((id) => CARD_POOL.includes(id)));
-  eq('Double Strike is the rare of the set', CARD_RARITY.doubleStrike, 'rare');
+  eq('Encore is the rare of the set', CARD_RARITY.doubleStrike, 'rare');
 
   // Sharpen: +SHARPEN_BONUS to the hero's auto, feeding memberDamage(), then it
   // fades after SHARPEN_TURNS enemy turns.
@@ -387,7 +387,7 @@ function wardenGame(seed: number) {
   }
 
 
-  // Double Strike: doubles exactly the next basic auto, consumed on use.
+  // Encore: doubles exactly the next basic auto, consumed on use.
   {
     const cfg = defaultBattleConfig();
     cfg.party = [partyFromMembers(['mage'])[0], empty(), empty()]; // solo mage isolates the auto
@@ -397,7 +397,7 @@ function wardenGame(seed: number) {
     g.playCard(giveCard(g, 'doubleStrike'), 0);
     check('Double Strike primes the hero', mage.drumPrimed);
     const before = g.enemy.hp; g._runPartyPhase();
-    eq('Double Strike doubles the next auto', before - g.enemy.hp, dmg * 2);
+    eq('Encore doubles the next auto', before - g.enemy.hp, dmg * 2);
     check('the doubled beat is spent', !mage.drumPrimed);
     const before2 = g.enemy.hp; g._runPartyPhase();
     eq('the following auto is back to normal', before2 - g.enemy.hp, dmg);
@@ -466,9 +466,9 @@ function wardenGame(seed: number) {
   const total = (['holy', 'nature', 'shadow', 'blood', 'arcane', 'iron'] as CardType[])
     .reduce((s, t) => s + CARDS_BY_TYPE[t].length, 0);
   eq('types partition every card', total, ALL.length);
-  // Ability cards' type counts for synergies (the Warlock's Hex reads as Shadow).
+  // Ability cards' type counts for synergies (the Warlock's Evil Eye reads as Shadow).
   eq('cardType(hex) is shadow', cardType('hex'), 'shadow');
-  eq('cardsOfType(shadow) includes Dread Whisper', cardsOfType('shadow').includes('dreadWhisper'), true);
+  eq('cardsOfType(shadow) includes Trash Talk', cardsOfType('shadow').includes('dreadWhisper'), true);
 }
 
 // --- Per-type counters (#63) ------------------------------------------------
@@ -651,10 +651,10 @@ function hitAt(g: Game, slots: number[], damage: number): void {
   check('the counter moved enemy HP (party->enemy only)', g.enemy.hp < enemyBefore);
 }
 
-// --- Flagellant + Penance (#75): the lethal blood battery --------------------
-// A fight with a Flagellant fielded so his Penance ability card is playable.
-// Flagellant seats LEFT (slot 0); tank CENTER, mage RIGHT. Enemy HP is huge so the
-// buffed autos never actually finish it; per-test HP is set on the Flagellant directly.
+// --- Strongman + Feat of Strength (#75): the lethal blood battery --------------------
+// A fight with a Strongman fielded so his Feat of Strength ability card is playable.
+// Strongman seats LEFT (slot 0); tank CENTER, mage RIGHT. Enemy HP is huge so the
+// buffed autos never actually finish it; per-test HP is set on the Strongman directly.
 function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['flagellant', 'tank', 'mage']);
@@ -670,21 +670,21 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
 }
 {
   // Definitions / typing sanity for the member and the ability card (#75).
-  eq('Flagellant is in MEMBER_POOL', MEMBER_POOL.flagellant?.id, 'flagellant');
-  eq('Flagellant maxHP 15', MEMBER_POOL.flagellant.maxHP, 15);
-  eq('Flagellant damage 2 (weak swing)', MEMBER_POOL.flagellant.damage, 2);
-  eq('Flagellant ability is penance', MEMBER_POOL.flagellant.ability, 'penance');
-  eq('Flagellant base salary 14', MEMBER_BASE_SALARY.flagellant, 14);
-  check('Flagellant is in the draft pool', DRAFT_POOL.includes('flagellant'));
-  check('Flagellant has an ability flavor mentioning Penance', /Penance/.test(MEMBER_ABILITY_FLAVOR.flagellant ?? ''));
-  eq('penance is the Flagellant\'s bound ability card', ABILITY_CARD.penance, 'penance');
-  eq('Penance is Blood', cardType('penance'), 'blood');
-  check('Penance counts toward the blood bucket (incite precedent)', cardsOfType('blood').includes('penance'));
-  eq('Penance costs 2', CARDS.penance.cost, 2);
-  eq('Penance targets none', CARDS.penance.target, 'none');
-  eq('Penance carries NO selfDamage field (payment is a raw drain, not the clamped gate)', CARDS.penance.selfDamage, undefined);
-  eq('Penance is uncommon', CARD_RARITY.penance, 'uncommon');
-  check('Penance is an ability card (never shopped)', isAbilityCard('penance') && !CARD_POOL.includes('penance'));
+  eq('Strongman is in MEMBER_POOL', MEMBER_POOL.flagellant?.id, 'flagellant');
+  eq('Strongman maxHP 15', MEMBER_POOL.flagellant.maxHP, 15);
+  eq('Strongman damage 2 (weak swing)', MEMBER_POOL.flagellant.damage, 2);
+  eq('Strongman ability is penance', MEMBER_POOL.flagellant.ability, 'penance');
+  eq('Strongman base salary 14', MEMBER_BASE_SALARY.flagellant, 14);
+  check('Strongman is in the draft pool', DRAFT_POOL.includes('flagellant'));
+  check('Strongman has an ability flavor mentioning Feat of Strength', /Feat of Strength/.test(MEMBER_ABILITY_FLAVOR.flagellant ?? ''));
+  eq('penance is the Strongman\'s bound ability card', ABILITY_CARD.penance, 'penance');
+  eq('Feat of Strength is Blood', cardType('penance'), 'blood');
+  check('Feat of Strength counts toward the blood bucket (incite precedent)', cardsOfType('blood').includes('penance'));
+  eq('Feat of Strength costs 2', CARDS.penance.cost, 2);
+  eq('Feat of Strength targets none', CARDS.penance.target, 'none');
+  eq('Feat of Strength carries NO selfDamage field (payment is a raw drain, not the clamped gate)', CARDS.penance.selfDamage, undefined);
+  eq('Feat of Strength is uncommon', CARD_RARITY.penance, 'uncommon');
+  check('Feat of Strength is an ability card (never shopped)', isAbilityCard('penance') && !CARD_POOL.includes('penance'));
 }
 {
   // Survive branch: at 15 HP the payment leaves him at 11, and every LIVING member's
@@ -693,9 +693,9 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   const flag = g.members[SLOT.LEFT];
   const baseFlag = g.memberDamage(flag);
   const baseTank = g.memberDamage(g.members[SLOT.CENTER]);
-  eq('Flagellant opens at full 15 HP', flag.hp, 15);
+  eq('Strongman opens at full 15 HP', flag.hp, 15);
   g.playCard(giveCard(g, 'penance'), null);
-  eq('Penance pays PENANCE_HP with no clamp: 15 -> 11', flag.hp, 15 - PENANCE_HP);
+  eq('Feat of Strength pays PENANCE_HP with no clamp: 15 -> 11', flag.hp, 15 - PENANCE_HP);
   check('the payment left him alive (5+ HP survives)', flag.alive);
   eq('his own auto is buffed (he survived)', g.memberDamage(flag), baseFlag + PENANCE_STRIKE_BONUS);
   eq('every other living member is buffed too', g.memberDamage(g.members[SLOT.CENTER]), baseTank + PENANCE_STRIKE_BONUS);
@@ -710,15 +710,15 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   flag.hp = PENANCE_HP; // exactly the payment — a lethal cast
   const res = g.playCard(giveCard(g, 'penance'), null);
   check('the lethal cast was legal (no HP playability gate)', res.ok);
-  check('the Flagellant died', !flag.alive);
+  check('the Strongman died', !flag.alive);
   eq('he was drained to 0', flag.hp, 0);
   check('the death recorded a scar (diedThisFight bookkeeping)', g.diedThisFightSlots().includes(flag.slot));
   eq('the +2 buff still landed on the surviving party', g.memberDamage(g.members[SLOT.CENTER]), baseTank + PENANCE_STRIKE_BONUS);
   check('the party did not wipe (tank + mage stand)', g.status === 'playing');
 }
 {
-  // Martyr's Icon (#22) converts the suicide to a 1-HP survival: the Icon triggers on
-  // MEMBER DEATH, and a Penance suicide is a member death — intended, not special-cased.
+  // Guardian Feather (#22) converts the suicide to a 1-HP survival: the Icon triggers on
+  // MEMBER DEATH, and a Feat of Strength suicide is a member death — intended, not special-cased.
   // The buff then includes him, because he lives.
   const g = flagellantGame(752, ['martyrsIcon']);
   const flag = g.members[SLOT.LEFT];
@@ -733,17 +733,17 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   eq('the buff includes him (he lives)', g.memberDamage(flag), baseFlag + PENANCE_STRIKE_BONUS);
 }
 {
-  // The Penance buff is its OWN field, additive with Battle Hymn in the same turn
+  // The Feat of Strength buff is its OWN field, additive with Fight Song in the same turn
   // (not max-ed against it): the tank auto gains HYMN_BONUS + PENANCE_STRIKE_BONUS.
   const g = flagellantGame(754);
   const tank = g.members[SLOT.CENTER];
   const base = tank.damage;
   g.playCard(giveCard(g, 'battleHymn'), null);
   g.playCard(giveCard(g, 'penance'), null);
-  eq('Penance stacks additively with Battle Hymn', g.memberDamage(tank), base + HYMN_BONUS + PENANCE_STRIKE_BONUS);
+  eq('Feat of Strength stacks additively with Fight Song', g.memberDamage(tank), base + HYMN_BONUS + PENANCE_STRIKE_BONUS);
 }
 {
-  // The Penance buff now lasts PENANCE_STRIKE_TURNS enemy turns (was cast-turn only):
+  // The Feat of Strength buff now lasts PENANCE_STRIKE_TURNS enemy turns (was cast-turn only):
   // it does NOT reset when the party autos resolve, and decays in _decayBuffs.
   const g = flagellantGame(755);
   g.playCard(giveCard(g, 'penance'), null);
@@ -756,18 +756,18 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
 }
 {
   // #79 floats: a party-wide +ATK buff resolves to a per-member payload (slots) the
-  // animator fans a `+N ATK` float over. Battle Hymn buffs every living member.
+  // animator fans a `+N ATK` float over. Fight Song buffs every living member.
   const g = flagellantGame(760);
   g.events = [];
   g.playCard(giveCard(g, 'battleHymn'), null);
   const hymn = g.events.find((e) => e.kind === 'hymn') as Extract<GameEvent, { kind: 'hymn' }>;
-  check('Battle Hymn emits a hymn event', !!hymn);
+  check('Fight Song emits a hymn event', !!hymn);
   eq('the hymn carries its bonus', hymn.bonus, HYMN_BONUS);
   eq('the hymn fans over every living member', hymn.slots.slice().sort().join(','),
     g.livingMembers().map((m) => m.slot).sort().join(','));
 }
 {
-  // #79 floats: Penance carries the living members it buffs (slots) plus the payer's
+  // #79 floats: Feat of Strength carries the living members it buffs (slots) plus the payer's
   // own slot for the `PENANCE PAID` flag when the payment kills him.
   const g = flagellantGame(761);
   const flag = g.members[SLOT.LEFT];
@@ -775,7 +775,7 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   g.events = [];
   g.playCard(giveCard(g, 'penance'), null);
   const pen = g.events.find((e) => e.kind === 'penance') as Extract<GameEvent, { kind: 'penance' }>;
-  check('Penance emits a penance event', !!pen);
+  check('Feat of Strength emits a penance event', !!pen);
   check('the dead payer is flagged', pen.died && pen.slot === flag.slot);
   check('the buffed slots are the living members only (payer excluded)',
     !pen.slots.includes(flag.slot) && pen.slots.length === g.livingMembers().length);
@@ -808,7 +808,7 @@ function dndGame(seed: number): Game {
 }
 {
   // Ability card binds to its carrier only — a drop on any other hero must cancel.
-  // Default trio: LEFT=Imbue Venom, CENTER=Bolster, RIGHT=Unleash.
+  // Default trio: LEFT=Poison Tip, CENTER=Bolster, RIGHT=Unleash.
   const g = dndGame(3);
   const spec = g.dropTargets(giveAbility(g, SLOT.LEFT)); // imbuePoison -> the LEFT member
   eq('ability card accepts exactly its carrier', spec.slots.join(','), String(SLOT.LEFT));
@@ -840,7 +840,7 @@ function dndGame(seed: number): Game {
   check('AoE heal is a board card', aoe.board);
   eq('AoE heal has no member slots', aoe.slots.length, 0);
   const bolt = g.dropTargets(giveCard(g, 'dreadWhisper'));
-  check('Dread Whisper (offensive, no target) is a board card', bolt.board);
+  check('Trash Talk (offensive, no target) is a board card', bolt.board);
 }
 {
   // Unaffordable cards accept nothing — the drag has nowhere legal to land.

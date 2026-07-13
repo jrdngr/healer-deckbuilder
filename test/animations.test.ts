@@ -329,17 +329,17 @@ const fxTypes = (tl: ReturnType<typeof buildTimeline>): string[] =>
   eq('a single-hero +ATK buff floats once', sharpen.entries.flatMap(
     (e) => (e.fx ?? []).filter((f) => f.type === 'float' && f.text === '+1 ATK')).length, 1);
 
-  // Penance fans +ATK over every living member; when the Flagellant dies paying it,
-  // a `PENANCE PAID` label still marks his (now dead) slot.
+  // Feat of Strength fans +ATK over every living member; when the Strongman dies
+  // paying it, a `GAVE IT ALL` label still marks his (now dead) slot.
   const pen = buildTimeline([{ kind: 'penance', slot: 0, bonus: 2, died: true, slots: [1, 2] }]);
   eq('penance floats +ATK over each living member', pen.entries.flatMap(
     (e) => (e.fx ?? []).filter((f) => f.type === 'float' && f.text === '+2 ATK')).length, 2);
-  check('penance marks the paid slot when the Flagellant dies', floatsAt(pen, 0).includes('PENANCE PAID'));
+  check('penance marks the paid slot when the Strongman dies', floatsAt(pen, 0).includes('GAVE IT ALL'));
 
-  // Hex (a member-side debuff) floats a `Hex` label over each afflicted member.
+  // Jinx (a member-side debuff) floats a `Jinx` label over each afflicted member.
   const hex = buildTimeline([{ kind: 'wound', turns: 2, slots: [0, 1, 2] }]);
   const hexFloats = hex.entries.flatMap((e) => (e.fx ?? []).filter(
-    (f) => f.type === 'float' && f.text === 'Hex'));
+    (f) => f.type === 'float' && f.text === 'Jinx'));
   eq('hex floats a debuff label over every afflicted member', hexFloats.length, 3);
 
   // Stun (Sentinel) now names itself with a float over the member.

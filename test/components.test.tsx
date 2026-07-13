@@ -161,7 +161,7 @@ async function render(el: React.ReactElement): Promise<string> {
   hallRun.nodeContent = { type: 'partyUpgrade', offers: [] };
   const hallAct = <T,>(fn: (r: Run) => T): T => fn(hallRun);
   const hallText = await render(<PartyUpgradeShopScreen run={hallRun} act={hallAct} onDone={() => {}} />);
-  check('Training Hall shows roster names', hallText.includes('Skald') && hallText.includes('Sentinel'), hallText);
+  check('Training Hall shows roster names', hallText.includes('Busker') && hallText.includes('Showstopper'), hallText);
   check('Training Hall does not show classic-trio names for a non-trio roster',
     !hallText.includes('Ranger') && !hallText.includes('Tank'), hallText);
 }

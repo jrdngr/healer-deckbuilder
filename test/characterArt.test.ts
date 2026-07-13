@@ -1,6 +1,6 @@
 // Character-art coverage. Run with: tsx test/characterArt.test.ts
 // resolveArt() must return non-empty art for EVERY roster id (all 14 heroes +
-// all 15 enemy defs, incl. spammer=Brute and the plain enemy/boss fallbacks), so
+// all 15 enemy defs, incl. spammer=Basher and the plain enemy/boss fallbacks), so
 // a future roster addition that lacks art trips this test.
 import { resolveArt, HERO_ART_IDS, ENEMY_ART_IDS } from '../src/characterArt';
 import {
@@ -45,13 +45,13 @@ check('all 15 enemy defs have art ids', ENEMY_ART_IDS.length === 15, String(ENEM
 check('every enemy def id has matching art', enemyDefs.every((d) => ENEMY_ART_IDS.includes(d.id)),
   enemyDefs.filter((d) => !ENEMY_ART_IDS.includes(d.id)).map((d) => d.id).join(', '));
 
-// --- spammer is "Brute": its art carries the signature fang layer -------------
+// --- spammer is "Basher": its art carries the signature fang layer -------------
 {
-  const brute = enemyDefs.find((d) => d.name === 'Brute');
-  check('the enemy named "Brute" has roster id spammer', brute?.id === 'spammer', brute?.id);
+  const brute = enemyDefs.find((d) => d.name === 'Basher');
+  check('the enemy named "Basher" has roster id spammer', brute?.id === 'spammer', brute?.id);
   const art = resolveArt('spammer', true);
   // Fang underbite fangs are cream triangles (polygon(0 0,100% 0,50% 100%)).
-  check('spammer/Brute art includes its fang layer',
+  check('spammer/Basher art includes its fang layer',
     art.layers.some((l) => l.includes('polygon(0 0,100% 0,50% 100%)')));
 }
 

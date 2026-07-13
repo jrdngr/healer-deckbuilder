@@ -31,12 +31,12 @@ export const SLOT_WEIGHTS: Record<'normal' | 'hidden', number[]> = {
 // Human-readable intent names for each attack type (the telegraph carries the
 // numbers; this labels what the enemy is about to do).
 // Note: no generic name may collide with a boss channel's name (e.g. the
-// Gatewarden's 'Crushing Blow') — a channel is a bigger threat than the plain
+// Bouncer's 'Haymaker') — a channel is a bigger threat than the plain
 // attack type it replaces, and sharing a name trains the wrong read.
 export const ATTACK_INTENT_NAMES: Record<AttackType, string> = {
-  single: 'Strike', two: 'Double Strike', aoe: 'Barrage',
-  hidden: 'Veiled Strike', heavy: 'Heavy Blow', sweep: 'Sweep',
-  // 'cast' rotation steps always carry an explicit name (Hex / Siphon / Consume),
+  single: 'Strike', two: 'Double Strike', aoe: 'Scattershot',
+  hidden: 'Sucker Punch', heavy: 'Wallop', sweep: 'Sweep',
+  // 'cast' rotation steps always carry an explicit name (Jinx / Slurp / Gulp),
   // so this generic label is only a fallback.
   cast: 'Cast',
 };
@@ -58,17 +58,17 @@ export interface ChannelDef {
   turns: number;       // enemy turns from telegraph to resolve (2 = one wind-up turn + resolve)
   damage: number;      // per-target damage on resolve
   type: AttackType;    // geometry/label the channel resolves as
-  name: string;        // display name (e.g. "Crushing Blow")
+  name: string;        // display name (e.g. "Haymaker")
 }
 
 // A single step in a scripted boss rotation. A bare AttackType is shorthand for a
 // plain attack of that type (the Gatewarden uses that form); a RotationStep object
-// adds the Hexweaver's tricks: an explicit intent name, a damage override, targeting
+// adds the Jinxweaver's tricks: an explicit intent name, a damage override, targeting
 // flags that bypass the taunt funnel, a multi-turn channel wind-up, or a scripted
 // 'cast' effect. `type: 'cast'` steps deal no damage and must set `cast`.
 export interface RotationStep {
   type: AttackType;
-  name?: string;          // intent/display name override (e.g. 'Piercing Bolt', 'Hex')
+  name?: string;          // intent/display name override (e.g. 'Zinger', 'Jinx')
   damage?: number;        // per-target base damage override (defaults to ATTACK_BASE_DAMAGE[type])
   ignoreTaunt?: boolean;  // not funnelled/redirected by Taunt (still auto-aimed by targetLowest)
   ignoreDefense?: boolean;// Defense reduction does not apply to this hit
@@ -98,7 +98,7 @@ export interface PhaseDef {
   hpFraction: number;         // trigger when hp <= maxHP * hpFraction
   beat: string;               // the announced transformation line
   rotation: RotationEntry[];  // the rotation the enemy switches to in phase 2
-  channel?: ChannelDef;       // a phase-2 channel slot (Maw)
+  channel?: ChannelDef;       // a phase-2 channel slot (Big Chomp)
   enrageTurn?: number;        // optional tighter enrage turn once transformed
 }
 
@@ -120,7 +120,7 @@ const aw = (single: number, two: number, aoe: number, hidden: number, heavy: num
   ({ single, two, aoe, hidden, heavy, sweep, cast: 0 });
 
 // A pierce step: ignores Taunt AND Defense and aims at the lowest-HP living member
-// — the shared shape of every piercer (Piercing Bolt / Needle Shot / Skewer).
+// — the shared shape of every piercer (Zinger / Needle Shot / Skewer).
 const pierceStep = (name: string, damage: number): RotationStep =>
   ({ type: 'single', name, damage, ignoreTaunt: true, ignoreDefense: true, targetLowest: true });
 
@@ -136,107 +136,107 @@ const bossDef = (id: string, name: string, rest: Partial<EnemyDef>): EnemyDef =>
 // threat as the old generic normal (~4.5 party-wide dmg/turn), not a difficulty
 // spike — the encounter tables keep per-fight winrates within ±5pp of baseline.
 export const ENEMY_SPAMMER: EnemyDef = { // single-spammer: relentless single hits
-  id: 'spammer', name: 'Brute', boss: false,
+  id: 'spammer', name: 'Basher', boss: false,
   baseWeights: aw(78, 14, 4, 4, 0, 0), enragedWeights: aw(58, 24, 14, 4, 0, 0),
 };
 export const ENEMY_SWARM: EnemyDef = { // swarm: leans more on multi-target blows
-  id: 'swarm', name: 'Swarm', boss: false,
+  id: 'swarm', name: 'Rabble', boss: false,
   baseWeights: aw(52, 26, 17, 5, 0, 0), enragedWeights: aw(35, 33, 27, 5, 0, 0),
 };
 export const ENEMY_STALKER: EnemyDef = { // stalker: leans on concealed (hidden) blows
-  id: 'stalker', name: 'Stalker', boss: false,
+  id: 'stalker', name: 'Skulker', boss: false,
   baseWeights: aw(52, 10, 8, 30, 0, 0), enragedWeights: aw(35, 18, 17, 30, 0, 0),
 };
 export const ENEMY_CLEAVER: EnemyDef = { // cleaver: occasional heavy single hit
-  id: 'cleaver', name: 'Cleaver', boss: false,
+  id: 'cleaver', name: 'Clobberer', boss: false,
   baseWeights: aw(58, 12, 7, 5, 18, 0), enragedWeights: aw(42, 18, 12, 5, 23, 0),
 };
 
-// Boss 1 — Gatewarden (issue 12): a fixed, learnable rotation that teaches
-// telegraph-reading. Every 2nd cycle its heavy becomes Crushing Blow — a 2-turn
+// Boss 1 — Bouncer (issue 12): a fixed, learnable rotation that teaches
+// telegraph-reading. Every 2nd cycle its heavy becomes Haymaker — a 2-turn
 // channel at 12 (~1.7× heavy). Opens on single, complementing the turn-1 rule.
 // 14 keeps the read answerable (playtest finding): a defended tank takes 13, so
 // Taunt upkeep + topping the tank up survives it, while the ranger (11) and
 // mage (9) still die to it — at the original 20 it exceeded every max HP and
 // killed a member in 82% of good-play sims, teaching sacrifice instead.
-export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Gatewarden', {
+export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Bouncer', {
   rotation: ['single', 'two', 'heavy', 'sweep'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Crushing Blow' },
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Haymaker' },
 });
 
-// Boss 2 — Hexweaver (issue 13): the telegraphed taunt-punisher. It breaks the
+// Boss 2 — Jinxweaver (issue 13): the telegraphed taunt-punisher. It breaks the
 // permanent-taunt/turtle solve with three tools, all fully telegraphed:
-//   • Piercing Bolt — ignores Taunt AND Defense, aims at the lowest-HP member, so
+//   • Zinger — ignores Taunt AND Defense, aims at the lowest-HP member, so
 //     the tank can't soak it and the fragile DPS is the one under threat.
-//   • Hex — a 'cast' that halves ALL healing for WOUND_TURNS turns (you can't
+//   • Jinx — a 'cast' that halves ALL healing for WOUND_TURNS turns (you can't
 //     out-heal it — Cleanse removes it).
-//   • Siphon — a 'cast' that drains SIPHON_AMOUNT healer MP (you can't cast freely).
+//   • Slurp — a 'cast' that drains SIPHON_AMOUNT healer MP (you can't cast freely).
 // Opens on a plain single (a gentle turn-1 read), then cycles the three tricks
 // between whole-party pressure. Cleanse (added this issue) is its designed counter.
-export const HEXWEAVER_PIERCER_DMG = 5; // Piercing Bolt per-hit damage (before attackBonus)
-export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Hexweaver', {
+export const HEXWEAVER_PIERCER_DMG = 5; // Zinger per-hit damage (before attackBonus)
+export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Jinxweaver', {
   rotation: [
     'single',
-    pierceStep('Piercing Bolt', HEXWEAVER_PIERCER_DMG),
-    { type: 'cast', name: 'Hex', cast: 'wound' },
+    pierceStep('Zinger', HEXWEAVER_PIERCER_DMG),
+    { type: 'cast', name: 'Jinx', cast: 'wound' },
     'sweep',
-    pierceStep('Piercing Bolt', HEXWEAVER_PIERCER_DMG),
-    { type: 'cast', name: 'Siphon', cast: 'siphon' },
+    pierceStep('Zinger', HEXWEAVER_PIERCER_DMG),
+    { type: 'cast', name: 'Slurp', cast: 'siphon' },
   ],
 });
 
-// Boss 3 — Devourer (issue 14): "race or die". Turns the invisible enrage race
+// Boss 3 — Gobbler (issue 14): "race or die". Turns the invisible enrage race
 // into an explicit, fair one via a phase system:
-//   • Phase 1 (>50% HP): a heavy/sweep pool plus Consume — a 'cast' that cleanses
+//   • Phase 1 (>50% HP): a heavy/sweep pool plus Gulp — a 'cast' that cleanses
 //     its OWN Poison and self-heals for every remaining tick, so poison stops being
 //     free value (it becomes a decision — the deferred call in #18).
-//   • Phase 2 (<=50% HP): an announced transformation beat, then Maw — a 2-turn
+//   • Phase 2 (<=50% HP): an announced transformation beat, then Big Chomp — a 2-turn
 //     channelled sweep at DEVOURER_MAW_DMG x3, recurring every ~4 turns — plus a
-//     tighter enrage. Enraged Maw one-shots an unshielded squishy: race it down.
+//     tighter enrage. Enraged Big Chomp one-shots an unshielded squishy: race it down.
 // The phase threshold is edge-detected (fires once, even mid-Poison-tick).
-export const DEVOURER_MAW_DMG = 7; // Maw per-target sweep damage (before enrage/attackBonus)
-export const DEVOURER_DEF: EnemyDef = bossDef('devourer', 'Devourer', {
+export const DEVOURER_MAW_DMG = 7; // Big Chomp per-target sweep damage (before enrage/attackBonus)
+export const DEVOURER_DEF: EnemyDef = bossDef('devourer', 'Gobbler', {
   rotation: [
     'single',
     'heavy',
     'sweep',
-    { type: 'cast', name: 'Consume', cast: 'consume' },
+    { type: 'cast', name: 'Gulp', cast: 'consume' },
     'two',
     'heavy',
   ],
   phase: {
     hpFraction: 0.5,
-    beat: 'The Devourer splits its maw and TRANSFORMS!',
-    // Slot 0 is always Maw (the channel fires every cycle at slot 0); the 'sweep'
-    // literal there is a placeholder the channel overrides. Maw resolves every 4
+    beat: 'The Gobbler unhinges its jaw and TRANSFORMS!',
+    // Slot 0 is always Big Chomp (the channel fires every cycle at slot 0); the 'sweep'
+    // literal there is a placeholder the channel overrides. Big Chomp resolves every 4
     // enemy turns (2-turn wind-up + heavy + two).
     rotation: ['sweep', 'heavy', 'two'],
-    channel: { slot: 0, everyCycles: 1, turns: 2, damage: DEVOURER_MAW_DMG, type: 'sweep', name: 'Maw' },
+    channel: { slot: 0, everyCycles: 1, turns: 2, damage: DEVOURER_MAW_DMG, type: 'sweep', name: 'Big Chomp' },
     enrageTurn: 11,
   },
 });
 
-// Act boss per act (0-based): Gatewarden (#12), Hexweaver (#13), Devourer (#14).
+// Act boss per act (0-based): Bouncer (#12), Jinxweaver (#13), Gobbler (#14).
 export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF];
 
 // ---------------------------------------------------------------------------
 // Act 2/3 named normals (issue 20): boss tech at small scale, so the later map
 // teaches (and rewards) the reads the act bosses demand — a channeler (mini
-// Crushing Blow), a piercer (mini Piercing Bolt), a self-healer (mini Consume).
+// Haymaker), a piercer (mini Zinger), a self-healer (mini Gulp).
 // Total threat stays near the act-1 normals' ~4.5 party-wide dmg/turn; the
 // signature trick, not the numbers, is the difference. No channel/step name may
-// collide with a boss's (Crushing Blow / Piercing Bolt / Maw / Consume).
+// collide with a boss's (Haymaker / Zinger / Big Chomp / Gulp).
 // ---------------------------------------------------------------------------
 
-// Act 2 — Ironmaw (channeler): a learnable 3-step cycle whose 3rd step becomes
-// Siegebreak every 2nd cycle — a 2-turn single-target channel at 9.
-export const IRONMAW_DEF: EnemyDef = normalDef('ironmaw', 'Ironmaw', {
+// Act 2 — Ironchomp (channeler): a learnable 3-step cycle whose 3rd step becomes
+// Jawbreaker every 2nd cycle — a 2-turn single-target channel at 9.
+export const IRONMAW_DEF: EnemyDef = normalDef('ironmaw', 'Ironchomp', {
   rotation: ['single', 'two', 'single'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 9, type: 'single', name: 'Siegebreak' },
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 9, type: 'single', name: 'Jawbreaker' },
 });
 
 // Act 2 — Needler (piercer): one step per cycle is Needle Shot — a mini
-// Piercing Bolt (ignores Taunt AND Defense, aims at the lowest-HP member) at 4.
+// Zinger (ignores Taunt AND Defense, aims at the lowest-HP member) at 4.
 // Pierce-at-lowest is worth far more than its number (it bypasses the whole
 // taunt/Defense answer), so it appears once per 4-step cycle.
 export const NEEDLER_PIERCE_DMG = 4;
@@ -244,33 +244,33 @@ export const NEEDLER_DEF: EnemyDef = normalDef('needler', 'Needler', {
   rotation: ['single', pierceStep('Needle Shot', NEEDLER_PIERCE_DMG), 'two', 'single'],
 });
 
-// Act 2 — Leech (self-healer): a mini Consume ('Gorge') every 6th turn cleanses
+// Act 2 — Leech (self-healer): a mini Gulp ('Snack Time') every 6th turn cleanses
 // its own Poison and self-heals the remaining ticks — poison timing matters on
-// normals now, not just on the Devourer. Its plain cycle runs light because the
-// Gorge value is real threat too.
+// normals now, not just on the Gobbler. Its plain cycle runs light because the
+// Snack Time value is real threat too.
 export const LEECH_DEF: EnemyDef = normalDef('leech', 'Leech', {
-  rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Gorge', cast: 'consume' }, 'two'],
+  rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Snack Time', cast: 'consume' }, 'two'],
 });
 
-// Act 3 — Juggernaut (channeler, heavier): Overrun is an 11-damage 2-turn
+// Act 3 — Steamroller (channeler, heavier): Flatten is an 11-damage 2-turn
 // channel every 2nd cycle, over a single-heavy base cycle (the channel is the
 // threat; the cycle stays on budget).
-export const JUGGERNAUT_DEF: EnemyDef = normalDef('juggernaut', 'Juggernaut', {
+export const JUGGERNAUT_DEF: EnemyDef = normalDef('juggernaut', 'Steamroller', {
   rotation: ['single', 'single', 'two'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 11, type: 'single', name: 'Overrun' },
+  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 11, type: 'single', name: 'Flatten' },
 });
 
-// Act 3 — Lancer (piercer, heavier): Skewer pierces at 5, once per 4-step cycle.
+// Act 3 — Pokey (piercer, heavier): Skewer pierces at 5, once per 4-step cycle.
 export const LANCER_PIERCE_DMG = 5;
-export const LANCER_DEF: EnemyDef = normalDef('lancer', 'Lancer', {
+export const LANCER_DEF: EnemyDef = normalDef('lancer', 'Pokey', {
   rotation: ['single', pierceStep('Skewer', LANCER_PIERCE_DMG), 'single', 'two'],
 });
 
-// Act 3 — Devourling (self-healer, hungrier): Gorge every 6th turn over a
+// Act 3 — Gobblet (self-healer, hungrier): Snack Time every 6th turn over a
 // light cycle (long 150-HP fights sit near the enrage cliff, so every eaten
-// poison tick is expensive — the Gorge itself is the difficulty).
-export const DEVOURLING_DEF: EnemyDef = normalDef('devourling', 'Devourling', {
-  rotation: ['single', 'two', 'single', { type: 'cast', name: 'Gorge', cast: 'consume' }, 'two', 'single'],
+// poison tick is expensive — the Snack Time itself is the difficulty).
+export const DEVOURLING_DEF: EnemyDef = normalDef('devourling', 'Gobblet', {
+  rotation: ['single', 'two', 'single', { type: 'cast', name: 'Snack Time', cast: 'consume' }, 'two', 'single'],
 });
 
 export const NORMAL_ENEMY_DEFS: EnemyDef[] = [

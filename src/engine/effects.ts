@@ -103,7 +103,7 @@ Game.prototype._applyCard = function (card, target) {
         // (after the Regen tick, before the draw; see _startPlayerPhase). Each cast
         // queues its own entry, so casting twice this turn heals twice next turn.
         this.delayedStartEffects.push({ kind: 'sunriseVigil' });
-        this._log(`Sunrise Vigil set — every living member heals ${SUNRISE_VIGIL_HEAL} at the start of your next turn.`, 'status');
+        this._log(`Special Delivery scheduled — every living member heals ${SUNRISE_VIGIL_HEAL} at the start of your next turn.`, 'status');
         break;
       }
       case 'consecration': {
@@ -122,7 +122,7 @@ Game.prototype._applyCard = function (card, target) {
             atFullSlots.push(m.slot);
           }
         }
-        this._log(`Consecration: the party heals ${card.heal ?? CONSECRATION_HEAL}; ${atFullSlots.length} at full HP strike +${CONSECRATION_STRIKE_BONUS} for ${CONSECRATION_STRIKE_TURNS} enemy turns.`, 'heal');
+        this._log(`Glow Up: the party heals ${card.heal ?? CONSECRATION_HEAL}; ${atFullSlots.length} at full HP strike +${CONSECRATION_STRIKE_BONUS} for ${CONSECRATION_STRIKE_TURNS} enemy turns.`, 'heal');
         if (atFullSlots.length > 0) this._emit({ kind: 'hymn', bonus: CONSECRATION_STRIKE_BONUS, slots: atFullSlots });
         break;
       }
@@ -219,7 +219,7 @@ Game.prototype._applyCard = function (card, target) {
       case 'battleHymn': {
         // No stacking — re-singing it in the same phase keeps the stronger bonus.
         this.hymnBonus = Math.max(this.hymnBonus, HYMN_BONUS);
-        this._log(`Battle Hymn: every living member's attack deals +${this.hymnBonus} this turn.`, 'status');
+        this._log(`Fight Song: every living member's attack deals +${this.hymnBonus} this turn.`, 'status');
         this._emit({ kind: 'hymn', bonus: this.hymnBonus, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
@@ -239,7 +239,7 @@ Game.prototype._applyCard = function (card, target) {
         const paid = this._bloodPay(m, this._bloodCost(card));
         const before = this.mp;
         this.mp = Math.min(this.maxMana, this.mp + BLOOD_TITHE_MP);
-        this._log(`Blood Tithe: ${m.name} pays ${paid} HP; ${this.mp - before} MP restored. (MP ${this.mp})`, 'mp');
+        this._log(`Elbow Grease: ${m.name} pays ${paid} HP; ${this.mp - before} MP restored. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
         break;
       }
@@ -251,13 +251,13 @@ Game.prototype._applyCard = function (card, target) {
           const healed = this._healMember(other, card.heal ?? 0, true);
           this._emit({ kind: 'heal', slot: other.slot, amount: healed, hp: other.hp });
         }
-        this._log(`Martyr's Gift: ${m.name} pays ${paid} HP; the others heal up to ${card.heal}.`, 'heal');
+        this._log(`Helping Hand: ${m.name} pays ${paid} HP; the others heal up to ${card.heal}.`, 'heal');
         break;
       }
       // --- Blood + cycling (#68): HP as a spendable resource -------------------
       case 'crimsonPact': {
         // Pay HP, then draw through the normal draw path — a reshuffle mid-draw fires
-        // Prayer Beads / Grimoire (like Inspiration, but priced in HP).
+        // Fidget Beads / Grimoire (like Inspiration, but priced in HP).
         const m = this.members[target as number];
         const paid = this._bloodPay(m, this._bloodCost(card));
         const before = this.hand.length;
@@ -267,7 +267,7 @@ Game.prototype._applyCard = function (card, target) {
           this.hand.push(c);
         }
         const drawn = this.hand.length - before;
-        this._log(`Crimson Pact: ${m.name} pays ${paid} HP; drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
+        this._log(`Paper Cuts: ${m.name} pays ${paid} HP; drew ${drawn} card${drawn === 1 ? '' : 's'}.`, 'status');
         this._emit({ kind: 'draw', count: drawn });
         break;
       }
@@ -277,7 +277,7 @@ Game.prototype._applyCard = function (card, target) {
         // A normal Shield (replaces Brace, fades in SHIELD_TURNS enemy turns).
         m.shield = true;
         m.shieldTurns = SHIELD_TURNS;
-        this._log(`Scarlet Ward: ${m.name} pays ${paid} HP for a Shield (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
+        this._log(`Thick Skin: ${m.name} pays ${paid} HP for a Shield (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
         this._emit({ kind: 'shieldApplied', slot: m.slot });
         break;
       }
@@ -288,10 +288,10 @@ Game.prototype._applyCard = function (card, target) {
         const other = this._mostWoundedOther(m);
         if (other) {
           const healed = this._healMember(other, card.heal ?? TRANSFUSION_HEAL, true);
-          this._log(`Transfusion: ${m.name} pays ${paid} HP; ${other.name} heals ${healed}.`, 'heal');
+          this._log(`Blood Drive: ${m.name} pays ${paid} HP; ${other.name} heals ${healed}.`, 'heal');
           this._emit({ kind: 'heal', slot: other.slot, amount: healed, hp: other.hp });
         } else {
-          this._log(`Transfusion: ${m.name} pays ${paid} HP, but no other member remains to receive it.`, 'status');
+          this._log(`Blood Drive: ${m.name} pays ${paid} HP, but no other member remains to receive it.`, 'status');
         }
         break;
       }
@@ -302,7 +302,7 @@ Game.prototype._applyCard = function (card, target) {
         const cost = BLOOD_BANNER_HP + this._sanguineSurcharge();
         for (const m of this.livingMembers()) this._bloodPay(m, cost);
         this.bloodBannerTurns = BLOOD_BANNER_TURNS;
-        this._log(`Blood Banner: the party bleeds for the standard — autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.`, 'status');
+        this._log(`Pep Rally: the party digs deep — autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'hymn', bonus: BLOOD_BANNER_BONUS, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
@@ -315,7 +315,7 @@ Game.prototype._applyCard = function (card, target) {
         const total = this.enemy.poison * this.enemy.poisonTurns;
         this.enemy.poison = 0;
         this.enemy.poisonTurns = 0;
-        const killed = this._damageEnemy(total, 'Hemorrhage');
+        const killed = this._damageEnemy(total, 'Goo Burst');
         this._emitEnemyNuke(total, killed);
         break;
       }
@@ -328,10 +328,10 @@ Game.prototype._applyCard = function (card, target) {
         if (t && !t.cast && t.damage > 0) {
           const before = t.damage;
           t.damage = Math.max(0, t.damage - DREAD_WHISPER_REDUCTION);
-          this._log(`A dread whisper saps the ${this.telegraphIntent() ?? 'attack'}: ${before} → ${t.damage} per target.`, 'status');
+          this._log(`Trash Talk saps the ${this.telegraphIntent() ?? 'attack'}: ${before} → ${t.damage} per target.`, 'status');
           this._emit({ kind: 'graveChill', slot: SLOT.CENTER, amount: before - t.damage });
         } else {
-          this._log('A dread whisper reaches for the telegraph, but there is nothing to sap.', 'status');
+          this._log('Trash Talk echoes at the telegraph, but there is nothing to sap.', 'status');
         }
         break;
       }
@@ -340,7 +340,7 @@ Game.prototype._applyCard = function (card, target) {
         // canPlay guarantees no active Defense (that is also the no-stack rule).
         m.defense = PHALANX_TURNS;
         m.defenseAmount = PHALANX_DEFENSE;
-        this._log(`Phalanx: ${m.name} gains Defense ${PHALANX_DEFENSE} for ${PHALANX_TURNS} enemy turns.`, 'status');
+        this._log(`Turtle Up: ${m.name} gains Defense ${PHALANX_DEFENSE} for ${PHALANX_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'defenseApplied', slot: m.slot, amount: PHALANX_DEFENSE });
         break;
       }
@@ -525,11 +525,11 @@ Game.prototype._fireAbility = function (m, target = null) {
         // Re-hexing refreshes the duration and keeps the stronger value (no stacking).
         this.enemy.vulnerable = Math.max(this.enemy.vulnerable, vuln);
         this.enemy.vulnerableTurns = HEX_TURNS;
-        this._log(`${m.name} hexes the enemy — +${Math.round(vuln * 100)}% damage taken for ${HEX_TURNS} turns.`, 'status');
+        this._log(`${m.name} gives the enemy the Evil Eye — +${Math.round(vuln * 100)}% damage taken for ${HEX_TURNS} turns.`, 'status');
         break;
       }
       case 'crescendo': {
-        // The Skald (#27) draws CRESCENDO_DRAW cards; the Ability card that fired it
+        // The Busker (#27) draws CRESCENDO_DRAW cards; the Ability card that fired it
         // already counted as the "1 card played" toward his cards-played strike.
         let drawn = 0;
         for (let i = 0; i < CRESCENDO_DRAW; i++) {
@@ -564,7 +564,7 @@ Game.prototype._fireAbility = function (m, target = null) {
         break;
       }
       case 'stun': {
-        // The Sentinel (#61) Stuns the enemy: flag the standing telegraph as
+        // The Showstopper (#61) Stuns the enemy: flag the standing telegraph as
         // cancelled. On the enemy phase it deals no damage and runs no cast — the
         // enemy loses the turn — but the move is CONSUMED: the rotation still
         // advances and any channel wind-up aborts (the "cooldown as if the move was
@@ -596,7 +596,7 @@ Game.prototype._fireAbility = function (m, target = null) {
         break;
       }
       case 'penance': {
-        // The Flagellant (#75) pays PENANCE_HP — NO clamp; this is the SOLE Blood effect
+        // The Strongman (#75) pays PENANCE_HP — NO clamp; this is the SOLE Blood effect
         // that can kill him. Order is payment -> death check -> buff (per the design):
         //   1) drain via _drainMember (unclamped): at <= PENANCE_HP HP it empties him and
         //      runs the FULL standard death pipeline — Martyr's Icon may veto it (survive at
@@ -616,8 +616,8 @@ Game.prototype._fireAbility = function (m, target = null) {
         this.penanceBonus = Math.max(this.penanceBonus, PENANCE_STRIKE_BONUS);
         this.penanceTurns = PENANCE_STRIKE_TURNS;
         this._log(died
-          ? `${m.name} spends the last of his blood — Penance is paid. Every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`
-          : `${m.name} scourges himself (-${cost} HP) — Penance: every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`, 'status');
+          ? `${m.name} gives everything for one last Feat of Strength. Every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`
+          : `${m.name} strains himself (-${cost} HP) — Feat of Strength: every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died,
           slots: this.livingMembers().map((x) => x.slot) });
         break;

@@ -684,7 +684,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'penance': {
-        // The Flagellant scourges himself (#75): a self-sacrifice, then the whole party's
+        // The Strongman strains himself (#75): a self-sacrifice, then the whole party's
         // autos flare. The HP cost's own -N shake rides its bloodPay event; here we mark the
         // party-wide fury (his slot glows only if he survived the payment).
         const fx: FxSpec[] = [];
@@ -692,7 +692,7 @@ export function buildTimeline(events: GameEvent[]): Timeline {
           fx.push({ type: 'glow', at: s, color: C.danger });
           fx.push({ type: 'float', at: s, text: `+${ev.bonus} ATK`, color: C.danger, big: true });
         }
-        if (ev.died) fx.push({ type: 'float', at: ev.slot, text: 'PENANCE PAID', color: C.danger });
+        if (ev.died) fx.push({ type: 'float', at: ev.slot, text: 'GAVE IT ALL', color: C.danger });
         push({ at: t, fx });
         t += 460;
         break;
@@ -740,17 +740,17 @@ export function buildTimeline(events: GameEvent[]): Timeline {
       }
 
       case 'wound': {
-        // Hex settles over the party — destructive but not punchy: the curse creeps
-        // in as a vignette and crumbles down over each living member, with a `Hex`
+        // The Jinx settles over the party — destructive but not punchy: the curse creeps
+        // in as a vignette and crumbles down over each living member, with a `Jinx`
         // label naming the healing-reduction debuff on each affected card.
         push({ at: t, shake: 3, fx: [
           { type: 'vignette', color: C.hex, mode: 'tint', dur: 950 },
-          { type: 'float', at: 'enemy', text: 'HEX', color: C.hex, big: true },
+          { type: 'float', at: 'enemy', text: 'JINX', color: C.hex, big: true },
           ...ev.slots.map((s): FxSpec => ({ type: 'glow', at: s, color: C.hex, dur: 800 })),
         ] });
         push({ at: t + 220, fx: [
           ...ev.slots.map((s): FxSpec => ({ type: 'burst', at: s, color: C.hex, count: 9, spread: 55, mode: 'fall', dur: 900 })),
-          ...ev.slots.map((s): FxSpec => ({ type: 'float', at: s, text: 'Hex', color: C.hex })),
+          ...ev.slots.map((s): FxSpec => ({ type: 'float', at: s, text: 'Jinx', color: C.hex })),
         ] });
         t += 640;
         break;

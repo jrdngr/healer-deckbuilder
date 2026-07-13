@@ -160,8 +160,8 @@ function exerciseOnePlay(game: Game, cov: Coverage): boolean {
 // live fight — so scanning the fight log proves the relic fired.
 const RELIC_LOG_MARK: Partial<Record<RelicId, string>> = {
   warDrum: 'War Drum',
-  prayerBeads: 'Prayer Beads',
-  martyrsIcon: "Martyr's Icon",
+  prayerBeads: 'Fidget Beads',
+  martyrsIcon: 'Guardian Feather',
 };
 
 // Drive one exerciser fight to completion. `preKill` seeds a corpse so Resurrect
@@ -343,7 +343,7 @@ const RELIC_PROBES: Record<RelicId, () => boolean> = {
     const g = probeGame(['pilgrimsFlask']); g.start();
     g.ranger.hp = 1;                    // a wounded member to top off
     g.skipTurn();                       // a Rest heals all living members via the pipeline
-    return g.log.some((e) => e.text.includes("Pilgrim's Flask"));
+    return g.log.some((e) => e.text.includes('Nap Sack'));
   },
   surgeonsThread: () => {
     // Run-layer: the between-fight recovery fraction is higher with the relic.

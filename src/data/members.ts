@@ -26,28 +26,28 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // own low damage enough to carry act 1. No self-damage: the old Soul Tithe / Dark
   // Bargain suicide (a permadeath magnet under the roster campaign) is gone.
   warlock: { slot: 0, id: 'warlock', name: 'Warlock', maxHP: 14, damage: 3, ability: 'hex' },
-  // Skald: 0 base damage; his strike scales on cards played this phase (Crescendo
+  // Busker: 0 base damage; his strike scales on cards played this phase (Crescendo
   // both draws and counts toward that), attacking Rest timing.
-  skald: { slot: 2, id: 'skald', name: 'Skald', maxHP: 10, damage: 0, ability: 'crescendo' },
+  skald: { slot: 2, id: 'skald', name: 'Busker', maxHP: 10, damage: 0, ability: 'crescendo' },
   // Roster wave 2 (#28). Berserker: strongest at LOW HP — healing him is friendly fire.
   berserker: { slot: 0, id: 'berserker', name: 'Berserker', maxHP: 16, damage: 2, ability: 'rampage' },
   // Roster wave 3 (#29). Beast Warden: 9 HP / 1 dmg, but Call Boar summons a pet on
   // her slot that soaks whole hits and lends her its strike — the most invasive
   // member (a new board entity).
   beastWarden: { slot: 0, id: 'beastWarden', name: 'Beast Warden', maxHP: 9, damage: 1, ability: 'callBoar' },
-  // Sentinel (#61): a sturdy front-line bruiser whose Stun cancels the enemy's
+  // Showstopper (#61): a sturdy front-line bruiser whose Stun cancels the enemy's
   // standing telegraph — a control member. Low damage; the value is the lost enemy
   // turn. Home slot 0 (front line).
-  sentinel: { slot: 0, id: 'sentinel', name: 'Sentinel', maxHP: 13, damage: 2, ability: 'stun' },
+  sentinel: { slot: 0, id: 'sentinel', name: 'Showstopper', maxHP: 13, damage: 2, ability: 'stun' },
   // Duelist (#74): a front-line skirmisher who converts being attacked well into
   // damage. Her En Garde Provokes a chosen member (Taunt) and grants them PERSISTENT
   // Riposte — for a few enemy turns they counterattack EVERY hit that lands on them
   // (fully blocked hits included) for their live auto damage. Home slot 0 (front line).
   duelist: { slot: 0, id: 'duelist', name: 'Duelist', maxHP: 12, damage: 3, ability: 'enGarde' },
-  // Flagellant (#75): the blood battery. A big body, weak swing (Berserker-adjacent
-  // chassis) whose HP is the party's fuel — his Penance pays 4 HP (NO clamp, it can
-  // kill him) to buff every living member's auto +2 for 2 enemy turns. Home slot 0.
-  flagellant: { slot: 0, id: 'flagellant', name: 'Flagellant', maxHP: 15, damage: 2, ability: 'penance' },
+  // Strongman (#75): the blood battery. A big body, weak swing (Berserker-adjacent
+  // chassis) whose HP is the party's fuel — his Feat of Strength pays 4 HP (NO clamp,
+  // it can kill him) to buff every living member's auto +2 for 2 enemy turns. Home slot 0.
+  flagellant: { slot: 0, id: 'flagellant', name: 'Strongman', maxHP: 15, damage: 2, ability: 'penance' },
 };
 
 // Build a party config from an ordered list of member ids (slot = list index).
@@ -159,13 +159,13 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
   tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
   mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
-  warlock: `Hex — curse the enemy with Vulnerability: the party deals +${Math.round(HEX_VULN_BY_SIZE[1] * 100)}% damage solo / +${Math.round(HEX_VULN_BY_SIZE[3] * 100)}% in a full party, for ${HEX_TURNS} turns.`,
+  warlock: `Evil Eye — curse the enemy with Vulnerability: the party deals +${Math.round(HEX_VULN_BY_SIZE[1] * 100)}% damage solo / +${Math.round(HEX_VULN_BY_SIZE[3] * 100)}% in a full party, for ${HEX_TURNS} turns.`,
   skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
   berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
   beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
   sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
   duelist: `En Garde — a chosen member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
-  flagellant: `Penance — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns (him included if he survives; the buff lands even if he dies).`,
+  flagellant: `Feat of Strength — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns (him included if he survives; the buff lands even if he dies).`,
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity

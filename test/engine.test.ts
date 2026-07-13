@@ -299,9 +299,9 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   check('bolster is unplayable while the tank is dead', g.canPlay(idx, null) !== null);
   eq('playing a card with a dead bound member is refused', g.playCard(idx, null).ok, false);
   // A card whose member was never deployed is likewise unplayable: the default
-  // trio has no Warlock, so the Hex card finds no carrier.
+  // trio has no Warlock, so the Evil Eye card finds no carrier.
   const pact = giveCard(g, 'hex');
-  check('the Hex card is unplayable with no Warlock deployed', g.canPlay(pact, null) !== null);
+  check('the Evil Eye card is unplayable with no Warlock deployed', g.canPlay(pact, null) !== null);
 }
 {
   // Ability cards (#44) are no-target and play immediately with no member-pick prompt —
@@ -496,7 +496,7 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   check('ranger alive again after Resurrect', ranger.alive);
   check('the death still counts for a scar after Resurrect', g.diedThisFightSlots().includes(SLOT.LEFT));
 
-  // A Martyr's Icon save vetoes the death itself, so no scar is recorded.
+  // A Guardian Feather save vetoes the death itself, so no scar is recorded.
   const cfg = defaultBattleConfig();
   cfg.relics = ['martyrsIcon'];
   const gm = new Game(42, cfg);
@@ -1326,10 +1326,10 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   for (const m of g.members) eq(`memberDamage(${m.id})`, g.memberDamage(m), m.damage);
 }
 
-// --- Gatewarden: fixed rotation + Crushing Blow channel (issue 12) ----------
+// --- Bouncer: fixed rotation + Haymaker channel (issue 12) ----------
 {
   // Rotation is exact: single -> two -> heavy -> sweep, repeating, with the heavy
-  // becoming Crushing Blow on every 2nd cycle.
+  // becoming Haymaker on every 2nd cycle.
   const g = gatewardenGame(1);
   const seq: string[] = [];
   for (let i = 0; i < 8; i++) {
@@ -1339,10 +1339,10 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   }
   eq('exact rotation with channel on cycle 2',
     JSON.stringify(seq),
-    JSON.stringify(['single', 'two', 'heavy', 'sweep', 'single', 'two', 'channel:Crushing Blow', 'sweep']));
+    JSON.stringify(['single', 'two', 'heavy', 'sweep', 'single', 'two', 'channel:Haymaker', 'sweep']));
 }
 {
-  // Crushing Blow: a 2-turn channel that deals 12 on resolve; no damage during
+  // Haymaker: a 2-turn channel that deals 12 on resolve; no damage during
   // the wind-up (the enemy takes no other action while channelling). 12 keeps
   // the read answerable — a defended tank survives it when topped up, while the
   // ranger/mage still die to it (see the GATEWARDEN_DEF note).
@@ -1361,17 +1361,17 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   check('still channelling after wind-up', g.telegraph.channel === true);
   g.members[target].hp = 50;
   g.turn = 3; g._runEnemyPhase();     // resolve turn
-  eq('Crushing Blow lands for 12', g.members[target].hp, 38);
+  eq('Haymaker lands for 12', g.members[target].hp, 38);
 }
 {
   // The channel is answerable by the tank and only the tank (the teaching): a
   // defended, topped-up tank survives the resolve; the squishies never do.
   const dmg = GATEWARDEN_DEF.channel!.damage;
   const [ranger, tank, mage] = MEMBER_DEFS;
-  check('a defended full tank survives Crushing Blow',
+  check('a defended full tank survives Haymaker',
     tank.maxHP - (dmg - DEFENSE_AMOUNT) > 0);
-  check('Crushing Blow still one-shots a full ranger', ranger.maxHP - dmg <= 0);
-  check('Crushing Blow still one-shots a full mage', mage.maxHP - dmg <= 0);
+  check('Haymaker still one-shots a full ranger', ranger.maxHP - dmg <= 0);
+  check('Haymaker still one-shots a full mage', mage.maxHP - dmg <= 0);
 }
 {
   // A Taunt cast DURING the wind-up still redirects the channel at resolve.
@@ -1400,7 +1400,7 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   eq('plain heavy announces by its generic name', g.telegraphIntent(), ATTACK_INTENT_NAMES.heavy);
   g.rotationIndex = 6;                 // channel slot (cycle 2)
   g.telegraph = g._generateTelegraph(3);
-  eq('a standing channel announces by its own name', g.telegraphIntent(), 'Crushing Blow');
+  eq('a standing channel announces by its own name', g.telegraphIntent(), 'Haymaker');
   // The resolve log also names the channel, not the underlying attack type.
   const target = g.telegraph.targets[0];
   g.members[target].hp = 50;
@@ -1408,11 +1408,11 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   g.members[target].hp = 50;
   g.turn = 3; g._runEnemyPhase();      // resolve
   check('the resolve log names the channel',
-    g.log.some((l) => /Crushing Blow (hits|whiffs)/.test(l.text)),
+    g.log.some((l) => /Haymaker (hits|whiffs)/.test(l.text)),
     g.log.map((l) => l.text).slice(-3).join(' | '));
 }
 
-// --- Hexweaver: Piercing Bolt / Hex / Siphon + Cleanse (issue 13) -----------
+// --- Jinxweaver: Zinger / Jinx / Slurp + Cleanse (issue 13) -----------
 {
   // Rotation is exact and mixes the three tricks between whole-party pressure.
   const g = hexweaverGame(1);
@@ -1422,32 +1422,32 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
     g.telegraph = g._generateTelegraph(5);
     seq.push(g.telegraphIntent() ?? '?');
   }
-  eq('exact Hexweaver rotation (by intent name)',
+  eq('exact Jinxweaver rotation (by intent name)',
     JSON.stringify(seq),
-    JSON.stringify(['Strike', 'Piercing Bolt', 'Hex', 'Sweep', 'Piercing Bolt', 'Siphon']));
+    JSON.stringify(['Strike', 'Zinger', 'Jinx', 'Sweep', 'Zinger', 'Slurp']));
   // A bare-string opener still announces by its generic intent name.
   g.rotationIndex = 0; g.telegraph = g._generateTelegraph(5);
   eq('plain opener announces generically', g.telegraphIntent(), ATTACK_INTENT_NAMES.single);
 }
 {
-  // Piercing Bolt ignores Taunt AND Defense and aims at the lowest-HP member — the
+  // Zinger ignores Taunt AND Defense and aims at the lowest-HP member — the
   // tank can't soak it and the fragile DPS is who's threatened.
   const g = hexweaverGame(2);
   g.tank.taunt = TAUNT_TURNS; g.tank.defense = DEFENSE_TURNS; // full taunt/defense up
   g.ranger.hp = 3; g.mage.hp = 9; g.tank.hp = 18;            // ranger is lowest
-  g.rotationIndex = 1;                                        // Piercing Bolt slot
+  g.rotationIndex = 1;                                        // Zinger slot
   g.telegraph = g._generateTelegraph(5);
-  check('Piercing Bolt is telegraphed by name', g.telegraphIntent() === 'Piercing Bolt');
-  eq('Piercing Bolt aims at the lowest-HP member (ranger), not the taunter', JSON.stringify(g.telegraph.targets), JSON.stringify([SLOT.LEFT]));
+  check('Zinger is telegraphed by name', g.telegraphIntent() === 'Zinger');
+  eq('Zinger aims at the lowest-HP member (ranger), not the taunter', JSON.stringify(g.telegraph.targets), JSON.stringify([SLOT.LEFT]));
   // Preview must equal applied even though the tank is taunting/defending.
   const spec = g.attackTargets().find((s) => s.slot === SLOT.LEFT);
   eq('preview shows the full piercer damage (Defense ignored)', spec?.damage, HEXWEAVER_PIERCER_DMG);
   g.turn = 5; g._runEnemyPhase();
-  eq('Piercing Bolt hit the ranger for full damage', g.ranger.hp, 3 - HEXWEAVER_PIERCER_DMG <= 0 ? 0 : 3 - HEXWEAVER_PIERCER_DMG);
+  eq('Zinger hit the ranger for full damage', g.ranger.hp, 3 - HEXWEAVER_PIERCER_DMG <= 0 ? 0 : 3 - HEXWEAVER_PIERCER_DMG);
   eq('the taunting tank was untouched by the piercer', g.tank.hp, 18);
 }
 {
-  // Invariant: preview == applied for a Piercing Bolt aimed at a DEFENDED member —
+  // Invariant: preview == applied for a Zinger aimed at a DEFENDED member —
   // the ignoreDefense flag must fold into both the preview and the hit identically.
   const g = hexweaverGame(20);
   g.tank.hp = 10; g.tank.defense = DEFENSE_TURNS; // tank is strictly lowest AND defending
@@ -1462,40 +1462,40 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   eq('and both equal the undefended piercer damage', applied, HEXWEAVER_PIERCER_DMG);
 }
 {
-  // A Piercing Bolt is NOT redirected onto a taunter that taunts during the wind-up
-  // (unlike Crushing Blow) — it pierces the funnel.
+  // A Zinger is NOT redirected onto a taunter that taunts during the wind-up
+  // (unlike Haymaker) — it pierces the funnel.
   const g = hexweaverGame(3);
   g.ranger.hp = 8; g.mage.hp = 9; g.tank.hp = 18;
   g.rotationIndex = 1; g.telegraph = g._generateTelegraph(5); // aims at ranger (lowest)
   check('not redirectable onto the tank', g._standingTelegraphRedirectable(SLOT.CENTER) === false);
 }
 {
-  // Hex: a 'cast' that halves ALL healing for WOUND_TURNS turns — intercepts both
+  // Jinx: a 'cast' that halves ALL healing for WOUND_TURNS turns — intercepts both
   // the direct heal path and the Regen tick (both route through _healMember).
   const g = hexweaverGame(4);
-  g.rotationIndex = 2; g.telegraph = g._generateTelegraph(5); // Hex slot
-  check('Hex telegraph is a cast', g.telegraph.cast === 'wound');
-  check('Hex deals no damage lines', g.attackTargets().length === 0);
-  g.turn = 5; g._runEnemyPhase();                             // Hex resolves
-  check('party is Wounded after Hex', g.wounded === true);
+  g.rotationIndex = 2; g.telegraph = g._generateTelegraph(5); // Jinx slot
+  check('Jinx telegraph is a cast', g.telegraph.cast === 'wound');
+  check('Jinx deals no damage lines', g.attackTargets().length === 0);
+  g.turn = 5; g._runEnemyPhase();                             // Jinx resolves
+  check('party is Wounded after Jinx', g.wounded === true);
   eq('Wound lasts WOUND_TURNS player phases', g.woundTurns, WOUND_TURNS);
   // Direct heal path: a Heal-4 heals only 2 while Wounded.
   g.tank.hp = 1;
   const healed = g._healMember(g.tank, 4);
-  eq('direct heal is halved under Hex', healed, 2);
+  eq('direct heal is halved under Jinx', healed, 2);
   // Regen tick path: strength 2 regens 1 while Wounded.
   g.mage.hp = 1; g.mage.regen = 2;
   g.phase = 'idle'; g._startPlayerPhase();
-  eq('Regen tick is halved under Hex', g.mage.hp, 1 + 1);
+  eq('Regen tick is halved under Jinx', g.mage.hp, 1 + 1);
 }
 {
-  // Cleanse removes the Hex; healing returns to full.
+  // Cleanse removes the Jinx; healing returns to full.
   const g = hexweaverGame(5);
   g.woundTurns = WOUND_TURNS;
   const idx = giveCard(g, 'cleanse');
   g.phase = 'player';
   g.playCard(idx, null);
-  check('Cleanse cleared the Hex', g.wounded === false);
+  check('Cleanse cleared the Jinx', g.wounded === false);
   g.tank.hp = 1;
   eq('healing is full again after Cleanse', g._healMember(g.tank, 4), 4);
 }
@@ -1503,70 +1503,70 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   // Wound lasts exactly WOUND_TURNS player phases (the same-turn decay does not eat one).
   const g = hexweaverGame(6);
   g.rotationIndex = 2; g.telegraph = g._generateTelegraph(5);
-  g.turn = 5; g._runEnemyPhase();       // Hex resolves; woundTurns = 3
+  g.turn = 5; g._runEnemyPhase();       // Jinx resolves; woundTurns = 3
   let woundedPhases = 0;
   for (let k = 0; k < 5; k++) {
     if (g.wounded) woundedPhases++;      // player phase k: is healing halved?
     g.turn += 1; g._runEnemyPhase();     // next enemy phase decays it at the top
   }
-  eq('Hex halves healing for exactly WOUND_TURNS player phases', woundedPhases, WOUND_TURNS);
+  eq('Jinx halves healing for exactly WOUND_TURNS player phases', woundedPhases, WOUND_TURNS);
 }
 {
-  // Siphon: a 'cast' that drains SIPHON_AMOUNT MP, floored at 0, previewed on the bar.
+  // Slurp: a 'cast' that drains SIPHON_AMOUNT MP, floored at 0, previewed on the bar.
   const g = hexweaverGame(7);
-  g.rotationIndex = 5; g.telegraph = g._generateTelegraph(5); // Siphon slot
-  check('Siphon telegraph is a cast', g.telegraph.cast === 'siphon');
+  g.rotationIndex = 5; g.telegraph = g._generateTelegraph(5); // Slurp slot
+  check('Slurp telegraph is a cast', g.telegraph.cast === 'siphon');
   g.mp = 10;
-  eq('Siphon preview matches the drain', g.predictedSiphon(), SIPHON_AMOUNT);
+  eq('Slurp preview matches the drain', g.predictedSiphon(), SIPHON_AMOUNT);
   g.turn = 5; g._runEnemyPhase();
-  eq('Siphon drained the MP', g.mp, 10 - SIPHON_AMOUNT);
+  eq('Slurp drained the MP', g.mp, 10 - SIPHON_AMOUNT);
   // Floors at 0: from 1 MP, a 3-drain only takes 1.
   const g2 = hexweaverGame(8);
   g2.rotationIndex = 5; g2.telegraph = g2._generateTelegraph(5);
   g2.mp = 1;
-  eq('Siphon floors at 0', g2.predictedSiphon(), 1);
+  eq('Slurp floors at 0', g2.predictedSiphon(), 1);
   g2.turn = 5; g2._runEnemyPhase();
-  eq('Siphon left MP at 0, not negative', g2.mp, 0);
+  eq('Slurp left MP at 0, not negative', g2.mp, 0);
 }
 {
   // Cleanse is a pool card (uncommon) and is in the shop pool.
   check('Cleanse exists as an uncommon', CARDS.cleanse != null);
 }
 
-// --- Devourer: phase system + Consume + Maw (issue 14) ----------------------
+// --- Gobbler: phase system + Gulp + Big Chomp (issue 14) ----------------------
 {
-  // Consume: cleanses the enemy's OWN poison and self-heals for every remaining
-  // tick (poison stops being free value against the Devourer).
+  // Gulp: cleanses the enemy's OWN poison and self-heals for every remaining
+  // tick (poison stops being free value against the Gobbler).
   const g = devourerGame(1);
   g.enemy.hp = 100;                       // room to heal (below max 200)
   g.enemy.poison = 5; g.enemy.poisonTurns = 4; // 20 damage of poison still owed
-  g.rotationIndex = 3; g.telegraph = g._generateTelegraph(2); // Consume slot
-  check('Consume is a cast telegraph', g.telegraph.cast === 'consume');
-  eq('Consume announces by name', g.telegraphIntent(), 'Consume');
+  g.rotationIndex = 3; g.telegraph = g._generateTelegraph(2); // Gulp slot
+  check('Gulp is a cast telegraph', g.telegraph.cast === 'consume');
+  eq('Gulp announces by name', g.telegraphIntent(), 'Gulp');
   // Resolve the cast in isolation (a full enemy phase would first land one poison
   // tick, which is correct in play but muddies the pure heal-for-remaining check).
   g._resolveCast(g.telegraph);
-  eq('Consume cleansed the enemy poison', g.enemy.poisonTurns, 0);
-  eq('Consume also zeroed the poison strength', g.enemy.poison, 0);
-  eq('Consume self-healed for the remaining ticks (5x4)', g.enemy.hp, 100 + 20);
+  eq('Gulp cleansed the enemy poison', g.enemy.poisonTurns, 0);
+  eq('Gulp also zeroed the poison strength', g.enemy.poison, 0);
+  eq('Gulp self-healed for the remaining ticks (5x4)', g.enemy.hp, 100 + 20);
 }
 {
-  // Consume heal is capped at max HP and is a no-op with no poison up.
+  // Gulp heal is capped at max HP and is a no-op with no poison up.
   const g = devourerGame(2);
   g.enemy.hp = 100;
   g.rotationIndex = 3; g.telegraph = g._generateTelegraph(2);
   g.turn = 2; g._runEnemyPhase();
-  eq('Consume with no poison leaves HP unchanged', g.enemy.hp, 100);
+  eq('Gulp with no poison leaves HP unchanged', g.enemy.hp, 100);
 }
 {
   // Phase transition fires exactly once at <=50% HP, swaps in the phase-2 rotation
-  // (Maw channel) and tightens enrage — and does NOT re-fire on further damage.
+  // (Big Chomp channel) and tightens enrage — and does NOT re-fire on further damage.
   const g = devourerGame(3, 200);
   check('starts un-transformed', g.phaseTriggered === false);
   check('phase-1 rotation is active', g.activeChannel() === undefined);
   g._damageEnemy(101, 'test');            // 200 -> 99 (<=50%)
   check('transformed at the threshold', g.phaseTriggered === true);
-  check('phase-2 Maw channel is now active', g.activeChannel()?.name === 'Maw');
+  check('phase-2 Big Chomp channel is now active', g.activeChannel()?.name === 'Big Chomp');
   eq('enrage tightened to the phase-2 turn', g.enrageTurn, 11);
   const beats = g.events.filter((e) => e.kind === 'phaseChange').length;
   eq('the transformation beat fired once', beats, 1);
@@ -1582,24 +1582,24 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   g.telegraph = g._generateTelegraph(2); // some phase-1 attack (not consume)
   g.turn = 2; g._runEnemyPhase();        // poison ticks 55 -> 45, crossing 50%
   check('a Poison tick triggers the phase once', g.phaseTriggered === true);
-  check('Maw is active after the DoT-triggered transition', g.activeChannel()?.name === 'Maw');
+  check('Big Chomp is active after the DoT-triggered transition', g.activeChannel()?.name === 'Big Chomp');
 }
 {
-  // Maw: a 2-turn channelled sweep that resolves for DEVOURER_MAW_DMG on every
-  // living member. Drive to phase 2, then find and resolve a Maw.
+  // Big Chomp: a 2-turn channelled sweep that resolves for DEVOURER_MAW_DMG on every
+  // living member. Drive to phase 2, then find and resolve a Big Chomp.
   const g = devourerGame(5, 200);
   g._damageEnemy(150, 'test');           // -> 50, phase 2
-  // Find the next Maw telegraph.
+  // Find the next Big Chomp telegraph.
   let guard = 0;
   while (guard++ < 12) {
     g.rotationIndex += 1;
     const t = g._generateTelegraph(2);   // turn 2 (pre-enrage) so damage is base
-    if (t.channel && t.channelName === 'Maw') { g.telegraph = t; break; }
+    if (t.channel && t.channelName === 'Big Chomp') { g.telegraph = t; break; }
   }
-  check('a Maw telegraph was found in phase 2', g.telegraph?.channelName === 'Maw');
-  eq('Maw is a 2-turn channel', g.telegraph!.turnsUntilResolve, 2);
-  eq('Maw hits the whole party (sweep geometry)', g.telegraph!.targets.length, 3);
-  eq('Maw base damage is DEVOURER_MAW_DMG', g.telegraph!.damage, DEVOURER_MAW_DMG);
+  check('a Big Chomp telegraph was found in phase 2', g.telegraph?.channelName === 'Big Chomp');
+  eq('Big Chomp is a 2-turn channel', g.telegraph!.turnsUntilResolve, 2);
+  eq('Big Chomp hits the whole party (sweep geometry)', g.telegraph!.targets.length, 3);
+  eq('Big Chomp base damage is DEVOURER_MAW_DMG', g.telegraph!.damage, DEVOURER_MAW_DMG);
   // Wind-up then resolve; every living member takes DEVOURER_MAW_DMG.
   for (const m of g.members) m.hp = m.maxHP;
   g.turn = 2; g._runEnemyPhase();        // wind-up (no damage)
@@ -1607,7 +1607,7 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
   g.turn = 3; g._runEnemyPhase();        // resolve
   let allTookMaw = true;
   g.members.forEach((m, i) => { if (m.alive && preResolve[i] - m.hp !== DEVOURER_MAW_DMG) allTookMaw = false; });
-  check('Maw resolved for DEVOURER_MAW_DMG on each member', allTookMaw);
+  check('Big Chomp resolved for DEVOURER_MAW_DMG on each member', allTookMaw);
 }
 
 // --- enemy-first ordering: an opening strike lands before the player's turn ----
@@ -1635,7 +1635,7 @@ eq('Refresh (Font of Mana) is named Refresh', CARDS.fontOfMana.name, 'Refresh');
     check('opening strike is single-target (one target)', hits.length === 1, `seed=${seed} hits=${hits.length}`);
   }
   // The opener does not advance a boss's learnable rotation: after start(), turn 1's
-  // standing telegraph is still the rotation's first step (Gatewarden opens 'single').
+  // standing telegraph is still the rotation's first step (Bouncer opens 'single').
   const gwCfg = defaultBattleConfig();
   gwCfg.enemy = { maxHP: 200, boss: true, attackBonus: 0, def: GATEWARDEN_DEF };
   const gw = new Game(3, gwCfg); gw.start();
@@ -1873,22 +1873,22 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('Inspiration comes back to hand off the reshuffle', g.hand.some((c) => c.id === 'inspiration'));
 }
 
-// --- card set phase B: Lifebloom / Battle Hymn / Barrier / Blood (issue 16) ---
+// --- card set phase B: Lifebloom / Fight Song / Barrier / Blood (issue 16) ---
 {
   // Definitions: costs, blood costs, rarities (shop prices follow rarity 25/50/75).
   eq('Lifebloom costs 3', CARDS.lifebloom.cost, 3);
   eq('Lifebloom regen strength 2', CARDS.lifebloom.regen, 2);
   eq('Lifebloom is uncommon', CARD_RARITY.lifebloom, 'uncommon');
-  eq('Battle Hymn costs 1', CARDS.battleHymn.cost, 1);
-  eq('Battle Hymn is common', CARD_RARITY.battleHymn, 'common');
+  eq('Fight Song costs 1', CARDS.battleHymn.cost, 1);
+  eq('Fight Song is common', CARD_RARITY.battleHymn, 'common');
   eq('Barrier costs 4', CARDS.barrier.cost, 4);
   eq('Barrier is rare', CARD_RARITY.barrier, 'rare');
-  eq('Blood Tithe costs 0 MP', CARDS.bloodTithe.cost, 0);
-  eq('Blood Tithe blood cost 4', CARDS.bloodTithe.selfDamage, 4);
-  eq('Blood Tithe is uncommon', CARD_RARITY.bloodTithe, 'uncommon');
-  eq('Martyr\'s Gift costs 2', CARDS.martyrsGift.cost, 2);
-  eq('Martyr\'s Gift blood cost 3', CARDS.martyrsGift.selfDamage, 3);
-  eq('Martyr\'s Gift heals others 4', CARDS.martyrsGift.heal, 4);
+  eq('Elbow Grease costs 0 MP', CARDS.bloodTithe.cost, 0);
+  eq('Elbow Grease blood cost 4', CARDS.bloodTithe.selfDamage, 4);
+  eq('Elbow Grease is uncommon', CARD_RARITY.bloodTithe, 'uncommon');
+  eq('Helping Hand costs 2', CARDS.martyrsGift.cost, 2);
+  eq('Helping Hand blood cost 3', CARDS.martyrsGift.selfDamage, 3);
+  eq('Helping Hand heals others 4', CARDS.martyrsGift.heal, 4);
   check('the phase-B survivors joined the shop pool',
     (['lifebloom', 'battleHymn', 'barrier', 'bloodTithe', 'martyrsGift'] as CardId[])
       .every((id) => CARD_POOL.includes(id)));
@@ -1946,7 +1946,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('no posthumous heal', tank.hp, 0);
 }
 {
-  // Battle Hymn: +2 on every living auto THIS party phase; resets after.
+  // Fight Song: +2 on every living auto THIS party phase; resets after.
   const g = new Game(76); g.start();
   g.playCard(giveCard(g, 'battleHymn'), null);
   const expected = g.livingMembers().reduce((s, m) => s + m.damage + HYMN_BONUS, 0);
@@ -1956,7 +1956,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Hymn resets after the party phase', g.hymnBonus, 0);
 }
 {
-  // Battle Hymn degrades as members die (per-member bonus, no corpse credit).
+  // Fight Song degrades as members die (per-member bonus, no corpse credit).
   const g = new Game(77); g.start();
   g._killMember(g.mage);
   g.playCard(giveCard(g, 'battleHymn'), null);
@@ -1980,7 +1980,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     [g.members[SLOT.LEFT], g.members[SLOT.RIGHT]].every((m) => !m.alive || !m.shield));
 }
 {
-  // Blood Tithe: pay 4 HP for 2 MP (capped); gated on >4 HP; engine-tagged.
+  // Elbow Grease: pay 4 HP for 2 MP (capped); gated on >4 HP; engine-tagged.
   const g = new Game(79); g.start();
   const tank = g.tank;
   tank.hp = 12;
@@ -1996,12 +1996,12 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   tank.hp = 18; g.mp = g.maxMana;
   g.playCard(idx2, SLOT.CENTER);
   eq('Tithe MP gain respects the cap', g.mp, g.maxMana);
-  check('Blood Tithe is engine-tagged', isEngineCard('bloodTithe'));
-  check('Retain cannot lock in Blood Tithe', !MODIFIERS.retain.eligible('bloodTithe'));
+  check('Elbow Grease is engine-tagged', isEngineCard('bloodTithe'));
+  check('Retain cannot lock in Elbow Grease', !MODIFIERS.retain.eligible('bloodTithe'));
   check('Efficient cannot touch a 0-cost card', !MODIFIERS.efficient.eligible('bloodTithe'));
 }
 {
-  // Martyr's Gift: the target pays 3; every OTHER living member heals 4.
+  // Helping Hand: the target pays 3; every OTHER living member heals 4.
   const g = new Game(80); g.start();
   const [ranger, tank, mage] = g.members;
   ranger.hp = 5; tank.hp = 10; mage.hp = 3;
@@ -2021,27 +2021,27 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('the member survives the payment', tank.alive);
 }
 
-// --- card set phase C: Phalanx + the Defense pipeline (issue 17) ----
+// --- card set phase C: Turtle Up + the Defense pipeline (issue 17) ----
 {
-  eq('Phalanx costs 2', CARDS.phalanx.cost, 2);
-  eq('Phalanx is uncommon', CARD_RARITY.phalanx, 'uncommon');
-  check('Phalanx joined the shop pool',
+  eq('Turtle Up costs 2', CARDS.phalanx.cost, 2);
+  eq('Turtle Up is uncommon', CARD_RARITY.phalanx, 'uncommon');
+  check('Turtle Up joined the shop pool',
     (['phalanx'] as CardId[]).every((id) => CARD_POOL.includes(id)));
 }
 {
-  // Phalanx: Defense 2 for 2 enemy turns; Defense-exclusive (its no-stack rule)
+  // Turtle Up: Defense 2 for 2 enemy turns; Defense-exclusive (its no-stack rule)
   // and never on the taunting member.
   const g = new Game(92); g.start();
   const ranger = g.ranger;
   const idx = giveCard(g, 'phalanx');
-  eq('Phalanx playable on an undefended member', g.canPlay(idx, SLOT.LEFT), null);
+  eq('Turtle Up playable on an undefended member', g.canPlay(idx, SLOT.LEFT), null);
   g.playCard(idx, SLOT.LEFT);
-  eq('Phalanx grants Defense strength 2', ranger.defenseAmount, PHALANX_DEFENSE);
-  eq('Phalanx lasts 2 enemy turns', ranger.defense, PHALANX_TURNS);
+  eq('Turtle Up grants Defense strength 2', ranger.defenseAmount, PHALANX_DEFENSE);
+  eq('Turtle Up lasts 2 enemy turns', ranger.defense, PHALANX_TURNS);
   const idx2 = giveCard(g, 'phalanx');
-  eq('Phalanx refuses a defended member (no stack)', g.canPlay(idx2, SLOT.LEFT), 'target already has Defense');
+  eq('Turtle Up refuses a defended member (no stack)', g.canPlay(idx2, SLOT.LEFT), 'target already has Defense');
   g.tank.taunt = 2; g.tank.defense = 0; g.tank.defenseAmount = 0; // taunt outliving Defense (edge)
-  eq('Phalanx refuses the taunting member', g.canPlay(idx2, SLOT.CENTER), 'cannot target the taunting member');
+  eq('Turtle Up refuses the taunting member', g.canPlay(idx2, SLOT.CENTER), 'cannot target the taunting member');
   // Expiry clears the per-member strength too.
   for (let i = 0; i < PHALANX_TURNS; i++) {
     g.telegraph = { type: 'single', hidden: false, damage: 0, targets: [SLOT.RIGHT], enraged: false, forTurn: g.turn + 1 };
@@ -2050,7 +2050,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('expired Defense clears its strength', ranger.defenseAmount, 0);
 }
 {
-  // Taunt keeps a stronger Defense already standing (Phalanx then Taunt).
+  // Taunt keeps a stronger Defense already standing (Turtle Up then Taunt).
   const g = new Game(93); g.start();
   const tank = g.tank;
   g.playCard(giveCard(g, 'phalanx'), SLOT.CENTER); // Defense 2 on the (untaunting) tank
@@ -2112,18 +2112,18 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     return new Game(seed, cfg);
   };
 
-  // Ironmaw: Siegebreak is a 2-turn channel at 9 in rotation slot 2 every 2nd cycle.
+  // Ironchomp: Jawbreaker is a 2-turn channel at 9 in rotation slot 2 every 2nd cycle.
   {
     const g = rosterGame(110, IRONMAW_DEF);
     g.rotationIndex = 2; // slot 2, cycle 0 — NOT a channel cycle
     let t = g._generateTelegraph(2);
-    check('Ironmaw slot 2 cycle 0 is a plain attack', !t.channel);
+    check('Ironchomp slot 2 cycle 0 is a plain attack', !t.channel);
     g.rotationIndex = 5; // slot 2, cycle 1 — the channel cycle
     t = g._generateTelegraph(2);
-    check('Ironmaw channels Siegebreak on cycle 2', t.channel === true);
-    eq('Siegebreak carries its name', t.channelName, 'Siegebreak');
-    eq('Siegebreak hits for 9', t.damage, 9);
-    eq('Siegebreak is a 2-turn wind-up', t.turnsUntilResolve, 2);
+    check('Ironchomp channels Jawbreaker on cycle 2', t.channel === true);
+    eq('Jawbreaker carries its name', t.channelName, 'Jawbreaker');
+    eq('Jawbreaker hits for 9', t.damage, 9);
+    eq('Jawbreaker is a 2-turn wind-up', t.turnsUntilResolve, 2);
   }
 
   // Needler: Needle Shot pierces — ignores Taunt and Defense, aims at the
@@ -2142,20 +2142,20 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     eq('only one pierce per Needler cycle', NEEDLER_DEF.rotation!.filter((s) => typeof s !== 'string').length, 1);
   }
 
-  // Leech: Gorge is a telegraphed 'cast' that cleanses its own Poison and
-  // self-heals the remaining ticks — the Devourer's Consume at small scale.
+  // Leech: Snack Time is a telegraphed 'cast' that cleanses its own Poison and
+  // self-heals the remaining ticks — the Gobbler's Gulp at small scale.
   {
     const g = rosterGame(112, LEECH_DEF);
     g.start();
-    g.rotationIndex = 4; // the Gorge slot
+    g.rotationIndex = 4; // the Snack Time slot
     g.telegraph = g._generateTelegraph(2);
-    eq('Gorge telegraphs as a cast', g.telegraph.cast, 'consume');
-    eq('Gorge carries its name', g.telegraphIntent(), 'Gorge');
+    eq('Snack Time telegraphs as a cast', g.telegraph.cast, 'consume');
+    eq('Snack Time carries its name', g.telegraphIntent(), 'Snack Time');
     g.enemy.hp = 100; g.enemy.poison = 5; g.enemy.poisonTurns = 3;
     g._runEnemyPhase();
-    // One poison tick (5) lands first, then Gorge eats the remaining 2 ticks (10).
-    eq('Gorge cleanses the poison', g.enemy.poisonTurns, 0);
-    eq('Gorge heals the remaining ticks', g.enemy.hp, 100 - 5 + 10);
+    // One poison tick (5) lands first, then Snack Time eats the remaining 2 ticks (10).
+    eq('Snack Time cleanses the poison', g.enemy.poisonTurns, 0);
+    eq('Snack Time heals the remaining ticks', g.enemy.hp, 100 - 5 + 10);
   }
 
   // Act-3 variants reuse the same machinery at heavier numbers.
@@ -2163,14 +2163,14 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     const g = rosterGame(113, JUGGERNAUT_DEF);
     g.rotationIndex = 5; // slot 2, cycle 1
     const t = g._generateTelegraph(2);
-    check('Juggernaut channels Overrun', t.channel === true && t.channelName === 'Overrun');
-    eq('Overrun hits for 11', t.damage, 11);
+    check('Steamroller channels Flatten', t.channel === true && t.channelName === 'Flatten');
+    eq('Flatten hits for 11', t.damage, 11);
     const g2 = rosterGame(114, LANCER_DEF);
     g2.rotationIndex = 1;
     const t2 = g2._generateTelegraph(2);
     check('Lancer Skewer pierces', t2.name === 'Skewer' && t2.ignoreTaunt === true && t2.ignoreDefense === true);
     eq('Skewer hits for 5', t2.damage, LANCER_PIERCE_DMG);
-    check('Devourling carries a Gorge step',
+    check('Gobblet carries a Snack Time step',
       DEVOURLING_DEF.rotation!.some((s) => typeof s !== 'string' && s.cast === 'consume'));
   }
 }
@@ -2269,7 +2269,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
     return new Game(seed, cfg);
   };
 
-  // Martyr's Icon: the first death of the FIGHT becomes survival at 1 HP with
+  // Guardian Feather: the first death of the FIGHT becomes survival at 1 HP with
   // statuses stripped; the wipe check sees the survivor; later deaths are real.
   // (Now once per FIGHT — it resets each fight, and is not persisted to spentRelics.)
   {
@@ -2313,7 +2313,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   }
 }
 
-// --- party roster wave 1: Hexen Warlock + Skald (#27; Warlock redesigned #39) ---
+// --- party roster wave 1: Evil-Eye Warlock + Busker (#27; Warlock redesigned #39) ---
 {
   // Warlock identity is read from the drafted member id, seated at its slot.
   const cfg = defaultBattleConfig();
@@ -2322,20 +2322,20 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const w = g.members[0];
   eq('drafted Warlock seated in slot 0', w.id, 'warlock');
   eq('Warlock name from the pool', w.name, 'Warlock');
-  eq('Warlock ability is Hex (#39)', w.ability, 'hex');
+  eq('Warlock ability is Evil Eye (#39)', w.ability, 'hex');
   eq('Warlock is a low-damage controller', w.damage, 3);
 
-  // Hex curses the enemy with Vulnerability; in a full party it uses the trio value.
+  // Evil Eye curses the enemy with Vulnerability; in a full party it uses the trio value.
   g.enemy.hp = 999;
   g._fireAbility(w);
-  eq('Hex makes the enemy Vulnerable for HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
-  eq('trio Hex vuln = HEX_VULN_BY_SIZE[3]', g.enemy.vulnerable, HEX_VULN_BY_SIZE[3]);
+  eq('Evil Eye makes the enemy Vulnerable for HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
+  eq('trio Evil Eye vuln = HEX_VULN_BY_SIZE[3]', g.enemy.vulnerable, HEX_VULN_BY_SIZE[3]);
   // Vulnerability amplifies every party damage source (applied in _damageEnemy).
   const raw = 10;
   eq('Vulnerability amplifies party damage', g.vulnerableAmount(raw), raw + Math.floor(raw * HEX_VULN_BY_SIZE[3]));
 }
 {
-  // The Hex is STRONGER the fewer members are fielded (#39): solo > trio.
+  // The Evil Eye is STRONGER the fewer members are fielded (#39): solo > trio.
   const mkEmpty = () => ({ maxHP: 0, damage: 0, abilityPower: 0, injuries: 0, empty: true });
   const cfg = defaultBattleConfig();
   cfg.party = [partyFromMembers(['warlock'])[0], mkEmpty(), mkEmpty()];
@@ -2343,11 +2343,11 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('a solo Warlock fields party size 1', g.fieldedPartySize(), 1);
   g.enemy.hp = 999;
   g._fireAbility(g.members[0]);
-  eq('solo Hex uses the solo (largest) vuln', g.enemy.vulnerable, HEX_VULN_BY_SIZE[1]);
-  check('solo Hex is stronger than a full party', HEX_VULN_BY_SIZE[1] > HEX_VULN_BY_SIZE[3]);
+  eq('solo Evil Eye uses the solo (largest) vuln', g.enemy.vulnerable, HEX_VULN_BY_SIZE[1]);
+  check('solo Evil Eye is stronger than a full party', HEX_VULN_BY_SIZE[1] > HEX_VULN_BY_SIZE[3]);
 }
 {
-  // The redesigned Hex has NO self-damage: the old Soul Tithe / Dark Bargain suicide
+  // The redesigned Evil Eye has NO self-damage: the old Soul Tithe / Dark Bargain suicide
   // (a permadeath magnet under the roster campaign) is gone.
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
@@ -2357,7 +2357,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.enemy.hp = 999;
   g._fireAbility(w);
   g._fireAbility(w);
-  eq('Hex costs the Warlock no HP', w.hp, hp0);
+  eq('Evil Eye costs the Warlock no HP', w.hp, hp0);
   g.endTurn(); // a full party phase — no Soul Tithe drain any more
   eq('the Warlock is not drained at end of party phase', w.hp, hp0);
   check('the Warlock stays alive (no burn-out)', w.alive);
@@ -2369,25 +2369,25 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   const g = new Game(6, cfg); g.start();
   g.enemy.hp = 999;
   g._fireAbility(g.members[0]);
-  eq('Hex sets HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
+  eq('Evil Eye sets HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
   for (let i = 0; i < HEX_TURNS; i++) g.endTurn();
   eq('Vulnerability expires after HEX_TURNS enemy phases', g.enemy.vulnerableTurns, 0);
   eq('vuln magnitude resets to 0 on expiry', g.enemy.vulnerable, 0);
 }
 {
-  // Skald: 0 base, strikes for SKALD_DMG_PER_CARD × cards played, capped.
+  // Busker: 0 base, strikes for SKALD_DMG_PER_CARD × cards played, capped.
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['ranger', 'tank', 'skald']);
   const g = new Game(4, cfg); g.start();
   const s = g.members[2];
-  eq('drafted Skald seated in slot 2', s.id, 'skald');
-  eq('Skald base damage is 0', s.damage, 0);
+  eq('drafted Busker seated in slot 2', s.id, 'skald');
+  eq('Busker base damage is 0', s.damage, 0);
   g.cardsPlayedThisPhase = 0;
-  eq('Skald strikes for 0 on an empty turn', g.memberDamage(s), 0);
+  eq('Busker strikes for 0 on an empty turn', g.memberDamage(s), 0);
   g.cardsPlayedThisPhase = 3;
-  eq('Skald strike scales with cards played', g.memberDamage(s), SKALD_DMG_PER_CARD * 3);
+  eq('Busker strike scales with cards played', g.memberDamage(s), SKALD_DMG_PER_CARD * 3);
   g.cardsPlayedThisPhase = 10;
-  eq('Skald strike is capped', g.memberDamage(s), SKALD_DMG_CAP);
+  eq('Busker strike is capped', g.memberDamage(s), SKALD_DMG_CAP);
 }
 {
   // Crescendo draws CRESCENDO_DRAW, counts as a card played, and is engine-tagged.
@@ -2398,13 +2398,13 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.drawPile = [makeDeckCard('lowHeal', -900), makeDeckCard('lowHeal', -901), makeDeckCard('lowHeal', -902)];
   const handBefore = g.hand.length;
   g.mp = 10;
-  const idx = giveCard(g, 'conduct'); // the Skald's bound ability card (#44)
+  const idx = giveCard(g, 'conduct'); // the Busker's bound ability card (#44)
   const played0 = g.cardsPlayedThisPhase;
-  g.playCard(idx); // fire the Skald's Crescendo
+  g.playCard(idx); // fire the Busker's Crescendo
   eq('Crescendo drew CRESCENDO_DRAW cards', g.hand.length, handBefore + CRESCENDO_DRAW);
   eq('Crescendo counts as one card played', g.cardsPlayedThisPhase, played0 + 1);
   check('Crescendo is engine-tagged', isEngineAbility('crescendo'));
-  check('Hex is not engine-tagged (#39: no longer mints MP)', !isEngineAbility('hex'));
+  check('Jinx is not engine-tagged (#39: no longer mints MP)', !isEngineAbility('hex'));
   check('Poison is not engine-tagged', !isEngineAbility('poison'));
 }
 

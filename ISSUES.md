@@ -67,6 +67,6 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 85 | 📋 Open | [Cartoony naming audit](issues/85-cartoony-naming-audit.md) ⚠️ Fable only | content (flavor) | — | intake 2026-07-13 (naming vs. cartoony theme) |
+| 85 | ✅ Complete | [Cartoony naming audit](issues/85-cartoony-naming-audit.md) ⚠️ Fable only | content (flavor) | — | intake 2026-07-13 (naming vs. cartoony theme) |
 | 86 | 📋 Open | [Resurrect in Standard + drafted decks](issues/86-resurrect-in-starter-decks.md) | rules (deck comp) | — | intake 2026-07-13 (Resurrect in starter kits) |
 | 87 | 📋 Open | [Enemy signatures + Hero Poison / Curse-Mark](issues/87-enemy-signatures-and-new-mechanics.md) | content + engine | — | intake 2026-07-13 (defining enemy attacks) |

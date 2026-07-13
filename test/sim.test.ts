@@ -543,7 +543,7 @@ import { check, eq, results } from './harness';
 // Not gates: the policy plans around Hex, Crescendo, and Provoke rather than firing
 // them only in a corner case.
 {
-  // The Warlock's Hex (#39): the policy curses the enemy with Vulnerability, so a
+  // The Warlock's Evil Eye (#39): the policy curses the enemy with Vulnerability, so a
   // Warlock comp reliably makes the enemy Vulnerable over a fight.
   let everHexed = false;
   for (let s = 1; s <= 40; s++) {
@@ -552,9 +552,9 @@ import { check, eq, results } from './harness';
     cfg.enemy = { ...cfg.enemy, maxHP: 200 }; // a wall, so the fight lasts several turns
     const g = new Game(s, cfg);
     playFight(g, 12);
-    if (g.log.some((e) => e.text.includes('hexes the enemy'))) everHexed = true;
+    if (g.log.some((e) => e.text.includes('gives the enemy the Evil Eye'))) everHexed = true;
   }
-  check('the policy plays Hex to make the enemy Vulnerable (#39)', everHexed);
+  check('the policy plays Evil Eye to make the enemy Vulnerable (#39)', everHexed);
 
   // Provoke is the taunt-less redirection line: a party with no Tank plays Provoke,
   // so a member that does NOT have the Taunt ability ends up holding Taunt.

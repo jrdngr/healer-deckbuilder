@@ -896,7 +896,7 @@ export class Game {
     m.boarHp = 0;    // the Boar has no summoner left (#29)
     m.boarTurns = 0;
     if (saved) {
-      this._log(`The Martyr's Icon glows — ${m.name} clings to life at 1 HP!`, 'status');
+      this._log(`The Guardian Feather glows — ${m.name} clings to life at 1 HP!`, 'status');
       this._emit({ kind: 'martyrSave', slot: m.slot });
       return false;
     }
@@ -1126,7 +1126,7 @@ export class Game {
     if (!other) return;
     const res = this._applyHeal(other, TWIN_CENSER_SPLASH, true);
     if (res.healed > 0) {
-      this._log(`The Twin Censer splashes ${res.healed} to ${other.name}. (${other.hp}/${other.maxHP})`, 'heal');
+      this._log(`The Buddy System brings ${res.healed} to ${other.name}. (${other.hp}/${other.maxHP})`, 'heal');
       this._emit({ kind: 'heal', slot: other.slot, amount: res.healed, hp: other.hp });
     }
   }
@@ -1315,7 +1315,7 @@ export class Game {
       this.enemy.vulnerableTurns -= 1;
       if (this.enemy.vulnerableTurns === 0) {
         this.enemy.vulnerable = 0;
-        this._log('The Hex fades; the enemy is no longer Vulnerable.', 'status');
+        this._log('The Evil Eye fades; the enemy is no longer Vulnerable.', 'status');
       }
     }
     // A channel (#64) suppresses all passive/over-time MP income — including Font of
@@ -1338,12 +1338,12 @@ export class Game {
         this.refresh = 0;
       }
     }
-    // Hex (#13) decays at the start of the enemy phase — so a Hex applied this turn
+    // Jinx (#13) decays at the start of the enemy phase — so a Jinx applied this turn
     // still Wounds the coming WOUND_TURNS player phases in full (decaying it in
     // _decayBuffs after resolution would eat the turn it was cast on).
     if (this.woundTurns > 0) {
       this.woundTurns -= 1;
-      if (this.woundTurns === 0) this._log('The Hex fades; healing is restored.', 'status');
+      if (this.woundTurns === 0) this._log('The Jinx fades; healing is restored.', 'status');
     }
     // Channeled card (#64): tick here as long as the player HELD this turn (played no
     // card — a card play cancels the channel). The first tick already landed on the
@@ -1478,40 +1478,40 @@ export class Game {
     // per enemy turn (outside the per-member loop) after its BLOOD_BANNER_TURNS.
     if (this.bloodBannerTurns > 0) {
       this.bloodBannerTurns -= 1;
-      if (this.bloodBannerTurns === 0) this._log('The Blood Banner falls.', 'status');
+      if (this.bloodBannerTurns === 0) this._log('The Pep Rally winds down.', 'status');
     }
     // Penance (#75): the party-wide +auto buff also decays engine-level, clearing the
     // bonus when its window closes.
     if (this.penanceTurns > 0) {
       this.penanceTurns -= 1;
-      if (this.penanceTurns === 0) { this.penanceBonus = 0; this._log('The Penance fervor subsides.', 'status'); }
+      if (this.penanceTurns === 0) { this.penanceBonus = 0; this._log('The Feat of Strength wears off.', 'status'); }
     }
   }
 
-  // Resolve a scripted 'cast' telegraph (Hexweaver #13 / Devourer #14). These deal
-  // no damage — they run game logic: Hex halves the party's healing, Siphon drains
-  // healer MP, Consume cleanses the enemy's own poison and self-heals for it.
+  // Resolve a scripted 'cast' telegraph (Jinxweaver #13 / Gobbler #14). These deal
+  // no damage — they run game logic: Jinx halves the party's healing, Slurp drains
+  // healer MP, Gulp cleanses the enemy's own poison and self-heals for it.
   _resolveCast(t: Telegraph): void {
     switch (t.cast) {
       case 'wound': {
         this.woundTurns = WOUND_TURNS;
-        this._log(`${this.enemyDef.name} weaves a Hex — healing is halved for ${WOUND_TURNS} turns.`, 'system');
+        this._log(`${this.enemyDef.name} casts a Jinx — healing is halved for ${WOUND_TURNS} turns.`, 'system');
         this._emit({ kind: 'wound', turns: WOUND_TURNS, slots: this.livingMembers().map((x) => x.slot) });
         break;
       }
       case 'siphon': {
         const drained = Math.min(SIPHON_AMOUNT, this.mp);
         this.mp -= drained;
-        this._log(`${this.enemyDef.name} Siphons ${drained} MP. (MP ${this.mp})`, 'mp');
+        this._log(`${this.enemyDef.name} Slurps up ${drained} MP. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'siphon', amount: drained, mp: this.mp });
         break;
       }
       case 'consume': {
-        // Devourer (#14) / the act-2/3 self-healers (#20): cleanse the enemy's
+        // Gobbler (#14) / the act-2/3 self-healers (#20): cleanse the enemy's
         // own Poison and heal for every remaining tick, so poison stops being
-        // free value. Log with the step's own name (Consume / Gorge) so the
+        // free value. Log with the step's own name (Gulp / Snack Time) so the
         // resolution matches the telegraph the player read.
-        const name = t.name ?? 'Consume';
+        const name = t.name ?? 'Gulp';
         const healed = this.enemy.poison * this.enemy.poisonTurns;
         this.enemy.poison = 0;
         this.enemy.poisonTurns = 0;
@@ -1619,7 +1619,7 @@ export class Game {
       const half = m.maxHP * OSSUARY_THRESHOLD;
       if (m.alive && this.hasRelic('ossuaryBell') && hpBefore >= half && m.hp < half) {
         m.regen += OSSUARY_REGEN;
-        this._log(`The Ossuary Bell tolls for ${m.name} — Regen ${m.regen}.`, 'status');
+        this._log(`The Second-Wind Chime rings for ${m.name} — Regen ${m.regen}.`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
       }
       // En Garde (#74): the persistent stance counters EVERY hit that strikes the holder,
@@ -1673,7 +1673,7 @@ export class Game {
             const res = this._applyHeal(m, SUNRISE_VIGIL_HEAL, true);
             if (res.healed > 0) this._emit({ kind: 'heal', slot: m.slot, amount: res.healed, hp: m.hp });
           }
-          this._log(`Sunrise Vigil breaks: every living member heals ${SUNRISE_VIGIL_HEAL}.`, 'heal');
+          this._log(`Special Delivery arrives: every living member heals ${SUNRISE_VIGIL_HEAL}.`, 'heal');
         }
       }
     }
@@ -1708,12 +1708,12 @@ export class Game {
       this.drawPile = shuffle(this.discardPile, this.rng);
       this.discardPile = [];
       this._log('Reshuffled discard into draw pile.', 'system');
-      // Prayer Beads (#21): every reshuffle restores MP — but not while channeling
+      // Fidget Beads (#21): every reshuffle restores MP — but not while channeling
       // (#64), which suppresses all passive/over-time MP income.
       if (this.hasRelic('prayerBeads') && this.mp < this.maxMana && !this.channelActive()) {
         const before = this.mp;
         this.mp = Math.min(this.maxMana, this.mp + PRAYER_BEADS_MP);
-        this._log(`The Prayer Beads turn: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
+        this._log(`The Fidget Beads click: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
       }
     }
@@ -1916,7 +1916,7 @@ export class Game {
       if (wounded) {
         const res = this._applyHeal(wounded, PILGRIM_FLASK_HEAL, true);
         if (res.healed > 0) {
-          this._log(`Pilgrim's Flask heals ${wounded.name} ${res.healed}. (${wounded.hp}/${wounded.maxHP})`, 'heal');
+          this._log(`The Nap Sack restores ${wounded.name} ${res.healed}. (${wounded.hp}/${wounded.maxHP})`, 'heal');
           this._emit({ kind: 'heal', slot: wounded.slot, amount: res.healed, hp: wounded.hp });
         }
       }

@@ -1859,7 +1859,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const maxW = withT.roster[0].maxHP;
   withT.winFight([1, withT.roster[1].maxHP, withT.roster[2].maxHP]);
   without.winFight([1, without.roster[1].maxHP, without.roster[2].maxHP]);
-  eq("Surgeon's Thread recovers to the 50% line", withT.roster[0].hp, Math.min(maxW, 1 + Math.round(maxW * SURGEON_THREAD_HEAL_PCT)));
+  eq("Spare Bandages recover to the 50% line", withT.roster[0].hp, Math.min(maxW, 1 + Math.round(maxW * SURGEON_THREAD_HEAL_PCT)));
   eq('without the Thread recovery stays at the 40% line', without.roster[0].hp, Math.min(maxW, 1 + Math.round(maxW * HERO_HEAL_PCT)));
   check("the Thread's recovery exceeds the default", (withT.roster[0].hp ?? 0) > (without.roster[0].hp ?? 0));
   check('Surgeon\'s Thread is a common, non-curse relic', RELICS.surgeonsThread.rarity === 'common' && RELICS.surgeonsThread.curse !== true);
@@ -1894,7 +1894,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   const ids: RelicId[] = ['pilgrimsFlask', 'surgeonsThread', 'beggarsBowl'];
   check('all three #71 relics exist', ids.every((id) => RELIC_IDS.includes(id)));
   const spoilsPool = RELIC_IDS.filter((id) => !RELICS[id].curse);
-  check("Pilgrim's Flask and Surgeon's Thread are spoils-eligible", spoilsPool.includes('pilgrimsFlask') && spoilsPool.includes('surgeonsThread'));
+  check("Nap Sack and Spare Bandages are spoils-eligible", spoilsPool.includes('pilgrimsFlask') && spoilsPool.includes('surgeonsThread'));
   check("Beggar's Bowl is excluded from the spoils pool", !spoilsPool.includes('beggarsBowl'));
 }
 

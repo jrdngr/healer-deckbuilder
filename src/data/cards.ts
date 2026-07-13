@@ -18,36 +18,36 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // --- per-member ability cards (#44): the healer enables the member's move ----
   // One is inserted into the battle deck for each deployed member; cost mirrors the
   // old generic Ability card (2 MP). Unplayable while the bound member is down.
-  imbuePoison: { id: 'imbuePoison', name: 'Imbue Venom', cost: 2, target: 'none', ability: 'poison',
-    desc: 'Lace the Ranger\'s arrows — Poison the enemy.' },
+  imbuePoison: { id: 'imbuePoison', name: 'Poison Tip', cost: 2, target: 'none', ability: 'poison',
+    desc: 'Dip the Ranger\'s arrows — Poison the enemy.' },
   bolster: { id: 'bolster', name: 'Bolster', cost: 2, target: 'none', ability: 'taunt',
     desc: 'Steel the Tank — they Taunt the enemy and brace.' },
   unleash: { id: 'unleash', name: 'Unleash', cost: 2, target: 'none', ability: 'bolt',
     desc: 'Unleash the Mage\'s stored Charge as a Lightning Bolt.' },
-  hex: { id: 'hex', name: 'Hex', cost: 2, target: 'none', ability: 'hex',
-    desc: 'Curse the enemy through the Warlock — it takes more damage (more with fewer allies).' },
+  hex: { id: 'hex', name: 'Evil Eye', cost: 2, target: 'none', ability: 'hex',
+    desc: 'The Warlock gives the enemy the Evil Eye — it takes more damage (more with fewer allies).' },
   conduct: { id: 'conduct', name: 'Conduct', cost: 2, target: 'none', ability: 'crescendo',
-    desc: 'Cue the Skald\'s Crescendo — draw cards.' },
-  incite: { id: 'incite', name: 'Incite', cost: 2, target: 'none', ability: 'rampage',
-    desc: 'Incite the Berserker — a doubled strike at an HP cost.' },
+    desc: 'Cue the Busker\'s Crescendo — draw cards.' },
+  incite: { id: 'incite', name: 'Rile Up', cost: 2, target: 'none', ability: 'rampage',
+    desc: 'Rile up the Berserker — a doubled strike at an HP cost.' },
   beckon: { id: 'beckon', name: 'Beckon', cost: 2, target: 'none', ability: 'callBoar',
     desc: 'Beckon the Beast Warden\'s Boar to soak hits at her side.' },
-  // Stagger (#61) costs 5 MP — the higher price (vs the 2 MP other ability cards) is
+  // Halt! (#61) costs 5 MP — the higher price (vs the 2 MP other ability cards) is
   // the balance lever: no once-per-fight cap, the MP burn plus the tempo lost toward
   // enrage is what limits stunning.
-  stagger: { id: 'stagger', name: 'Stagger', cost: 5, target: 'none', ability: 'stun',
-    desc: 'Through the Sentinel, Stun the enemy — cancel its telegraphed action.' },
+  stagger: { id: 'stagger', name: 'Halt!', cost: 5, target: 'none', ability: 'stun',
+    desc: 'Through the Showstopper, Stun the enemy — cancel its telegraphed action.' },
   // En Garde (#74): the Duelist Provokes a chosen member (Taunt) and grants them the
   // persistent Riposte stance (herself included).
   enGarde: { id: 'enGarde', name: 'En Garde', cost: 2, target: 'single', ability: 'enGarde',
     desc: `Through the Duelist, a chosen member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} enemy turns — they counter every hit that strikes them.` },
-  // Penance (#75) is a Blood ability card (incite precedent — target 'none', counts toward
-  // the blood type counters). It carries NO selfDamage field: the payment is not the clamped
-  // canPlay Blood gate but a raw lethal drain in _fireAbility (this ability is meant to be
-  // castable at any HP — a lethal Penance is a legal, informed sacrifice, so there is no
+  // Feat of Strength (#75) is a Blood ability card (incite precedent — target 'none', counts
+  // toward the blood type counters). It carries NO selfDamage field: the payment is not the
+  // clamped canPlay Blood gate but a raw lethal drain in _fireAbility (this ability is meant to
+  // be castable at any HP — a lethal Feat is a legal, informed sacrifice, so there is no
   // ">N HP" playability gate). The Sanguine surcharge is applied in the engine, not via _bloodCost.
-  penance: { id: 'penance', name: 'Penance', cost: 2, target: 'none', ability: 'penance',
-    desc: `Through the Flagellant, pay ${PENANCE_HP} HP (no clamp — it can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for 2 enemy turns.` },
+  penance: { id: 'penance', name: 'Feat of Strength', cost: 2, target: 'none', ability: 'penance',
+    desc: `Through the Strongman, pay ${PENANCE_HP} HP (no clamp — it can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for 2 enemy turns.` },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -74,16 +74,16 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // --- card set phase B (#16): cards with small new engine state -------------
   lifebloom: { id: 'lifebloom', name: 'Lifebloom', cost: 3, target: 'single', regen: 2,
     desc: 'Regen +2 (decays each turn); when it ends while the target lives, burst-heal 3.' },
-  battleHymn: { id: 'battleHymn', name: 'Battle Hymn', cost: 1, target: 'none',
+  battleHymn: { id: 'battleHymn', name: 'Fight Song', cost: 1, target: 'none',
     desc: 'Every living member\'s attack this turn deals +2.' },
   barrier: { id: 'barrier', name: 'Barrier', cost: 4, target: 'all',
     desc: 'Every living member gains a Shield; unused ones fade after the next enemy phase.' },
-  bloodTithe: { id: 'bloodTithe', name: 'Blood Tithe', cost: 0, target: 'single', selfDamage: 4, engine: true,
+  bloodTithe: { id: 'bloodTithe', name: 'Elbow Grease', cost: 0, target: 'single', selfDamage: 4, engine: true,
     desc: 'A member with more than 4 HP pays 4 HP; restore 2 MP.' },
-  martyrsGift: { id: 'martyrsGift', name: 'Martyr\'s Gift', cost: 2, target: 'single', selfDamage: 3, heal: 4,
+  martyrsGift: { id: 'martyrsGift', name: 'Helping Hand', cost: 2, target: 'single', selfDamage: 3, heal: 4,
     desc: 'A member with more than 3 HP pays 3 HP; every other living member heals 4.' },
   // --- card set phase C (#17): the Bulwark / Defense pipeline ----------------
-  phalanx: { id: 'phalanx', name: 'Phalanx', cost: 2, target: 'single', noDefense: true, noTaunt: true,
+  phalanx: { id: 'phalanx', name: 'Turtle Up', cost: 2, target: 'single', noDefense: true, noTaunt: true,
     desc: 'Defense 2 for 2 enemy turns. Cannot target a defended or taunting member.' },
   // Taunt-lite (#31): make any member the enemy's aim — the taunt-less draft's
   // redirection tool, so the Tank isn't mandatory in every party.
@@ -104,35 +104,35 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // Hemorrhage cashes the enemy's whole Poison out in one uncapped hit (per-turn ×
   // turns left) through _damageEnemy, so Vulnerability multiplies the cash-out (the
   // poison ticks it consumes stay unmultiplied). needsPoison-gated.
-  hemorrhage: { id: 'hemorrhage', name: 'Hemorrhage', cost: 3, target: 'none', needsPoison: true,
+  hemorrhage: { id: 'hemorrhage', name: 'Goo Burst', cost: 3, target: 'none', needsPoison: true,
     desc: `Consume the enemy's Poison and deal its whole remaining damage (per-turn × turns left) at once.` },
-  // Dread Whisper shaves the standing telegraph by 1 per target (floor 0) — stacks
+  // Trash Talk shaves the standing telegraph by 1 per target (floor 0) — stacks
   // with every other reduction to zero out a sweep.
-  dreadWhisper: { id: 'dreadWhisper', name: 'Dread Whisper', cost: 1, target: 'none',
+  dreadWhisper: { id: 'dreadWhisper', name: 'Trash Talk', cost: 1, target: 'none',
     desc: `The standing telegraph deals ${DREAD_WHISPER_REDUCTION} less per target (min 0).` },
   // --- Blood + cycling (#68): HP as a spendable resource ---------------------
-  // Crimson Pact draws 2 through the normal draw path (a reshuffle mid-draw fires
-  // Prayer Beads); like Inspiration it is `engine`-tagged (draw effect), so
-  // Retain/Efficient are ineligible. 0-MP — the HP is the cost (Blood Tithe precedent).
-  crimsonPact: { id: 'crimsonPact', name: 'Crimson Pact', cost: 0, target: 'single', selfDamage: CRIMSON_PACT_HP, draw: CRIMSON_PACT_DRAW, engine: true,
+  // Paper Cuts draws 2 through the normal draw path (a reshuffle mid-draw fires
+  // Fidget Beads); like Inspiration it is `engine`-tagged (draw effect), so
+  // Retain/Efficient are ineligible. 0-MP — the HP is the cost (Elbow Grease precedent).
+  crimsonPact: { id: 'crimsonPact', name: 'Paper Cuts', cost: 0, target: 'single', selfDamage: CRIMSON_PACT_HP, draw: CRIMSON_PACT_DRAW, engine: true,
     desc: `A member with more than ${CRIMSON_PACT_HP} HP pays ${CRIMSON_PACT_HP} HP; draw ${CRIMSON_PACT_DRAW}.` },
-  scarletWard: { id: 'scarletWard', name: 'Scarlet Ward', cost: 1, target: 'single', selfDamage: SCARLET_WARD_HP,
+  scarletWard: { id: 'scarletWard', name: 'Thick Skin', cost: 1, target: 'single', selfDamage: SCARLET_WARD_HP,
     desc: `A member with more than ${SCARLET_WARD_HP} HP pays ${SCARLET_WARD_HP} HP; gain a Shield.` },
-  transfusion: { id: 'transfusion', name: 'Transfusion', cost: 1, target: 'single', selfDamage: TRANSFUSION_HP, heal: TRANSFUSION_HEAL,
+  transfusion: { id: 'transfusion', name: 'Blood Drive', cost: 1, target: 'single', selfDamage: TRANSFUSION_HP, heal: TRANSFUSION_HEAL,
     desc: `A member with more than ${TRANSFUSION_HP} HP pays ${TRANSFUSION_HP} HP; the most wounded other member heals ${TRANSFUSION_HEAL}.` },
-  // Blood Banner has no ">N HP" gate (clamped, target 'none'): every living member
+  // Pep Rally has no ">N HP" gate (clamped, target 'none'): every living member
   // pays, and the payment leaves each at 1 HP minimum.
-  bloodBanner: { id: 'bloodBanner', name: 'Blood Banner', cost: 2, target: 'none',
+  bloodBanner: { id: 'bloodBanner', name: 'Pep Rally', cost: 2, target: 'none',
     desc: `Every living member pays ${BLOOD_BANNER_HP} HP (clamps to 1); the party's autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.` },
   // --- Holy board-state payoffs (#69) ----------------------------------------
-  // Sunrise Vigil queues a delayed party heal: at the START of your next turn (after the
+  // Special Delivery queues a delayed party heal: at the START of your next turn (after the
   // enemy blow and the Regen tick, before the draw) every living member heals. Cast twice,
   // it queues twice. The wave's timing tool — heal AFTER the blow lands.
-  sunriseVigil: { id: 'sunriseVigil', name: 'Sunrise Vigil', cost: 2, target: 'none',
+  sunriseVigil: { id: 'sunriseVigil', name: 'Special Delivery', cost: 2, target: 'none',
     desc: `At the start of your next turn, heal every living member ${SUNRISE_VIGIL_HEAL}.` },
-  // Consecration heals the whole party a little; members at FULL HP afterward turn the
+  // Glow Up heals the whole party a little; members at FULL HP afterward turn the
   // surplus into offense — a standing +auto for a couple enemy turns.
-  consecration: { id: 'consecration', name: 'Consecration', cost: 3, target: 'all', heal: CONSECRATION_HEAL,
+  consecration: { id: 'consecration', name: 'Glow Up', cost: 3, target: 'all', heal: CONSECRATION_HEAL,
     desc: `Heal all ${CONSECRATION_HEAL}; members at full HP afterward gain +${CONSECRATION_STRIKE_BONUS} auto for ${CONSECRATION_STRIKE_TURNS} enemy turns.` },
   // --- arcane support (#70) --------------------------------------------------
   // Arcane Lens: arm a one-shot turn flag — the NEXT single-target heal this turn also
@@ -155,8 +155,8 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
     desc: `A hero takes ${GUARD_DR} less damage per hit for ${GUARD_TURNS} enemy turns. Stacks with Defense, not with itself.` },
   sharpen: { id: 'sharpen', name: 'Sharpen', cost: 1, target: 'single',
     desc: `A hero's attacks deal +${SHARPEN_BONUS} for ${SHARPEN_TURNS} enemy turns.` },
-  // Double Strike (rare): doubles the chosen hero's next basic auto (not an ability).
-  doubleStrike: { id: 'doubleStrike', name: 'Double Strike', cost: 2, target: 'single',
+  // Encore (rare): doubles the chosen hero's next basic auto (not an ability).
+  doubleStrike: { id: 'doubleStrike', name: 'Encore', cost: 2, target: 'single',
     desc: 'A hero\'s next basic attack lands doubled, then is spent.' },
   empower: { id: 'empower', name: 'Empower', cost: 1, target: 'single',
     desc: `A hero's next ability fires at +${EMPOWER_BONUS} ability power, then is spent.` },

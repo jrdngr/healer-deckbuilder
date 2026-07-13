@@ -123,7 +123,7 @@ export const BEGGARS_BOWL_GOLD = 20;         // Beggar's Bowl (curse): extra gol
 export const BEGGARS_BOWL_REWARD_SIZE = 2;   // Beggar's Bowl (curse): card-reward offers rolled per won fight
 
 export const RELICS: Record<RelicId, RelicDef> = {
-  lantern: { id: 'lantern', name: 'Lantern of Foresight', rarity: 'common', icon: '🏮',
+  lantern: { id: 'lantern', name: 'Searchlight', rarity: 'common', icon: '🔦',
     desc: 'Hidden attacks reveal their target.' },
   hagglersCharm: { id: 'hagglersCharm', name: 'Haggler\'s Charm', rarity: 'common', icon: '🪙',
     desc: `All shop prices −${Math.round(HAGGLER_DISCOUNT_PCT * 100)}%.` },
@@ -131,30 +131,30 @@ export const RELICS: Record<RelicId, RelicDef> = {
     desc: `Heals on a member below ${FIELD_TRIAGE_THRESHOLD * 100}% max HP heal +${FIELD_TRIAGE_BONUS}.` },
   warDrum: { id: 'warDrum', name: 'War Drum', rarity: 'uncommon', icon: '🥁',
     desc: 'After a member casts their Ability, their next auto-attack deals double.' },
-  prayerBeads: { id: 'prayerBeads', name: 'Prayer Beads', rarity: 'common', icon: '📿',
+  prayerBeads: { id: 'prayerBeads', name: 'Fidget Beads', rarity: 'common', icon: '📿',
     desc: `+${PRAYER_BEADS_MP} MP each time the draw pile is reshuffled.` },
-  vanguardsBanner: { id: 'vanguardsBanner', name: 'Vanguard\'s Banner', rarity: 'rare', icon: '🚩',
+  vanguardsBanner: { id: 'vanguardsBanner', name: 'Team Pennant', rarity: 'rare', icon: '🚩',
     desc: `Members at full HP deal +${VANGUARD_BONUS} on their auto-attack.` },
   // --- phase B (#22): rule-changers ------------------------------------------
-  martyrsIcon: { id: 'martyrsIcon', name: 'Martyr\'s Icon', rarity: 'rare', icon: '🕊',
+  martyrsIcon: { id: 'martyrsIcon', name: 'Guardian Feather', rarity: 'rare', icon: '🕊',
     desc: 'Once per fight, a member death becomes survival at 1 HP.' },
   // --- phase B (#22): curses -------------------------------------------------
-  pactOfSilence: { id: 'pactOfSilence', name: 'Pact of Silence', rarity: 'rare', icon: '🤐', curse: true,
+  pactOfSilence: { id: 'pactOfSilence', name: 'Cursed Coffee', rarity: 'rare', icon: '☕', curse: true,
     desc: `CURSE — you can no longer Rest; gain +${PACT_PASSIVE_MP} MP at the start of each turn.` },
   rustyCrown: { id: 'rustyCrown', name: 'Rusty Crown', rarity: 'rare', icon: '👑', curse: true,
     desc: `CURSE — normal enemies attack +${RUSTY_CROWN_ATTACK} harder (bosses are proud enough); fight wins pay +${RUSTY_CROWN_GOLD}g.` },
   // --- small-party relics (#42): a build-around for fielding fewer bodies -------
   loneWolf: { id: 'loneWolf', name: 'Lone Wolf Totem', rarity: 'uncommon', icon: '🐺',
     desc: `While fielding ${SMALL_PARTY_MAX} or fewer members, each of them deals +${LONE_WOLF_DMG} damage.` },
-  focusStone: { id: 'focusStone', name: 'Focus Stone', rarity: 'uncommon', icon: '🔷',
+  focusStone: { id: 'focusStone', name: 'Thinking Cap', rarity: 'uncommon', icon: '🎩',
     desc: `While fielding ${SMALL_PARTY_MAX} or fewer members, +${FOCUS_STONE_MP} max MP (fewer bodies to tend).` },
-  warband: { id: 'warband', name: 'Warband Standard', rarity: 'rare', icon: '⚔️',
+  warband: { id: 'warband', name: 'Roomy Tent', rarity: 'rare', icon: '⛺',
     desc: `Fielded members gain +${WARBAND_HP_PER_SEAT} max HP for each empty deploy seat.` },
   // --- card-type synergy relics (#63) ----------------------------------------
-  reliquaryOfLight: { id: 'reliquaryOfLight', name: 'Reliquary of Light', rarity: 'uncommon', icon: '✨',
+  reliquaryOfLight: { id: 'reliquaryOfLight', name: 'Glitter Box', rarity: 'uncommon', icon: '✨',
     desc: `Holy cards heal +${HOLY_RELIC_HEAL}.` },
   // --- Regen conversions relics (#66) ----------------------------------------
-  ossuaryBell: { id: 'ossuaryBell', name: 'Ossuary Bell', rarity: 'uncommon', icon: '🔔',
+  ossuaryBell: { id: 'ossuaryBell', name: 'Second-Wind Chime', rarity: 'uncommon', icon: '🔔',
     desc: `Whenever a member drops below ${OSSUARY_THRESHOLD * 100}% max HP, they gain Regen ${OSSUARY_REGEN}.` },
   // --- Status-window management relics (#67) ---------------------------------
   venomGland: { id: 'venomGland', name: 'Venom Gland', rarity: 'uncommon', icon: '🦂',
@@ -162,15 +162,15 @@ export const RELICS: Record<RelicId, RelicDef> = {
   // --- Holy overheal & board-state relics (#69) ------------------------------
   beaconOfSecondSun: { id: 'beaconOfSecondSun', name: 'Beacon of the Second Sun', rarity: 'rare', icon: '🌅',
     desc: `Whenever a card heals a member to full, draw ${BEACON_DRAW}.` },
-  twinCenser: { id: 'twinCenser', name: 'Twin Censer', rarity: 'rare', icon: '🪔',
+  twinCenser: { id: 'twinCenser', name: 'Buddy System', rarity: 'rare', icon: '🤝',
     desc: `Single-target heal cards also heal the most wounded other member ${TWIN_CENSER_SPLASH}.` },
   // --- Channel archetype rescue relic (#70) ----------------------------------
   chantersIdol: { id: 'chantersIdol', name: "Chanter's Idol", rarity: 'rare', icon: '🎐',
     desc: 'The first card you play each turn does not break your channel.' },
   // --- Meta-layer / run-economy relics (#71) ---------------------------------
-  pilgrimsFlask: { id: 'pilgrimsFlask', name: "Pilgrim's Flask", rarity: 'common', icon: '🍶',
+  pilgrimsFlask: { id: 'pilgrimsFlask', name: 'Nap Sack', rarity: 'common', icon: '🎒',
     desc: `Every Rest also heals your most wounded member ${PILGRIM_FLASK_HEAL}.` },
-  surgeonsThread: { id: 'surgeonsThread', name: "Surgeon's Thread", rarity: 'common', icon: '🧵',
+  surgeonsThread: { id: 'surgeonsThread', name: 'Spare Bandages', rarity: 'common', icon: '🧵',
     desc: `Between-fight recovery rises to ${SURGEON_THREAD_HEAL_PCT * 100}% of max HP (from ${HERO_HEAL_PCT * 100}%).` },
   beggarsBowl: { id: 'beggarsBowl', name: "Beggar's Bowl", rarity: 'rare', icon: '🥣', curse: true,
     desc: `CURSE — card rewards after a won fight offer ${BEGGARS_BOWL_REWARD_SIZE} choices instead of 3; +${BEGGARS_BOWL_GOLD}g per won fight.` },
@@ -181,7 +181,7 @@ export const RELIC_IDS: RelicId[] = Object.keys(RELICS) as RelicId[];
 // Relic prices by rarity (C 50 / U 75 / R 100) — distinct from card prices.
 export const RELIC_PRICE: Record<Rarity, number> = { common: 50, uncommon: 75, rare: 100 };
 
-// Relics that counter the act-3 boss (the Devourer's Maw sweep + heavy singles
+// Relics that counter the act-3 boss (the Gobbler's Big Chomp sweep + heavy singles
 // and the post-transform race): the fight-6 spoils roll weights these ×2.
 export const ACT3_COUNTER_RELICS: RelicId[] = ['warDrum', 'vanguardsBanner'];
 
