@@ -1,6 +1,6 @@
 # Issue 87 — Enemy signature audit + two new boss mechanics (Hero Poison, Curse/Mark)
 
-- **Status:** ✅ Done (2026-07-13)
+- **Status:** ✅ Complete (2026-07-13 — teaching-pipeline re-scope: Hero Poison + Curse/Mark built as engine mechanics, taught by new normals Gloopy/Doomling and weaponised on Gobbler/Jinxweaver; signature audit + Basher Executioner; all fights within ±5pp at N=1000)
 - **Phase:** content + engine (enemy identity)   **Size:** XL (umbrella — split into multiple commits)
 - **Depends on:** —   **Blocks:** none
 

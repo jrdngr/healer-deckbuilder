@@ -23,6 +23,10 @@ When an issue lands:
    the [Issues table](#issues-implementation-order) below. The issue file stays in [`issues/`](./issues/)
    as the historical archive — the table only ever shows what is still open.
 
+**Always applicable:** any issue that is resolved must have its row removed from this file **before
+the commit that resolves it lands** — regardless of how the work was triggered. The table must never
+contain a row for an issue whose file is `✅ Complete`.
+
 ## Implementing all open issues
 
 When I say **"implement all open issues"** (or anything like it), work through every open issue in
@@ -67,4 +71,5 @@ through this list and, for each note:
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 87 | 📋 Open | [Enemy signatures + Hero Poison / Curse-Mark](issues/87-enemy-signatures-and-new-mechanics.md) | content + engine | — | intake 2026-07-13 (defining enemy attacks) |
+
+_No open issues._
