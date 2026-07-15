@@ -389,7 +389,14 @@ import { check, eq, results } from './harness';
   //     changed — pure pool/rng drift: F0 195, F1 191->190, F2 155->152, F3 153->147, F4 150->145,
   //     F5 145->140, F6 142->139, F7 142->139, F8 139->131. All band/CI/boss gates below still
   //     hold; re-pinned.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 190, 152, 147, 145, 140, 139, 139, 131]));
+  //   • Roster cap of 3 (2026-07-15): the roster is hard-capped at ROSTER_CAP (3) — the reserve
+  //     is gone. The STICK policy's recruitCap is 6, so it used to stockpile a 4th–6th bench body;
+  //     now recruitMember no-ops past 3, so late-run rosters top out at three and the deploy/gold/
+  //     salary flow downstream shifts. Only the back half moves and slightly EASIER: F5 140->142,
+  //     F6/F7 139->141, F8 131->137 (F0-F4 unchanged). Replacement (recruiting at a full roster)
+  //     is a UI/engine path the baseline sim doesn't exercise. All band/CI/boss gates below still
+  //     hold; re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 190, 152, 147, 145, 142, 141, 141, 137]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

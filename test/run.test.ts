@@ -249,6 +249,50 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('an openable recruit stop survives untouched', nodes[0].type === 'recruit' && nodes[1].type === 'event');
 }
 
+// --- roster cap of 3: recruiting appends until full, then REPLACES --------------
+{
+  const run = new Run(50);
+  startRun(run);
+  run.winFight();
+  run.skipCardReward();
+  run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  run.roster = partyFromMembers(['ranger']); // room to grow
+  run.chooseBranch(0);
+  run.enterNode(0);
+  const opts = run.nodeContent?.type === 'recruit' ? run.nodeContent.options : [];
+  run.recruitMember(opts[0]);
+  check('recruiting with room appends the hero',
+    run.roster.length === 2 && run.roster.some((p) => p.member === opts[0]));
+}
+
+// --- a full roster (cap 3) keeps the Recruiter open and swaps a member -----------
+{
+  const run = new Run(32);
+  startRun(run);
+  run.winFight();
+  run.skipCardReward();
+  run.map[0].branches[0].nodes = [{ type: 'recruit' }, { type: 'event' }];
+  run.roster = partyFromMembers(['ranger', 'tank', 'mage']); // FULL (ROSTER_CAP = 3)
+  run.chooseBranch(0);
+  check('a full-cap roster keeps the recruit stop open (replace path)', run.nodeAvailable('recruit'));
+  run.enterNode(0);
+  const opts = run.nodeContent?.type === 'recruit' ? run.nodeContent.options : [];
+  const newHero = opts[0];
+  // A full roster with no replacement chosen must be a no-op (can't grow past the cap).
+  run.recruitMember(newHero);
+  check('recruiting at a full roster without a replacement is refused',
+    run.roster.length === 3 && !run.roster.some((p) => p.member === newHero)
+    && run.nodeContent?.type === 'recruit' && !run.nodeContent.done);
+  // Choosing a slot to release swaps exactly one member.
+  run.recruitMember(newHero, 1); // release the Tank (index 1)
+  check('replacing swaps exactly one member (roster still 3)',
+    run.roster.length === 3 && run.roster.some((p) => p.member === newHero)
+    && !run.roster.some((p) => p.member === 'tank'));
+  check('the dismissed hero returns to the recruit pool', run.availableMembers().includes('tank'));
+  check('a completed replace spends the node',
+    run.nodeContent?.type === 'recruit' && run.nodeContent.done);
+}
+
 // --- #77: fork availability is resolved for EVERY branch at fork-entry ----------
 {
   // Repro (intake 2026-07-10, seed 216002962): after the first fight the roster is a

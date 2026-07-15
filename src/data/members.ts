@@ -66,6 +66,11 @@ export const CLASSIC_TRIO: MemberId[] = ['ranger', 'tank', 'mage'];
 
 // A drafted party seats this many members (one per slot).
 export const PARTY_SIZE = 3;
+// Hard cap on the roster (2026-07): the player may own at most this many heroes at
+// once — there is no bench beyond the fielded three. Recruiting at a full roster
+// REPLACES a member (the dismissed hero returns to the recruit pool) rather than growing
+// it. Deploy already tops out at 3 slots, so this simply removes the reserve.
+export const ROSTER_CAP = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
 // land (#28 Berserker/Augur, #29 Beast Warden).
 export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'beastWarden', 'sentinel', 'duelist', 'flagellant'];

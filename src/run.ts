@@ -25,7 +25,7 @@ import {
   SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   injuryRecordCap, injuryIncapacitates, injuryKills,
-  partyFromMembers, DRAFT_POOL, CLASSIC_TRIO,
+  partyFromMembers, DRAFT_POOL, CLASSIC_TRIO, ROSTER_CAP,
   DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
 } from './constants';
 import type {
@@ -885,8 +885,9 @@ export class Run {
   }
 
   // Whether a node of this type can be visited right now. The Recruit node is hidden
-  // once the roster holds everyone (nothing left to offer); the Infirmary hides when
-  // nobody is hurt or injured (nothing to heal); all others are always open.
+  // only once the roster holds every eligible member (nothing left to offer) — a FULL
+  // roster (ROSTER_CAP) does not hide it, since recruiting there is now a REPLACE. The
+  // Infirmary hides when nobody is hurt or injured (nothing to heal); all others are open.
   nodeAvailable(type: NodeType): boolean {
     if (type === 'recruit') return this.availableMembers().length > 0;
     if (type === 'infirmary') return this.anyoneNeedsInfirmary();
@@ -900,10 +901,23 @@ export class Run {
 
   // Recruit node (2026-07): add the chosen member to the roster, once. Ignores an
   // unknown / already-owned id or a spent node so a crude UI can't double-recruit.
-  recruitMember(id: MemberId): void {
+  //
+  // Roster cap (ROSTER_CAP): with room to spare this simply appends. At a FULL roster
+  // the player must REPLACE — `replaceIndex` names the roster slot to dismiss; the
+  // dismissed hero leaves the roster and (being neither owned nor buried) returns to the
+  // recruit pool for later. A missing/out-of-range `replaceIndex` at a full roster is
+  // rejected so the UI can't drop the roster below three or grow it past the cap.
+  recruitMember(id: MemberId, replaceIndex?: number): void {
     if (this.location.kind !== 'node' || this.nodeContent?.type !== 'recruit') return;
     if (this.nodeContent.done) return;
     if (!this.nodeContent.options.includes(id) || this.roster.some((p) => p.member === id)) return;
+    if (this.roster.length >= ROSTER_CAP) {
+      if (replaceIndex == null || replaceIndex < 0 || replaceIndex >= this.roster.length) return;
+      this.roster.splice(replaceIndex, 1);
+      // Splicing shifts roster indices, so the remembered seating no longer maps to the
+      // same heroes — reset to the default (the deploy step re-opens before the fight).
+      this.deployment = this._defaultDeployment();
+    }
     this.roster.push(partyFromMembers([id])[0]);
     this.nodeContent.done = true;
   }
