@@ -57,7 +57,7 @@ import { makeRng, shuffle, weightedPick } from '../rng';
 declare module './core' {
   interface Game {
     _applyCard(card: ResolvedCard, target: number | null): void;
-    _fireAbility(m: Member, target?: number | null): void;
+    _fireAbility(m: Member, target?: number | null, ability?: AbilityId): void;
   }
 }
 
@@ -68,7 +68,8 @@ Game.prototype._applyCard = function (card, target) {
       const m = this._abilityMember(card.ability);
       // En Garde (#74) is the first target 'single' ability card — the chosen member
       // receives the stance. Every other ability is target 'none' and ignores `target`.
-      if (m) this._fireAbility(m, target);
+      // Fire the CARD's ability (which may be a learned one), not the member's signature.
+      if (m) this._fireAbility(m, target, card.ability);
       return;
     }
     // Channeled cards (#64): start a channel (first tick immediate) rather than a
@@ -455,7 +456,7 @@ Game.prototype._applyCard = function (card, target) {
     }
 };
 
-Game.prototype._fireAbility = function (m, target = null) {
+Game.prototype._fireAbility = function (m, target = null, ability = m.ability) {
     // War Drum (#21): any Ability cast primes the caster's next auto to double.
     if (this.hasRelic('warDrum')) m.drumPrimed = true;
     // Empower (#62): a one-shot +abilityPower on this ability. Every case reads
@@ -467,7 +468,9 @@ Game.prototype._fireAbility = function (m, target = null) {
       m.empowerBonus = 0;
       this._log(`${m.name} is Empowered — this ability fires at +${empower} power.`, 'status');
     }
-    switch (m.ability) {
+    // Switch on the ability being FIRED (a learned card's, or the signature by default),
+    // not the member's signature — one hero can now fire several abilities.
+    switch (ability) {
       case 'poison': {
         // Floored at 1: a Broken member (DR1) can carry negative abilityPower, but
         // an ability never resolves to 0-or-below damage.

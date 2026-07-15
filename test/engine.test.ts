@@ -2698,4 +2698,29 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   check('Rampage still struck', g.enemy.hp < ehp2);
 }
 
+// --- Multi-ability plumbing (Training Dojo): a hero can own learned ability cards ---
+{
+  // abilityCardsForParty injects the signature card PLUS one per learned ability.
+  const solo = partyFromMembers(['ranger']);
+  eq('a hero with nothing learned injects one ability card', abilityCardsForParty(solo).length, 1);
+  solo[0].learned = ['taunt']; // the Ranger learns the Tank's Taunt (bolster)
+  const cards = abilityCardsForParty(solo);
+  eq('a learned ability injects a second card', cards.length, 2);
+  eq('the signature card comes first', cards[0].id, 'imbuePoison');
+  eq('the learned card is its bound card', cards[1].id, 'bolster');
+}
+{
+  // Firing a learned card resolves to its owner and fires the CARD's ability (with the
+  // owner's stats) — not the owner's signature ability.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['ranger', 'mage', 'sentinel']); // none carries the Taunt signature
+  cfg.party[0].learned = ['taunt'];
+  const g = new Game(1, cfg).start();
+  g.mp = 9;
+  g.playCard(giveCard(g, 'bolster')); // the learned Taunt card
+  check('a learned Taunt card taunts its owner (the Ranger, slot 0)', g.members[0].taunt > 0);
+  eq('the Ranger still owns her signature Poison', g._abilityMember('poison')?.slot, 0);
+  eq('the learned Taunt resolves to the Ranger too', g._abilityMember('taunt')?.slot, 0);
+}
+
 finish();

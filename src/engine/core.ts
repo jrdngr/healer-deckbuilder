@@ -129,6 +129,9 @@ export interface Member {
   absent: boolean; // an unfilled deploy slot (no member seated here): starts dead, is never
                    // targeted and never strikes (excluded like any dead member via alive:false);
                    // the battle UI renders it as an empty slot rather than a fallen hero.
+  learned: AbilityId[]; // extra ability ids this hero owns (Training Dojo). _abilityMember and
+                        // _fireAbility resolve a learned card's ability to this member; passives
+                        // stay keyed on the signature `ability`, not these.
 }
 
 export interface Enemy {
@@ -371,6 +374,7 @@ export class Game {
         injuries: p.injuries, // display-only; penalty already folded into the stats above
         incapacitated: p.incapacitated ?? false,
         absent: empty,
+        learned: p.learned ?? [], // extra ability cards learned at the Dojo (#Training)
       };
     });
 
@@ -1999,8 +2003,11 @@ export class Game {
 
   // The deployed living member carrying an ability (#44). Undefined if that member
   // is dead or was never deployed — which makes their ability card unplayable.
+  // The living hero who owns this ability — their signature `ability` OR a learned one
+  // (Training Dojo). A learned card thus resolves to the hero who learned it, and the
+  // canPlay/disabled gating keeps working unchanged.
   _abilityMember(ability: AbilityId): Member | undefined {
-    return this.members.find((m) => m.alive && m.ability === ability);
+    return this.members.find((m) => m.alive && (m.ability === ability || m.learned.includes(ability)));
   }
 
   // #54: is this ability card currently disabled — drawn but unplayable because its

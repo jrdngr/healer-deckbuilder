@@ -243,7 +243,7 @@ export class Run {
     run.gold = snap.gold;
     run.starterDeck = snap.starterDeck ?? DEFAULT_STARTER_DECK; // older saves default to Preserver
     run.deck = snap.deck.map((c) => ({ ...c, upgrades: [...c.upgrades] }));
-    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0, hp: p.hp ?? p.maxHP }));
+    run.roster = snap.roster.map((p) => ({ ...p, injuries: p.injuries ?? 0, upgrades: p.upgrades ?? 0, hp: p.hp ?? p.maxHP, learned: [...(p.learned ?? [])] }));
     run.deployment = [...(snap.deployment ?? [0, 1, 2])];
     run.graveyard = [...(snap.graveyard ?? [])];
     run.healer = { ...snap.healer };

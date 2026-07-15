@@ -60,6 +60,11 @@ export interface PartyMemberConfig {
   // the member's salary (memberSalary): each upgrade raises the fee to field them.
   // Absent/0 on a fresh member and on the battle party (a run-layer concern only).
   upgrades?: number;
+  // Ability cards this hero has LEARNED beyond their signature (Training Dojo). Each
+  // is an extra AbilityId this member owns; on deploy, abilityCardsForParty injects one
+  // bound card per learned ability alongside the signature. Persisted per roster member;
+  // absent/empty on a fresh member and on the battle party.
+  learned?: AbilityId[];
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +282,11 @@ export function abilityCardsForParty(party: PartyMemberConfig[]): DeckCard[] {
     // equivalent to purging at fight start (the card is never drawn at all).
     if (p.incapacitated) return;
     const ability = (p.member ? MEMBER_POOL[p.member] : MEMBER_DEFS[slot]).ability;
-    cards.push(makeDeckCard(ABILITY_CARD[ability], -(cards.length + 1)));
+    // The signature ability card, plus one bound card per ability learned at the Dojo.
+    // All get negative uids so they never collide with the persistent run deck and vanish
+    // when the fight ends.
+    const abilities = [ability, ...(p.learned ?? [])];
+    for (const a of abilities) cards.push(makeDeckCard(ABILITY_CARD[a], -(cards.length + 1)));
   });
   return cards;
 }

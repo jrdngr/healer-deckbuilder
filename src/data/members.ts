@@ -56,7 +56,7 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
 export function partyFromMembers(ids: MemberId[]): PartyMemberConfig[] {
   return ids.map((id): PartyMemberConfig => {
     const d = MEMBER_POOL[id];
-    return { maxHP: d.maxHP, hp: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, upgrades: 0, member: id };
+    return { maxHP: d.maxHP, hp: d.maxHP, damage: d.damage, abilityPower: 0, injuries: 0, upgrades: 0, member: id, learned: [] };
   });
 }
 
