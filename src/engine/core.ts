@@ -20,6 +20,7 @@ import {
   RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, CHANNEL_MP,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
+  TOXICOLOGIST_BONUS, GRUDGE_DIVISOR, FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
@@ -132,6 +133,11 @@ export interface Member {
   learned: AbilityId[]; // extra ability ids this hero owns (Training Dojo). _abilityMember and
                         // _fireAbility resolve a learned card's ability to this member; passives
                         // stay keyed on the signature `ability`, not these.
+  bankedDamage: number;   // Tank (Grudge): damage soaked since his last auto; half rides his
+                          // next strike, then clears. 0 for every other hero.
+  feralPrimed: boolean;   // Beast Warden (Feral Bond): her next auto deals FERAL_BOND_MULT× once
+                          // her Boar falls or expires (consumed by that strike).
+  lastStandUsed: boolean; // Strongman (Last Stand): whether his once-per-fight cheat-death fired.
 }
 
 export interface Enemy {
@@ -375,6 +381,9 @@ export class Game {
         incapacitated: p.incapacitated ?? false,
         absent: empty,
         learned: p.learned ?? [], // extra ability cards learned at the Dojo (#Training)
+        bankedDamage: 0,       // Grudge: nothing soaked yet (Tank)
+        feralPrimed: false,    // Feral Bond: no avenging strike pending (Beast Warden)
+        lastStandUsed: false,  // Last Stand: the once-per-fight save is unspent (Strongman)
       };
     });
 
@@ -500,7 +509,11 @@ export class Game {
     const bloodBanner = this.bloodBannerTurns > 0 ? BLOOD_BANNER_BONUS : 0;
     // Penance (#75): a party-wide +auto (lasts penanceTurns enemy turns), its OWN field so
     // it stacks additively with Battle Hymn's hymnBonus (both summed here).
-    return base + this.hymnBonus + this.penanceBonus + banner + lone + strike + bloodBanner;
+    // Hero passives: Toxicologist (Ranger) — +auto vs a poisoned enemy; Grudge (Tank) —
+    // half the damage banked since his last strike rides this one.
+    const toxic = m.id === 'ranger' && this.enemy.poison > 0 ? TOXICOLOGIST_BONUS : 0;
+    const grudge = m.id === 'tank' ? Math.floor(m.bankedDamage / GRUDGE_DIVISOR) : 0;
+    return base + this.hymnBonus + this.penanceBonus + banner + lone + strike + bloodBanner + toxic + grudge;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -944,9 +957,15 @@ export class Game {
   // save, in which case they survive at 1 HP with every status stripped (the
   // wipe check sees a living member either way). Returns true if they died.
   _killMember(m: Member): boolean {
-    const saved = !this.martyrUsed && this.hasRelic('martyrsIcon');
+    const martyr = !this.martyrUsed && this.hasRelic('martyrsIcon');
+    // Last Stand (Strongman passive): once per fight a killing blow — a hit OR a Blood
+    // cost — leaves him at 1 HP instead. Yields to the Martyr's Icon (either save is
+    // enough; only one is spent). Like Martyr, it strips his statuses and clears the scar.
+    const lastStand = !martyr && m.id === 'flagellant' && !m.lastStandUsed;
+    const saved = martyr || lastStand;
+    if (martyr) this.martyrUsed = true;
+    if (lastStand) m.lastStandUsed = true;
     if (saved) {
-      this.martyrUsed = true;
       m.hp = 1;
     } else {
       m.alive = false;
@@ -971,13 +990,33 @@ export class Game {
     m.riposteTurns = 0; // death ends the En Garde stance (#74)
     m.boarHp = 0;    // the Boar has no summoner left (#29)
     m.boarTurns = 0;
+    m.bankedDamage = 0;    // Grudge bank forfeited (Tank)
+    m.feralPrimed = false; // any pending Feral Bond strike is lost (Beast Warden)
     if (saved) {
-      this._log(`The Guardian Feather glows — ${m.name} clings to life at 1 HP!`, 'status');
-      this._emit({ kind: 'martyrSave', slot: m.slot });
+      if (martyr) {
+        this._log(`The Guardian Feather glows — ${m.name} clings to life at 1 HP!`, 'status');
+        this._emit({ kind: 'martyrSave', slot: m.slot });
+      } else {
+        this._log(`${m.name} makes his Last Stand — he clings to life at 1 HP!`, 'status');
+      }
       return false;
     }
     this._log(`${m.name} has fallen!`, 'death');
+    // Dark Bargain (Warlock passive): a living Warlock feeds on a party death — a permanent
+    // +damage/+ability power for the rest of the fight (a Warlock dying alone earns nothing).
+    this._darkBargain(m);
     return true;
+  }
+
+  // Dark Bargain (Warlock passive): each time a party member truly dies, a living Warlock
+  // grows permanently stronger for the rest of the fight. `dead` is the member who just
+  // fell — if that is the Warlock himself, there is no living Warlock left to profit.
+  _darkBargain(dead: Member): void {
+    const w = this.members.find((x) => x.alive && x.id === 'warlock');
+    if (!w || w === dead) return;
+    w.damage += DARK_BARGAIN_DMG;
+    w.abilityPower += DARK_BARGAIN_POWER;
+    this._log(`${w.name} feeds on ${dead.name}'s death — Dark Bargain (+${DARK_BARGAIN_DMG} damage, +${DARK_BARGAIN_POWER} power).`, 'status');
   }
 
   // Returns true on the blow that actually finishes the enemy, so the caller can
@@ -1584,6 +1623,7 @@ export class Game {
         m.boarTurns -= 1;
         if (m.boarTurns === 0) {
           m.boarHp = 0;
+          m.feralPrimed = true; // Feral Bond: the Boar's passing primes her avenging strike
           this._log(`${m.name}'s Boar returns to the wild.`, 'status');
           this._emit({ kind: 'boarExpire', slot: m.slot });
         }
@@ -1710,11 +1750,27 @@ export class Game {
     // corpse while a valid target lives.
     const struck = this._resolvedTargets(t);
     for (const slot of struck) {
-      const m = this.members[slot];
+      let m = this.members[slot];
       if (!m || !m.alive) { // defensive — _resolvedTargets only returns living slots
         this._log(`${label} whiffs on slot ${slot + 1}.`, 'whiff');
         this._emit({ kind: 'enemyAttack', slot, amount: 0, hp: 0, result: 'whiff', killed: false, hidden: t.hidden, attackType: t.type });
         continue;
+      }
+      // Stunt Double (Showstopper passive): she throws herself in front of a blow that
+      // would be LETHAL to a teammate, taking the hit in their place. Only a hit that
+      // would actually drop the target past its wards/Boar to 0 is intercepted; on an AoE
+      // she can be struck more than once (her own hit plus each blow she catches). She may
+      // die partway through a sweep, after which further blows fall through normally.
+      if (m.id !== 'sentinel') {
+        const s = this.members.find((x) => x.alive && x.id === 'sentinel' && x.slot !== m.slot);
+        if (s) {
+          const preview = this._wardedDamage(m, t.damage, t.ignoreDefense, t.type);
+          const lethal = m.boarHp <= 0 && !preview.spendsShield && (m.hp - preview.dmg) <= 0;
+          if (lethal) {
+            this._log(`${s.name} dives in front of ${m.name}, taking the ${label}!`, 'status');
+            m = s; // the blow now lands on the Showstopper — her wards, her death check
+          }
+        }
       }
       // Beast Warden's Boar (#29): a standing Boar eats the WHOLE instance aimed at
       // her slot — no spill to the Warden, her own wards untouched. The Boar takes
@@ -1723,37 +1779,41 @@ export class Game {
       if (m.boarHp > 0) {
         m.boarHp = Math.max(0, m.boarHp - t.damage);
         const boarDied = m.boarHp <= 0;
-        if (boarDied) m.boarTurns = 0;
+        if (boarDied) { m.boarTurns = 0; m.feralPrimed = true; } // Feral Bond: avenge the Boar
         this._log(`${m.name}'s Boar takes the ${label} for ${t.damage}${boarDied ? ' and falls' : ''}. (Boar ${m.boarHp})`, 'shield');
-        this._emit({ kind: 'boarHit', slot, amount: t.damage, boarHp: m.boarHp, killed: boarDied });
+        this._emit({ kind: 'boarHit', slot: m.slot, amount: t.damage, boarHp: m.boarHp, killed: boarDied });
         continue;
       }
       // Defense -> Shield (#17); the same pipeline attackTargets() previews. Shield
       // only spends on a still-damaging instance.
       const w = this._wardedDamage(m, t.damage, t.ignoreDefense, t.type);
+      // Riposte Master (Duelist passive): she ALWAYS counters — exactly like a standing
+      // En Garde stance, but with no card and no timer. Fold her into the same path.
+      const ripostes = m.riposteTurns > 0 || m.id === 'duelist';
       // En Garde (#74): capture the counter magnitude NOW — before this hit spends any
       // Shield — so the live auto-damage seam (Sharpen, Battle Hymn, Lone Wolf, injuries)
-      // is read even on the very hit that consumes the block. 0 when the holder isn't
-      // En Garde; a corpse never counters (guarded at each fire site).
-      const engardeCounter = m.riposteTurns > 0 ? this.memberDamage(m) : 0;
+      // is read even on the very hit that consumes the block. 0 when nothing counters;
+      // a corpse never counters (guarded at each fire site).
+      const engardeCounter = ripostes ? this.memberDamage(m) : 0;
       if (w.spendsShield) {
         m.shield = false;
         m.shieldTurns = 0;
         this._log(`${m.name}'s Shield absorbs the hit.`, 'shield');
-        this._emit({ kind: 'enemyAttack', slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
+        this._emit({ kind: 'enemyAttack', slot: m.slot, amount: t.damage, hp: m.hp, result: 'shield', killed: false, hidden: t.hidden, attackType: t.type });
         // En Garde (#74): a fully Shield-blocked hit STILL counters — the stance rewards
         // blocking; the blow that struck their guard is answered in kind.
-        if (m.riposteTurns > 0 && this._dealEnGardeCounter(m, engardeCounter)) return;
+        if (ripostes && this._dealEnGardeCounter(m, engardeCounter)) return;
         continue;
       }
       const hpBefore = m.hp; // Ossuary Bell (#66): the crossing is measured across this hit
       m.hp = Math.max(0, m.hp - w.dmg);
+      if (m.id === 'tank') m.bankedDamage += w.dmg; // Grudge: bank what the Tank soaks
       this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       // The Martyr's Icon (#22) may veto the death — resolve that BEFORE the
       // event is emitted so the animator never stages a death that didn't happen.
       let killed = m.hp <= 0;
       if (killed) killed = this._killMember(m);
-      this._emit({ kind: 'enemyAttack', slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden, attackType: t.type });
+      this._emit({ kind: 'enemyAttack', slot: m.slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden, attackType: t.type });
       // Ossuary Bell (#66): a member surviving a downward crossing of OSSUARY_THRESHOLD
       // of max HP gains Regen. Every crossing retriggers (Regen heals above → drop below
       // again → grants anew) — no per-fight cap; magnitude + threshold are the levers. A
@@ -1768,7 +1828,7 @@ export class Game {
       // even a Defense/Brace-reduced hit that lands for 0. It SUPERSEDES the one-shot
       // Riposte below — while the stance runs, the one-shot is neither consumed nor
       // double-triggered (persistent state wins). Fires on a still-living, un-killed hero.
-      if (!killed && m.alive && m.riposteTurns > 0) {
+      if (!killed && m.alive && ripostes) {
         if (this._dealEnGardeCounter(m, engardeCounter)) return;
       } else if (w.dmg > 0 && !killed && m.alive && m.riposte) {
         // Riposte (#62): the first attack that actually connects with a buffed, still-
@@ -1840,12 +1900,18 @@ export class Game {
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
     }
-    // Per-member Charge ticks before the player can act (only the Bolt ability
-    // consumes it today, so for the trio this is effectively the mage's charge).
+    // Arcane Battery (Mage passive): Charge is the Mage's own resource — only he banks
+    // +1 each turn before he can act. (Bolt is the sole consumer, so gating the tick to
+    // the Mage reframes the old universal tick as his identity, no gameplay delta.)
     for (const m of this.members) {
-      if (m.alive) m.charge = Math.min(CHARGE_MAX, m.charge + 1);
+      if (m.alive && m.id === 'mage') m.charge = Math.min(CHARGE_MAX, m.charge + 1);
     }
     this._drawTo(this.handSize);
+    // Opening Act (Busker passive): a fielded, living Busker draws one extra card each turn.
+    if (this.members.some((m) => m.alive && m.id === 'skald')) {
+      const c = this._drawOne();
+      if (c != null) { this.hand.push(c); this._emit({ kind: 'draw', count: 1 }); }
+    }
     this.cardsPlayedThisPhase = 0;
     this.typePlayedThisTurn = Game._zeroTypeCounts(); // per-turn type counters reset (#63)
     this.phase = 'player';
@@ -2136,8 +2202,17 @@ export class Game {
           ? `The War Drum beats — ${m.name}'s strike doubles!`
           : `${m.name}'s strike lands doubled!`, 'status');
       }
+      // Feral Bond (Beast Warden passive): her first strike after the Boar falls rips for
+      // FERAL_BOND_MULT× — consumed by this swing.
+      if (m.id === 'beastWarden' && m.feralPrimed) {
+        dmg *= FERAL_BOND_MULT;
+        m.feralPrimed = false;
+        this._log(`${m.name} avenges her Boar — her strike tears for ${dmg}!`, 'status');
+      }
       const killed = this._damageEnemy(dmg, `${m.name}`);
       this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
+      // Grudge (Tank passive): the banked damage rode this strike (via memberDamage) — spent now.
+      if (m.id === 'tank') m.bankedDamage = 0;
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }

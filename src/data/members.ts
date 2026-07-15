@@ -38,7 +38,9 @@ export const MEMBER_POOL: Record<MemberId, MemberDef> = {
   // Showstopper (#61): a sturdy front-line bruiser whose Stun cancels the enemy's
   // standing telegraph — a control member. Low damage; the value is the lost enemy
   // turn. Home slot 0 (front line).
-  sentinel: { slot: 0, id: 'sentinel', name: 'Showstopper', maxHP: 13, damage: 2, ability: 'stun' },
+  // HP raised 13 -> 16 (2026-07) to pay for the Stunt Double passive: she throws herself
+  // in front of blows that would kill a teammate, so she needs a deeper pool to soak them.
+  sentinel: { slot: 0, id: 'sentinel', name: 'Showstopper', maxHP: 16, damage: 2, ability: 'stun' },
   // Duelist (#74): a front-line skirmisher who converts being attacked well into
   // damage. Her En Garde Provokes a chosen member (Taunt) and grants them PERSISTENT
   // Riposte — for a few enemy turns they counterattack EVERY hit that lands on them

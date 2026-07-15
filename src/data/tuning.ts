@@ -227,6 +227,14 @@ export const BERSERKER_BAND2_HP = 4; // Berserker: a further +BAND_BONUS while H
 export const BERSERKER_BAND_BONUS = 2; // per-band damage bonus (net 2 / 4 / 6 across the bands)
 export const RAMPAGE_SELF_DMG = 2;   // Rampage: HP the Berserker loses after the doubled strike
 export const GRAVE_CHILL_REDUCTION = 2; // Grave Chill: per-target damage shaved off the standing telegraph
+// Hero passives (2026-07). One always-on identity per hero; small magnitudes, sim-tuned.
+// (Berserker's Rage bands are the BERSERKER_* constants above; Mage's Arcane Battery and
+// Busker's Opening Act reuse the existing +1-Charge / +1-draw and add no constant.)
+export const TOXICOLOGIST_BONUS = 2;   // Ranger: +auto damage vs a poisoned enemy
+export const GRUDGE_DIVISOR = 2;       // Tank: his next auto adds (banked damage / this)
+export const FERAL_BOND_MULT = 3;      // Beast Warden: her next auto after her Boar falls ×this
+export const DARK_BARGAIN_DMG = 1;     // Warlock: permanent +damage each time a party member dies
+export const DARK_BARGAIN_POWER = 1;   // Warlock: permanent +ability power on the same trigger
 // Roster wave 3 abilities (#29).
 export const BOAR_HP = 7;           // Call Boar: pet HP (+ abilityPower) — exactly one base heavy
 export const BOAR_TURNS = 4;        // Call Boar: enemy turns the Boar stands before returning to the wild

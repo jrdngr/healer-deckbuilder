@@ -1535,10 +1535,14 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
 
 // --- member-identity refactor (issue 08) -----------------------------------
 {
-  // Charge is per-member and ticks for every living member each player phase.
+  // Charge is the Mage's resource now (Arcane Battery passive): only he banks +1 each
+  // player phase — Bolt is the sole consumer, so it is his identity, not a universal tick.
   const g = new Game(41);
   g.start(); // one tick already happened at player-phase start
-  for (const m of g.members) check(`${m.id} has per-member charge`, typeof m.charge === 'number' && m.charge >= 1);
+  for (const m of g.members) {
+    const ok = m.id === 'mage' ? m.charge >= 1 : m.charge === 0;
+    check(`${m.id} charge follows Arcane Battery (mage-only)`, typeof m.charge === 'number' && ok);
+  }
   // mageCharge proxies the mage's charge (back-compat for UI/sim/tests).
   eq('mageCharge proxies mage.charge', g.mageCharge, g.mage.charge);
   g.mageCharge = 4;
@@ -2194,6 +2198,9 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
 {
   // Fight Song: +2 on every living auto THIS party phase; resets after.
   const g = new Game(76); g.start();
+  // The opening strike hit the Tank, so Grudge has banked damage that would inflate his
+  // auto — clear it to isolate the Hymn bonus this test is about.
+  for (const m of g.members) m.bankedDamage = 0;
   g.playCard(giveCard(g, 'battleHymn'), null);
   const expected = g.livingMembers().reduce((s, m) => s + m.damage + HYMN_BONUS, 0);
   const ehp = g.enemy.hp;

@@ -10,6 +10,7 @@ import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_D
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, SANGUINE_PACT_THRESHOLD, RADIANCE_HEAL } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
+import { TOXICOLOGIST_BONUS, GRUDGE_DIVISOR, FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER } from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
@@ -115,7 +116,7 @@ function wardenGame(seed: number) {
   // Data: the Showstopper is a sturdy bruiser carrying Stun; the bound card is Halt!
   // (5 MP, no target), and it maps through ABILITY_CARD like every other member card.
   const s = MEMBER_POOL.sentinel;
-  eq('Showstopper HP 13', s.maxHP, 13);
+  eq('Showstopper HP 16', s.maxHP, 16); // raised 13 -> 16 to pay for Stunt Double
   eq('Showstopper damage 2', s.damage, 2);
   eq('Showstopper ability is stun', s.ability, 'stun');
   eq('stun binds to the Halt! card', ABILITY_CARD.stun, 'stagger');
@@ -614,8 +615,10 @@ function hitAt(g: Game, slots: number[], damage: number): void {
     return before - g.enemy.hp;
   };
   for (let t = 1; t <= EN_GARDE_TURNS; t++) eq(`enemy turn ${t} counters`, oneTurn(), dmg);
-  eq('the turn after the stance does not counter (expired)', oneTurn(), 0);
-  check('the stance timer is spent', duelist.riposteTurns === 0);
+  // The En Garde TIMER expires — but the Duelist keeps countering regardless, because
+  // Riposte Master (her passive) makes her counter every hit permanently, card or no card.
+  eq('Riposte Master keeps the Duelist countering after En Garde', oneTurn(), dmg);
+  check('the En Garde stance timer is spent (Riposte Master is separate)', duelist.riposteTurns === 0);
 }
 {
   // Death ends the stance immediately.
@@ -707,6 +710,7 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   const g = flagellantGame(751);
   const flag = g.members[SLOT.LEFT];
   const baseTank = g.memberDamage(g.members[SLOT.CENTER]);
+  flag.lastStandUsed = true; // spend Last Stand so the lethal Blood cost actually kills him
   flag.hp = PENANCE_HP; // exactly the payment — a lethal cast
   const res = g.playCard(giveCard(g, 'penance'), null);
   check('the lethal cast was legal (no HP playability gate)', res.ok);
@@ -771,6 +775,7 @@ function flagellantGame(seed: number, relics: RelicId[] = []): Game {
   // own slot for the `PENANCE PAID` flag when the payment kills him.
   const g = flagellantGame(761);
   const flag = g.members[SLOT.LEFT];
+  flag.lastStandUsed = true; // spend Last Stand so the payment is truly lethal
   flag.hp = PENANCE_HP; // a lethal payment
   g.events = [];
   g.playCard(giveCard(g, 'penance'), null);
@@ -863,5 +868,120 @@ function dndGame(seed: number): Game {
   check('Sap effect line drops the play-a-card warning', !/play a card/i.test(channelEffectLine('sap')));
 }
 
+// === Hero passives (2026-07): one always-on identity per hero =================
+// A controlled fight: field the given party, heal everyone up, fat enemy, full MP.
+function passiveGame(party: MemberId[], seed = 900): Game {
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(party);
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  const g = new Game(seed, cfg); g.start();
+  g.members.forEach((m) => {
+    m.maxHP = 100; m.hp = 100; m.alive = true; m.shield = false; m.shieldTurns = 0;
+    m.bankedDamage = 0; m.feralPrimed = false; m.lastStandUsed = false; // reset opening-strike side effects
+  });
+  g.enemy.maxHP = 100000; g.enemy.hp = 100000;
+  g.enemy.poison = 0; g.enemy.poisonTurns = 0; g.enemy.vulnerable = 0; g.enemy.vulnerableTurns = 0;
+  g.maxMana = 40; g.mp = 40; g.passiveMp = 0; g.enrageTurn = 9999;
+  return g;
+}
+{
+  // Toxicologist (Ranger): +auto vs a poisoned enemy; plain otherwise.
+  const g = passiveGame(['ranger', 'tank', 'mage']);
+  const r = g.members[0];
+  eq('Ranger auto is base vs an unpoisoned enemy', g.memberDamage(r), r.damage);
+  g.enemy.poison = 3; g.enemy.poisonTurns = 3;
+  eq('Toxicologist adds +2 auto vs a poisoned enemy', g.memberDamage(r), r.damage + TOXICOLOGIST_BONUS);
+}
+{
+  // Arcane Battery (Mage): only the Mage banks Charge each turn (also asserted in engine.test).
+  const g = passiveGame(['mage', 'tank', 'ranger']);
+  eq('only the Mage carries Charge', g.members.filter((m) => m.charge > 0).map((m) => m.id).join(','), 'mage');
+}
+{
+  // Opening Act (Busker): a fielded Busker draws one extra card at each turn start.
+  const withBusker = passiveGame(['skald', 'tank', 'mage']);
+  const without = passiveGame(['ranger', 'tank', 'mage']);
+  eq('Opening Act draws one extra at turn start', withBusker.hand.length, without.hand.length + 1);
+}
+{
+  // Riposte Master (Duelist): she counters every hit that lands on her — no card, no timer.
+  const g = passiveGame(['duelist', 'tank', 'mage']);
+  const d = g.members[0];
+  eq('the Duelist has no En Garde stance running', d.riposteTurns, 0);
+  hitAt(g, [SLOT.LEFT], 5);
+  const before = g.enemy.hp;
+  g._resolveAttack();
+  eq('Riposte Master counters for her auto without any card', before - g.enemy.hp, d.damage);
+}
+{
+  // Last Stand (Strongman): the first killing blow leaves him at 1 HP; the next one kills.
+  const g = passiveGame(['flagellant', 'tank', 'mage']);
+  const f = g.members[0];
+  f.hp = 3; hitAt(g, [SLOT.LEFT], 99); g._resolveAttack();
+  check('Last Stand catches a lethal hit — he clings at 1 HP', f.alive && f.hp === 1);
+  check('Last Stand is spent', f.lastStandUsed);
+  f.hp = 3; hitAt(g, [SLOT.LEFT], 99); g._resolveAttack();
+  check('a second lethal hit kills him (Last Stand already spent)', !f.alive);
+}
+{
+  // Grudge (Tank): banks damage soaked; his next auto adds half, then clears.
+  const g = passiveGame(['tank', 'ranger', 'mage']);
+  const tk = g.members[0];
+  const base = g.memberDamage(tk);
+  hitAt(g, [SLOT.LEFT], 8); g._resolveAttack();
+  eq('Grudge banks the damage the Tank soaked', tk.bankedDamage, 8);
+  eq('Grudge adds half the bank to his next auto', g.memberDamage(tk), base + Math.floor(8 / GRUDGE_DIVISOR));
+  g._runPartyPhase();
+  eq('the bank clears after he cashes it', tk.bankedDamage, 0);
+  eq('his auto returns to base once cashed', g.memberDamage(tk), base);
+}
+{
+  // Dark Bargain (Warlock): a party death permanently grows a living Warlock.
+  const g = passiveGame(['warlock', 'tank', 'mage']);
+  const w = g.members[0], tk = g.members[1];
+  const d0 = w.damage, p0 = w.abilityPower;
+  g._killMember(tk);
+  eq('Dark Bargain: +1 damage on a party death', w.damage, d0 + DARK_BARGAIN_DMG);
+  eq('Dark Bargain: +1 ability power too', w.abilityPower, p0 + DARK_BARGAIN_POWER);
+}
+{
+  // Feral Bond (Beast Warden): when her Boar falls, her next strike is primed for ×3.
+  const g = passiveGame(['beastWarden', 'tank', 'mage']);
+  const wd = g.members[0];
+  g._fireAbility(wd); // summon a Boar
+  hitAt(g, [SLOT.LEFT], BOAR_HP + 10); g._resolveAttack(); // one instance fells the Boar
+  check('the Boar fell to the blow', wd.boarHp === 0);
+  check('Feral Bond primes her avenging strike', wd.feralPrimed);
+}
+{
+  // Feral Bond payoff: the primed strike deals FERAL_BOND_MULT×, then is consumed.
+  const g = passiveGame(['beastWarden', 'tank', 'mage']);
+  const wd = g.members[0];
+  g.members[1].damage = 0; g.members[2].damage = 0; // silence the others so only she strikes
+  wd.feralPrimed = true;
+  const expected = g.memberDamage(wd) * FERAL_BOND_MULT;
+  const ehp = g.enemy.hp;
+  g._runPartyPhase();
+  eq('Feral Bond triples the avenging strike', ehp - g.enemy.hp, expected);
+  check('Feral Bond is consumed by that strike', !wd.feralPrimed);
+}
+{
+  // Stunt Double (Showstopper): a blow that would kill a teammate lands on her instead.
+  const g = passiveGame(['sentinel', 'ranger', 'mage']);
+  const show = g.members[0], ranger = g.members[1];
+  ranger.hp = 4; const showHp = show.hp;
+  hitAt(g, [SLOT.CENTER], 5); g._resolveAttack(); // a lethal hit aimed at the Ranger
+  check('the endangered teammate is untouched', ranger.hp === 4 && ranger.alive);
+  eq('the Showstopper took the blow in her place', show.hp, showHp - 5);
+}
+{
+  // Stunt Double only intercepts LETHAL blows — a survivable hit is left alone.
+  const g = passiveGame(['sentinel', 'ranger', 'mage']);
+  const show = g.members[0], ranger = g.members[1];
+  ranger.hp = 50; const showHp = show.hp;
+  hitAt(g, [SLOT.CENTER], 5); g._resolveAttack();
+  eq('a survivable hit lands on its target', ranger.hp, 45);
+  eq('the Showstopper is untouched by a non-lethal blow', show.hp, showHp);
+}
 
 finish();

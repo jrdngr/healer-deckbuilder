@@ -396,7 +396,14 @@ import { check, eq, results } from './harness';
   //     F6/F7 139->141, F8 131->137 (F0-F4 unchanged). Replacement (recruiting at a full roster)
   //     is a UI/engine path the baseline sim doesn't exercise. All band/CI/boss gates below still
   //     hold; re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([195, 190, 152, 147, 145, 142, 141, 141, 137]));
+  //   • Hero passives (2026-07-15): every hero gained an always-on passive (Toxicologist, Grudge,
+  //     Dark Bargain, Feral Bond, Stunt Double, Last Stand, Riposte Master, Opening Act, Arcane
+  //     Battery; Berserker's Rage bands pre-date this). These strengthen the party across the board,
+  //     so the whole vector rises and combat consumes a bit less rng per fight (shifting the stream):
+  //     F0/F1 195/190->194/189, F2 152->159, F3 147->155, F4 145->152, F5 142->150, F6/F7 141->149,
+  //     F8 137->140. A real power increase the balance pass owns (enemy-HP re-anchor is a follow-up,
+  //     per the plan); the band/CI/boss gates below still hold. Re-pinned on the new numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 189, 159, 155, 152, 150, 149, 149, 140]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.
