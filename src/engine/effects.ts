@@ -11,6 +11,10 @@ import {
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
+  TWIN_SHOT_HITS, CONC_VENOM_MULT, SHIELD_WALL_DEFENSE, SHIELD_WALL_TURNS, HOLD_LINE_DEFENSE, HOLD_LINE_TURNS,
+  ARCANE_SURGE_CHARGE, DRAIN_LIFE_DMG, DOOM_DELAY, SACRIFICE_HP, SACRIFICE_DMG, SACRIFICE_POWER,
+  FINALE_MULT, BLOODBATH_PER_MISSING, WHIRLWIND_HITS, SIC_EM_MULT, MEND_BEAST_HEAL, BIG_TOP_TURNS,
+  LUNGE_MULT, LUNGE_TAUNT_TURNS, FLURRY_HITS, FLURRY_REDUCTION, STRONGEST_HP, DEADLIFT_TURNS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
@@ -627,6 +631,158 @@ Game.prototype._fireAbility = function (m, target = null, ability = m.ability) {
           : `${m.name} strains himself (-${cost} HP) — Feat of Strength: every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns.`, 'status');
         this._emit({ kind: 'penance', slot: m.slot, bonus: PENANCE_STRIKE_BONUS, died,
           slots: this.livingMembers().map((x) => x.slot) });
+        break;
+      }
+      // ---- learned ability cards (Training Dojo, 2026-07) --------------------
+      case 'twinShot': {
+        // The Ranger looses two arrows — each is a full auto (Toxicologist rides each).
+        for (let i = 0; i < TWIN_SHOT_HITS; i++) {
+          if (this._strikeEnemy(m, this.memberDamage(m), `${m.name} (Twin Shot)`)) break;
+        }
+        break;
+      }
+      case 'concVenom': {
+        // Double the enemy's current Poison-per-turn (duration unchanged); a no-op unpoisoned.
+        if (this.enemy.poisonTurns > 0) {
+          this.enemy.poison *= CONC_VENOM_MULT;
+          this._log(`${m.name} concentrates the venom — Poison ${this.enemy.poison}/turn.`, 'status');
+          this._emit({ kind: 'poisonApplied', slot: m.slot, amount: this.enemy.poison, poison: this.enemy.poison });
+        } else {
+          this._log(`${m.name} finds no venom to concentrate.`, 'status');
+        }
+        break;
+      }
+      case 'shieldWall': {
+        // Every living member braces (keep the stronger of any standing Defense).
+        for (const x of this.livingMembers()) {
+          x.defenseAmount = x.defense > 0 ? Math.max(x.defenseAmount, SHIELD_WALL_DEFENSE) : SHIELD_WALL_DEFENSE;
+          x.defense = Math.max(x.defense, SHIELD_WALL_TURNS);
+          this._emit({ kind: 'defenseApplied', slot: x.slot, amount: SHIELD_WALL_DEFENSE });
+        }
+        this._log(`${m.name} raises a Shield Wall — the party braces (Defense ${SHIELD_WALL_DEFENSE} for ${SHIELD_WALL_TURNS} turns).`, 'status');
+        break;
+      }
+      case 'holdLine': {
+        // The Tank digs in (Defense) and opens a window where his Grudge banks double.
+        m.defenseAmount = m.defense > 0 ? Math.max(m.defenseAmount, HOLD_LINE_DEFENSE) : HOLD_LINE_DEFENSE;
+        m.defense = Math.max(m.defense, HOLD_LINE_TURNS);
+        m.holdLineTurns = HOLD_LINE_TURNS;
+        this._emit({ kind: 'defenseApplied', slot: m.slot, amount: HOLD_LINE_DEFENSE });
+        this._log(`${m.name} holds the line (Defense ${HOLD_LINE_DEFENSE}) — the blows he soaks now bank double for Grudge.`, 'status');
+        break;
+      }
+      case 'arcaneSurge': {
+        // Instant Charge for the Mage — fuels a huge next Bolt.
+        m.charge = Math.min(CHARGE_MAX, m.charge + ARCANE_SURGE_CHARGE);
+        this._log(`${m.name} surges with arcane power — Charge ${m.charge}.`, 'status');
+        break;
+      }
+      case 'drainLife': {
+        // Deal DRAIN_LIFE_DMG (Vulnerability scales it), then heal the most-wounded living
+        // member for the damage actually dealt (post-Vulnerability lifesteal).
+        const dealt = this.vulnerableAmount(DRAIN_LIFE_DMG + m.abilityPower);
+        const killed = this._damageEnemy(DRAIN_LIFE_DMG + m.abilityPower, `${m.name} (Drain Life)`);
+        this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: dealt, enemyHp: this.enemy.hp });
+        if (killed) this._emit({ kind: 'defeatEnemy' });
+        const wounded = this.livingMembers().reduce((a, b) => (b.maxHP - b.hp) > (a.maxHP - a.hp) ? b : a, m);
+        const res = this._applyHeal(wounded, dealt, true);
+        if (res.healed > 0) this._emit({ kind: 'heal', slot: wounded.slot, amount: res.healed, hp: wounded.hp });
+        break;
+      }
+      case 'doom': {
+        // Curse the enemy: it detonates after DOOM_DELAY enemy turns (see _runEnemyPhase).
+        // Recasting refreshes the countdown.
+        this.enemy.doomTurns = DOOM_DELAY;
+        this._log(`${m.name} pronounces Doom — the enemy is struck in ${DOOM_DELAY} turns.`, 'status');
+        break;
+      }
+      case 'sacrifice': {
+        // A chosen ally bleeds (clamped to leave 1 HP); the Warlock grows for the fight.
+        const ally = (target != null && this.members[target]?.alive) ? this.members[target] : m;
+        this._bloodPay(ally, SACRIFICE_HP);
+        m.damage += SACRIFICE_DMG;
+        m.abilityPower += SACRIFICE_POWER;
+        this._log(`${m.name} sacrifices ${ally === m ? 'his own' : `${ally.name}'s`} blood — +${SACRIFICE_DMG} damage, +${SACRIFICE_POWER} power for the fight.`, 'status');
+        break;
+      }
+      case 'finale': {
+        // The Busker's big number: FINALE_MULT× his current cards-played auto.
+        this._strikeEnemy(m, FINALE_MULT * this.memberDamage(m), `${m.name} (Finale)`);
+        break;
+      }
+      case 'duet': {
+        // A chosen other member makes an immediate bonus auto-attack.
+        const partner = (target != null && this.members[target]?.alive) ? this.members[target] : m;
+        this._strikeEnemy(partner, this.memberDamage(partner), `${partner.name} (Duet)`);
+        break;
+      }
+      case 'bloodbath': {
+        // The Berserker strikes for his MISSING HP — bigger the more hurt he is.
+        const missing = Math.max(0, m.maxHP - m.hp);
+        this._strikeEnemy(m, missing * BLOODBATH_PER_MISSING + m.abilityPower, `${m.name} (Bloodbath)`);
+        break;
+      }
+      case 'whirlwind': {
+        // Strike WHIRLWIND_HITS×, plus a third while in his hottest rage band.
+        const times = m.hp <= this.berserkerThresholds()[1] ? WHIRLWIND_HITS + 1 : WHIRLWIND_HITS;
+        for (let i = 0; i < times; i++) {
+          if (this._strikeEnemy(m, this.memberDamage(m), `${m.name} (Whirlwind)`)) break;
+        }
+        break;
+      }
+      case 'sicEm': {
+        // The Boar lunges (canPlay's needsBoar gate guarantees one is out).
+        this._strikeEnemy(m, SIC_EM_MULT * BOAR_STRIKE_BONUS + m.abilityPower, `${m.name}'s Boar (Sic 'Em)`);
+        break;
+      }
+      case 'mendBeast': {
+        // Heal the Boar and extend its stay (needsBoar-gated).
+        m.boarHp += MEND_BEAST_HEAL;
+        m.boarTurns += 1;
+        this._log(`${m.name} mends her Boar (${m.boarHp} HP, ${m.boarTurns} turns).`, 'status');
+        this._emit({ kind: 'boarSummon', slot: m.slot, hp: m.boarHp, turns: m.boarTurns });
+        break;
+      }
+      case 'standingOvation': {
+        // Every living member's next attack lands doubled (reuses the drum-primed one-shot).
+        for (const x of this.livingMembers()) x.drumPrimed = true;
+        this._log(`${m.name} brings the house down — every member's next strike lands doubled!`, 'status');
+        break;
+      }
+      case 'bigTop': {
+        // A one-turn party-wide DR aura (read in _effectiveDamage, decays in _decayBuffs).
+        this.bigTopTurns = Math.max(this.bigTopTurns, BIG_TOP_TURNS);
+        this._log(`${m.name} raises the big top — the party takes less from every hit next turn.`, 'status');
+        break;
+      }
+      case 'lunge': {
+        // Strike LUNGE_MULT× and Provoke (she taunts the enemy onto herself).
+        this._strikeEnemy(m, LUNGE_MULT * this.memberDamage(m), `${m.name} (Lunge)`);
+        m.taunt = Math.max(m.taunt, LUNGE_TAUNT_TURNS);
+        this._emit({ kind: 'taunt', slot: m.slot, turns: LUNGE_TAUNT_TURNS });
+        break;
+      }
+      case 'flurry': {
+        // FLURRY_HITS reduced strikes (each auto − FLURRY_REDUCTION, min 1).
+        const each = Math.max(1, this.memberDamage(m) - FLURRY_REDUCTION);
+        for (let i = 0; i < FLURRY_HITS; i++) {
+          if (this._strikeEnemy(m, each, `${m.name} (Flurry)`)) break;
+        }
+        break;
+      }
+      case 'strongest': {
+        // Pay STRONGEST_HP (NO clamp — Last Stand can catch a lethal payment), then every
+        // living member's next auto lands doubled. Order: pay -> (death pipeline) -> buff.
+        this._drainMember(m, STRONGEST_HP);
+        for (const x of this.livingMembers()) x.drumPrimed = true;
+        this._log(`${m.name} shows the world his strength — every member's next strike lands doubled!`, 'status');
+        break;
+      }
+      case 'deadlift': {
+        // Hoist a chosen ally clear — untargetable for the next enemy turn.
+        const lifted = (target != null && this.members[target]?.alive) ? this.members[target] : m;
+        lifted.untargetable = Math.max(lifted.untargetable, DEADLIFT_TURNS);
+        this._log(`${m.name} hoists ${lifted === m ? 'himself' : lifted.name} clear — out of reach next turn.`, 'status');
         break;
       }
       default:

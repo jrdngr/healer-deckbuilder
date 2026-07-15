@@ -562,6 +562,10 @@ const CARD_BUY_VALUE: Record<CardId, number> = {
   guard: 1, sharpen: 1, doubleStrike: 1, empower: 1, riposte: 1,
   // Ability cards (#44) — inserted per-fight, never bought.
   imbuePoison: 0, bolster: 0, unleash: 0, hex: 0, conduct: 0, incite: 0, beckon: 0, stagger: 0, enGarde: 0, penance: 0,
+  // Learned ability cards (Training Dojo): never shopped — learned free at the Dojo node.
+  twinShot: 0, concVenom: 0, shieldWall: 0, holdLine: 0, arcaneSurge: 0, drainLife: 0,
+  doom: 0, sacrifice: 0, finale: 0, duet: 0, bloodbath: 0, whirlwind: 0,
+  sicEm: 0, mendBeast: 0, standingOvation: 0, bigTop: 0, lunge: 0, flurry: 0, strongest: 0, deadlift: 0,
 };
 const MAX_CARDS_PER_SHOP = 2; // stay selective so the deck doesn't dilute ability draws
 

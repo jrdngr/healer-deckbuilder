@@ -1,7 +1,13 @@
-import type { CardId, CardType, CardDef, AbilityId } from './tuning';
+import type { CardId, CardType, CardDef, AbilityId, MemberId } from './tuning';
 import { MOD_EFFICIENT_COST, MOD_POTENT_STRENGTH, MOD_LINGERING_TURNS, REFRESH_MP_CAP, REFRESH_TURNS } from './tuning';
 import {
   BLOOD_BANNER_BONUS, BLOOD_BANNER_HP, BLOOD_BANNER_TURNS, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, CRIMSON_PACT_DRAW, CRIMSON_PACT_HP, DREAD_WHISPER_REDUCTION, EMPOWER_BONUS, EN_GARDE_TURNS, FONT_MP_CAP, GUARD_DR, GUARD_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SAP_MAX_TURNS, SAP_VULN_CAP, SAP_VULN_PER_TICK, SCARLET_WARD_HP, SHARPEN_BONUS, SHARPEN_TURNS, SPOREBURST_POISON, SUNRISE_VIGIL_HEAL, TRANSFUSION_HEAL, TRANSFUSION_HP
+} from './tuning';
+import {
+  TWIN_SHOT_HITS, SHIELD_WALL_DEFENSE, SHIELD_WALL_TURNS, HOLD_LINE_DEFENSE, HOLD_LINE_TURNS,
+  ARCANE_SURGE_CHARGE, DRAIN_LIFE_DMG, DOOM_DELAY, DOOM_DAMAGE, SACRIFICE_HP, SACRIFICE_DMG, SACRIFICE_POWER,
+  FINALE_MULT, WHIRLWIND_HITS, SIC_EM_MULT, MEND_BEAST_HEAL, BIG_TOP_DR,
+  LUNGE_MULT, LUNGE_TAUNT_TURNS, FLURRY_HITS, FLURRY_REDUCTION, STRONGEST_HP,
 } from './tuning';
 import type { DeckCard, ResolvedCard } from './run';
 
@@ -48,6 +54,48 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // ">N HP" playability gate). The Sanguine surcharge is applied in the engine, not via _bloodCost.
   penance: { id: 'penance', name: 'Feat of Strength', cost: 2, target: 'none', ability: 'penance',
     desc: `Through the Strongman, pay ${PENANCE_HP} HP (no clamp — it can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for 2 enemy turns.` },
+  // --- learned ability cards (Training Dojo, 2026-07): two extra per hero -------
+  // Acquired at the Dojo node; injected on deploy only for the hero that learned them.
+  twinShot: { id: 'twinShot', name: 'Twin Shot', cost: 2, target: 'none', ability: 'twinShot',
+    desc: `The Ranger looses ${TWIN_SHOT_HITS} arrows — she strikes twice (each takes Toxicologist).` },
+  concVenom: { id: 'concVenom', name: 'Concentrated Venom', cost: 1, target: 'none', ability: 'concVenom',
+    desc: `Double the enemy's current Poison-per-turn (its duration is unchanged).` },
+  shieldWall: { id: 'shieldWall', name: 'Shield Wall', cost: 2, target: 'none', ability: 'shieldWall',
+    desc: `Every living member gains Defense ${SHIELD_WALL_DEFENSE} for ${SHIELD_WALL_TURNS} enemy turns.` },
+  holdLine: { id: 'holdLine', name: 'Hold the Line', cost: 1, target: 'none', ability: 'holdLine',
+    desc: `The Tank braces (Defense ${HOLD_LINE_DEFENSE} for ${HOLD_LINE_TURNS} turns); while it stands, the damage he soaks banks double for Grudge.` },
+  arcaneSurge: { id: 'arcaneSurge', name: 'Arcane Surge', cost: 1, target: 'none', ability: 'arcaneSurge',
+    desc: `The Mage gains ${ARCANE_SURGE_CHARGE} Charge at once.` },
+  drainLife: { id: 'drainLife', name: 'Drain Life', cost: 2, target: 'none', ability: 'drainLife',
+    desc: `Deal ${DRAIN_LIFE_DMG} to the enemy (more if it is Vulnerable); the most wounded member heals for the damage dealt.` },
+  doom: { id: 'doom', name: 'Doom', cost: 3, target: 'none', ability: 'doom',
+    desc: `Curse the enemy: after ${DOOM_DELAY} enemy turns it takes ${DOOM_DAMAGE} damage (its Vulnerability then scales it).` },
+  sacrifice: { id: 'sacrifice', name: 'Sacrifice', cost: 1, target: 'single', ability: 'sacrifice', exhaust: true,
+    desc: `A chosen ally pays ${SACRIFICE_HP} HP (clamps to 1); the Warlock gains +${SACRIFICE_DMG} damage & +${SACRIFICE_POWER} ability power for the fight. Consumed after one use.` },
+  finale: { id: 'finale', name: 'Finale', cost: 2, target: 'none', ability: 'finale',
+    desc: `The Busker strikes for ${FINALE_MULT}× his cards-played value this turn.` },
+  duet: { id: 'duet', name: 'Duet', cost: 1, target: 'single', ability: 'duet',
+    desc: `A chosen other member immediately makes a bonus auto-attack.` },
+  bloodbath: { id: 'bloodbath', name: 'Bloodbath', cost: 2, target: 'none', ability: 'bloodbath',
+    desc: `The Berserker strikes for his MISSING HP — the more hurt, the harder it hits.` },
+  whirlwind: { id: 'whirlwind', name: 'Whirlwind', cost: 2, target: 'none', ability: 'whirlwind',
+    desc: `The Berserker strikes ${WHIRLWIND_HITS}× (a 3rd time while in his hottest rage band).` },
+  sicEm: { id: 'sicEm', name: "Sic 'Em", cost: 1, target: 'none', ability: 'sicEm', needsBoar: true,
+    desc: `The Beast Warden's Boar lunges — deal ${SIC_EM_MULT}× its strike bonus to the enemy.` },
+  mendBeast: { id: 'mendBeast', name: 'Mend Beast', cost: 1, target: 'none', ability: 'mendBeast', needsBoar: true,
+    desc: `Heal the Boar ${MEND_BEAST_HEAL} and extend its stay by 1 enemy turn.` },
+  standingOvation: { id: 'standingOvation', name: 'Standing Ovation', cost: 2, target: 'none', ability: 'standingOvation',
+    desc: `Every living member's next attack this turn lands doubled.` },
+  bigTop: { id: 'bigTop', name: 'Big Top', cost: 2, target: 'none', ability: 'bigTop',
+    desc: `The whole party takes ${BIG_TOP_DR} less from every hit for the next enemy turn.` },
+  lunge: { id: 'lunge', name: 'Lunge', cost: 2, target: 'none', ability: 'lunge',
+    desc: `The Duelist strikes for ${LUNGE_MULT}× and Provokes (the enemy aims at her) for ${LUNGE_TAUNT_TURNS} turns.` },
+  flurry: { id: 'flurry', name: 'Flurry', cost: 2, target: 'none', ability: 'flurry',
+    desc: `The Duelist strikes ${FLURRY_HITS} times, each for her auto − ${FLURRY_REDUCTION}.` },
+  strongest: { id: 'strongest', name: 'Strongest in the World', cost: 2, target: 'none', ability: 'strongest',
+    desc: `The Strongman pays ${STRONGEST_HP} HP (no clamp — it can kill him); every living member's auto lands doubled this turn.` },
+  deadlift: { id: 'deadlift', name: 'Deadlift', cost: 1, target: 'single', ability: 'deadlift',
+    desc: `Hoist a chosen ally clear — the enemy cannot target them next enemy turn.` },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
     desc: 'Heal a member for 2.' },
   highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
@@ -195,6 +243,17 @@ export const CARD_TYPE: Record<CardId, CardType> = {
   bolster: 'iron', guard: 'iron',
   feint: 'iron', /* Iron mitigation web (#65) */
   enGarde: 'iron', /* Duelist's Provoke + persistent-Riposte stance (#74); Iron Ward's first-iron discount applies */
+  // Learned ability cards (Training Dojo, 2026-07): themed by the hero's kit.
+  twinShot: 'nature', concVenom: 'nature',       // Ranger (venom/hunter)
+  shieldWall: 'iron', holdLine: 'iron',          // Tank (protection)
+  arcaneSurge: 'arcane', drainLife: 'shadow',    // Mage (mana / enemy damage)
+  doom: 'shadow', sacrifice: 'blood',            // Warlock (curse / HP cost)
+  finale: 'nature', duet: 'nature',              // Busker (performance offense)
+  bloodbath: 'blood', whirlwind: 'blood',        // Berserker (self-harm strikes)
+  sicEm: 'nature', mendBeast: 'nature',          // Beast Warden (the pack)
+  standingOvation: 'nature', bigTop: 'iron',     // Showstopper (rally / shelter)
+  lunge: 'iron', flurry: 'iron',                 // Duelist (fencing)
+  strongest: 'blood', deadlift: 'iron',          // Strongman (blood / hoist)
 };
 
 // The assembled card table: each raw def with its type folded in. Every card in
@@ -244,6 +303,27 @@ export const ABILITY_CARD: Record<AbilityId, CardId> = {
   stun: 'stagger',
   enGarde: 'enGarde',
   penance: 'penance',
+  // Learned ability cards (Training Dojo): card id == ability id.
+  twinShot: 'twinShot', concVenom: 'concVenom', shieldWall: 'shieldWall', holdLine: 'holdLine',
+  arcaneSurge: 'arcaneSurge', drainLife: 'drainLife', doom: 'doom', sacrifice: 'sacrifice',
+  finale: 'finale', duet: 'duet', bloodbath: 'bloodbath', whirlwind: 'whirlwind',
+  sicEm: 'sicEm', mendBeast: 'mendBeast', standingOvation: 'standingOvation', bigTop: 'bigTop',
+  lunge: 'lunge', flurry: 'flurry', strongest: 'strongest', deadlift: 'deadlift',
+};
+
+// Which member (by id) owns each learned ability card — the Dojo offers a hero only
+// their own two. Signature ability cards are keyed off the member's `ability`, not here.
+export const LEARNED_CARDS_BY_MEMBER: Partial<Record<MemberId, AbilityId[]>> = {
+  ranger: ['twinShot', 'concVenom'],
+  tank: ['shieldWall', 'holdLine'],
+  mage: ['arcaneSurge', 'drainLife'],
+  warlock: ['doom', 'sacrifice'],
+  skald: ['finale', 'duet'],
+  berserker: ['bloodbath', 'whirlwind'],
+  beastWarden: ['sicEm', 'mendBeast'],
+  sentinel: ['standingOvation', 'bigTop'],
+  duelist: ['lunge', 'flurry'],
+  flagellant: ['strongest', 'deadlift'],
 };
 
 // The set of per-member ability card ids — excluded from the shop pool and Retain
@@ -288,6 +368,7 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     needsRegen: base.needsRegen === true,
     needsPoison: base.needsPoison === true,
     needsChannel: base.needsChannel === true,
+    needsBoar: base.needsBoar === true,
     // The cap is the BASE card's designed lifetime — Potent/Lingering change the
     // tempo of a Refresh-slot cast, never its total (flaw #7).
     refreshCap: base.refreshCap ?? REFRESH_MP_CAP,

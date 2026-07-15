@@ -34,7 +34,19 @@ export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berse
 // the one-shot Riposte card. It is a target 'single' ability card — the stance can be
 // placed on any member, self included. Each fires via that member's own ability card
 // (#44), inserted into the deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'callBoar' | 'stun' | 'enGarde' | 'penance';
+export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'callBoar' | 'stun' | 'enGarde' | 'penance'
+  // Learned ability cards (Training Dojo, 2026-07): two extra per hero, acquired at the
+  // Dojo node and fired like a signature ability card (bound member, _fireAbility case).
+  | 'twinShot' | 'concVenom'        // Ranger
+  | 'shieldWall' | 'holdLine'       // Tank
+  | 'arcaneSurge' | 'drainLife'     // Mage
+  | 'doom' | 'sacrifice'            // Warlock
+  | 'finale' | 'duet'               // Busker
+  | 'bloodbath' | 'whirlwind'       // Berserker
+  | 'sicEm' | 'mendBeast'           // Beast Warden
+  | 'standingOvation' | 'bigTop'    // Showstopper
+  | 'lunge' | 'flurry'              // Duelist
+  | 'strongest' | 'deadlift';       // Strongman
 export type CardId =
   | 'lowHeal' | 'highHeal' | 'aoeHeal'
   | 'regen' | 'shield' | 'resurrect' | 'cleanse'
@@ -66,7 +78,13 @@ export type CardId =
   // battle deck when that member is deployed and firing their ability. The healer
   // enables the member's move — the player no longer picks which member acts.
   | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'beckon' | 'stagger' | 'enGarde' | 'penance';
+  | 'conduct' | 'incite' | 'beckon' | 'stagger' | 'enGarde' | 'penance'
+  // Learned ability cards (Training Dojo, 2026-07): two extra ability cards per hero.
+  // Card id == its AbilityId; injected on deploy only for the hero that learned it.
+  | 'twinShot' | 'concVenom' | 'shieldWall' | 'holdLine' | 'arcaneSurge' | 'drainLife'
+  | 'doom' | 'sacrifice' | 'finale' | 'duet' | 'bloodbath' | 'whirlwind'
+  | 'sicEm' | 'mendBeast' | 'standingOvation' | 'bigTop' | 'lunge' | 'flurry'
+  | 'strongest' | 'deadlift';
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)
@@ -148,6 +166,13 @@ export interface CardDef {
   // CardChannelDef) instead of a one-shot effect. Its per-tick payoff is applied by
   // the engine, keyed by card id.
   channel?: CardChannelDef;
+  // Consume/exhaust (Training Dojo, 2026-07): when set, the card is REMOVED from the
+  // fight after one play (not sent to the discard pile, so it never reshuffles). Used by
+  // Sacrifice — a one-shot per fight.
+  exhaust?: boolean;
+  // Playability gate (Training Dojo): the caster must have a living Boar out (Sic 'Em /
+  // Mend Beast are dead cards without one — mirrors needsPoison's no-dead-cast UX).
+  needsBoar?: boolean;
 }
 
 export const SLOT = { LEFT: 0, CENTER: 1, RIGHT: 2 } as const;
@@ -235,6 +260,36 @@ export const GRUDGE_DIVISOR = 2;       // Tank: his next auto adds (banked damag
 export const FERAL_BOND_MULT = 3;      // Beast Warden: her next auto after her Boar falls ×this
 export const DARK_BARGAIN_DMG = 1;     // Warlock: permanent +damage each time a party member dies
 export const DARK_BARGAIN_POWER = 1;   // Warlock: permanent +ability power on the same trigger
+
+// Learned ability cards (Training Dojo, 2026-07): two extra per hero. First-draft numbers;
+// a balance pass owns them. Multi-strike counts / mults live inline where obvious.
+export const TWIN_SHOT_HITS = 2;         // Ranger Twin Shot: auto strikes this many times
+export const CONC_VENOM_MULT = 2;        // Ranger Concentrated Venom: enemy poison-per-turn ×this
+export const SHIELD_WALL_DEFENSE = 2;    // Tank Shield Wall: party Defense strength
+export const SHIELD_WALL_TURNS = 2;      // Tank Shield Wall: enemy turns it lasts
+export const HOLD_LINE_DEFENSE = 3;      // Tank Hold the Line: his Defense strength
+export const HOLD_LINE_TURNS = 2;        // Tank Hold the Line: enemy turns of the stance
+export const HOLD_LINE_BANK_MULT = 2;    // Tank Hold the Line: Grudge banks ×this while it stands
+export const ARCANE_SURGE_CHARGE = 3;    // Mage Arcane Surge: Charge gained now
+export const DRAIN_LIFE_DMG = 3;         // Mage Drain Life: base damage (heals the most wounded for it)
+export const DOOM_DELAY = 2;             // Warlock Doom: enemy turns until it detonates
+export const DOOM_DAMAGE = 10;           // Warlock Doom: detonation damage (Vulnerability scales it via _damageEnemy)
+export const SACRIFICE_HP = 6;           // Warlock Sacrifice: HP the chosen ally pays (clamps to 1)
+export const SACRIFICE_DMG = 2;          // Warlock Sacrifice: +damage the Warlock gains for the fight
+export const SACRIFICE_POWER = 2;        // Warlock Sacrifice: +ability power on the same
+export const FINALE_MULT = 2;            // Busker Finale: strikes for ×this of his cards-played auto
+export const BLOODBATH_PER_MISSING = 1;  // Berserker Bloodbath: damage per point of missing HP
+export const WHIRLWIND_HITS = 2;         // Berserker Whirlwind: base strikes (a 3rd in his hottest band)
+export const SIC_EM_MULT = 2;            // Beast Warden Sic 'Em: damage = Boar strike bonus ×this
+export const MEND_BEAST_HEAL = 3;        // Beast Warden Mend Beast: Boar HP healed (and +1 turn)
+export const BIG_TOP_DR = 2;             // Showstopper Big Top: party takes this much less per hit
+export const BIG_TOP_TURNS = 1;          // Showstopper Big Top: enemy turns of the DR aura
+export const LUNGE_MULT = 2;             // Duelist Lunge: strike ×this, and she Provokes
+export const LUNGE_TAUNT_TURNS = 2;      // Duelist Lunge: enemy turns she Provokes for
+export const FLURRY_HITS = 3;            // Duelist Flurry: number of reduced strikes
+export const FLURRY_REDUCTION = 1;       // Duelist Flurry: each strike is auto − this (min 1)
+export const STRONGEST_HP = 5;           // Strongman Strongest in the World: HP paid (NO clamp — Last Stand can catch it)
+export const DEADLIFT_TURNS = 1;         // Strongman Deadlift: enemy turns the ally is untargetable
 // Roster wave 3 abilities (#29).
 export const BOAR_HP = 7;           // Call Boar: pet HP (+ abilityPower) — exactly one base heavy
 export const BOAR_TURNS = 4;        // Call Boar: enemy turns the Boar stands before returning to the wild

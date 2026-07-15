@@ -533,12 +533,13 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
 }
 {
   // Ability cards (#44) are no-target and play immediately with no member-pick prompt —
-  // EXCEPT En Garde (#74), the first single-target ability card: the Duelist grants her
-  // stance to a chosen member, so it runs the normal single-target pick flow.
+  // EXCEPT the ones that grant/aim at a chosen ally, which run the single-target pick flow:
+  // En Garde (#74), and the Dojo cards Sacrifice / Duet / Deadlift.
+  const SINGLE_TARGET_ABILITY_CARDS = new Set<CardId>(['enGarde', 'sacrifice', 'duet', 'deadlift']);
   for (const id of Object.keys(CARDS) as CardId[]) {
     const card = CARDS[id];
     if (card.ability == null) continue;
-    if (id === 'enGarde') { eq('enGarde is the single-target ability card', card.target, 'single'); continue; }
+    if (SINGLE_TARGET_ABILITY_CARDS.has(id)) { eq(`${id} is a single-target ability card`, card.target, 'single'); continue; }
     eq(`${id} is a no-target ability card`, card.target, 'none');
   }
 }

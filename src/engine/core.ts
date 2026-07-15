@@ -21,6 +21,7 @@ import {
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
   TOXICOLOGIST_BONUS, GRUDGE_DIVISOR, FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER,
+  DOOM_DAMAGE, BIG_TOP_DR, HOLD_LINE_BANK_MULT,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
   POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
@@ -138,6 +139,8 @@ export interface Member {
   feralPrimed: boolean;   // Beast Warden (Feral Bond): her next auto deals FERAL_BOND_MULT× once
                           // her Boar falls or expires (consumed by that strike).
   lastStandUsed: boolean; // Strongman (Last Stand): whether his once-per-fight cheat-death fired.
+  untargetable: number;   // Deadlift (Dojo): enemy turns this member cannot be aimed at / hit.
+  holdLineTurns: number;  // Hold the Line (Dojo, Tank): enemy turns his Grudge banks doubled.
 }
 
 export interface Enemy {
@@ -147,6 +150,7 @@ export interface Enemy {
   poisonTurns: number; // enemy turns of Poison remaining
   vulnerable: number;      // Vulnerability (Warlock's Hex, #39): party damage is x(1 + this)
   vulnerableTurns: number; // enemy turns of Vulnerability remaining
+  doomTurns: number;   // Doom (Dojo, Warlock): enemy turns until the curse detonates (0 = none)
   enraged: boolean;
 }
 
@@ -294,6 +298,7 @@ export class Game {
   penanceBonus: number;   // Penance (#75): +auto for every living member; ADDITIVE with hymnBonus (own field so it stacks with Battle Hymn)
   penanceTurns: number;   // Penance (#75): enemy turns the party-wide +auto buff lasts (decays in _decayBuffs)
   bloodBannerTurns: number; // Blood Banner (#68): enemy turns the party-wide +auto buff lasts
+  bigTopTurns: number;    // Big Top (Dojo, Showstopper): enemy turns the party takes BIG_TOP_DR less per hit
   // Delayed player-phase-start effects (#69): a generic FIFO fired at the START of the
   // player phase (after the Regen tick, before the draw). Per-fight; cleared at fight
   // start. Sunrise Vigil pushes one entry per cast (two casts -> two heals).
@@ -384,13 +389,15 @@ export class Game {
         bankedDamage: 0,       // Grudge: nothing soaked yet (Tank)
         feralPrimed: false,    // Feral Bond: no avenging strike pending (Beast Warden)
         lastStandUsed: false,  // Last Stand: the once-per-fight save is unspent (Strongman)
+        untargetable: 0,       // Deadlift: not hoisted clear
+        holdLineTurns: 0,      // Hold the Line: no double-bank window (Tank)
       };
     });
 
     this.enemy = {
       hp: config.enemy.maxHP, maxHP: config.enemy.maxHP,
       poison: 0, poisonTurns: 0,
-      vulnerable: 0, vulnerableTurns: 0, enraged: false,
+      vulnerable: 0, vulnerableTurns: 0, doomTurns: 0, enraged: false,
     };
 
     // Focus Stone (#42): fewer bodies to tend means more MP to spare while small.
@@ -415,6 +422,7 @@ export class Game {
     this.hymnBonus = 0;
     this.penanceBonus = 0; this.penanceTurns = 0; // no Penance buff at fight start (#75)
     this.bloodBannerTurns = 0; // no Blood Banner buff at fight start (#68)
+    this.bigTopTurns = 0;      // no Big Top DR aura at fight start (Dojo)
     this.delayedStartEffects = []; // no queued delayed effects at fight start (#69)
     this.relics = new Set(config.relics ?? []);
     this.titheGained = 0;
@@ -673,12 +681,15 @@ export class Game {
     const weights = type === 'hidden' ? SLOT_WEIGHTS.hidden : SLOT_WEIGHTS.normal;
     // Never aim the primary at a fallen member: a dead primary leaves single/hidden
     // attacks with no telegraph line to show and makes the blow whiff on a corpse.
-    // Re-roll against the living slots' relative weights instead.
-    const living = weights
-      .map((wt, i): [Slot, number] => [i as Slot, wt])
-      .filter(([slot]) => this.members[slot].alive);
-    if (living.length === 0) return SLOT.CENTER; // unreachable: telegraphs only generate while someone lives
-    return weightedPick(living, this.rng);
+    // Re-roll against the living slots' relative weights instead. Deadlift (Dojo) hoists a
+    // member clear — the enemy won't aim at them while untargetable; if EVERY living body is
+    // hoisted the aim falls back to any living member (the blow must land somewhere).
+    const all = weights.map((wt, i): [Slot, number] => [i as Slot, wt]);
+    const living = all.filter(([slot]) => this.members[slot].alive);
+    const aimable = living.filter(([slot]) => this.members[slot].untargetable <= 0);
+    const pool = aimable.length > 0 ? aimable : living;
+    if (pool.length === 0) return SLOT.CENTER; // unreachable: telegraphs only generate while someone lives
+    return weightedPick(pool, this.rng);
   }
 
   // Resolve the set of target slots for a type given a chosen primary slot.
@@ -735,7 +746,9 @@ export class Game {
     // the Payoff hitting nobody. No corpse re-point: an unmarked party is simply spared.
     if (t.targetsMarked) return this._markedLivingSlots();
     if (t.targets.length === 0) return [];
-    const living = t.targets.filter((slot) => this.members[slot]?.alive);
+    // Deadlift (Dojo): a hoisted (untargetable) member is dropped from the hit set — an AoE
+    // spares them, and a single-target blow aimed only at them re-points to a living body.
+    const living = t.targets.filter((slot) => this.members[slot]?.alive && this.members[slot].untargetable <= 0);
     if (living.length > 0) return living;
     if (this.livingMembers().length === 0) return []; // party wiped — nothing to hit
     return [this._nearestLivingSlot(t.targets[0])];
@@ -1068,6 +1081,17 @@ export class Game {
     const m = this.livingMembers()[0];
     if (m) this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(amount), enemyHp: this.enemy.hp });
     if (killed) this._emit({ kind: 'defeatEnemy' });
+  }
+
+  // One member-attributed strike on the enemy (Dojo cards: Twin Shot, Bloodbath, etc.).
+  // Deals `amount` through _damageEnemy (so Vulnerability applies), emits the partyAttack
+  // float on the striker's slot, and returns true if it defeated the enemy (caller stops).
+  _strikeEnemy(m: Member, amount: number, label: string): boolean {
+    if (amount <= 0) return false;
+    const killed = this._damageEnemy(amount, label);
+    this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(amount), enemyHp: this.enemy.hp });
+    if (killed) this._emit({ kind: 'defeatEnemy' });
+    return killed;
   }
 
   // ---- channeled cards (#64) ----------------------------------------------
@@ -1403,6 +1427,9 @@ export class Game {
     // itself (a second Guard just refreshes the timer). A pure read, so
     // attackTargets() previews it exactly (telegraph == applied).
     if (m.guardTurns > 0) dmg = Math.max(0, dmg - m.guardDR);
+    // Big Top (Dojo, Showstopper): a party-wide DR aura for its window. Independent field,
+    // so it stacks with Defense/Guard; a pure read, so previews match.
+    if (this.bigTopTurns > 0) dmg = Math.max(0, dmg - BIG_TOP_DR);
     return dmg;
   }
 
@@ -1449,6 +1476,18 @@ export class Game {
       this.enemy.poisonTurns -= 1;
       if (this.enemy.poisonTurns === 0) this.enemy.poison = 0;
       if (this.status === 'win') return; // poison can finish the enemy
+    }
+    // Doom (Dojo, Warlock): the curse counts down and detonates at 0 — heavy damage that
+    // the enemy's still-live Vulnerability scales (via _damageEnemy). Ticked BEFORE the
+    // Vulnerability countdown below so a Hex laid alongside the Doom is still amplifying it.
+    if (this.enemy.doomTurns > 0) {
+      this.enemy.doomTurns -= 1;
+      if (this.enemy.doomTurns === 0) {
+        this._log(`Doom comes due — the enemy is struck for ${DOOM_DAMAGE}.`, 'status');
+        const killed = this._damageEnemy(DOOM_DAMAGE, 'Doom');
+        this._emitEnemyNuke(DOOM_DAMAGE, killed);
+        if (this.status === 'win') return; // Doom can finish the enemy
+      }
     }
     // Vulnerability (Warlock's Hex, #39) counts down here, after Poison this turn is
     // amplified — so a cast Hex amplifies HEX_TURNS full party phases before fading.
@@ -1628,6 +1667,16 @@ export class Game {
           this._emit({ kind: 'boarExpire', slot: m.slot });
         }
       }
+      // Deadlift (Dojo): the "hoisted clear" window closes after its enemy turns.
+      if (m.alive && m.untargetable > 0) m.untargetable -= 1;
+      // Hold the Line (Dojo, Tank): the double-Grudge-bank window closes with the stance.
+      if (m.alive && m.holdLineTurns > 0) m.holdLineTurns -= 1;
+    }
+    // Big Top (Dojo, Showstopper): the party-wide DR aura is engine-level — decays once
+    // per enemy turn, outside the per-member loop.
+    if (this.bigTopTurns > 0) {
+      this.bigTopTurns -= 1;
+      if (this.bigTopTurns === 0) this._log('The big top comes down.', 'status');
     }
     // Blood Banner (#68): the party-wide +auto buff is engine-level, so it decays once
     // per enemy turn (outside the per-member loop) after its BLOOD_BANNER_TURNS.
@@ -1807,7 +1856,8 @@ export class Game {
       }
       const hpBefore = m.hp; // Ossuary Bell (#66): the crossing is measured across this hit
       m.hp = Math.max(0, m.hp - w.dmg);
-      if (m.id === 'tank') m.bankedDamage += w.dmg; // Grudge: bank what the Tank soaks
+      // Grudge: bank what the Tank soaks — doubled while Hold the Line stands (Dojo).
+      if (m.id === 'tank') m.bankedDamage += w.dmg * (m.holdLineTurns > 0 ? HOLD_LINE_BANK_MULT : 1);
       this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       // The Martyr's Icon (#22) may veto the death — resolve that BEFORE the
       // event is emitted so the animator never stages a death that didn't happen.
@@ -2000,6 +2050,11 @@ export class Game {
     // Liturgy (#73): a dead cast with no channel to grant dual cadence (mirrors
     // needsRegen's no-dead-cast UX, but reads the channel state).
     if (card.needsChannel && !this.channelActive()) return 'no active channel';
+    // Sic 'Em / Mend Beast (Dojo): a dead card unless the Beast Warden has a live Boar.
+    if (card.needsBoar) {
+      const owner = card.ability != null ? this._abilityMember(card.ability) : undefined;
+      if (!owner || owner.boarHp <= 0) return 'no Boar out';
+    }
     return null;
   }
 
@@ -2041,7 +2096,9 @@ export class Game {
     const card = resolveCard(dc);
     this.mp -= this.effectiveCost(card);
     this.hand.splice(handIndex, 1);
-    this.discardPile.push(dc);
+    // Consume/exhaust (Dojo): a `exhaust` card (Sacrifice) is removed from the fight after
+    // one play — it never reaches the discard pile, so it can't reshuffle back in.
+    if (!CARDS[dc.id].exhaust) this.discardPile.push(dc);
     this.cardsPlayedThisPhase += 1;
 
     // Channeled cards (#64): playing ANY other card breaks a running channel — it

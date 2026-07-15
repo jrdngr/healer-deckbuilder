@@ -37,6 +37,12 @@ const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
   conduct: 'mana', incite: 'power', beckon: 'ward', stagger: 'ward',
   enGarde: 'ward', // Duelist's Iron Provoke + counter-stance (#74)
   penance: 'power', // Flagellant pays HP for a party-wide +auto (#75)
+  // Learned ability cards (Training Dojo): tint by what they do.
+  twinShot: 'power', concVenom: 'power', shieldWall: 'ward', holdLine: 'ward',
+  arcaneSurge: 'mana', drainLife: 'power', doom: 'power', sacrifice: 'power',
+  finale: 'power', duet: 'power', bloodbath: 'power', whirlwind: 'power',
+  sicEm: 'power', mendBeast: 'heal', standingOvation: 'power', bigTop: 'ward',
+  lunge: 'power', flurry: 'power', strongest: 'power', deadlift: 'ward',
 };
 
 interface CardProps {

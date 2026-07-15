@@ -11,6 +11,11 @@ import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, SANGUINE_PACT_THRESHOLD, RADIANCE_HEAL } from '../src/constants';
 import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
 import { TOXICOLOGIST_BONUS, GRUDGE_DIVISOR, FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER } from '../src/constants';
+import {
+  SHIELD_WALL_DEFENSE, HOLD_LINE_DEFENSE, HOLD_LINE_BANK_MULT, ARCANE_SURGE_CHARGE, DRAIN_LIFE_DMG,
+  DOOM_DELAY, DOOM_DAMAGE, SACRIFICE_HP, SACRIFICE_DMG, SACRIFICE_POWER, FINALE_MULT, BLOODBATH_PER_MISSING,
+  WHIRLWIND_HITS, SIC_EM_MULT, MEND_BEAST_HEAL, BIG_TOP_DR, LUNGE_MULT, FLURRY_HITS, FLURRY_REDUCTION, STRONGEST_HP,
+} from '../src/constants';
 import { CARD_TYPE, CARDS_BY_TYPE, cardType, cardsOfType } from '../src/constants';
 import { SHADOW_BOLT_DMG, SIPHON_LIFE_DMG, SIPHON_LIFE_HEAL, DOOM_BASE, DOOM_PER_DEBUFF, DOOM_PER_VULN, DOOM_CAP } from '../src/constants';
 import { HOLY_RELIC_HEAL, SHADOW_RELIC_DMG, IRON_RELIC_DISCOUNT } from '../src/constants';
@@ -982,6 +987,173 @@ function passiveGame(party: MemberId[], seed = 900): Game {
   hitAt(g, [SLOT.CENTER], 5); g._resolveAttack();
   eq('a survivable hit lands on its target', ranger.hp, 45);
   eq('the Showstopper is untouched by a non-lethal blow', show.hp, showHp);
+}
+
+// === Learned ability cards (Training Dojo): fire each and assert its effect ====
+{ // Twin Shot (Ranger): two auto strikes.
+  const g = passiveGame(['ranger', 'tank', 'mage']);
+  const r = g.members[0]; const ehp = g.enemy.hp;
+  g._fireAbility(r, null, 'twinShot');
+  eq('Twin Shot strikes twice', ehp - g.enemy.hp, 2 * g.memberDamage(r));
+}
+{ // Concentrated Venom (Ranger): double the enemy's poison-per-turn.
+  const g = passiveGame(['ranger', 'tank', 'mage']);
+  g.enemy.poison = 3; g.enemy.poisonTurns = 3;
+  g._fireAbility(g.members[0], null, 'concVenom');
+  eq('Concentrated Venom doubles poison-per-turn', g.enemy.poison, 6);
+  eq('Concentrated Venom leaves the duration alone', g.enemy.poisonTurns, 3);
+}
+{ // Shield Wall (Tank): every living member braces.
+  const g = passiveGame(['tank', 'ranger', 'mage']);
+  g._fireAbility(g.members[0], null, 'shieldWall');
+  check('Shield Wall braces the whole party',
+    g.livingMembers().every((m) => m.defense > 0 && m.defenseAmount >= SHIELD_WALL_DEFENSE));
+}
+{ // Hold the Line (Tank): Defense + a double-Grudge-bank window.
+  const g = passiveGame(['tank', 'ranger', 'mage']);
+  const tk = g.members[0];
+  g._fireAbility(tk, null, 'holdLine');
+  check('Hold the Line braces the Tank and opens the window', tk.defense > 0 && tk.holdLineTurns > 0);
+  hitAt(g, [SLOT.LEFT], 10); g._resolveAttack();
+  eq('Grudge banks double under Hold the Line', tk.bankedDamage, (10 - HOLD_LINE_DEFENSE) * HOLD_LINE_BANK_MULT);
+}
+{ // Arcane Surge (Mage): instant Charge.
+  const g = passiveGame(['mage', 'tank', 'ranger']);
+  const mg = g.members[0]; mg.charge = 0;
+  g._fireAbility(mg, null, 'arcaneSurge');
+  eq('Arcane Surge grants Charge', mg.charge, ARCANE_SURGE_CHARGE);
+}
+{ // Drain Life (Mage): deal damage, heal the most wounded for it.
+  const g = passiveGame(['mage', 'tank', 'ranger']);
+  const mg = g.members[0], tk = g.members[1]; tk.hp = 50;
+  const ehp = g.enemy.hp;
+  g._fireAbility(mg, null, 'drainLife');
+  eq('Drain Life deals its damage', ehp - g.enemy.hp, DRAIN_LIFE_DMG);
+  eq('Drain Life heals the most wounded for the damage dealt', tk.hp, 50 + DRAIN_LIFE_DMG);
+}
+{ // Doom (Warlock): arms a countdown that detonates for heavy damage.
+  const g = passiveGame(['warlock', 'tank', 'mage']);
+  g._fireAbility(g.members[0], null, 'doom');
+  eq('Doom arms the countdown', g.enemy.doomTurns, DOOM_DELAY);
+  const ehp = g.enemy.hp;
+  for (let i = 0; i < DOOM_DELAY; i++) g._runEnemyPhase();
+  eq('Doom detonates for its damage', ehp - g.enemy.hp, DOOM_DAMAGE);
+  eq('Doom is spent after it fires', g.enemy.doomTurns, 0);
+}
+{ // Sacrifice (Warlock): an ally bleeds; the Warlock grows for the fight.
+  const g = passiveGame(['warlock', 'tank', 'mage']);
+  const w = g.members[0], tk = g.members[1];
+  const d0 = w.damage, p0 = w.abilityPower;
+  g._fireAbility(w, SLOT.CENTER, 'sacrifice');
+  eq('Sacrifice bleeds the chosen ally', tk.hp, 100 - SACRIFICE_HP);
+  eq('Sacrifice grows the Warlock damage', w.damage, d0 + SACRIFICE_DMG);
+  eq('Sacrifice grows the Warlock power', w.abilityPower, p0 + SACRIFICE_POWER);
+}
+{ // Sacrifice exhausts: after one play it never reaches the discard pile.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
+  cfg.party[0].learned = ['sacrifice'];
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  const g = new Game(1, cfg).start();
+  g.mp = 40;
+  const before = g.discardPile.length;
+  g.playCard(giveCard(g, 'sacrifice'), SLOT.CENTER);
+  eq('Sacrifice is consumed — not added to the discard pile', g.discardPile.length, before);
+}
+{ // Finale (Busker): 2× his cards-played auto.
+  const g = passiveGame(['skald', 'tank', 'mage']);
+  const b = g.members[0]; g.cardsPlayedThisPhase = 2;
+  const auto = g.memberDamage(b); const ehp = g.enemy.hp;
+  g._fireAbility(b, null, 'finale');
+  eq('Finale strikes for 2x his cards-played auto', ehp - g.enemy.hp, FINALE_MULT * auto);
+}
+{ // Duet (Busker): a chosen ally makes a bonus auto-attack.
+  const g = passiveGame(['skald', 'ranger', 'mage']);
+  const ehp = g.enemy.hp;
+  g._fireAbility(g.members[0], SLOT.CENTER, 'duet');
+  eq('Duet makes the chosen ally strike', ehp - g.enemy.hp, g.memberDamage(g.members[1]));
+}
+{ // Bloodbath (Berserker): damage equal to his missing HP.
+  const g = passiveGame(['berserker', 'tank', 'mage']);
+  const bz = g.members[0]; bz.hp = bz.maxHP - 12;
+  const ehp = g.enemy.hp;
+  g._fireAbility(bz, null, 'bloodbath');
+  eq('Bloodbath deals his missing HP', ehp - g.enemy.hp, 12 * BLOODBATH_PER_MISSING);
+}
+{ // Whirlwind (Berserker): 2 strikes, a 3rd in his hottest band.
+  const g = passiveGame(['berserker', 'tank', 'mage']);
+  const bz = g.members[0];
+  let auto = g.memberDamage(bz); let ehp = g.enemy.hp;
+  g._fireAbility(bz, null, 'whirlwind');
+  eq('Whirlwind strikes twice outside the hottest band', ehp - g.enemy.hp, WHIRLWIND_HITS * auto);
+  bz.hp = 1; auto = g.memberDamage(bz); ehp = g.enemy.hp;
+  g._fireAbility(bz, null, 'whirlwind');
+  eq('Whirlwind adds a third strike in the hottest band', ehp - g.enemy.hp, (WHIRLWIND_HITS + 1) * auto);
+}
+{ // Sic 'Em (Beast Warden): the Boar lunges for 2x its strike bonus.
+  const g = passiveGame(['beastWarden', 'tank', 'mage']);
+  const wd = g.members[0];
+  g._fireAbility(wd); // summon the Boar (signature Call Boar)
+  const ehp = g.enemy.hp;
+  g._fireAbility(wd, null, 'sicEm');
+  eq("Sic 'Em deals 2x the Boar's strike bonus", ehp - g.enemy.hp, SIC_EM_MULT * BOAR_STRIKE_BONUS);
+}
+{ // Mend Beast (Beast Warden): heal + extend the Boar.
+  const g = passiveGame(['beastWarden', 'tank', 'mage']);
+  const wd = g.members[0];
+  g._fireAbility(wd);
+  const hp0 = wd.boarHp, t0 = wd.boarTurns;
+  g._fireAbility(wd, null, 'mendBeast');
+  eq('Mend Beast heals the Boar', wd.boarHp, hp0 + MEND_BEAST_HEAL);
+  eq('Mend Beast extends the Boar by a turn', wd.boarTurns, t0 + 1);
+}
+{ // needsBoar gate: Sic 'Em is unplayable without a live Boar.
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['beastWarden', 'tank', 'mage']);
+  cfg.party[0].learned = ['sicEm'];
+  cfg.deck = [...cfg.deck.filter((c) => !isAbilityCard(c.id)), ...abilityCardsForParty(cfg.party)];
+  const g = new Game(2, cfg).start();
+  g.mp = 40;
+  check("Sic 'Em is unplayable with no Boar out", g.canPlay(giveCard(g, 'sicEm'), null) != null);
+}
+{ // Standing Ovation (Showstopper): every living member's next strike doubles.
+  const g = passiveGame(['sentinel', 'tank', 'mage']);
+  g._fireAbility(g.members[0], null, 'standingOvation');
+  check('Standing Ovation primes every living member', g.livingMembers().every((m) => m.drumPrimed));
+}
+{ // Big Top (Showstopper): a one-turn party DR aura.
+  const g = passiveGame(['sentinel', 'tank', 'mage']);
+  g._fireAbility(g.members[0], null, 'bigTop');
+  check('Big Top arms the aura', g.bigTopTurns > 0);
+  eq('Big Top reduces incoming damage party-wide', g._effectiveDamage(g.members[1], 10), 10 - BIG_TOP_DR);
+}
+{ // Lunge (Duelist): 2x strike and she Provokes.
+  const g = passiveGame(['duelist', 'tank', 'mage']);
+  const d = g.members[0]; const auto = g.memberDamage(d); const ehp = g.enemy.hp;
+  g._fireAbility(d, null, 'lunge');
+  eq('Lunge strikes for 2x', ehp - g.enemy.hp, LUNGE_MULT * auto);
+  check('Lunge Provokes (she Taunts)', d.taunt > 0);
+}
+{ // Flurry (Duelist): three reduced strikes.
+  const g = passiveGame(['duelist', 'tank', 'mage']);
+  const d = g.members[0]; const each = Math.max(1, g.memberDamage(d) - FLURRY_REDUCTION);
+  const ehp = g.enemy.hp;
+  g._fireAbility(d, null, 'flurry');
+  eq('Flurry strikes three times, each reduced', ehp - g.enemy.hp, FLURRY_HITS * each);
+}
+{ // Strongest in the World (Strongman): pay HP, double the party's next strikes.
+  const g = passiveGame(['flagellant', 'tank', 'mage']);
+  const f = g.members[0];
+  g._fireAbility(f, null, 'strongest');
+  eq('Strongest pays its HP', f.hp, 100 - STRONGEST_HP);
+  check("Strongest doubles the party's next strikes", g.livingMembers().every((m) => m.drumPrimed));
+}
+{ // Deadlift (Strongman): a chosen ally is hoisted clear (untargetable).
+  const g = passiveGame(['flagellant', 'ranger', 'mage']);
+  g._fireAbility(g.members[0], SLOT.CENTER, 'deadlift');
+  check('Deadlift hoists the ally clear', g.members[1].untargetable > 0);
+  hitAt(g, [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT], 5);
+  check('Deadlift removes the hoisted ally from an AoE', !g._resolvedTargets(g.telegraph!).includes(SLOT.CENTER));
 }
 
 finish();

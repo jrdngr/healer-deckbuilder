@@ -317,6 +317,7 @@ export interface ResolvedCard {
   needsRegen: boolean;
   needsPoison: boolean; // Hemorrhage (#67): playable only while the enemy is Poisoned
   needsChannel: boolean; // Liturgy (#73): playable only while a channel is active
+  needsBoar: boolean;   // Sic 'Em / Mend Beast (Dojo): playable only while a Boar is out
   refreshCap: number; // per-cast lifetime MP cap for Refresh-slot cards
   selfDamage?: number; // Blood cost the target pays (never bumped by modifiers)
   noDefense: boolean; // Bulwark targeting gate: no active Defense on the target
@@ -598,6 +599,12 @@ export const CARD_RARITY: Record<CardId, Rarity> = {
   imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
   conduct: 'uncommon', incite: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
   enGarde: 'uncommon', penance: 'uncommon',
+  // Learned ability cards (Training Dojo): also never shopped — rarity inert but required.
+  twinShot: 'uncommon', concVenom: 'uncommon', shieldWall: 'uncommon', holdLine: 'uncommon',
+  arcaneSurge: 'uncommon', drainLife: 'uncommon', doom: 'uncommon', sacrifice: 'uncommon',
+  finale: 'uncommon', duet: 'uncommon', bloodbath: 'uncommon', whirlwind: 'uncommon',
+  sicEm: 'uncommon', mendBeast: 'uncommon', standingOvation: 'uncommon', bigTop: 'uncommon',
+  lunge: 'uncommon', flurry: 'uncommon', strongest: 'uncommon', deadlift: 'uncommon',
 };
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
