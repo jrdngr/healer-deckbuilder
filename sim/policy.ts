@@ -882,14 +882,23 @@ export function resolveNode(run: Run, profile: SkillProfile = STICK): void {
     case 'reliquary': shopReliquary(run, profile); break;
     case 'recruit': recruitPick(run, profile); break;
     case 'infirmary': infirmaryNode(run); break;
+    case 'dojo': dojoPick(run); break;
     default: break;
   }
+}
+
+// Training Dojo node: the good player always takes a free ability card. Any offer is
+// permanent power, so grab the first (the roll is already seeded/varied).
+export function dojoPick(run: Run): void {
+  if (run.nodeContent?.type !== 'dojo' || run.nodeContent.done) return;
+  const offer = run.nodeContent.offers[0];
+  if (offer) run.learnAbility(offer.member, offer.ability);
 }
 
 // Score a branch by the permanent power its nodes offer, so the policy walks the
 // stronger path through each fork.
 const NODE_DESIRABILITY: Record<string, number> = {
-  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, recruit: 4, cardUpgrade: 4, infirmary: 3, cardShop: 3, event: 2, fight: 0,
+  partyUpgrade: 5, healerUpgrade: 5, reliquary: 5, recruit: 4, dojo: 4, cardUpgrade: 4, infirmary: 3, cardShop: 3, event: 2, fight: 0,
 };
 
 // Walk the chosen branch's hub one step per driver tick: enter the first

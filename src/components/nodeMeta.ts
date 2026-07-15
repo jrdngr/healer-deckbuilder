@@ -9,5 +9,6 @@ export const NODE_META: Record<NodeType, { label: string; icon: string; desc: st
   event: { label: 'Event', icon: '❓', desc: 'An encounter with a choice.' },
   recruit: { label: 'Recruiter', icon: '🎪', desc: 'Add a new member to your roster.' },
   infirmary: { label: 'Infirmary', icon: '🩹', desc: 'Pay to heal HP or shed an injury.' },
+  dojo: { label: 'Training Dojo', icon: '🥋', desc: 'A hero learns a new ability card, free.' },
   reliquary: { label: 'Reliquary', icon: '🏺', desc: 'Buy relics; pay to remove cards.' },
 };

@@ -403,7 +403,13 @@ import { check, eq, results } from './harness';
   //     F0/F1 195/190->194/189, F2 152->159, F3 147->155, F4 145->152, F5 142->150, F6/F7 141->149,
   //     F8 137->140. A real power increase the balance pass owns (enemy-HP re-anchor is a follow-up,
   //     per the plan); the band/CI/boss gates below still hold. Re-pinned on the new numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([194, 189, 159, 155, 152, 150, 149, 149, 140]));
+  //   • Training Dojo (2026-07-15): a new 'dojo' node (weight 18) joins the map and the good-player
+  //     policy always learns a free ability card there (dojoPick), so the party picks up extra power
+  //     mid-run AND the added node type reshuffles the whole seeded map stream. Mixed shift, up in the
+  //     mid-run where the learned cards land: F0 194->190, F1 189, F2 159->166, F3 155->160, F4 152->157,
+  //     F5 150->147, F6 149->146, F7 149->143, F8 140->135. A real feature-power change the balance pass
+  //     owns; the band/CI/boss gates below still hold. Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([190, 189, 166, 160, 157, 147, 146, 143, 135]));
   // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
   // build while a real drift still trips it.

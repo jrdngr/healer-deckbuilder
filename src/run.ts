@@ -29,11 +29,12 @@ import {
   DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
 } from './constants';
 import type {
-  Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId,
+  Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId, AbilityId,
   NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId,
   CardOffer, ModifierOffer, PartyUpgradeOffer, HealerUpgradeOffer, RelicOffer,
   StarterDeckId,
 } from './constants';
+import { LEARNED_CARDS_BY_MEMBER } from './constants';
 import { makeRng, weightedPick, shuffle } from './rng';
 import type { Rng } from './rng';
 
@@ -78,7 +79,13 @@ export type NodeContent =
   | { type: 'draft'; options: MemberId[] }                            // pick-one member draft (2026-07)
   | { type: 'starterDraft'; offers: CardId[]; picksLeft: number }     // pick-1-of-3 to build the drafted starter deck
   | { type: 'recruit'; options: MemberId[]; done: boolean }           // Recruit node: add one member, once
-  | { type: 'infirmary' };                                            // heal HP / shed a scar for gold (#58)
+  | { type: 'infirmary' }                                             // heal HP / shed a scar for gold (#58)
+  | { type: 'dojo'; offers: DojoOffer[]; done: boolean };             // Training Dojo: learn one ability card, once
+
+// A Training Dojo offer: a hero and one of their still-unlearned extra ability cards
+// (its card id equals the AbilityId). Picking it appends the ability to that roster
+// member's `learned`, so it injects on deploy thereafter.
+export interface DojoOffer { member: MemberId; ability: AbilityId }
 
 // Boundary-only save format. Bumped if the shape changes so stale saves are
 // discarded rather than misread. (v2: relics + spoils/reliquary content, #21;
@@ -111,7 +118,11 @@ export type NodeContent =
 // {type:'healerBoon'} node content sit between boss spoils and the fork, and old saves
 // can hold a 'healerUpgrade' node/location or a map with a Sanctum stop, so they are
 // discarded rather than resumed against a node type that no longer exists.
-export const RUN_SAVE_VERSION = 17;
+// v18: hero passives + learned ability cards + the Training Dojo (2026-07). Roster
+// members carry a `learned` ability list, and a new 'dojo' node type / {type:'dojo'}
+// content teaches them; the roster is also hard-capped at 3. Old saves lack `learned`
+// and can hold a map without the Dojo, so they are discarded rather than resumed.
+export const RUN_SAVE_VERSION = 18;
 
 export interface RunSnapshot {
   version: number;
@@ -891,7 +902,53 @@ export class Run {
   nodeAvailable(type: NodeType): boolean {
     if (type === 'recruit') return this.availableMembers().length > 0;
     if (type === 'infirmary') return this.anyoneNeedsInfirmary();
+    if (type === 'dojo') return this._dojoHasOffers();
     return true;
+  }
+
+  // A roster member's ability cards not yet learned (their pool minus `learned`).
+  _unlearnedAbilities(p: PartyMemberConfig): AbilityId[] {
+    const pool = (p.member && LEARNED_CARDS_BY_MEMBER[p.member]) ?? [];
+    const known = new Set(p.learned ?? []);
+    return pool.filter((a) => !known.has(a));
+  }
+
+  // The Dojo hides once no roster member has anything left to learn.
+  _dojoHasOffers(): boolean {
+    return this.roster.some((p) => this._unlearnedAbilities(p).length > 0);
+  }
+
+  // Roll the Dojo's offers (Training Dojo): each roster member's UNLEARNED cards, round-
+  // robin, up to 3 total. With a full party (3 heroes) that is one card per hero; with a
+  // smaller party a hero may show both of theirs (a lone hero shows up to 2). Seeded.
+  _rollDojoOffers(): DojoOffer[] {
+    const pools = this.roster
+      .map((p) => ({ member: p.member!, cards: shuffle(this._unlearnedAbilities(p), this.rng) }))
+      .filter((x) => x.member && x.cards.length > 0);
+    shuffle(pools, this.rng); // vary which hero leads
+    const maxPerHero = this.roster.length >= 3 ? 1 : 2;
+    const offers: DojoOffer[] = [];
+    for (let round = 0; round < maxPerHero && offers.length < 3; round++) {
+      for (const pool of pools) {
+        if (offers.length >= 3) break;
+        if (round < pool.cards.length) offers.push({ member: pool.member, ability: pool.cards[round] });
+      }
+    }
+    return offers;
+  }
+
+  // Learn one offered ability card for free: append it to that roster member's `learned`
+  // (so it injects on deploy) and spend the node. Ignores an offer not on the board, an
+  // already-learned ability, or a spent node so a crude UI can't double-dip.
+  learnAbility(member: MemberId, ability: AbilityId): void {
+    if (this.location.kind !== 'node' || this.nodeContent?.type !== 'dojo') return;
+    if (this.nodeContent.done) return;
+    if (!this.nodeContent.offers.some((o) => o.member === member && o.ability === ability)) return;
+    const p = this.roster.find((r) => r.member === member);
+    if (!p) return;
+    p.learned = [...(p.learned ?? [])];
+    if (!p.learned.includes(ability)) p.learned.push(ability);
+    this.nodeContent.done = true;
   }
 
   // A roster member the Infirmary could help: below full HP, or carrying a scar (#58).
@@ -958,6 +1015,7 @@ export class Run {
       case 'event': return { type: 'event', event: this.rollEvent(), done: false };
       case 'recruit': return { type: 'recruit', options: this._rollMemberOffer(this.availableMembers(), RECRUIT_OFFER_SIZE), done: false };
       case 'infirmary': return { type: 'infirmary' };
+      case 'dojo': return { type: 'dojo', offers: this._rollDojoOffers(), done: false };
       case 'reliquary': return { type: 'reliquary', offers: this.rollReliquary(), removalsLeft: RELIQUARY_REMOVALS_MAX };
       default: return null;
     }

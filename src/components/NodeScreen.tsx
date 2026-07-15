@@ -7,6 +7,7 @@ import { EventScreen } from './EventScreen';
 import { ReliquaryScreen } from './ReliquaryScreen';
 import { RecruitScreen } from './RecruitScreen';
 import { InfirmaryScreen } from './InfirmaryScreen';
+import { DojoScreen } from './DojoScreen';
 
 interface NodeScreenProps {
   run: Run;
@@ -32,6 +33,8 @@ export function NodeScreen({ run, act, onDone }: NodeScreenProps) {
       return <RecruitScreen run={run} act={act} onDone={onDone} />;
     case 'infirmary':
       return <InfirmaryScreen run={run} act={act} onDone={onDone} />;
+    case 'dojo':
+      return <DojoScreen run={run} act={act} onDone={onDone} />;
     case 'reliquary':
       return <ReliquaryScreen run={run} act={act} onDone={onDone} />;
     default:

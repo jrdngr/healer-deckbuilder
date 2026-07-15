@@ -422,6 +422,7 @@ export type NodeType =
   | 'fight' | 'cardShop' | 'cardUpgrade' | 'partyUpgrade' | 'event'
   | 'recruit'   // add a member to the roster (2026-07) — a weighted node; hidden when the roster is full
   | 'infirmary' // heal HP / shed a scar for gold (#58) — hidden when nobody is hurt or injured
+  | 'dojo'      // learn a hero ability card for free (Training Dojo) — hidden when nothing is left to learn
   | 'reliquary'; // relic shop (#21) — never rolled; injected exactly twice per run
 
 // The non-fight node types that fill the branches between fights. The Infirmary is
@@ -430,7 +431,7 @@ export type NodeType =
 // Sanctum / healerUpgrade node was removed (#83) — healer upgrades are now a free
 // post-boss boon (see run.ts _enterHealerBoon), not a gold-bought map node.
 export const NON_FIGHT_NODES: NodeType[] = [
-  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'recruit', 'infirmary', 'reliquary',
+  'cardShop', 'cardUpgrade', 'partyUpgrade', 'event', 'recruit', 'infirmary', 'dojo', 'reliquary',
 ];
 
 // Weights for placing non-fight node types on the map. The Recruit node (2026-07)
@@ -441,7 +442,7 @@ export const NON_FIGHT_NODES: NodeType[] = [
 // redistributed across the surviving types (total stays 140).
 export const NODE_TYPE_WEIGHTS: Array<[NodeType, number]> = [
   ['cardShop', 28], ['cardUpgrade', 23], ['partyUpgrade', 22], ['event', 22],
-  ['recruit', 22], ['infirmary', 23],
+  ['recruit', 22], ['infirmary', 23], ['dojo', 18],
 ];
 
 // A run is 3 acts of 3 fights each (two normals + an act boss): 9 fights, 8 forks

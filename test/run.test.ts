@@ -12,7 +12,7 @@ import {
   HAGGLER_DISCOUNT_PCT, NODE_TYPE_WEIGHTS, RELICS, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
   NORMAL_ENEMY_DEFS, ENEMY_DEF_BY_ID, isActBoss, actOfFight, ACT_BOSS_DEFS, FIGHTS_PER_ACT, ACT_COUNT,
   MAX_INJURIES, INJURY_MAXHP, INJURY_DAMAGE, INJURY_ABILITY, RELIC_IDS,
-  DRAFT_POOL, partyFromMembers, DRAFT_OFFER_SIZE, isAbilityCard,
+  DRAFT_POOL, partyFromMembers, DRAFT_OFFER_SIZE, isAbilityCard, LEARNED_CARDS_BY_MEMBER, abilityCardsForParty,
   memberSalary, MEMBER_BASE_SALARY, SALARY_PER_UPGRADE, SALARY_PER_INJURY, MIN_SALARY,
   INJURY_RULES, INCAPACITATE_AT, DEATH_AT, injuryRecordCap, injuryIncapacitates,
   injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
@@ -291,6 +291,63 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('the dismissed hero returns to the recruit pool', run.availableMembers().includes('tank'));
   check('a completed replace spends the node',
     run.nodeContent?.type === 'recruit' && run.nodeContent.done);
+}
+
+// --- Training Dojo: learn a hero ability card for free --------------------------
+{
+  const run = new Run(70);
+  startRun(run);
+  run.winFight(); run.skipCardReward();
+  run.map[0].branches[0].nodes = [{ type: 'dojo' }, { type: 'event' }];
+  run.roster = partyFromMembers(['ranger', 'tank', 'mage']); // full party
+  run.chooseBranch(0);
+  check('the Dojo is open while heroes have cards to learn', run.nodeAvailable('dojo'));
+  run.enterNode(0);
+  const offers = run.nodeContent?.type === 'dojo' ? run.nodeContent.offers : [];
+  eq('a full party is offered one card per hero', offers.length, 3);
+  check('each offer is a real unlearned ability for its hero',
+    offers.every((o) => (LEARNED_CARDS_BY_MEMBER[o.member] ?? []).includes(o.ability)));
+  check('the offered heroes are distinct at a full party', new Set(offers.map((o) => o.member)).size === 3);
+  const pick = offers[0];
+  run.learnAbility(pick.member, pick.ability);
+  const learner = run.roster.find((p) => p.member === pick.member)!;
+  check('the hero keeps the learned ability', (learner.learned ?? []).includes(pick.ability));
+  check('the Dojo is spent after a pick', run.nodeContent?.type === 'dojo' && run.nodeContent.done);
+}
+{
+  // A lone hero is offered BOTH of their cards; a two-hero party fills up to three.
+  const solo = new Run(71);
+  startRun(solo); solo.winFight(); solo.skipCardReward();
+  solo.map[0].branches[0].nodes = [{ type: 'dojo' }, { type: 'event' }];
+  solo.roster = partyFromMembers(['mage']);
+  solo.chooseBranch(0); solo.enterNode(0);
+  const soloOffers = solo.nodeContent?.type === 'dojo' ? solo.nodeContent.offers : [];
+  eq('a lone hero is offered both of their cards', soloOffers.length, 2);
+  check('both offers belong to that hero', soloOffers.every((o) => o.member === 'mage'));
+
+  const duo = new Run(73);
+  startRun(duo); duo.winFight(); duo.skipCardReward();
+  duo.map[0].branches[0].nodes = [{ type: 'dojo' }, { type: 'event' }];
+  duo.roster = partyFromMembers(['ranger', 'tank']);
+  duo.chooseBranch(0); duo.enterNode(0);
+  const duoOffers = duo.nodeContent?.type === 'dojo' ? duo.nodeContent.offers : [];
+  eq('two heroes fill up to three offers', duoOffers.length, 3);
+}
+{
+  // The Dojo hides once every roster member has learned everything it can teach them.
+  const run = new Run(72);
+  const roster = partyFromMembers(['ranger']);
+  roster[0].learned = [...(LEARNED_CARDS_BY_MEMBER['ranger'] ?? [])];
+  run.roster = roster;
+  check('a fully-taught roster hides the Dojo', !run.nodeAvailable('dojo'));
+}
+{
+  // A learned card injects on deploy alongside the signature (abilityCardsForParty).
+  const roster = partyFromMembers(['ranger', 'tank', 'mage']);
+  roster[0].learned = ['twinShot'];
+  const cards = abilityCardsForParty(roster);
+  check('the learned card injects next to the signature',
+    cards.some((c) => c.id === 'twinShot') && cards.some((c) => c.id === 'imbuePoison'));
 }
 
 // --- #77: fork availability is resolved for EVERY branch at fork-entry ----------
@@ -658,8 +715,8 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check('healerUpgrade absent from NON_FIGHT_NODES', NON_FIGHT_NODES.every((t) => (t as string) !== 'healerUpgrade'));
   check('no gold-buy healer path remains', !('rollHealerShop' in (Run.prototype as object)) && !('buyHealerOffer' in (Run.prototype as object)));
   check('SHOP_SIZE has no healerUpgrade entry', !('healerUpgrade' in SHOP_SIZE));
-  // NODE_TYPE_WEIGHTS still totals the same weight (the removed 15 was redistributed).
-  eq('node-type weights still total 140', NODE_TYPE_WEIGHTS.reduce((a, [, w]) => a + w, 0), 140);
+  // NODE_TYPE_WEIGHTS totals 158: the base 140 plus the Training Dojo's 18 (2026-07).
+  eq('node-type weights total 158', NODE_TYPE_WEIGHTS.reduce((a, [, w]) => a + w, 0), 158);
 }
 {
   // After an act-1 boss, the reward chain reaches a healerBoon offering all four
