@@ -464,6 +464,13 @@ export const TAUNT_RETARGET_SURCHARGE = 1; // extra MP to redirect the standing 
 
 export const HAND_SIZE = 3;
 
+// Card Bank slot / "The Reserve" (91a): the per-turn MP upkeep multiplier. A card
+// held in the bank costs `bankHoldTurns * BANK_UPKEEP_PER_TURN` MP at each turn-end
+// (1 the turn it was banked, 2 the next, 3 the next…, reset when a fresh card is
+// banked). Banking itself is free and not an action; only this escalating upkeep and
+// playing/unbanking touch the turn economy.
+export const BANK_UPKEEP_PER_TURN = 1;
+
 // Small-party build (#42): relics/cards that reward fielding fewer bodies, so a
 // sub-max deployment is a real line (paired with the empty-seat gold bounty and the
 // Warlock's fewer-allies Hex). "Small" means a fielded party of SMALL_PARTY_MAX or
