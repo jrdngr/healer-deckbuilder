@@ -36,4 +36,4 @@ _No notes awaiting intake._
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| [90](./issues/90-balance-re-anchor-harder.md) | 📋 Open | Balance re-anchor: make the game hard again | post-demo (balance) | — | intake 2026-07-16 |
+| _No open issues._ | | | | | |

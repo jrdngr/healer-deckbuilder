@@ -1,6 +1,6 @@
 # Issue 90 — Balance re-anchor: make the game hard again
 
-- **Status:** 📋 Open
+- **Status:** ✅ Done (2026-07-16)
 - **Phase:** post-demo (balance)   **Size:** L (multi-commit: measure → tune → re-pin)
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** intake 2026-07-16 — "The game is way too easy now. Enemies die too fast and the
@@ -76,29 +76,40 @@ Establish the true post-content-cut baseline before touching a single constant.
 > by a subagent (the "implement all open issues" flow), the subagent's job **ends at the end of
 > Phase 1** — report the table and stop. Targets are the maintainer's call, explicitly.
 
-### Phase 2 — Maintainer sets targets
+### Phase 2 — Maintainer sets targets ✅
 
-Maintainer fills in, from Phase 1's numbers:
+Set 2026-07-16, from Phase 1's N=1000 numbers:
 
-| Tier | Baseline (Phase 1) | Target |
-|---|---|---|
-| Optimal (flawless, lean deck, trio) | _tbd_ | _tbd_ |
-| Average | _tbd_ | _tbd_ |
-| Poor | _tbd_ | _tbd_ |
-| Solo (forced line) | _tbd_ | _tbd_ |
+| Tier | Baseline (Phase 1) | Target | Landed (Phase 3) |
+|---|---|---|---|
+| Optimal (flawless, lean deck, trio) | 67.8% | 60% | **59.2%** |
+| Average | 45.2% | 30% | **34.5%** |
+| Poor | 5.7% | ~0% | **3.8%** |
+| Solo Warlock (forced line) | 9.1% | (context) | **5.9%** |
 
-### Phase 3 — Tune to the targets
+**Structural finding (drove the anchor choice):** HP, enemy damage, normal-enrage and
+boss-burst all move the optimal and average tiers *together* — the tier gap is fixed
+~23pp by the **sim profile** (average's 14% fumble + deck dilution), **not** by content
+difficulty. So a 60/30 split (a 30pp gap) is **unreachable**; the frontier is
+`optimal ≈ average + 23`. Presented the frontier; maintainer chose to **hold optimal
+near 60 and let average sit at 34** (Option C) over pulling average to 30 at optimal ~51.
 
-- [ ] Tune using the levers above, in priority order, re-measuring at N = 1000 between steps.
-- [ ] **Winnability proof:** demonstrate at least one seed where an optimal line wins the full run.
-      A 0% optimal tier is a **failure**, not an overshoot — "technically winnable" is the floor.
-- [ ] Every damage-modifying change keeps `attackTargets()` telegraph == applied damage (the
-      standing property test).
-- [ ] Re-pin the sim baseline vector in `test/sim.test.ts` and widen/narrow the tier bands to the new
-      anchor.
-- [ ] `npm test` green; `npm run typecheck` clean.
-- [ ] Land tuning and test-re-pin as their own commits (per `CLAUDE.md`: one logical unit per commit,
-      never a catch-all).
+### Phase 3 — Tune to the targets ✅
+
+- [x] Tuned via **enemy HP only** (lever #1), re-measured at N=1000 between steps. HP raised across
+      the board, weighted toward act 1 (F0 10→14, F1 15→20, F2 32→35, act-2/3 up proportionally).
+      Damage/enrage/boss-burst were tried and reverted — they don't widen the tier gap (see Phase 2
+      finding) and are strictly worse. **The MP pillar is fully restored by the HP raise alone**
+      (flawless line hard-dry in 69-90% of ALL fight classes, up from ~52% on normals) — no MP, heal
+      or gold constant touched, honoring the pass's constraints.
+- [x] **Winnability proof:** committed test — an optimal line wins the full run on seed 1
+      (`test/sim.test.ts`, "#90 winnability floor"). Optimal tier is ~59% at N=1000, far from 0%.
+- [x] No damage-modifying change shipped (HP-only), so `attackTargets()` telegraph == applied damage
+      is unaffected; the standing engine property tests pass.
+- [x] Re-pinned the sim baseline vector + re-centered the full-run band on the ~60% anchor in
+      `test/sim.test.ts`; F0's normal-clear floor relaxed to 85% (deliberately harder early game).
+- [x] `npm test` green (49 sim assertions); `npm run typecheck` clean.
+- [x] Landed as three commits: MP instrumentation → HP tuning + harness → test re-pin + winnability.
 
 ## Implementation notes (anchors)
 
