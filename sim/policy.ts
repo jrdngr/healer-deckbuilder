@@ -488,11 +488,39 @@ function tacticsFor(profile: SkillProfile): Tactic[] {
   }
 }
 
+// MP-economy telemetry (#90). Accumulated across a single fight so the harness can
+// report the "runs dry every fight" pillar directly instead of by feel. Every field is
+// filled by READING game state at the end of each player phase — it never draws the
+// policy RNG, so passing a collector leaves the pinned STICK line byte-identical.
+export interface FightMpTelemetry {
+  playerTurns: number;  // player phases taken to a close this fight
+  restTurns: number;    // phases that ended in a Rest (skipTurn to bank MP)
+  starvedTurns: number; // phases that ended with NO card in hand affordable (hard-dry)
+  hitZero: boolean;     // MP reached exactly 0 at some end-of-phase this fight
+  minMp: number;        // lowest end-of-phase MP seen this fight (Infinity if no phase closed)
+}
+
+export function newMpTelemetry(): FightMpTelemetry {
+  return { playerTurns: 0, restTurns: 0, starvedTurns: 0, hitZero: false, minMp: Infinity };
+}
+
+// Record the end-of-phase MP state (post-card-play, pre-Rest) into the collector. Read-only.
+function recordMpTurn(game: Game, tel: FightMpTelemetry): void {
+  tel.playerTurns++;
+  // Cheapest card we could still play this phase; if none is affordable the phase closed
+  // hard-dry (the player is forced to Rest/pass on economy, not on choice).
+  let minCost = Infinity;
+  for (const c of game.hand) minCost = Math.min(minCost, game.effectiveCost(resolveCard(c)));
+  if (game.hand.length === 0 || game.mp < minCost) tel.starvedTurns++;
+  if (game.mp < tel.minMp) tel.minMp = game.mp;
+  if (game.mp === 0) tel.hitZero = true;
+}
+
 // Play a single player phase to a natural close (rest or end turn). A mistake roll (only
 // when mistakeProb > 0) mutes ONE tactic slot for this turn — a bounded, deterministic
 // model of a real slip (a missed cleanse, a late re-taunt, a reactive instead of proactive
 // heal). stick/optimal set mistakeProb 0, so rng is never drawn and the turn is identical.
-function takeFightTurn(game: Game, tactics: Tactic[], mistakeProb: number, rng: Rng | null): void {
+function takeFightTurn(game: Game, tactics: Tactic[], mistakeProb: number, rng: Rng | null, tel: FightMpTelemetry | null): void {
   // A heuristic policy must always make progress toward ending the turn; this guard
   // is a backstop so a mis-registered tactic can never hang the sim (it would leave
   // status 'playing', which the caller reads as a loss).
@@ -511,9 +539,10 @@ function takeFightTurn(game: Game, tactics: Tactic[], mistakeProb: number, rng: 
     if (!acted || ++guard > 200) break;
   }
   if (game.phase !== 'player') return; // a Bolt / Poison tick finished the enemy
+  if (tel) recordMpTurn(game, tel); // sample end-of-phase MP before the Rest tops it back up
   // Nothing left worth doing: rest to bank MP if we still have room and haven't
   // committed the turn to a card; otherwise let the party phase run.
-  if (game.canSkip() && game.mp < game.maxMana) game.skipTurn();
+  if (game.canSkip() && game.mp < game.maxMana) { if (tel) tel.restTurns++; game.skipTurn(); }
   else game.endTurn();
 }
 
@@ -521,14 +550,14 @@ function takeFightTurn(game: Game, tactics: Tactic[], mistakeProb: number, rng: 
 // stalled line dragging on forever; exceeding it leaves status 'playing', which
 // the caller reads as a loss. `profile` defaults to STICK (the pinned good player),
 // so every existing caller is byte-identical.
-export function playFight(game: Game, turnCap = 40, profile: SkillProfile = STICK): void {
+export function playFight(game: Game, turnCap = 40, profile: SkillProfile = STICK, tel: FightMpTelemetry | null = null): void {
   game.start();
   const tactics = tacticsFor(profile);
   const rng = profile.mistakeProb > 0 ? fightPolicyRng(game.seed) : null;
   let guard = 0;
   while (game.status === 'playing' && game.turn <= turnCap && guard < 1000) {
     guard++;
-    takeFightTurn(game, tactics, profile.mistakeProb, rng);
+    takeFightTurn(game, tactics, profile.mistakeProb, rng, tel);
   }
 }
 

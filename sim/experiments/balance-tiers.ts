@@ -44,6 +44,17 @@ function printCell(c: Cell): void {
     `milestones ${pct(b1).padStart(5)}% / ${pct(b2).padStart(5)}% / ${pct(b3).padStart(5)}%   ` +
     `boss-cond ${cond}`,
   );
+  // Attrition per cell (the DR1 sacrifice signal): deaths per WON boss + scars/run.
+  const [d1, d2, d3] = BOSSES.map((bi) => r.deathsPerWin[bi].toFixed(2));
+  console.log(
+    `  ${''.padEnd(22)} deaths/boss ${d1} / ${d2} / ${d3}   scars/run ${r.meanInjuries.toFixed(2)}`,
+  );
+  // #90 MP-economy pillar per cell: run-dry % of fights, Rest %, hard-dry %, mean fight-low MP.
+  const m = r.mp;
+  console.log(
+    `  ${''.padEnd(22)} MP: ran-dry ${pct(m.ranDryRate).padStart(5)}%  hard-dry ${pct(m.starvedFightRate).padStart(5)}% of fights  ` +
+    `Rest ${pct(m.restRate).padStart(5)}%  hard-dry-phase ${pct(m.starvedTurnRate).padStart(5)}%  low-MP ${m.meanMinMp.toFixed(2)}`,
+  );
 }
 
 // CLI.
