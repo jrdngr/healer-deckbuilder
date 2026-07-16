@@ -13,35 +13,9 @@ equal to applied damage (a property test); the engine stays pure/DOM-free; each 
 
 **This table lists only open issues.** It is the single source of truth for what is left to do.
 
-## Completing an issue
-
-When an issue lands:
-
-1. **Update the issue file's own status.** Flip its `- **Status:**` line (the first list item in
-   the file) to `✅ Complete` **in the same commit** as the work.
-2. **Remove the issue's row from this file.** Once the file's status is updated, delete the row from
-   the [Issues table](#issues-implementation-order) below. The issue file stays in [`issues/`](./issues/)
-   as the historical archive — the table only ever shows what is still open.
-
-**Always applicable:** any issue that is resolved must have its row removed from this file **before
-the commit that resolves it lands** — regardless of how the work was triggered. The table must never
-contain a row for an issue whose file is `✅ Complete`.
-
-## Implementing all open issues
-
-When I say **"implement all open issues"** (or anything like it), work through every open issue in
-the [Issues table](#issues-implementation-order) below:
-
-1. **One subagent per issue, fresh context.** Implement each issue by dispatching a subagent (the
-   Agent tool) whose entire job is that single issue. Each issue gets its own clean context — do not
-   carry one issue's working context into the next.
-2. **Sequential, not parallel.** Implement issues in table order (which is dependency order). Launch
-   the next issue's subagent only **after** the previous one has fully finished. Never run issue
-   subagents concurrently.
-3. **Each subagent completes the issue end to end** per `CLAUDE.md` and the "Completing an issue"
-   rules above: implement the change, add tests, run `npm test` and `npm run typecheck`, flip the
-   issue file's `- **Status:**` line to `✅ Complete`, remove its row from the table, and land its
-   own `jj` commit.
+**The process lives in the `issues` skill** — intake, completing an issue (status flip + row
+removal), and implementing all open issues (one subagent per issue, sequential). This file is the
+data: the ground rules above, the Intake list, and the table.
 
 ## Legend
 
@@ -53,17 +27,8 @@ the [Issues table](#issues-implementation-order) below:
 
 ## Intake
 
-Brief notes I've taken that need to be written up as issues. When I say **"run issue intake"**, go
-through this list and, for each note:
-
-1. **Interview me** about anything unclear, ambiguous, or that needs my input before writing (scope,
-   acceptance criteria, dependencies, balance targets). Don't guess on decisions that are mine to make.
-2. **Write a self-contained issue file** in [`issues/`](./issues/) (next number in sequence) with the
-   standard shape: a `- **Status:**` line as the **first list item** (new issues start `📋 Open`),
-   then Phase / Depends / Addresses, then why / acceptance criteria / implementation notes (code
-   anchors) / tests / out-of-scope.
-3. **Add its row** to the [Issues table](#issues-implementation-order) below.
-4. **Remove the note** from this Intake list once it has become an issue.
+Brief notes I've taken that need to be written up as issues — see the `issues` skill for the intake
+process.
 
 _No notes awaiting intake._
 
