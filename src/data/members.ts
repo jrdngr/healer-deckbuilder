@@ -1,7 +1,7 @@
 import type { MemberId, MemberDef } from './tuning';
 import type { PartyMemberConfig } from './run';
 import {
-  BERSERKER_BAND_BONUS, BOAR_HP, BOAR_STRIKE_BONUS, BOAR_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX, CRESCENDO_DRAW, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER, DEFENSE_AMOUNT, EN_GARDE_TURNS, FERAL_BOND_MULT, FERMENT_GROWTH, FERMENT_TURNS, GRAVE_CHILL_REDUCTION, GRUDGE_DIVISOR, HEX_TURNS, HEX_VULN_BY_SIZE, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, POISON_BASE, POISON_TURNS, RADIANCE_HEAL, RAMPAGE_SELF_DMG, SKALD_DMG_CAP, SKALD_DMG_PER_CARD, TAUNT_TURNS, TOXICOLOGIST_BONUS
+  BERSERKER_BAND_BONUS, BOLT_CHARGE_MULT, CHARGE_MAX, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER, FERAL_BOND_MULT, GRUDGE_DIVISOR, TOXICOLOGIST_BONUS
 } from './tuning';
 
 export const MEMBER_DEFS: MemberDef[] = [
@@ -160,20 +160,6 @@ export const DRAFT_FALLBACK_PAIRS: MemberId[][] = [
   ['ranger', 'warlock'], ['tank', 'berserker'], ['mage', 'skald'],
 ];
 
-
-// Member ability flavor + slot lookup (moved from the old middle region).
-export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
-  ranger: `Poison Arrow — Poison ${POISON_BASE}: ${POISON_BASE} damage per turn for ${POISON_TURNS} turns.`,
-  tank: `Taunt — pull the enemy onto the Tank and brace (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} turns.`,
-  mage: `Lightning Bolt — deal ${BOLT_BASE} + ${BOLT_CHARGE_MULT}×Charge to the enemy.`,
-  warlock: `Evil Eye — curse the enemy with Vulnerability: the party deals +${Math.round(HEX_VULN_BY_SIZE[1] * 100)}% damage solo / +${Math.round(HEX_VULN_BY_SIZE[3] * 100)}% in a full party, for ${HEX_TURNS} turns.`,
-  skald: `Crescendo — draw ${CRESCENDO_DRAW}. Strikes for ${SKALD_DMG_PER_CARD}×cards played (cap ${SKALD_DMG_CAP}).`,
-  berserker: `Rampage — strike for 2× current damage, then −${RAMPAGE_SELF_DMG} HP. Hits +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2} harder at low HP.`,
-  beastWarden: `Call Boar — summon a ${BOAR_HP} HP Boar for ${BOAR_TURNS} turns; it soaks whole hits aimed at her and adds +${BOAR_STRIKE_BONUS} to her strike.`,
-  sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
-  duelist: `En Garde — a chosen member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
-  flagellant: `Feat of Strength — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns (him included if he survives; the buff lands even if he dies).`,
-};
 
 // Hero passive flavor: the always-on identity every hero carries (`cf5fc4d`). Names
 // ship verbatim from the engine comments (#89 — no #85 rename); each `desc` is derived

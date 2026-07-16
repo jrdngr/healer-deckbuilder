@@ -318,8 +318,7 @@ export const EN_GARDE_TURNS = 3;   // Duelist's En Garde (#74): enemy turns the 
 // Penance (#75): the Flagellant's Blood ability. The ONE blood effect that breaks the
 // never-lethal clamp — the payment is a raw drain (engine _drainMember), so at PENANCE_HP
 // or less HP the cast KILLS him (a real death: scars, permadeath, ability-card removal),
-// and the party still gets the fury. Declared here (before MEMBER_ABILITY_FLAVOR) so the
-// flavor string can read it. Sanguine Pact's surcharge rides this ability-card blood cost
+// and the party still gets the fury. Sanguine Pact's surcharge rides this ability-card blood cost
 // too (a deliberate scope call: curse costs apply to blood ABILITY cards, not just hand
 // Blood cards — see _fireAbility's penance case).
 export const PENANCE_HP = 4;           // Penance: HP the Flagellant pays — NO clamp; <= this kills him

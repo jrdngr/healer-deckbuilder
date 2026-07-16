@@ -83,16 +83,16 @@ comes off the member cards entirely and the passive takes the freed space.
 
 ## Resolution (2026-07-16)
 
-Built as specified, with one decision on the acceptance criteria's `MEMBER_ABILITY_FLAVOR`
+Built as specified, with these decisions on the acceptance criteria's `MEMBER_ABILITY_FLAVOR`
 fork:
 
-- **`MEMBER_ABILITY_FLAVOR` was kept, not deleted.** After the sweep it had zero *production*
-  consumers (all three member tiles now render the passive), which by the letter of one
-  criterion would mean deleting it. But the Tests section's negative criterion explicitly
-  asks assertions to run "against `MEMBER_ABILITY_FLAVOR[id]` content directly," making the
-  tests its intended remaining consumer. Keeping it satisfies both the negative-test
-  criterion and the existing archetype flavor checks (`engine.archetypes.test.ts:132/524/687`
-  still pass unchanged); it is no longer dead data.
+- **`MEMBER_ABILITY_FLAVOR` was deleted outright** (maintainer call, 2026-07-16). After the
+  sweep it had zero production consumers — heroes no longer have inherent abilities; each
+  ability's text lives on its ability **card**, the only place it belongs. The table and every
+  test that referenced it were removed (`engine.test.ts` / `engine.archetypes.test.ts` imports
+  and the three flavor-mention checks). The negative render tests now guard against the ability
+  **card** name appearing on a member tile (`abilityCardName()` in `components.test.tsx`), which
+  is the modern encoding of "ability text belongs on the card, not the member."
 - **Passive names shipped verbatim** from the engine comments. The Berserker — absent from
   the criteria's name list — is **Rage** (`cf5fc4d`'s "Berserker's Rage bands"); the record is
   total over `MEMBER_POOL`.
