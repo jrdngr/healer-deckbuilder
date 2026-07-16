@@ -532,10 +532,20 @@ export const isActBoss = (fightIndex: number): boolean =>
 // tiers.ts): average ~30%, poor <1%. Bosses stay the walls but are answerable. MP economy
 // and healing were left untouched per the maintainer constraint — this pass is HP + gold +
 // solo-only levers only.
+// 2026-07-16 #90 RE-ANCHOR (make the game hard again): the post-content-cut baseline had
+// drifted too easy (optimal 68% / average 45% / poor 6%) and the "runs dry every fight"
+// MP pillar had lapsed — normals were 2-turn cakewalks. HP was raised across the board,
+// weighted toward act 1, to pull the curve down (esp. early) AND lengthen every fight so
+// MP is taxed again (the optimal line is now hard-dry in 69-88% of ALL fight classes, up
+// from ~52% on normals — measured, no MP constant touched). Anchor (maintainer's call,
+// N=1000): optimal 59% / average 34% / poor 4%. NOTE: HP, damage, enrage and boss-burst
+// all scale the optimal and average tiers TOGETHER — the tier gap is fixed ~23pp by the
+// sim profile, not content — so a 60/30 split is unreachable; the maintainer chose to hold
+// optimal at ~60 and let average sit at 34. See memory/balance-reanchor-2026-07-16.
 export const ENEMY_HP_BY_FIGHT: number[] = [
-  10, 15, 32,     // Act 1: solo F0, ~solo F1, duo Gatewarden (2026-07-09 post-wave re-anchor)
-  38, 47, 108,    // Act 2: duo/trio normals + Hexweaver (2026-07-09 post-wave re-anchor)
-  61, 71, 110,    // Act 3: small-roster normals + Devourer (2026-07-09 post-wave re-anchor)
+  14, 20, 35,     // Act 1: solo F0, ~solo F1, duo Gatewarden (#90 re-anchor — early game hardest)
+  44, 53, 111,    // Act 2: duo/trio normals + Hexweaver (#90 re-anchor)
+  68, 78, 114,    // Act 3: small-roster normals + Devourer (#90 re-anchor)
 ];
 // Normals stay gentle on per-hit damage (their difficulty is the rising HP =
 // longer fights), so a good player clears them reliably; the bosses are the walls.

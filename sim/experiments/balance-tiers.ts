@@ -12,8 +12,9 @@
 // earlier boss was beaten, so P(beat bossK) = perFight[bossIdx].wins / N is exactly the
 // cumulative milestone the targets are written against.
 //
-// Targets (trio / field 3): optimal 75% · average 30% (boss1 70%, boss2 50%, F1 >=88%) ·
-// poor <=3%. Solo (field 1): optimal Warlock ~25%.
+// Targets (#90 re-anchor 2026-07-16, trio / field 3): optimal ~59% · average ~34% ·
+// poor ~4% (near 0). Smaller parties are harder (duo ~43%, solo Warlock ~9%). The
+// optimal↔average gap is fixed ~23pp by the sim profile, so a 60/30 split is unreachable.
 
 import { runSim, type SimReport } from '../run-sim';
 import { OPTIMAL, AVERAGE, POOR, withSmallParty, type SkillProfile } from '../profile';
