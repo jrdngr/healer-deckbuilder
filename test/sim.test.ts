@@ -421,7 +421,12 @@ import { check, eq, results } from './harness';
   //     maintainer held optimal near 60 and let average sit at 34. The whole wins vector fell (HP up
   //     = slower clears): F0 190->180, F1 189->172, F2 166->151, F3 160->142, F4 157->135, F5 147->133,
   //     F6 146->131, F7 143->129, F8 135->123; full-run ~76% -> ~60%. Re-pinned on the new numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([180, 172, 151, 142, 135, 133, 131, 129, 123]));
+  //   • 91a Retain teardown (2026-07-16): the 'retain' ModifierId was removed (the Card Bank slot
+  //     replaces it), shrinking MODIFIER_IDS to three, so the seeded random-modifier rolls at
+  //     cardUpgrade/shrine nodes land differently and reshuffle the deck/rng stream. No gameplay
+  //     constant changed; a handful of fights flip: F1 172->174, F2 151->152, F5 133->134, F6 131->132,
+  //     F7 129->130 (rest unchanged). Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([180, 174, 152, 142, 135, 134, 132, 130, 123]));
   // Full-run gate around the ~60% OPTIMAL ceiling the flawless STICK line now hits (#90 re-anchor).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy build while a
   // real drift (e.g. back up toward the old ~76% "too easy" baseline) still trips it.

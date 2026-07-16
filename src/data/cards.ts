@@ -161,7 +161,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // --- Blood + cycling (#68): HP as a spendable resource ---------------------
   // Paper Cuts draws 2 through the normal draw path (a reshuffle mid-draw fires
   // Fidget Beads); like Inspiration it is `engine`-tagged (draw effect), so
-  // Retain/Efficient are ineligible. 0-MP — the HP is the cost (Elbow Grease precedent).
+  // Efficient is ineligible. 0-MP — the HP is the cost (Elbow Grease precedent).
   crimsonPact: { id: 'crimsonPact', name: 'Paper Cuts', cost: 0, target: 'single', selfDamage: CRIMSON_PACT_HP, draw: CRIMSON_PACT_DRAW, engine: true,
     desc: `A member with more than ${CRIMSON_PACT_HP} HP pays ${CRIMSON_PACT_HP} HP; draw ${CRIMSON_PACT_DRAW}.` },
   scarletWard: { id: 'scarletWard', name: 'Thick Skin', cost: 1, target: 'single', selfDamage: SCARLET_WARD_HP,
@@ -326,7 +326,7 @@ export const LEARNED_CARDS_BY_MEMBER: Partial<Record<MemberId, AbilityId[]>> = {
   flagellant: ['strongest', 'deadlift'],
 };
 
-// The set of per-member ability card ids — excluded from the shop pool and Retain
+// The set of per-member ability card ids — excluded from the shop pool
 // (they are inserted per-fight, never bought, upgraded, or removed from the run deck).
 export const ABILITY_CARD_IDS: ReadonlySet<CardId> = new Set(Object.values(ABILITY_CARD));
 export const isAbilityCard = (id: CardId): boolean => ABILITY_CARD_IDS.has(id);
@@ -336,12 +336,11 @@ export const isAbilityCard = (id: CardId): boolean => ABILITY_CARD_IDS.has(id);
 // from a module that itself reads CARDS at init — breaks the old TDZ cycle, #84).
 export function resolveCard(card: DeckCard): ResolvedCard {
   const base = CARDS[card.id];
-  let efficient = 0, potent = 0, lingering = 0, retain = false;
+  let efficient = 0, potent = 0, lingering = 0;
   for (const u of card.upgrades) {
     if (u === 'efficient') efficient++;
     else if (u === 'potent') potent++;
     else if (u === 'lingering') lingering++;
-    else if (u === 'retain') retain = true;
   }
   const bump = (v: number | undefined): number | undefined =>
     v == null ? undefined : v + potent * MOD_POTENT_STRENGTH;
@@ -378,7 +377,6 @@ export function resolveCard(card: DeckCard): ResolvedCard {
     ability: base.ability,
     channel: base.channel,
     refreshTurns: REFRESH_TURNS + lingering * MOD_LINGERING_TURNS,
-    retain,
     upgrades: card.upgrades,
   };
 }

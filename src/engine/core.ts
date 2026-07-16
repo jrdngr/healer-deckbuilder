@@ -2211,14 +2211,14 @@ export class Game {
     this.lensArmed = false;    // Arcane Lens (#70) is "this turn" only — an unspent arming fizzles
 
     // Discard the hand from the end (same ordering the prototype used, so existing
-    // seeds reshuffle identically), keeping any Retain cards in hand for next phase.
+    // seeds reshuffle identically).
     // The hand-4 carryover experiment (#25) additionally keeps up to `carryover`
-    // non-retain cards — costliest first, the card you're saving toward — across the
-    // discard. carryover 0 leaves this loop bit-identical to the classic discard.
+    // cards — costliest first, the card you're saving toward — across the discard.
+    // carryover 0 leaves this loop bit-identical to the classic discard.
     const carried = new Set<number>(
       this.carryover > 0
         ? this.hand
-            .filter((dc) => !resolveCard(dc).retain)
+            .slice()
             .sort((a, b) => resolveCard(b).cost - resolveCard(a).cost)
             .slice(0, this.carryover)
             .map((dc) => dc.uid)
@@ -2227,7 +2227,7 @@ export class Game {
     const kept: DeckCard[] = [];
     while (this.hand.length) {
       const dc = this.hand.pop() as DeckCard;
-      if (resolveCard(dc).retain || carried.has(dc.uid)) kept.push(dc);
+      if (carried.has(dc.uid)) kept.push(dc);
       else this.discardPile.push(dc);
     }
     this.hand = kept;

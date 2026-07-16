@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import type { GameEvent, Telegraph } from '../src/engine';
 import { channelEffectLine } from '../src/channelView';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS, MODIFIER_IDS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
@@ -1397,11 +1397,6 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   check('potent eligible on Font of Mana', MODIFIERS.potent.eligible('fontOfMana'));
   check('lingering ineligible on highHeal', !MODIFIERS.lingering.eligible('highHeal'));
   check('lingering eligible on regen', MODIFIERS.lingering.eligible('regen'));
-  // Retain gating (issue 03): refuses the always-on Ability card and engine cards.
-  check('retain eligible on shield', MODIFIERS.retain.eligible('shield'));
-  check('retain eligible on lowHeal', MODIFIERS.retain.eligible('lowHeal'));
-  check('retain refuses a per-member ability card', !MODIFIERS.retain.eligible('bolster'));
-  check('retain refuses the engine card Refresh', !MODIFIERS.retain.eligible('fontOfMana'));
   check('Refresh is engine-tagged', isEngineCard('fontOfMana'));
   check('Quick Heal is not engine-tagged', !isEngineCard('lowHeal'));
   // Efficient refuses 0-cost cards (there are none today; all base costs are > 0).
@@ -1415,8 +1410,10 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   check('efficient refuses a card already discounted to 1 (slot still open)',
     !canApplyModifier(makeDeckCard('regen', 1, ['efficient']), 'efficient'));
   check('efficient still applies while cost > 1', canApplyModifier(makeDeckCard('highHeal', 1, []), 'efficient'));
-  check('a second retain is refused', !canApplyModifier(makeDeckCard('shield', 1, ['retain']), 'retain'));
-  check('a first retain still applies', canApplyModifier(makeDeckCard('shield', 1, []), 'retain'));
+  // Retain removed (91a): the rare modifier pool is now exactly three.
+  eq('modifier pool is three (retain removed)', MODIFIER_IDS.length, 3);
+  check('MODIFIER_IDS = lingering/efficient/potent',
+    MODIFIER_IDS.includes('lingering') && MODIFIER_IDS.includes('efficient') && MODIFIER_IDS.includes('potent'));
 }
 {
   // Potent regen strength flows into gameplay.
@@ -1427,17 +1424,7 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   eq('potent regen strength applied', tank.regen, (CARDS.regen.regen ?? 0) + 1);
 }
 {
-  // Retain keeps the card in hand after end of turn; a plain card is discarded.
-  const g = new Game(8);
-  g.start();
-  g.hand = [];
-  g.hand.push(makeDeckCard('shield', -100, ['retain']), makeDeckCard('lowHeal', -101, []));
-  g.endTurn();
-  check('retained card stays in hand', g.hand.some((c) => c.uid === -100));
-  check('plain card left hand', !g.hand.some((c) => c.uid === -101));
-}
-{
-  // Hand-4 carryover experiment (#25, Q6). With carryover 1 the costliest non-retain
+  // Hand-4 carryover experiment (#25, Q6). With carryover 1 the costliest
   // card survives the end-of-turn discard, and next phase the hand refills to 4.
   const cfg = defaultBattleConfig();
   cfg.healer = { ...DEFAULT_HEALER, handSize: 4, carryover: 1 };
@@ -1458,22 +1445,8 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   void drawBefore; void discardBefore;
 }
 {
-  // Retain and carryover stack: a Retain card is kept regardless, and carryover
-  // keeps 1 additional non-retain card on top of it.
-  const cfg = defaultBattleConfig();
-  cfg.healer = { ...DEFAULT_HEALER, handSize: 4, carryover: 1 };
-  const g = new Game(9, cfg);
-  g.start();
-  g.hand = [];
-  g.hand.push(makeDeckCard('shield', -210, ['retain']), makeDeckCard('highHeal', -211, []), makeDeckCard('lowHeal', -212, []));
-  g.endTurn();
-  check('retain survives alongside carryover', g.hand.some((c) => c.uid === -210));
-  check('carryover keeps the costliest non-retain', g.hand.some((c) => c.uid === -211));
-  check('the other non-retain was discarded', !g.hand.some((c) => c.uid === -212));
-}
-{
   // carryover 0 leaves the discard bit-identical to the classic full discard: the
-  // whole (non-retain) hand goes to the discard pile.
+  // whole hand goes to the discard pile.
   const cfg = defaultBattleConfig();
   cfg.healer = { ...DEFAULT_HEALER, carryover: 0 };
   const g = new Game(10, cfg);
@@ -2106,8 +2079,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   eq('Inspiration draws 2 cards', g.hand.length, handBefore + 2);
   check('Inspiration is engine-tagged', isEngineCard('inspiration'));
   check('Font of Mana is engine-tagged', isEngineCard('fontOfMana'));
-  check('Retain cannot lock in Inspiration', !MODIFIERS.retain.eligible('inspiration'));
-  check('Retain cannot lock in Font of Mana', !MODIFIERS.retain.eligible('fontOfMana'));
   check('Efficient cannot discount Inspiration', !MODIFIERS.efficient.eligible('inspiration'));
   check('Efficient still applies to Font of Mana', MODIFIERS.efficient.eligible('fontOfMana'));
 }
@@ -2251,7 +2222,6 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.playCard(idx2, SLOT.CENTER);
   eq('Tithe MP gain respects the cap', g.mp, g.maxMana);
   check('Elbow Grease is engine-tagged', isEngineCard('bloodTithe'));
-  check('Retain cannot lock in Elbow Grease', !MODIFIERS.retain.eligible('bloodTithe'));
   check('Efficient cannot touch a 0-cost card', !MODIFIERS.efficient.eligible('bloodTithe'));
 }
 {

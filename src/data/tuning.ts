@@ -154,7 +154,7 @@ export interface CardDef {
   // Phalanx (#17) may not target the taunting member — Taunt's bundled Defense
   // is the tank's lane; Bulwark protects the members Taunt can't.
   noTaunt?: boolean;
-  // "Engine" cards generate MP or draw cards (they fuel the economy). Retain is
+  // "Engine" cards generate MP or draw cards (they fuel the economy). Efficient is
   // ineligible for them, and later economy modifiers (Taper, #22) gate on the
   // same tag. Keep this the single source of the tag.
   engine?: boolean;

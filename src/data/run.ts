@@ -17,7 +17,9 @@ import type { RelicId } from './relics';
 // ---------------------------------------------------------------------------
 
 // Card upgrade modifiers. Cards carry up to two of these in their upgrade slots.
-export type ModifierId = 'efficient' | 'potent' | 'lingering' | 'retain';
+// (Retain was removed in 91a — the Card Bank slot ("The Reserve") is now the single
+// hand-holding mechanism; see src/engine/core.ts bankCard.)
+export type ModifierId = 'efficient' | 'potent' | 'lingering';
 
 // A concrete card instance in the run deck: a base card id plus the upgrade
 // modifiers applied to it. `uid` is a stable identity for picking it in shops.
@@ -173,7 +175,7 @@ export interface HealerConfig {
   restRegen: number; // MP regained on rest
   passiveMp: number; // MP gained at the start of each player phase
   // Hand-4 carryover experiment (#25, Q6): cards KEPT in hand across the end-of-turn
-  // discard (in addition to Retain cards). Absent/0 = classic full-hand discard.
+  // discard. Absent/0 = classic full-hand discard.
   // Behind a flag: DEFAULT_HEALER ships it at 0; only an explicit config turns it on.
   carryover?: number;
 }
@@ -327,7 +329,6 @@ export interface ResolvedCard {
   // Regen has no separate duration (#52): `regen` is the applied magnitude, which
   // is also its number of ticks. Lingering folds into `regen` (see resolveCard).
   refreshTurns: number;
-  retain: boolean;
   upgrades: ModifierId[];
 }
 
@@ -363,12 +364,6 @@ export const isEngineCard = (id: CardId): boolean => CARDS[id].engine === true;
 export const isEngineAbility = (ability: AbilityId): boolean =>
   ability === 'crescendo';
 
-// Retain may not lock in a per-member ability card (#44: those are inserted per
-// fight, never part of the persistent deck), any engine card (that would make the
-// MP-economy loop deterministic), or a 0-cost card (free perpetual value).
-const retainEligible = (id: CardId): boolean =>
-  !isAbilityCard(id) && !isEngineCard(id) && CARDS[id].cost > 0;
-
 // Efficient may not touch a 0-cost card (nothing to shave; the #02 floor already
 // blocks reaching 0) or a draw-engine card (a discounted Inspiration compounds
 // the card economy the same way a Retained engine card would the MP economy).
@@ -395,22 +390,17 @@ export const MODIFIERS: Record<ModifierId, ModifierDef> = {
     id: 'potent', name: 'Potent', rarity: 'uncommon',
     desc: '+1 to its healing / restore amount.', eligible: cardHasStrength,
   },
-  retain: {
-    id: 'retain', name: 'Retain', rarity: 'rare',
-    desc: 'Not discarded at end of turn.', eligible: retainEligible,
-  },
 };
 
-export const MODIFIER_IDS: ModifierId[] = ['lingering', 'efficient', 'potent', 'retain'];
+export const MODIFIER_IDS: ModifierId[] = ['lingering', 'efficient', 'potent'];
 
 // Whether `mod` can be applied to `card` right now: an open slot, per-card-id
 // eligibility, and the modifier must actually change the resolved card.
-// Efficient cannot bite below the 1-MP floor and a second Retain is a no-op —
-// offering either would sell the player nothing for full price.
+// Efficient cannot bite below the 1-MP floor — offering it there would sell the
+// player nothing for full price.
 export function canApplyModifier(card: DeckCard, mod: ModifierId): boolean {
   if (card.upgrades.length >= MAX_UPGRADE_SLOTS || !MODIFIERS[mod].eligible(card.id)) return false;
   if (mod === 'efficient' && resolveCard(card).cost <= 1) return false;
-  if (mod === 'retain' && card.upgrades.includes('retain')) return false;
   return true;
 }
 

@@ -621,7 +621,7 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     cfg.deck.length, run.deck.length + deployed);
   eq('non-boss fight is not flagged as the boss', cfg.enemy.boss, false);
   // Config deep-copies the deck (mutating config must not touch the run deck).
-  cfg.deck[0].upgrades.push('retain');
+  cfg.deck[0].upgrades.push('potent');
   eq('config deck is a copy', run.deck[0].upgrades.length, 0);
 }
 
