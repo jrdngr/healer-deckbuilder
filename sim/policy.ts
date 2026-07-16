@@ -18,6 +18,7 @@ import {
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
   DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
   INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, SAP_VULN_CAP, PASSIVE_MP_CAP,
+  BANK_UPKEEP_PER_TURN,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
 import type { SkillProfile } from './profile';
@@ -459,18 +460,73 @@ function tryCleanseThreat(game: Game): boolean {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Card Bank slot / "The Reserve" (91a) tactics. Banking is FREE but holding a card
+// costs escalating end-of-turn MP (pressure-positive), so a good player only reserves
+// a *situational answer* it expects to use — a Shield for a big telegraphed hit, a
+// Cleanse for a recurring Mark/Poison — and plays it back the turn it is needed. These
+// exercise the mechanic in the sim: banking is USED, but never free (the upkeep taxes
+// the same MP the fight already runs dry). Bounded (one slot) so they cannot loop.
+// ---------------------------------------------------------------------------
+
+// The situational answers worth reserving rather than discarding at end of turn.
+const RESERVE_ANSWERS: CardId[] = ['shield', 'cleanse'];
+
+// Play the reserved card the turn its answer is finally needed: a held Shield onto a
+// member facing a (near-)lethal incoming hit, or a held Cleanse when a Mark / heavy
+// Poison lands. Tried alongside the survival guards so the answer beats offense.
+function tryPlayReserve(game: Game): boolean {
+  const dc = game.bankCard;
+  if (dc == null) return false;
+  const card = resolveCard(dc);
+  if (card.id === 'cleanse') {
+    if (game.canPlayBanked(null) !== null) return false; // unaffordable / no board play
+    const marked = game.livingMembers().some((m) => m.markTurns > 0);
+    const heavyPoison = game.livingMembers().some((m) => m.poisonTurns > 0 && m.poison * m.poisonTurns >= m.hp * 0.5);
+    if (!marked && !heavyPoison) return false;
+    return game.playBankedCard(null).ok;
+  }
+  if (card.id === 'shield') {
+    const incoming = incomingDamage(game);
+    const victim = saveOrder(game).find((m) =>
+      !m.shield && game.canPlayBanked(m.slot) === null && (incoming.get(m.slot) ?? 0) >= m.hp);
+    if (!victim) return false;
+    return game.playBankedCard(victim.slot).ok;
+  }
+  return false;
+}
+
+// Reserve a leftover situational answer instead of discarding it — carry it to the turn
+// it is needed. Tried LAST (only ever replaces a Rest/discard), Reserve empty, and only
+// when the first upkeep is affordable, so it deepens the MP squeeze without stealing a
+// real play. The bank refills the freed hand slot (engine rule), so the tactic loop may
+// then spend that fresh card — modelling the card advantage banking trades for MP.
+function tryReserveAnswer(game: Game): boolean {
+  if (game.bankCard != null) return false;
+  if (channelThreatUnanswered(game)) return false;
+  if (game.mp < BANK_UPKEEP_PER_TURN) return false; // must be able to pay the first upkeep
+  for (const id of RESERVE_ANSWERS) {
+    const idx = handIndexOf(game, id);
+    if (idx >= 0) return game.bank(idx).ok;
+  }
+  return false;
+}
+
 const STICK_TACTICS: Tactic[] = [
-  tryBraceChannel, tryRetaunt, tryProvoke, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryPlayReserve, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   // Hex before offense so the Vulnerability amplifies this phase's strikes (#39).
   tryHex, tryBolt, tryPoison, tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
+  // Bank slot (91a): reserve a leftover situational answer instead of discarding it — LAST.
+  tryReserveAnswer,
 ];
 
 // Optimal: the stick's survival core, then Vulnerability set-up (Hex/Sap) so every
 // downstream strike is amplified, then the damage race with Consume-aware poison.
 const OPTIMAL_TACTICS: Tactic[] = [
-  tryBraceChannel, tryRetaunt, tryProvoke, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
+  tryBraceChannel, tryRetaunt, tryProvoke, tryPlayReserve, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   tryHex, trySap, tryBolt, tryConsumeAwarePoison,
   tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
+  tryReserveAnswer,
 ];
 
 // Poor: offense before the survival guards (greedy attacking), economy/tempo tactics
@@ -498,10 +554,17 @@ export interface FightMpTelemetry {
   starvedTurns: number; // phases that ended with NO card in hand affordable (hard-dry)
   hitZero: boolean;     // MP reached exactly 0 at some end-of-phase this fight
   minMp: number;        // lowest end-of-phase MP seen this fight (Infinity if no phase closed)
+  // Card Bank slot / "The Reserve" (91a): banking telemetry. Read-only, so passing a
+  // collector still leaves the pinned line byte-identical.
+  bankHeldPhases: number;   // player phases that closed with a card still in the Reserve
+  bankHoldTurnsSum: number; // sum of bankHoldTurns sampled at those closes (hold-depth proxy)
 }
 
 export function newMpTelemetry(): FightMpTelemetry {
-  return { playerTurns: 0, restTurns: 0, starvedTurns: 0, hitZero: false, minMp: Infinity };
+  return {
+    playerTurns: 0, restTurns: 0, starvedTurns: 0, hitZero: false, minMp: Infinity,
+    bankHeldPhases: 0, bankHoldTurnsSum: 0,
+  };
 }
 
 // Record the end-of-phase MP state (post-card-play, pre-Rest) into the collector. Read-only.
@@ -514,6 +577,10 @@ function recordMpTurn(game: Game, tel: FightMpTelemetry): void {
   if (game.hand.length === 0 || game.mp < minCost) tel.starvedTurns++;
   if (game.mp < tel.minMp) tel.minMp = game.mp;
   if (game.mp === 0) tel.hitZero = true;
+  // Bank telemetry: a card still reserved at phase close is being HELD across the
+  // turn — it will pay the (escalating) upkeep at the end-of-turn. bankHoldTurns is the
+  // count of turn-ends it has already survived, so it is a proxy for hold-depth.
+  if (game.bankCard != null) { tel.bankHeldPhases++; tel.bankHoldTurnsSum += game.bankHoldTurns; }
 }
 
 // Play a single player phase to a natural close (rest or end turn). A mistake roll (only

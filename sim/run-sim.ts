@@ -132,6 +132,10 @@ export interface MpReport {
   meanMinMp: number;          // mean per-fight lowest end-of-phase MP
   ranDryByFight: number[];    // per-fight fraction of attempts that hit 0 MP (indexed by fight)
   hardDryByFight: number[];   // per-fight fraction of attempts with a hard-dry phase
+  // Card Bank slot / "The Reserve" (91a): banking telemetry — banking must be USED but
+  // never FREE (the escalating upkeep taxes the same MP the fight runs dry on).
+  bankRate: number;           // fraction of player phases that closed holding a reserved card
+  meanHoldTurns: number;      // mean bankHoldTurns over those held phases (hold-depth)
 }
 
 // 95% confidence half-width for a binomial proportion (normal approximation).
@@ -154,6 +158,7 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, opt
   let injuriesTotal = 0;
   // #90 MP telemetry accumulators (over every fight played, across all runs).
   let mpFights = 0, mpRanDry = 0, mpStarvedFights = 0, mpPlayerTurns = 0, mpRestTurns = 0, mpStarvedTurns = 0, mpMinSum = 0;
+  let mpBankHeldPhases = 0, mpBankHoldTurnsSum = 0; // 91a bank telemetry accumulators
   const mpRanDryF = new Array(FIGHT_COUNT).fill(0);   // per-fight: attempts that hit 0 MP
   const mpHardDryF = new Array(FIGHT_COUNT).fill(0);  // per-fight: attempts with a hard-dry phase
   const mpFightsF = new Array(FIGHT_COUNT).fill(0);   // per-fight: attempts with a closed player phase
@@ -176,6 +181,8 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, opt
         mpRestTurns += f.mp.restTurns;
         mpStarvedTurns += f.mp.starvedTurns;
         mpMinSum += f.mp.minMp;
+        mpBankHeldPhases += f.mp.bankHeldPhases;
+        mpBankHoldTurnsSum += f.mp.bankHoldTurnsSum;
       }
     }
   }
@@ -195,6 +202,8 @@ export function runSim(n: number, firstSeed = 1, setup?: (run: Run) => void, opt
       meanMinMp: mpFights ? mpMinSum / mpFights : 0,
       ranDryByFight: mpRanDryF.map((c, i) => (mpFightsF[i] ? c / mpFightsF[i] : 0)),
       hardDryByFight: mpHardDryF.map((c, i) => (mpFightsF[i] ? c / mpFightsF[i] : 0)),
+      bankRate: mpPlayerTurns ? mpBankHeldPhases / mpPlayerTurns : 0,
+      meanHoldTurns: mpBankHeldPhases ? mpBankHoldTurnsSum / mpBankHeldPhases : 0,
     },
   };
 }
@@ -230,6 +239,11 @@ export function formatReport(r: SimReport): string {
     `hard-dry phases: ${pct(r.mp.starvedTurnRate)}%   mean fight-low MP: ${r.mp.meanMinMp.toFixed(2)}`);
   lines.push('  per-fight ran-dry %: ' + r.mp.ranDryByFight.map((d, i) => `F${i} ${pct(d)}`).join('  '));
   lines.push('  per-fight hard-dry %: ' + r.mp.hardDryByFight.map((d, i) => `F${i} ${pct(d)}`).join('  '));
+  // Card Bank slot / "The Reserve" (91a): used but never free.
+  lines.push('');
+  lines.push('Card Bank / "The Reserve" (91a):');
+  lines.push(`  bank rate: ${pct(r.mp.bankRate)}% of player phases held a reserved card   ` +
+    `mean hold-turns: ${r.mp.meanHoldTurns.toFixed(2)}`);
   return lines.join('\n');
 }
 
