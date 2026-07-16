@@ -1,6 +1,6 @@
 # Issue 88 — Warn on undeployed party members + strip gold from the Fight button
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-16 — red warning above the slots + red Fight button when a roster member is benched with a free seat; button label stripped to `Fight`)
 - **Phase:** post-demo (UI polish)   **Size:** S
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** intake 2026-07-16 — "warning when the player has party members that aren't deployed"

@@ -65,6 +65,11 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
   const emptySeats = 3 - seatedCount;
   const projectedBounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * emptySeats));
   const projectedNet = projectedBounty - projectedSalary;
+  // Fielding fewer is a real (paid) strategy, but forgetting to seat a recruit is a
+  // mistake. Warn — loudly, non-blocking — when a roster member is benched AND a seat
+  // is free. One click still starts the fight; the warning only catches the oversight.
+  const benchedCount = run.roster.filter((p, ri) => p.member && !deploy.includes(ri)).length;
+  const warnUndeployed = benchedCount > 0 && emptySeats > 0;
 
   return (
     <main className="shop-screen deploy-screen">
@@ -74,11 +79,17 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
           <p>Up next: <strong>{enemy.name}</strong>{enemy.boss ? ' — Boss' : ''}.</p>
           <p className="deploy-salary-line">Gold {run.gold} · win pays <strong>{projectedBounty}g</strong>{emptySeats > 0 ? ` (+${Math.round(EMPTY_SEAT_GOLD_BONUS * emptySeats * 100)}% for ${emptySeats} empty)` : ''} − <strong>{projectedSalary}g</strong> wages = <strong>{projectedNet}g</strong></p>
         </div>
-        <button className="primary map-take" disabled={seatedCount === 0}
+        <button className={`primary map-take${warnUndeployed ? ' danger' : ''}`} disabled={seatedCount === 0}
           onClick={() => act((r) => r.confirmDeployment(deploy))}>
-          {seatedCount === 0 ? 'Deploy at least one' : `Fight with ${seatedCount} · +${projectedNet}g`}
+          {seatedCount === 0 ? 'Deploy at least one' : 'Fight'}
         </button>
       </header>
+
+      {warnUndeployed && (
+        <p className="deploy-undeployed-warning" role="alert">
+          ⚠ {benchedCount === 1 ? 'A party member is' : `${benchedCount} party members are`} benched with {emptySeats === 1 ? 'an empty seat' : 'empty seats'} to fill.
+        </p>
+      )}
 
       <div className="deploy-slots">
         {SLOT_NAMES.map((name, i) => {

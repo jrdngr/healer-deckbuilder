@@ -15,6 +15,7 @@ import { defaultBattleConfig } from '../src/constants';
 import { ManaBar } from '../src/components/ManaBar';
 import { StartScreen } from '../src/components/StartScreen';
 import { DraftScreen } from '../src/components/DraftScreen';
+import { DeployScreen } from '../src/components/DeployScreen';
 import { PartyUpgradeShopScreen } from '../src/components/PartyUpgradeShopScreen';
 import { Actions } from '../src/components/Actions';
 import { BattleScreen } from '../src/components/BattleScreen';
@@ -178,6 +179,44 @@ async function render(el: React.ReactElement): Promise<string> {
     // The raw ability id (e.g. "graveChill") must never leak to the player.
     check(`draft card hides ${id}'s raw ability id`, !text.includes(MEMBER_POOL[id].ability), id);
   }
+}
+
+// --- DeployScreen warns on benched members + strips gold from the Fight button (#88) ---
+{
+  const noop = <T,>(fn: (r: Run) => T): T => fn(new Run(3)); // act is never invoked in these render-only checks
+  // Set up a deploy location with a given roster + seating, then render.
+  let deployKey = 0;
+  const deployView = async (members: MemberId[], deployment: (number | null)[]): Promise<HTMLElement> => {
+    const dep = new Run(3);
+    dep.roster = partyFromMembers(members);
+    dep.deployment = deployment;
+    dep.location = { kind: 'deploy', fightIndex: 0 };
+    // DeployScreen seeds its seating into useState, so force a fresh instance each time.
+    await render(<DeployScreen key={deployKey++} run={dep} act={noop} />);
+    return rootEl;
+  };
+  const WARN = 'benched';
+
+  // roster 3, deployed 2 → warning + danger button.
+  let el = await deployView(['ranger', 'tank', 'mage'], [0, 1, null]);
+  let btn = el.querySelector('button.map-take')!;
+  check('#88 benched member with a free seat shows the warning', el.textContent!.includes(WARN), el.textContent);
+  check('#88 the Fight button carries the danger class when benched', btn.classList.contains('danger'));
+
+  // roster 3, deployed 3 → no warning, no danger.
+  el = await deployView(['ranger', 'tank', 'mage'], [0, 1, 2]);
+  btn = el.querySelector('button.map-take')!;
+  check('#88 a fully deployed roster shows no warning', !el.textContent!.includes(WARN), el.textContent);
+  check('#88 the Fight button is not danger when fully deployed', !btn.classList.contains('danger'));
+
+  // roster 2, deployed 2 → nobody benched, no warning.
+  el = await deployView(['ranger', 'tank'], [0, 1, null]);
+  check('#88 roster smaller than the seat count shows no warning', !el.textContent!.includes(WARN), el.textContent);
+
+  // Button label is exactly "Fight" — no seat count, no gold readout.
+  btn = el.querySelector('button.map-take')!;
+  check('#88 the Fight button says only "Fight"', btn.textContent!.trim() === 'Fight', btn.textContent);
+  check('#88 the Fight button carries no gold amount', !/\d+g/.test(btn.textContent!), btn.textContent);
 }
 
 // --- Actions button drops the "+0 MP" rest label at full MP (#37 item 4) --------
