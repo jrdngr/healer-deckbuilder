@@ -291,12 +291,15 @@ async function render(el: React.ReactElement): Promise<string> {
   await render(
     <BattleScreen
       game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
-      playCard={() => {}} skipTurn={() => {}} endTurn={() => {}} onWinFx={() => 0} onBattleEnd={() => {}}
+      playCard={() => {}} skipTurn={() => {}} endTurn={() => {}}
+      bankCard={() => {}} playBankedCard={() => {}} unbankDiscard={() => {}}
+      onWinFx={() => 0} onBattleEnd={() => {}}
     />,
   );
   const row = rootEl.querySelector('.mana-row');
   check('mana-row wraps the mp bar beside the primary turn button',
     !!row && !!row.querySelector('.mp-bar') && !!row.querySelector('button.primary'));
+  check('mana-row includes the Reserve zone (91a)', !!row && !!row.querySelector('.reserve'));
 }
 
 // --- Incapacitated member shows a distinct overlay, not plain DEAD (#33) --------

@@ -9,6 +9,7 @@ import { EnemyPanel } from './EnemyPanel';
 import { Party } from './Party';
 import { ManaBar } from './ManaBar';
 import { ChannelBanner } from './ChannelBanner';
+import { Reserve } from './Reserve';
 import { Hand } from './Hand';
 import { Card } from './Card';
 import { Actions } from './Actions';
@@ -48,6 +49,10 @@ interface BattleScreenProps {
   playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
   skipTurn: () => void;
   endTurn: () => void;
+  // Card Bank slot / "The Reserve" (91a).
+  bankCard: (handIndex: number) => void;
+  playBankedCard: (target: number | null) => void;
+  unbankDiscard: () => void;
   // Play the end-of-fight gold burst over the live board on a win (#59); returns how
   // long (ms) to hold the result overlay while it plays.
   onWinFx: () => number;
@@ -56,10 +61,15 @@ interface BattleScreenProps {
 }
 
 export function BattleScreen({
-  game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn, onWinFx, onBattleEnd,
+  game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn,
+  bankCard, playBankedCard, unbankDiscard, onWinFx, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
   const [dragView, setDragView] = useState<DragView | null>(null);
+  // Playing the reserved card (91a): once "Play" is pressed on a single/dead-target
+  // banked card, a hero pick is pending — the hero highlights read the Reserve's own
+  // drop targets. No-target banked cards resolve immediately and never enter this mode.
+  const [bankTargeting, setBankTargeting] = useState(false);
   // After a drag ends we swallow the click the browser fires on the source card, so
   // a drag never doubles as a select.
   const suppressClickRef = useRef(false);
@@ -73,7 +83,7 @@ export function BattleScreen({
   const mainRef = useRef<HTMLElement>(null);
 
   // A fresh Game instance (newGame) means any pending targeting is stale.
-  useEffect(() => { setSelected(null); setDragView(null); }, [game]);
+  useEffect(() => { setSelected(null); setDragView(null); setBankTargeting(false); }, [game]);
 
   // A fresh fight re-arms the result gate.
   useEffect(() => { resultFired.current = false; setResultReady(false); }, [game]);
@@ -95,11 +105,13 @@ export function BattleScreen({
   }, [animating, game.status, game]);
 
   // Cancel any pending targeting once a sequence starts playing.
-  useEffect(() => { if (animating) { setSelected(null); setDragView(null); } }, [animating]);
+  useEffect(() => { if (animating) { setSelected(null); setDragView(null); setBankTargeting(false); } }, [animating]);
+  // A resolved / lost Reserve clears any pending bank targeting.
+  useEffect(() => { if (game.bankCard == null) setBankTargeting(false); }, [game.bankCard]);
 
   // Escape cancels targeting.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelected(null); setDragView(null); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setSelected(null); setDragView(null); setBankTargeting(false); } };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
@@ -121,7 +133,11 @@ export function BattleScreen({
   // cards only accept their own carrier) drive both the hero highlights and the
   // target validation shared by the click and drag paths.
   const activeIndex = dragView ? dragView.handIndex : selected?.handIndex ?? null;
-  const dropSpec = activeIndex != null && !animating ? game.dropTargets(activeIndex) : null;
+  // When playing the reserved card (bankTargeting), the hero highlights read the
+  // Reserve's own drop targets instead of a hand card's.
+  const dropSpec = bankTargeting && !animating ? game.bankDropTargets()
+    : activeIndex != null && !animating ? game.dropTargets(activeIndex)
+    : null;
 
   const isValidTarget = (slot: Slot): boolean => !!dropSpec && dropSpec.slots.includes(slot);
 
@@ -159,11 +175,46 @@ export function BattleScreen({
   };
 
   const onMemberClick = (slot: Slot) => {
-    if (animating || !selected) return;
+    if (animating) return;
+    // Playing the reserved card: a hero pick resolves the banked card on that hero.
+    if (bankTargeting) {
+      if (game.bankDropTargets().slots.includes(slot)) {
+        setBankTargeting(false);
+        playBankedCard(slot);
+      }
+      return;
+    }
+    if (!selected) return;
     if (game.dropTargets(selected.handIndex).slots.includes(slot) === false) return; // invalid target
     const origin = cardOrigin(selected.handIndex);
     setSelected(null);
     playCard(selected.handIndex, slot, origin);
+  };
+
+  // Reserve a hand card (91a): free, not a turn action. Cancel any pending targeting.
+  const onBank = (handIndex: number) => {
+    if (animating || game.status !== 'playing' || game.phase !== 'player') return;
+    if (game.bankCard != null) return; // one slot only
+    setSelected(null);
+    setDragView(null);
+    bankCard(handIndex);
+  };
+
+  // Play the reserved card. A no-target card resolves immediately; a single/dead-target
+  // card enters bank targeting so a hero pick can finish it.
+  const onReservePlay = () => {
+    if (animating || game.bankCard == null) return;
+    const drops = game.bankDropTargets();
+    if (drops.board) { playBankedCard(null); return; }
+    if (drops.slots.length === 0) return; // nothing legal to target right now
+    setSelected(null);
+    setBankTargeting(true);
+  };
+
+  const onReserveUnbank = () => {
+    if (!game.canUnbankDiscard()) return;
+    setBankTargeting(false);
+    unbankDiscard();
   };
 
   // Resolve where a drag was released. A no-target ('board') card plays wherever it
@@ -231,8 +282,8 @@ export function BattleScreen({
     window.addEventListener('pointercancel', up);
   };
 
-  const onEndTurn = () => { setSelected(null); endTurn(); };
-  const onSkip = () => { setSelected(null); skipTurn(); };
+  const onEndTurn = () => { setSelected(null); setBankTargeting(false); endTurn(); };
+  const onSkip = () => { setSelected(null); setBankTargeting(false); skipTurn(); };
 
   // While a drag is live, cue the board: hero-targeted cards light their valid heroes
   // (isValidTarget); a no-target 'board' card arms the whole board instead.
@@ -263,9 +314,16 @@ export function BattleScreen({
             hasSelection={!!selected}
             onSkip={onSkip}
             onEndTurn={onEndTurn}
-            onCancel={() => setSelected(null)}
+            onCancel={() => { setSelected(null); setBankTargeting(false); }}
           />
         </div>
+        <Reserve
+          game={game}
+          animating={animating}
+          onPlay={onReservePlay}
+          onUnbank={onReserveUnbank}
+          targeting={bankTargeting}
+        />
       </div>
       <Hand
         game={game}
@@ -275,6 +333,9 @@ export function BattleScreen({
         onCardClick={onCardClick}
         onCardPointerDown={onCardPointerDown}
         draggingUid={dragView?.uid ?? null}
+        // The Bank affordance shows only while a card can be reserved: player phase,
+        // the Reserve empty, nothing animating.
+        onBank={!animating && game.status === 'playing' && game.phase === 'player' && game.bankCard == null ? onBank : undefined}
       />
       <CombatLog game={game} />
       {/* The standing telegraph would flash the *next* turn's lines mid-sequence. */}

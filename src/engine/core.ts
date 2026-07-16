@@ -2204,6 +2204,33 @@ export class Game {
     return { ok: true };
   }
 
+  // Where the banked card may legally be played, for the Reserve zone UI. Mirrors
+  // dropTargets but reads the Bank slot and validates via canPlayBanked, so the same
+  // hero-highlight machinery lights the valid targets when playing from the Reserve.
+  bankDropTargets(): { slots: number[]; board: boolean } {
+    const dc = this.bankCard;
+    if (dc == null) return { slots: [], board: false };
+    const card = resolveCard(dc);
+    if (card.ability != null && card.target !== 'single') {
+      const m = this._abilityMember(card.ability);
+      if (m && this.canPlayBanked(null) === null) return { slots: [m.slot], board: false };
+      return { slots: [], board: false };
+    }
+    if (card.target === 'single' || card.target === 'dead') {
+      const slots = this.members
+        .filter((m) => this.canPlayBanked(m.slot) === null)
+        .map((m) => m.slot);
+      return { slots, board: false };
+    }
+    return { slots: [], board: this.canPlayBanked(null) === null };
+  }
+
+  // The MP the Reserve will cost at the NEXT end-of-turn if the card is still held —
+  // the 1→2→3 forecast the UI shows (bankHoldTurns has not yet ticked for this turn).
+  bankNextUpkeep(): number {
+    return this.bankCard == null ? 0 : (this.bankHoldTurns + 1) * BANK_UPKEEP_PER_TURN;
+  }
+
   // Charge the Reserve's escalating end-of-turn upkeep. Called once per turn-end from
   // _endTurnInternal while a card is banked: the hold count ticks up and the charge is
   // bankHoldTurns * BANK_UPKEEP_PER_TURN (1, then 2, then 3…). If MP can't cover it the

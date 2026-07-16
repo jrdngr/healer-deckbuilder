@@ -16,6 +16,9 @@ interface HandProps {
   // dragged is dimmed in place while its ghost follows the cursor.
   onCardPointerDown: (handIndex: number, e: ReactPointerEvent) => void;
   draggingUid: number | null;
+  // Card Bank slot (91a): reserve a hand card. Present only while banking is possible
+  // (player phase, the Reserve empty, no animation) — undefined hides the affordance.
+  onBank?: (handIndex: number) => void;
 }
 
 function promptFor(card: ResolvedCard, game: Game): string {
@@ -33,7 +36,7 @@ function promptFor(card: ResolvedCard, game: Game): string {
   return `Select ${kind} for ${card.name} — or Cancel`;
 }
 
-export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid }: HandProps) {
+export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid, onBank }: HandProps) {
   const over = game.status !== 'playing';
   // A player-cast channel (#64, #78) is tracked per card id in the engine, so any
   // in-hand copy of the channeling card gets the glow + "channeling · N left" badge.
@@ -71,6 +74,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick,
                 onClick={() => onCardClick(i)}
                 onPointerDown={(e) => onCardPointerDown(i, e)}
                 dragging={draggingUid === dc.uid}
+                onBank={onBank ? () => onBank(i) : undefined}
                 channelingTurns={channelingId != null && dc.id === channelingId ? game.channelTurns : null}
                 // Fan geometry + draw-stagger inputs; uid-keying means only
                 // genuinely new cards mount and play the deal-in animation.
