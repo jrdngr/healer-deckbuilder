@@ -65,11 +65,12 @@ through this list and, for each note:
 3. **Add its row** to the [Issues table](#issues-implementation-order) below.
 4. **Remove the note** from this Intake list once it has become an issue.
 
-*(empty — all current notes have been written up as issues below.)*
+_No notes awaiting intake._
 
 ## Issues (implementation order)
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-
-_No open issues._
+| [88](./issues/88-undeployed-party-warning.md) | 📋 Open | Warn on undeployed party members + strip gold from the Fight button | post-demo (UI polish) | — | intake 2026-07-16 |
+| [89](./issues/89-passives-on-member-cards.md) | 📋 Open | Surface hero passives on member cards; remove all ability text from them | post-demo (UI polish) | — | intake 2026-07-16 |
+| [90](./issues/90-balance-re-anchor-harder.md) | 📋 Open | Balance re-anchor: make the game hard again | post-demo (balance) | — | intake 2026-07-16 |
