@@ -409,15 +409,30 @@ import { check, eq, results } from './harness';
   //     mid-run where the learned cards land: F0 194->190, F1 189, F2 159->166, F3 155->160, F4 152->157,
   //     F5 150->147, F6 149->146, F7 149->143, F8 140->135. A real feature-power change the balance pass
   //     owns; the band/CI/boss gates below still hold. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([190, 189, 166, 160, 157, 147, 146, 143, 135]));
-  // Full-run gate around the ~75% OPTIMAL ceiling the flawless STICK line now hits.
-  // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy
-  // build while a real drift still trips it.
-  check('full-run consistent with the ~75% optimal ceiling (2026-07-07 skill-tier pass)',
-    r.fullRun.rate - r.fullRun.ci95 <= 0.86 && r.fullRun.rate + r.fullRun.ci95 >= 0.66,
+  //   • #90 RE-ANCHOR (2026-07-16, "make the game hard again"): the post-content-cut baseline had
+  //     drifted too easy (optimal 68% / average 45% / poor 6% at N=1000) and the "runs dry every
+  //     fight" MP pillar had lapsed — act-1 normals were 2-turn cakewalks. ENEMY_HP_BY_FIGHT was
+  //     raised across the board, weighted toward act 1, to pull the curve DOWN (esp. early) and to
+  //     LENGTHEN every fight so MP is taxed again (the flawless line is now hard-dry — no affordable
+  //     card — in 69-90% of ALL fight classes, up from ~52% on normals; no MP constant was touched).
+  //     Maintainer-chosen anchor (N=1000): optimal 59% / average 34% / poor 4%. NOTE: HP, enemy
+  //     damage, enrage and boss-burst all move the optimal and average tiers TOGETHER — the tier gap
+  //     is fixed ~23pp by the sim profile, not by content — so a 60/30 split is unreachable; the
+  //     maintainer held optimal near 60 and let average sit at 34. The whole wins vector fell (HP up
+  //     = slower clears): F0 190->180, F1 189->172, F2 166->151, F3 160->142, F4 157->135, F5 147->133,
+  //     F6 146->131, F7 143->129, F8 135->123; full-run ~76% -> ~60%. Re-pinned on the new numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([180, 172, 151, 142, 135, 133, 131, 129, 123]));
+  // Full-run gate around the ~60% OPTIMAL ceiling the flawless STICK line now hits (#90 re-anchor).
+  // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy build while a
+  // real drift (e.g. back up toward the old ~76% "too easy" baseline) still trips it.
+  check('full-run consistent with the ~60% optimal ceiling (#90 re-anchor)',
+    r.fullRun.rate - r.fullRun.ci95 <= 0.68 && r.fullRun.rate + r.fullRun.ci95 >= 0.54,
     `${(r.fullRun.rate * 100).toFixed(1)}% ±${(r.fullRun.ci95 * 100).toFixed(1)}`);
-  // Normals clear cleanly for the flawless line: all normals >= 90%.
-  for (const fi of [0, 1, 3, 4]) check(`normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
+  // Normals clear for the flawless line. #90 deliberately made the EARLY game harder, so the
+  // act-1 opener F0 sits right at ~90% (a real MP-taxing fight now, not a cakewalk) — floored a
+  // touch lower to keep the pin robust to subsample noise; the rest still clear >= 90%.
+  check('act-1 opener F0 still clears >= 85% (#90 made it harder, not a wall)', r.perFight[0].rate >= 0.85);
+  for (const fi of [1, 3, 4]) check(`normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
   for (const fi of [6, 7]) check(`Act-3 normal F${fi} clears >= 90%`, r.perFight[fi].rate >= 0.90);
   // Boss gates re-anchored by the skill-tier pass: the flawless line answers all three
   // bosses ~88-96% conditional (N=200: 88.5 / 96.5 / 95.1%). Conditional on REACHING,
@@ -430,6 +445,17 @@ import { check, eq, results } from './harness';
     `${(r.perFight[5].rate * 100).toFixed(1)}% ±${(r.perFight[5].ci95 * 100).toFixed(1)}`);
   check('Act-3 boss (Devourer) consistent with ~86-100% (skill-tier pass)', bandConsistent(r.perFight[8], 0.86, 1.0),
     `${(r.perFight[8].rate * 100).toFixed(1)}% ±${(r.perFight[8].ci95 * 100).toFixed(1)}`);
+}
+
+// --- #90 winnability proof ---------------------------------------------------
+// The #90 re-anchor's floor: "technically winnable" — an optimal line must still win
+// the whole run on at least one seed (a 0% optimal tier would be a FAILURE, not an
+// overshoot). Seed 1 is a concrete, committed witness (the optimal trio full-run rate
+// is ~59% at N=1000, so wins are common, but this pins a specific reproducible one).
+{
+  const win = runSingleRun(1, undefined, { profile: OPTIMAL, maxDeploy: 3 });
+  check('an optimal line wins the full run on seed 1 (#90 winnability floor)',
+    win.status === 'won', `seed 1 status: ${win.status}`);
 }
 
 // --- DR1: the harness reports injury telemetry -------------------------------
