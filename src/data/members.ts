@@ -1,7 +1,7 @@
 import type { MemberId, MemberDef } from './tuning';
 import type { PartyMemberConfig } from './run';
 import {
-  BERSERKER_BAND_BONUS, BOAR_HP, BOAR_STRIKE_BONUS, BOAR_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, CRESCENDO_DRAW, DEFENSE_AMOUNT, EN_GARDE_TURNS, FERMENT_GROWTH, FERMENT_TURNS, GRAVE_CHILL_REDUCTION, HEX_TURNS, HEX_VULN_BY_SIZE, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, POISON_BASE, POISON_TURNS, RADIANCE_HEAL, RAMPAGE_SELF_DMG, SKALD_DMG_CAP, SKALD_DMG_PER_CARD, TAUNT_TURNS
+  BERSERKER_BAND_BONUS, BOAR_HP, BOAR_STRIKE_BONUS, BOAR_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX, CRESCENDO_DRAW, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER, DEFENSE_AMOUNT, EN_GARDE_TURNS, FERAL_BOND_MULT, FERMENT_GROWTH, FERMENT_TURNS, GRAVE_CHILL_REDUCTION, GRUDGE_DIVISOR, HEX_TURNS, HEX_VULN_BY_SIZE, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, POISON_BASE, POISON_TURNS, RADIANCE_HEAL, RAMPAGE_SELF_DMG, SKALD_DMG_CAP, SKALD_DMG_PER_CARD, TAUNT_TURNS, TOXICOLOGIST_BONUS
 } from './tuning';
 
 export const MEMBER_DEFS: MemberDef[] = [
@@ -173,6 +173,23 @@ export const MEMBER_ABILITY_FLAVOR: Record<MemberId, string> = {
   sentinel: `Stun — cancel the enemy's telegraphed action: the enemy loses the turn and telegraphs anew next turn.`,
   duelist: `En Garde — a chosen member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} enemy turns: they counter EVERY hit that strikes them (fully blocked hits included) for their auto damage.`,
   flagellant: `Feat of Strength — pay ${PENANCE_HP} HP (NO clamp — this can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for ${PENANCE_STRIKE_TURNS} enemy turns (him included if he survives; the buff lands even if he dies).`,
+};
+
+// Hero passive flavor: the always-on identity every hero carries (`cf5fc4d`). Names
+// ship verbatim from the engine comments (#89 — no #85 rename); each `desc` is derived
+// from the actual implementation in `engine/core.ts`, interpolating the tuning constants
+// so the text never drifts from the numbers. One entry per hero — the record is total.
+export const MEMBER_PASSIVE_FLAVOR: Record<MemberId, { name: string; desc: string }> = {
+  ranger: { name: 'Toxicologist', desc: `+${TOXICOLOGIST_BONUS} auto damage while the enemy is poisoned.` },
+  tank: { name: 'Grudge', desc: `His next auto adds the damage he has soaked since his last strike, divided by ${GRUDGE_DIVISOR}.` },
+  mage: { name: 'Arcane Battery', desc: `Only the Mage banks Charge — +1 each turn (max ${CHARGE_MAX}); Lightning Bolt spends it for +${BOLT_CHARGE_MULT} damage per Charge.` },
+  warlock: { name: 'Dark Bargain', desc: `Each time a party member dies, a living Warlock permanently gains +${DARK_BARGAIN_DMG} damage and +${DARK_BARGAIN_POWER} ability power for the rest of the fight.` },
+  skald: { name: 'Opening Act', desc: `While fielded and alive, the Busker draws +1 card at the start of each turn.` },
+  berserker: { name: 'Rage', desc: `Hits harder the lower his HP: +${BERSERKER_BAND_BONUS} damage in his first rage band, another +${BERSERKER_BAND_BONUS} in the second (net +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2}). The thresholds rise with the enemy's attack.` },
+  beastWarden: { name: 'Feral Bond', desc: `Her first strike after her Boar falls tears for ×${FERAL_BOND_MULT} damage.` },
+  sentinel: { name: 'Stunt Double', desc: `She dives in front of any blow that would be lethal to a teammate, taking the hit — her own wards and HP — in their place.` },
+  duelist: { name: 'Riposte Master', desc: `She always counterattacks: every hit that strikes her (fully blocked hits included) is answered for her live auto damage — no card, no timer.` },
+  flagellant: { name: 'Last Stand', desc: `Once per fight, a killing blow — a hit or a Blood cost — leaves him at 1 HP instead of dropping him.` },
 };
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity

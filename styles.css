@@ -256,6 +256,8 @@ section.enemy {
 .badge.defense { --ic: var(--hero-sentinel); }
 .badge.taunt { --ic: var(--gold); }
 .badge.injury { --ic: var(--danger); border-color: var(--danger); }
+/* Passive: the hero's always-on identity (#89) — a quieter, accent-tinted pill. */
+.badge.passive { color: var(--accent-ink); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
 .member .charge {
   display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 900;
   padding: 2px 9px; border-radius: 999px; background: var(--panel); border: var(--bw) solid var(--ink);

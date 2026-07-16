@@ -9,7 +9,7 @@ import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEA
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
 import { GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMBOLDEN_BONUS, EMBOLDEN_TURNS, EMPOWER_BONUS, EN_GARDE_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, PENANCE_STRIKE_TURNS, SANGUINE_PACT_THRESHOLD, RADIANCE_HEAL } from '../src/constants';
-import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
+import { ABILITY_CARD, MEMBER_POOL, MEMBER_ABILITY_FLAVOR, MEMBER_PASSIVE_FLAVOR, MEMBER_BASE_SALARY, FERMENT_TURNS, FERMENT_GROWTH, DRAFT_POOL } from '../src/constants';
 import { TOXICOLOGIST_BONUS, GRUDGE_DIVISOR, FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER } from '../src/constants';
 import {
   SHIELD_WALL_DEFENSE, HOLD_LINE_DEFENSE, HOLD_LINE_BANK_MULT, ARCANE_SURGE_CHARGE, DRAIN_LIFE_DMG,
@@ -130,6 +130,17 @@ function wardenGame(seed: number) {
   eq('Halt! fires the stun ability', CARDS.stagger.ability, 'stun');
   check('Halt! is a per-member ability card', isAbilityCard('stagger'));
   check('the Showstopper has ability flavor', MEMBER_ABILITY_FLAVOR.sentinel.length > 0);
+}
+{
+  // #89: every hero in the pool has a passive with a non-empty name + description, so
+  // the player-facing MEMBER_PASSIVE_FLAVOR table is total (mirrors the flavor checks).
+  for (const id of Object.keys(MEMBER_POOL) as (keyof typeof MEMBER_POOL)[]) {
+    const p = MEMBER_PASSIVE_FLAVOR[id];
+    check(`${id} has a passive name`, !!p && p.name.length > 0);
+    check(`${id} has a passive description`, !!p && p.desc.length > 0);
+  }
+  // The Showstopper's passive is Stunt Double, per the engine comment (no #85 rename).
+  eq('Showstopper passive is Stunt Double', MEMBER_PASSIVE_FLAVOR.sentinel.name, 'Stunt Double');
 }
 {
   // Playing Halt! cancels the standing telegraph: the coming enemy resolution

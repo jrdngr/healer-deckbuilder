@@ -26,7 +26,7 @@ import { Topbar } from '../src/components/Topbar';
 import { MapScreen } from '../src/components/MapScreen';
 import { BranchScreen } from '../src/components/BranchScreen';
 import { EventScreen } from '../src/components/EventScreen';
-import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE, DRAFT_POOL } from '../src/constants';
+import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_ABILITY_FLAVOR, MEMBER_PASSIVE_FLAVOR, MEMBER_POOL, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE, DRAFT_POOL } from '../src/constants';
 import type { MemberId } from '../src/constants';
 import { Run } from '../src/run';
 import { groupPile } from '../src/deckView';
@@ -167,7 +167,7 @@ async function render(el: React.ReactElement): Promise<string> {
     !hallText.includes('Ranger') && !hallText.includes('Tank'), hallText);
 }
 
-// --- Draft cards show ability FLAVOR, not the raw id (#37 item 1) ---------------
+// --- Draft cards show the PASSIVE name, not ability flavor or the raw id (#89/#37) ---
 {
   const draftRun = new Run(5);
   draftRun.beginDraft();
@@ -175,10 +175,54 @@ async function render(el: React.ReactElement): Promise<string> {
   const noop = <T,>(fn: (r: Run) => T): T => fn(draftRun);
   const text = await render(<DraftScreen run={draftRun} act={noop} />);
   for (const id of shown) {
-    check(`draft card shows ${id}'s ability flavor`, text.includes(MEMBER_ABILITY_FLAVOR[id]), id);
+    check(`draft card shows ${id}'s passive name`, text.includes(MEMBER_PASSIVE_FLAVOR[id].name), id);
+    // Ability flavor no longer belongs on member tiles — the ability cards state their own text.
+    check(`draft card drops ${id}'s ability flavor`, !text.includes(MEMBER_ABILITY_FLAVOR[id]), text);
     // The raw ability id (e.g. "graveChill") must never leak to the player.
     check(`draft card hides ${id}'s raw ability id`, !text.includes(MEMBER_POOL[id].ability), id);
   }
+  // The passive description rides along as the button's hover title.
+  const btn = rootEl.querySelector('button.draft-member')!;
+  const firstPassive = MEMBER_PASSIVE_FLAVOR[shown[0]];
+  check('draft tile carries the passive desc as a title',
+    (btn.getAttribute('title') ?? '').includes(firstPassive.desc), btn.getAttribute('title') ?? undefined);
+}
+
+// --- MemberCard surfaces the hero passive (name + desc tooltip), no ability text (#89) ---
+{
+  const cfg = defaultBattleConfig();
+  cfg.party = partyFromMembers(['duelist', 'warlock', 'flagellant']);
+  const game = new Game(4, cfg).start();
+  const m = game.members[0]; // Duelist — Riposte Master
+  await render(
+    <MemberCard
+      member={m} displayHp={m.hp} displayDead={false} react={null} mageCharge={0}
+      liveDamage={m.damage} berserkerBands={null} targetedByEnemy={false} validTarget={false}
+      onClick={() => {}}
+    />,
+  );
+  const passive = MEMBER_PASSIVE_FLAVOR[m.id];
+  check('member card shows the passive name', rootEl.textContent!.includes(passive.name), rootEl.textContent);
+  check('member card drops ability flavor', !rootEl.textContent!.includes(MEMBER_ABILITY_FLAVOR[m.id]), rootEl.textContent);
+  const badge = [...rootEl.querySelectorAll('.badge.passive')].find((b) => b.textContent!.includes(passive.name));
+  check('member card passive badge carries the desc as a title',
+    !!badge && (badge.getAttribute('title') ?? '').includes(passive.desc), badge?.getAttribute('title') ?? undefined);
+}
+
+// --- Deploy roster tiles show the passive, not ability flavor (#89) --------------
+{
+  const noop = <T,>(fn: (r: Run) => T): T => fn(new Run(6));
+  const dep = new Run(6);
+  dep.roster = partyFromMembers(['ranger', 'tank', 'mage']);
+  dep.deployment = [0, 1, 2];
+  dep.location = { kind: 'deploy', fightIndex: 0 };
+  await render(<DeployScreen run={dep} act={noop} />);
+  const tile = [...rootEl.querySelectorAll('button.draft-member')][0]!; // Ranger — Toxicologist
+  const passive = MEMBER_PASSIVE_FLAVOR.ranger;
+  check('deploy tile shows the passive name', tile.textContent!.includes(passive.name), tile.textContent);
+  check('deploy tile drops ability flavor', !rootEl.textContent!.includes(MEMBER_ABILITY_FLAVOR.ranger), rootEl.textContent);
+  check('deploy tile carries the passive desc as a title',
+    (tile.getAttribute('title') ?? '').includes(passive.desc), tile.getAttribute('title') ?? undefined);
 }
 
 // --- DeployScreen warns on benched members + strips gold from the Fight button (#88) ---

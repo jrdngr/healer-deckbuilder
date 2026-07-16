@@ -1,23 +1,23 @@
 import type { Run } from '../run';
 import type { RunAct } from '../useRun';
-import { MEMBER_POOL, MEMBER_ABILITY_FLAVOR, CONVENTIONALLY_HEALABLE } from '../constants';
+import { MEMBER_POOL, MEMBER_PASSIVE_FLAVOR, CONVENTIONALLY_HEALABLE } from '../constants';
 import type { MemberId } from '../constants';
 import { ScreenHeader } from './ScreenChrome';
 
-// One member offer button — shared by the pick-one draft and the Recruit node. The
-// ability shows its player-facing flavor, never the raw id (#37); a self-reliant tag
-// marks members conventional healing doesn't help.
+// One member offer button — shared by the pick-one draft and the Recruit node. Shows
+// the hero's always-on passive (name + hover description), never the raw id (#37/#89);
+// a self-reliant tag marks members conventional healing doesn't help.
 export function MemberOfferButton({ id, onClick }: { id: MemberId; onClick: () => void }) {
   const d = MEMBER_POOL[id];
   const healable = CONVENTIONALLY_HEALABLE.has(id);
-  const flavor = MEMBER_ABILITY_FLAVOR[id];
+  const passive = MEMBER_PASSIVE_FLAVOR[id];
   return (
-    <button className="draft-member" onClick={onClick} title={flavor}>
+    <button className="draft-member" onClick={onClick} title={`${passive.name} — ${passive.desc}`}>
       <span className="draft-member-name">{d.name}</span>
       <span className="draft-member-stats">
         HP {d.maxHP} · DMG {d.damage}{healable ? '' : ' · self-reliant'}
       </span>
-      <span className="draft-member-ability">{flavor}</span>
+      <span className="draft-member-ability">{passive.name}</span>
     </button>
   );
 }

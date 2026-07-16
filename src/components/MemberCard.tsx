@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import {
-  CHARGE_MAX, BOLT_CHARGE_MULT, BERSERKER_BAND_BONUS,
+  CHARGE_MAX, BOLT_CHARGE_MULT, BERSERKER_BAND_BONUS, MEMBER_PASSIVE_FLAVOR,
   INJURY_NAMES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
 } from '../constants';
 import type { ReactNode } from 'react';
@@ -154,6 +154,11 @@ export function MemberCard({
         <div className={`seg hp${hpFrac <= 0.25 ? ' low' : hpFrac <= 0.5 ? ' mid' : ''}`} style={{ left: 0, width: `${hpPct}%` }} />
       </StatBar>
       <div className="badges">
+        {MEMBER_PASSIVE_FLAVOR[m.id] && (
+          <StatusBadge cls="passive" title={`${MEMBER_PASSIVE_FLAVOR[m.id].name} — ${MEMBER_PASSIVE_FLAVOR[m.id].desc}`}>
+            {MEMBER_PASSIVE_FLAVOR[m.id].name}
+          </StatusBadge>
+        )}
         {m.shield && <StatusBadge cls="shield" icon="shield" title={`Shield — fully blocks the next damaging hit; fades unused in ${m.shieldTurns} enemy turn(s).`}>Shield</StatusBadge>}
         {m.regen > 0 && <StatusBadge cls="regen" icon="leaf" title={`Regen — heals ${m.regen} at the start of your turn, then decays by 1 each turn (${m.regen} tick(s) left).`}>Regen {m.regen}</StatusBadge>}
         {m.defense > 0 && <StatusBadge cls="defense" icon="shield" title={`Defense — incoming hits reduced by ${m.defenseAmount} for ${m.defense} more enemy turn(s).`}>Def {m.defenseAmount}·{m.defense}t</StatusBadge>}
