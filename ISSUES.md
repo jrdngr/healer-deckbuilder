@@ -36,4 +36,5 @@ _No notes awaiting intake._
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 91 | 📋 Open | [Card Bank Slot ("The Reserve") — proposal A](issues/91-card-bank-slot.md) | post-demo (healing availability) | — | planning 2026-07-16 (design tournament) |
+| 91a | 📋 Open | [Card Bank Slot ("The Reserve") — proposal A](issues/91a-card-bank-slot.md) | post-demo (healing availability) | — | planning 2026-07-16 (design tournament) |
+| 91b | 📋 Open | [Action Panel (Pay-on-Play) — proposal B](issues/91b-action-panel.md) | post-demo (healing availability) | — | 2026-07-16 tournament winner; head-to-head vs 91a |

@@ -1,4 +1,4 @@
-# Issue 91 — Card Bank Slot ("The Reserve") — proposal A
+# Issue 91a — Card Bank Slot ("The Reserve") — proposal A
 
 - **Status:** 📋 Open
 - **Phase:** post-demo (healing availability)   **Size:** L
@@ -7,11 +7,12 @@
   when needed without the 4-heal attractor" picked the maintainer's bank slot; the maintainer then
   refined it into the harsher, MP-pressure-positive variant below.
 
-> **This is design proposal A.** The maintainer has a second, more dramatic proposal (out of scope,
-> a future planning session) and wants to **compare the two — possibly prototyping both — before
-> committing to either.** So this issue is buildable as a prototype, but is **not unconditionally
-> greenlit for final ship**: do the head-to-head first. Do not delete Retain "for real" (see Approach)
-> until the comparison lands, unless prototyping specifically calls for it.
+> **This is design proposal A.** The competing proposal is now filed as **issue 91b (Action Panel,
+> Pay-on-Play)**, selected by the 2026-07-16 design tournament (P2 > P1 > P3). The maintainer wants to
+> **compare the two — prototyping both on separate branches — before committing to either.** So this
+> issue is buildable as a prototype, but is **not unconditionally greenlit for final ship**: do the
+> head-to-head first. Do not delete Retain "for real" (see Approach) until the comparison lands, unless
+> prototyping specifically calls for it.
 
 ## Why
 
