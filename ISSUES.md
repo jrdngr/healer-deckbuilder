@@ -36,4 +36,4 @@ _No notes awaiting intake._
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| _No open issues._ | | | | | |
+| 91 | 📋 Open | [Card Bank Slot ("The Reserve") — proposal A](issues/91-card-bank-slot.md) | post-demo (healing availability) | — | planning 2026-07-16 (design tournament) |
