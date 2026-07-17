@@ -21,10 +21,10 @@ interface ReserveProps {
 }
 
 // "The Reserve" (91a): the one card held across turns. Sits between the draw pile and the
-// hand. Reserving is FREE (drag a hand card onto the empty slot, or use the card's Reserve
-// affordance), but holding costs an escalating end-of-turn MP upkeep (1, then 2, 3…) shown
-// below the MP bar. Play the reserved card by clicking it (then a target) or dragging it
-// onto a hero/board; release it by dragging it onto the discard pile.
+// hand. Reserving is FREE (drag a hand card onto the empty slot), but holding costs an
+// escalating end-of-turn MP upkeep (1, then 2, 3…) shown below the MP bar. Play the
+// reserved card by clicking it (then a target) or dragging it onto a hero/board; release
+// it by dragging it onto the discard pile.
 export function Reserve({ game, animating, onCardClick, onCardPointerDown, targeting, dragging }: ReserveProps) {
   if (game.status !== 'playing') return null;
   const dc = game.reserveCard;
@@ -34,7 +34,7 @@ export function Reserve({ game, animating, onCardClick, onCardPointerDown, targe
     // the hand never shifts when a card is reserved or played back.
     return (
       <div className="reserve reserve-empty reserve-drop"
-        title="Drag a hand card here (or use its Reserve button) to hold it across turns for an escalating MP upkeep.">
+        title="Drag a hand card here to hold it across turns for an escalating MP upkeep.">
         <span className="reserve-hint">Reserve</span>
       </div>
     );

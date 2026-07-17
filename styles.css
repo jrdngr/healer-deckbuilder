@@ -217,17 +217,6 @@ main.drag-from-reserve .discard-pile {
   outline: 3px dashed color-mix(in srgb, var(--danger) 60%, transparent); outline-offset: 3px;
 }
 
-/* The "Reserve" affordance on a hand card (91a): a small corner button that holds the
-   card instead of playing it. Sits top-right, out of the way of the cost pip. */
-.card-reserve-btn {
-  position: absolute; top: 4px; right: 4px; z-index: 3;
-  font-size: 10px; font-weight: 800; letter-spacing: .02em;
-  padding: 2px 6px; border-radius: var(--r-sm);
-  border: var(--bw) solid var(--ink); background: color-mix(in srgb, var(--fam-ward) 30%, var(--panel));
-  color: var(--ink); cursor: pointer; opacity: 0; transition: opacity .12s ease;
-}
-.card:hover .card-reserve-btn, .card:focus-within .card-reserve-btn { opacity: 1; }
-.card-reserve-btn:hover { background: var(--fam-ward); }
 
 .enemy-status { margin-top: 8px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--muted); min-height: 18px; }
 .enemy-poison { display: inline-flex; align-items: center; gap: 5px; color: var(--fam-heal); font-weight: 800; }

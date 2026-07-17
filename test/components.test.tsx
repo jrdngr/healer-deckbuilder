@@ -308,8 +308,8 @@ async function render(el: React.ReactElement): Promise<string> {
   // Empty Reserve: a drop target, and no upkeep readout under the MP bar yet.
   check('an empty Reserve renders a drop target', !!area && !!area.querySelector('.reserve-empty.reserve-drop'));
   check('no upkeep readout while the Reserve is empty', !rootEl.querySelector('.reserve-upkeep'));
-  // The hand's cards carry the Reserve affordance while the slot is empty.
-  check('hand cards show the Reserve affordance while the slot is empty', !!rootEl.querySelector('.card-reserve-btn'));
+  // Reserving is drag-only now — no per-card Reserve button in the hand.
+  check('hand cards carry no Reserve button (drag-to-slot only)', !rootEl.querySelector('.card-reserve-btn'));
 }
 
 // --- reworked Reserve (91a): reserved card lives in the slot, upkeep reads under MP,
@@ -339,8 +339,6 @@ async function render(el: React.ReactElement): Promise<string> {
   check('the upkeep readout sits under the MP bar', !!upkeep);
   check('the upkeep reads "Reserve upkeep: N MP"',
     (upkeep?.textContent ?? '') === `Reserve upkeep: ${game.reserveNextUpkeep()} MP`, upkeep?.textContent);
-  // A full Reserve hides the hand-card Reserve affordance (one slot only).
-  check('the hand Reserve affordance is hidden while the slot is full', !rootEl.querySelector('.card-reserve-btn'));
 }
 
 // --- Incapacitated member shows a distinct overlay, not plain DEAD (#33) --------

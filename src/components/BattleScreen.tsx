@@ -224,15 +224,6 @@ export function BattleScreen({
     playCard(selected.handIndex, slot, origin);
   };
 
-  // Reserve a hand card via its corner affordance (91a): free, not a turn action.
-  const onReserveHandCard = (handIndex: number) => {
-    if (animating || game.status !== 'playing' || game.phase !== 'player') return;
-    if (game.reserveCard != null) return; // one slot only
-    setSelected(null);
-    setDragView(null);
-    reserve(handIndex);
-  };
-
   // Resolve where a drag was released. A hand card plays on a valid hero / the board, or
   // reserves onto the empty Reserve slot; the reserved card plays on a valid hero / the
   // board, or releases onto the discard pile. Anything else cancels.
@@ -339,8 +330,6 @@ export function BattleScreen({
       ].filter(Boolean).join(' ')
     : undefined;
 
-  const canReserveNow = !animating && game.status === 'playing' && game.phase === 'player' && game.reserveCard == null;
-
   return (
     <main ref={mainRef} className={mainCls}>
       <EnemyPanel game={game} displayHp={view.enemyHp} />
@@ -387,9 +376,7 @@ export function BattleScreen({
         onCardClick={onCardClick}
         onCardPointerDown={onHandPointerDown}
         draggingUid={dragView?.source.kind === 'hand' ? dragView.uid : null}
-        // The Reserve affordance shows only while a card can be reserved: player phase,
-        // the Reserve empty, nothing animating.
-        onReserve={canReserveNow ? onReserveHandCard : undefined}
+        // Reserving a hand card is drag-only: drop it onto the Reserve slot.
         reserveSlot={
           <Reserve
             game={game}
