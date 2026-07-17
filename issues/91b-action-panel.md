@@ -1,6 +1,6 @@
 # Issue 91b — Action Panel (Pay-on-Play) — proposal B
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-16 — closed NOT-SHIPPED; lost the 91a-vs-91b head-to-head, branch abandoned)
 - **Phase:** post-demo (healing availability)   **Size:** L
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** planning session 2026-07-16 — a 5-reviewer design tournament on "make healing
@@ -237,3 +237,20 @@ Build the mechanic exactly as specified below. Key decisions already settled (do
   playtests find the two-step flow tedious.
 - **Final go/no-go.** This is proposal B; the head-to-head against proposal A (91a) — and the decision
   to fully tear out Retain vs. keep it — is the maintainer's, in a later session.
+
+## Resolution (2026-07-16 — closed, NOT shipped)
+
+**Lost the head-to-head; abandoned.** Fully prototyped on its own branch (6 commits: Retain teardown →
+two-phase panel engine → Rest-is-Phase-1 refit → sim telemetry → two-phase UI → tidy), all gates green.
+Playtested against 91a (Card Bank). **The maintainer chose 91a — 91b "wasn't fun at all."** The
+two-phase stage→act turn structure was the deciding factor against it. The branch and all 6 commits were
+abandoned; `main` carries 91a instead. Kept here as the archive of a fully-built, rejected design.
+
+Corroborating sim signal at the time (prototype, un-tuned): pay-at-fire genuinely left the MP economy
+undisturbed (with an unbounded panel the model recovered to ~57.8% ≈ the #90 hand baseline), but at the
+spec'd `PANEL_SIZE = 3` the finite-slot card-flow squeeze dropped the tier band ~17–20pp LOW (opt ~42 /
+avg ~14 / poor ~0.6). `PANEL_SIZE` 4–5 would have recovered most of it — but the fun verdict, not the
+winrate, closed this. See [[healing-availability-workstream]] for the full comparison.
+
+The P1 "Pay-on-Stage" fast-follow and P3 "Rent" notes above die with this issue unless a future pass
+reopens the action-panel direction from scratch.

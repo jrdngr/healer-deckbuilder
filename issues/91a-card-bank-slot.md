@@ -1,6 +1,6 @@
 # Issue 91a — Card Bank Slot ("The Reserve") — proposal A
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-16 — shipped; won the 91a-vs-91b head-to-head, `main` moved to this work)
 - **Phase:** post-demo (healing availability)   **Size:** L
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** planning session 2026-07-16 — a 5-design tournament on "make healing available
@@ -177,3 +177,29 @@ hardened version. Key decisions already settled (do not relitigate):
   re-incentivize stacking one premium heal). Leave the rare pool at three modifiers.
 - **Final go/no-go.** This is proposal A; the head-to-head against proposal B (and the decision to fully
   tear out Retain vs. keep it) is the maintainer's, in a later session.
+
+## Resolution (2026-07-16)
+
+**Shipped, and won the head-to-head.** Built as a prototype on a branch, playtested against 91b
+(Action Panel), and selected by the maintainer — 91b "wasn't fun." `main` was moved onto this work;
+91b's branch and commits were abandoned. The full Retain teardown (save `RUN_SAVE_VERSION` 18→19) was
+included, not stubbed. Landed as four commits: Retain teardown → bank engine mechanic → "The Reserve"
+UI → sim telemetry + bank tactic. `npm test` green, `typecheck`/`build` clean, engine pure/DOM-free.
+
+Divergences from the straw-man above worth recording:
+
+- **Method naming.** The spec pinned both a `bankCard` *field* and a `bankCard(i)` *method*, which
+  collide in JS. Shipped as: engine field `bankCard` (load-bearing for the "never serialized"
+  criterion), engine method `bank(handIndex)`, and the useGame **controller** method exposed as
+  `bankCard` (matching the UI-threading names). `playBankedCard`/`unbankDiscard`/`canPlayBanked`/
+  `canUnbankDiscard` as specified; upkeep helper `_bankUpkeep`; shared play tail `_resolvePlayedCard`.
+- **UI.** The Reserve zone lives in the mana-row right gutter (`Reserve.tsx`) with next-upkeep forecast
+  + Play + Release; hand cards get a hover "Bank" button; banking uses a `bankDropTargets` targeting mode.
+- **Balance signal (left un-tuned per the prototype instruction — NOT a final balance pass).** N=1000:
+  bank used 22.5% of player phases, mean hold 0.81 turns; per-fight hard-dry 79.6% (in the 69–90%
+  band); optimal 59.9% ✓ / poor 4.1% ✓. **Average tier drifted ~34→39pp HIGH** — banking's free
+  hand-refill is net card advantage for mid players, outweighing the MP-upkeep pressure. No test gates
+  the average tier (suite green), so this is a **follow-up balance watch-item**, not a blocker: the real
+  balance pass on the shipped mechanic is a future issue. Deterministic sim vectors were re-pinned
+  (documented in-code) for the modifier-pool RNG shift and the new bank tactic; all band/CI/boss/
+  winnability gates still pass.
