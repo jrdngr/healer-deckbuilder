@@ -66,15 +66,15 @@ interface CardProps {
   // Stable deck-card identity, exposed as data-uid so the battle screen can
   // measure this card's box when it is played (the fly-to-target ghost).
   uid?: number;
-  // Card Bank slot (91a): when set, show a "Bank" affordance that reserves this card
+  // "The Reserve" (91a): when set, show a "Reserve" affordance that holds this card
   // instead of playing it. Absent (the default) hides the affordance — so it appears
   // only in the hand while the Reserve is empty, never on the reserved card itself.
-  onBank?: () => void;
+  onReserve?: () => void;
   // Fan layout variables (--i index, --n count) set by the Hand.
   style?: CSSProperties;
 }
 
-export function Card({ card, affordable, ineligible = false, selected, onClick, onPointerDown, dragging = false, channelingTurns = null, uid, onBank, style }: CardProps) {
+export function Card({ card, affordable, ineligible = false, selected, onClick, onPointerDown, dragging = false, channelingTurns = null, uid, onReserve, style }: CardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const disabled = !affordable || ineligible;
   const channeling = channelingTurns != null;
@@ -119,16 +119,16 @@ export function Card({ card, affordable, ineligible = false, selected, onClick, 
           <Icon name="bolt" /> channeling · {channelingTurns} left
         </div>
       )}
-      {onBank && (
+      {onReserve && (
         // Reserve this card (91a) — free, but it costs an escalating MP upkeep to hold.
         // stopPropagation keeps the click/drag from also selecting or playing the card.
         <button
-          className="card-bank-btn"
-          title="Reserve this card in The Reserve — hold it across turns for an escalating MP upkeep."
+          className="card-reserve-btn"
+          title="Hold this card in The Reserve — carry it across turns for an escalating MP upkeep."
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onBank(); }}
+          onClick={(e) => { e.stopPropagation(); onReserve(); }}
         >
-          ⤓ Bank
+          ⤓ Reserve
         </button>
       )}
       <div className="cost">{card.cost}</div>

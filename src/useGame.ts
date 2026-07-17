@@ -50,9 +50,9 @@ export interface GameController {
   playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
   skipTurn: () => void;
   endTurn: () => void;
-  /** Card Bank slot / "The Reserve" (91a): reserve a hand card (free, not an action),
-   *  play the reserved card, or release it to the discard for the whole turn. */
-  reserveCard: (handIndex: number) => void;
+  /** "The Reserve" (91a): reserve a hand card (free, not an action), play the reserved
+   *  card, or release it to the discard for the whole turn. */
+  reserve: (handIndex: number) => void;
   playReservedCard: (target: number | null) => void;
   releaseReserved: () => void;
   /** Dev-panel cheat hook: run an arbitrary engine mutation through the normal
@@ -294,8 +294,8 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   }, [dispatch, spawnFx]);
 
   // Reserve a hand card (91a). Free and not an action, so it neither ends the turn nor
-  // locks input — a live dispatch that just re-syncs the view (bank emits no timeline fx).
-  const reserveCard = useCallback((handIndex: number) => {
+  // locks input — a live dispatch that just re-syncs the view (reserve emits no timeline fx).
+  const reserve = useCallback((handIndex: number) => {
     const g = ref.current!;
     if (g.status !== 'playing' || g.phase !== 'player') return;
     if (animatingRef.current) return;
@@ -344,6 +344,6 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const controllerRef = useRef<GameController>({} as GameController);
   return Object.assign(controllerRef.current, {
     game: ref.current, view, fx, reacts, animating, shakeTick, newGame, playCard, skipTurn, endTurn,
-    reserveCard, playReservedCard, releaseReserved, devAction,
+    reserve, playReservedCard, releaseReserved, devAction,
   });
 }

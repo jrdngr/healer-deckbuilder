@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, ReactNode, PointerEvent as ReactPointerEvent } from 'react';
 import { resolveCard } from '../constants';
 import type { ResolvedCard } from '../constants';
 import type { Game } from '../engine';
@@ -16,9 +16,12 @@ interface HandProps {
   // dragged is dimmed in place while its ghost follows the cursor.
   onCardPointerDown: (handIndex: number, e: ReactPointerEvent) => void;
   draggingUid: number | null;
-  // Card Bank slot (91a): reserve a hand card. Present only while banking is possible
+  // "The Reserve" (91a): reserve a hand card. Present only while reserving is possible
   // (player phase, the Reserve empty, no animation) — undefined hides the affordance.
-  onBank?: (handIndex: number) => void;
+  onReserve?: (handIndex: number) => void;
+  // The Reserve slot, rendered by BattleScreen and slotted between the draw pile and the
+  // hand so the reserved card lives inside the hand row (91a).
+  reserveSlot?: ReactNode;
 }
 
 function promptFor(card: ResolvedCard, game: Game): string {
@@ -36,7 +39,7 @@ function promptFor(card: ResolvedCard, game: Game): string {
   return `Select ${kind} for ${card.name} — or Cancel`;
 }
 
-export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid, onBank }: HandProps) {
+export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid, onReserve, reserveSlot }: HandProps) {
   const over = game.status !== 'playing';
   // A player-cast channel (#64, #78) is tracked per card id in the engine, so any
   // in-hand copy of the channeling card gets the glow + "channeling · N left" badge.
@@ -56,6 +59,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick,
           <span className="pile-count">{game.drawPile.length}</span>
           <span className="pile-label">Draw</span>
         </button>
+        {reserveSlot}
         <div className="hand">
           {game.hand.map((dc, i) => {
             const card = resolveCard(dc);
@@ -74,7 +78,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick,
                 onClick={() => onCardClick(i)}
                 onPointerDown={(e) => onCardPointerDown(i, e)}
                 dragging={draggingUid === dc.uid}
-                onBank={onBank ? () => onBank(i) : undefined}
+                onReserve={onReserve ? () => onReserve(i) : undefined}
                 channelingTurns={channelingId != null && dc.id === channelingId ? game.channelTurns : null}
                 // Fan geometry + draw-stagger inputs; uid-keying means only
                 // genuinely new cards mount and play the deal-in animation.

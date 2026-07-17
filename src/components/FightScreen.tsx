@@ -68,7 +68,7 @@ export function FightScreen({ run, onWinFx, onWin, onLose, onSpent, onInjuries, 
       playCard={ctrl.playCard}
       skipTurn={ctrl.skipTurn}
       endTurn={ctrl.endTurn}
-      reserveCard={ctrl.reserveCard}
+      reserve={ctrl.reserve}
       playReservedCard={ctrl.playReservedCard}
       releaseReserved={ctrl.releaseReserved}
       onWinFx={onWinFx}

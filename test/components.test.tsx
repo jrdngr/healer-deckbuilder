@@ -292,14 +292,55 @@ async function render(el: React.ReactElement): Promise<string> {
     <BattleScreen
       game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
       playCard={() => {}} skipTurn={() => {}} endTurn={() => {}}
-      reserveCard={() => {}} playReservedCard={() => {}} releaseReserved={() => {}}
+      reserve={() => {}} playReservedCard={() => {}} releaseReserved={() => {}}
       onWinFx={() => 0} onBattleEnd={() => {}}
     />,
   );
   const row = rootEl.querySelector('.mana-row');
   check('mana-row wraps the mp bar beside the primary turn button',
     !!row && !!row.querySelector('.mp-bar') && !!row.querySelector('button.primary'));
-  check('mana-row includes the Reserve zone (91a)', !!row && !!row.querySelector('.reserve'));
+  // The Reserve zone (91a) now lives in the hand row, between the draw pile and the hand.
+  const area = rootEl.querySelector('.hand-area');
+  check('hand-area includes the Reserve zone (91a)', !!area && !!area.querySelector('.reserve'));
+  check('the Reserve sits after the draw pile and before the hand',
+    !!area && Array.prototype.indexOf.call(area.children, area.querySelector('.reserve'))
+      === Array.prototype.indexOf.call(area.children, area.querySelector('.draw-pile')) + 1);
+  // Empty Reserve: a drop target, and no upkeep readout under the MP bar yet.
+  check('an empty Reserve renders a drop target', !!area && !!area.querySelector('.reserve-empty.reserve-drop'));
+  check('no upkeep readout while the Reserve is empty', !rootEl.querySelector('.reserve-upkeep'));
+  // The hand's cards carry the Reserve affordance while the slot is empty.
+  check('hand cards show the Reserve affordance while the slot is empty', !!rootEl.querySelector('.card-reserve-btn'));
+}
+
+// --- reworked Reserve (91a): reserved card lives in the slot, upkeep reads under MP,
+// --- and the Play/Release buttons are gone (drag + two-click only) --------------
+{
+  const game = new Game(7, defaultBattleConfig()).start();
+  game.reserve(0); // hold the first hand card across turns
+  const reservedId = game.reserveCard!.id;
+  const view = { enemyHp: game.enemy.hp, memberHp: [10, 10, 10], memberDead: [false, false, false] };
+  await render(
+    <BattleScreen
+      game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
+      playCard={() => {}} skipTurn={() => {}} endTurn={() => {}}
+      reserve={() => {}} playReservedCard={() => {}} releaseReserved={() => {}}
+      onWinFx={() => 0} onBattleEnd={() => {}}
+    />,
+  );
+  const full = rootEl.querySelector('.reserve.reserve-full');
+  check('a held card renders in the Reserve slot', !!full);
+  check('the reserved card is a real card with a drag handle (data-uid)',
+    !!full && full.querySelector(`.card[data-uid="${game.reserveCard!.uid}"]`) != null);
+  check('the reserved card shows the held card', resolveCard(makeDeckCard(reservedId, 0)) != null && (full?.textContent ?? '').includes(resolveCard(makeDeckCard(reservedId, 0)).name));
+  // Item 4: no Play/Release buttons anywhere in the Reserve zone.
+  check('the Reserve zone has no action buttons (drag + two-click only)', !!full && full.querySelector('button') == null);
+  // Item 5: the upkeep message moved below the MP bar and reads "Reserve upkeep: N MP".
+  const upkeep = rootEl.querySelector('.mana-center .reserve-upkeep');
+  check('the upkeep readout sits under the MP bar', !!upkeep);
+  check('the upkeep reads "Reserve upkeep: N MP"',
+    (upkeep?.textContent ?? '') === `Reserve upkeep: ${game.reserveNextUpkeep()} MP`, upkeep?.textContent);
+  // A full Reserve hides the hand-card Reserve affordance (one slot only).
+  check('the hand Reserve affordance is hidden while the slot is full', !rootEl.querySelector('.card-reserve-btn'));
 }
 
 // --- Incapacitated member shows a distinct overlay, not plain DEAD (#33) --------

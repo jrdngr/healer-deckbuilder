@@ -1,3 +1,4 @@
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { resolveCard } from '../constants';
 import type { Game } from '../engine';
 import { Card } from './Card';
@@ -5,55 +6,53 @@ import { Card } from './Card';
 interface ReserveProps {
   game: Game;
   animating: boolean;
-  // Begin playing the banked card. The parent (BattleScreen) drives target
-  // selection for single/dead cards; no-target cards resolve immediately.
-  onPlay: () => void;
-  // Release the banked card to the discard for free (costs the whole turn).
-  onUnbank: () => void;
-  // The banked card is the live targeting source right now (its Play was pressed and
-  // a hero pick is pending) — highlight the zone so it reads as "choose a target".
+  // Begin playing the reserved card via a click (two-click targeting, like a hand card):
+  // a no-target card plays at once; a single/dead-target card enters targeting.
+  onCardClick: () => void;
+  // Begin a drag from the reserved card — drag it onto a hero/board to play it, or onto
+  // the discard pile to release it. BattleScreen decides play-vs-release on release point.
+  onCardPointerDown: (e: ReactPointerEvent) => void;
+  // The reserved card is the live targeting source right now (its play was begun and a
+  // hero pick is pending) — highlight the zone so it reads as "choose a target".
   targeting: boolean;
+  // The reserved card is the source of an in-progress drag — dim it in place while its
+  // ghost follows the cursor.
+  dragging: boolean;
 }
 
-// The Card Bank slot / "The Reserve" (91a): the one card reserved across turns. Sits
-// in the right gutter of `.mana-row` (grid column 3), mirroring the ChannelBanner in
-// the left gutter, so it occupies reserved space rather than shoving the hand down.
-// Reserving a card is FREE, but holding it costs an escalating end-of-turn MP upkeep
-// (1, then 2, then 3…) — reserve a *situational answer* (a shield, taunt, Cleanse or
-// heal) for a blow you see telegraphed, then play or release it.
-export function Reserve({ game, animating, onPlay, onUnbank, targeting }: ReserveProps) {
+// "The Reserve" (91a): the one card held across turns. Sits between the draw pile and the
+// hand. Reserving is FREE (drag a hand card onto the empty slot, or use the card's Reserve
+// affordance), but holding costs an escalating end-of-turn MP upkeep (1, then 2, 3…) shown
+// below the MP bar. Play the reserved card by clicking it (then a target) or dragging it
+// onto a hero/board; release it by dragging it onto the discard pile.
+export function Reserve({ game, animating, onCardClick, onCardPointerDown, targeting, dragging }: ReserveProps) {
   if (game.status !== 'playing') return null;
   const dc = game.reserveCard;
   if (dc == null) {
-    // Empty slot: keep the reserved gutter space (and a hint) so the row never shifts.
+    // Empty slot: a drop zone for a dragged hand card. `reserve-drop` lets the CSS light it
+    // up while a hand-card drag is live (main.drag-from-hand). The gutter width is held so
+    // the hand never shifts when a card is reserved or played back.
     return (
-      <div className="reserve reserve-empty" title="Reserve a card here to hold it across turns for an escalating MP upkeep.">
-        <span className="reserve-hint">Reserve empty</span>
+      <div className="reserve reserve-empty reserve-drop"
+        title="Drag a hand card here (or use its Reserve button) to hold it across turns for an escalating MP upkeep.">
+        <span className="reserve-hint">Reserve</span>
       </div>
     );
   }
   const card = resolveCard(dc);
-  const nextUpkeep = game.reserveNextUpkeep();
-  const drops = game.reserveDropTargets();
-  const canPlay = !animating && (drops.board || drops.slots.length > 0);
-  const canUnbank = !animating && game.canReleaseReserved();
   return (
-    <div className={`reserve reserve-full${targeting ? ' targeting' : ''}`}>
-      <span className="reserve-title">The Reserve</span>
-      <div className="reserve-card">
-        <Card card={card} affordable={game.mp >= game.effectiveCost(card)} selected={targeting} onClick={() => {}} />
-      </div>
-      <div className="reserve-upkeep" title="MP charged at the end of this turn if the card is still held. It rises by 1 each turn it stays reserved.">
-        Next upkeep: {nextUpkeep} MP
-      </div>
-      <div className="reserve-actions">
-        <button className="reserve-play" disabled={!canPlay} onClick={onPlay}
-          title="Play the reserved card now (normal MP cost).">Play</button>
-        <button className="reserve-unbank" disabled={!canUnbank} onClick={onUnbank}
-          title="Release the reserved card to the discard — free, but it uses your whole turn (no card played).">
-          Release
-        </button>
-      </div>
+    <div className={`reserve reserve-full${targeting ? ' targeting' : ''}`}
+      title="Click to play (then pick a target), or drag onto a hero to play — drag onto the discard pile to release.">
+      <Card
+        card={card}
+        uid={dc.uid}
+        affordable={!animating && game.mp >= game.effectiveCost(card)}
+        selected={targeting}
+        dragging={dragging}
+        onClick={onCardClick}
+        onPointerDown={onCardPointerDown}
+      />
+      <span className="reserve-tag">Reserve</span>
     </div>
   );
 }
