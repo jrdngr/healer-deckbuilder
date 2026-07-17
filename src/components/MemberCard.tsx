@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { CharacterBlob } from './CharacterBlob';
 import { StatBar } from './Bars';
+import { Tooltip } from './Tooltip';
 
 // One status/injury pill on a member card. `icon` is omitted for injury scars,
 // which show only their tier name.
@@ -18,9 +19,11 @@ function StatusBadge({ cls, icon, title, children }: {
   cls: string; icon?: IconName; title: string; children: ReactNode;
 }) {
   return (
-    <span className={`badge ${cls}`} title={title}>
-      {icon ? <><Icon name={icon} /> {children}</> : children}
-    </span>
+    <Tooltip content={title}>
+      <span className={`badge ${cls}`}>
+        {icon ? <><Icon name={icon} /> {children}</> : children}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -141,12 +144,14 @@ export function MemberCard({
         </div>
       )}
       {incapacitated && (
-        <div className="incap-overlay" title="A 4th scar took this member out of the run. Heal a scar at an Infirmary (or Field Hospital / Mending Totem) to restore them.">
-          <span className="incap-title">Incapacitated</span>
-          <span className="incap-hint">heal a scar to restore</span>
-        </div>
+        <Tooltip content="A 4th scar took this member out of the run. Heal a scar at an Infirmary (or Field Hospital / Mending Totem) to restore them.">
+          <div className="incap-overlay">
+            <span className="incap-title">Incapacitated</span>
+            <span className="incap-hint">heal a scar to restore</span>
+          </div>
+        </Tooltip>
       )}
-      <div className="atk" title="Attack"><Icon name="sword" /><span>{liveDamage}</span></div>
+      <Tooltip content="Attack"><div className="atk"><Icon name="sword" /><span>{liveDamage}</span></div></Tooltip>
       <CharacterBlob id={m.id} size={62} />
       <h3>{m.name}</h3>
       <StatBar label={`${displayHp} / ${m.maxHP}`}>
@@ -168,11 +173,13 @@ export function MemberCard({
         ))}
         {m.boarHp > 0 && <StatusBadge cls="shield" icon="shield" title={`Boar — soaks every hit aimed at this slot (whole, no spill), for ${m.boarTurns} more enemy turn(s). Unhealable.`}>Boar {m.boarHp}·{m.boarTurns}t</StatusBadge>}
       </div>
-      {m.id === 'mage' && <div className="charge" title={`Charge — builds as the Mage acts (max ${CHARGE_MAX}). Lightning Bolt spends it, adding ${BOLT_CHARGE_MULT} damage per Charge.`}><Icon name="bolt" /> Charge {mageCharge}/{CHARGE_MAX}</div>}
+      {m.id === 'mage' && <Tooltip content={`Charge — builds as the Mage acts (max ${CHARGE_MAX}). Lightning Bolt spends it, adding ${BOLT_CHARGE_MULT} damage per Charge.`}><div className="charge"><Icon name="bolt" /> Charge {mageCharge}/{CHARGE_MAX}</div></Tooltip>}
       {berserkerBands && (
-        <div className={`charge rage-${rageTier}`} title={`Rage bands: +${BERSERKER_BAND_BONUS} at HP ≤ ${berserkerBands[0]}, +${BERSERKER_BAND_BONUS * 2} at HP ≤ ${berserkerBands[1]}.`}>
-          <Icon name="sword" /> {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg
-        </div>
+        <Tooltip content={`Rage bands: +${BERSERKER_BAND_BONUS} at HP ≤ ${berserkerBands[0]}, +${BERSERKER_BAND_BONUS * 2} at HP ≤ ${berserkerBands[1]}.`}>
+          <div className={`charge rage-${rageTier}`}>
+            <Icon name="sword" /> {rageTier === 0 ? 'Calm' : rageTier === 1 ? 'Enraged' : 'Berserk'} — {liveDamage} dmg
+          </div>
+        </Tooltip>
       )}
     </div>
   );

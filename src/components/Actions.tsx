@@ -1,4 +1,5 @@
 import type { Game } from '../engine';
+import { Tooltip } from './Tooltip';
 
 interface ActionsProps {
   game: Game;
@@ -20,14 +21,15 @@ export function Actions({ game, animating, hasSelection, onSkip, onEndTurn, onCa
   const showRest = resting && restAmount > 0;
   return (
     <section className="buttons">
-      <button
-        className="primary"
-        disabled={over || animating}
-        onClick={resting ? onSkip : onEndTurn}
-        title={showRest ? 'Play no cards, rest to regain MP, then end your turn' : undefined}
-      >
-        {showRest ? `Rest & End Turn (+${restAmount} MP)` : 'End Turn'}
-      </button>
+      <Tooltip content={showRest ? 'Play no cards, rest to regain MP, then end your turn' : undefined}>
+        <button
+          className="primary"
+          disabled={over || animating}
+          onClick={resting ? onSkip : onEndTurn}
+        >
+          {showRest ? `Rest & End Turn (+${restAmount} MP)` : 'End Turn'}
+        </button>
+      </Tooltip>
       {hasSelection && <button onClick={onCancel}>Cancel targeting</button>}
     </section>
   );

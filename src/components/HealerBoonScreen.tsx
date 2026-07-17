@@ -2,6 +2,7 @@ import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { PASSIVE_MP_CAP } from '../constants';
 import { RewardScreen } from './ScreenChrome';
+import { Tooltip } from './Tooltip';
 
 interface HealerBoonScreenProps {
   run: Run;
@@ -20,7 +21,7 @@ export function HealerBoonScreen({ run, act }: HealerBoonScreenProps) {
   return (
     <RewardScreen
       title="A Healer’s Boon"
-      headerRight={<span className="run-gold" title="Free">Free pick</span>}
+      headerRight={<Tooltip content="Free"><span className="run-gold">Free pick</span></Tooltip>}
       hint={`Max Mana ${h.maxMana} · Hand ${h.handSize} · Rest +${h.restRegen} · Passive +${h.passiveMp}`}
       onSkip={() => act((r) => r.skipHealerBoon())}
       onBack={run.canGoBack() ? () => act((r) => r.goBackToReward()) : undefined}

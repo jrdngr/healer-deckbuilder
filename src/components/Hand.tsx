@@ -5,6 +5,7 @@ import type { ResolvedCard } from '../constants';
 import type { Game } from '../engine';
 import { Card } from './Card';
 import { groupPile } from '../deckView';
+import { Tooltip } from './Tooltip';
 
 interface HandProps {
   game: Game;
@@ -56,11 +57,13 @@ export function Hand({ game, disabled, drawCount, discardCount, selectedIndex, s
         {selectedCard ? promptFor(selectedCard, game) : 'Your hand'}
       </h3>
       <div className={`hand-area${disabled ? ' busy' : ''}`}>
-        <button className="pile draw-pile" title="Draw pile — click to view (contents shown unordered)"
-          onClick={() => setViewing(viewing === 'draw' ? null : 'draw')}>
-          <span className="pile-count">{drawCount}</span>
-          <span className="pile-label">Draw</span>
-        </button>
+        <Tooltip content="Draw pile — click to view (contents shown unordered)">
+          <button className="pile draw-pile"
+            onClick={() => setViewing(viewing === 'draw' ? null : 'draw')}>
+            <span className="pile-count">{drawCount}</span>
+            <span className="pile-label">Draw</span>
+          </button>
+        </Tooltip>
         {reserveSlot}
         <div className="hand">
           {game.hand.map((dc, i) => {
@@ -88,11 +91,13 @@ export function Hand({ game, disabled, drawCount, discardCount, selectedIndex, s
             );
           })}
         </div>
-        <button className="pile discard-pile" title="Discard pile — click to view"
-          onClick={() => setViewing(viewing === 'discard' ? null : 'discard')}>
-          <span className="pile-count">{discardCount}</span>
-          <span className="pile-label">Discard</span>
-        </button>
+        <Tooltip content="Discard pile — click to view">
+          <button className="pile discard-pile"
+            onClick={() => setViewing(viewing === 'discard' ? null : 'discard')}>
+            <span className="pile-count">{discardCount}</span>
+            <span className="pile-label">Discard</span>
+          </button>
+        </Tooltip>
       </div>
       {viewed && (
         <div className="pile-viewer" role="dialog" aria-label={`${viewing} pile contents`}>

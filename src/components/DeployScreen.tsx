@@ -3,6 +3,7 @@ import type { Run } from '../run';
 import type { RunAct } from '../useRun';
 import { MEMBER_POOL, MEMBER_PASSIVE_FLAVOR, topScarName, memberSalary, GOLD_PER_FIGHT, EMPTY_SEAT_GOLD_BONUS } from '../constants';
 import { firstEmptySlot, nextEmptySlot, reduceDeploy, type Deployment, type DragSource } from '../deploy';
+import { Tooltip } from './Tooltip';
 
 interface DeployScreenProps {
   run: Run;
@@ -120,14 +121,16 @@ export function DeployScreen({ run, act }: DeployScreenProps) {
           const scar = p.injuries > 0 ? ` · ${topScarName(p.injuries)}` : '';
           const passive = MEMBER_PASSIVE_FLAVOR[id];
           return (
-            <button key={ri} className={`draft-member${inSlot >= 0 ? ' chosen' : ''}`}
-              onClick={() => assign(ri)} aria-pressed={inSlot >= 0} title={`${passive.name} — ${passive.desc}`}
-              draggable
-              onDragStart={(e) => { dragSrc.current = { kind: 'roster', index: ri }; e.dataTransfer.effectAllowed = 'move'; }}>
-              <span className="draft-member-name">{dm.name}{inSlot >= 0 ? ` — ${SLOT_NAMES[inSlot]}` : ''}</span>
-              <span className="draft-member-stats">HP {p.maxHP} · DMG {p.damage} · {memberSalary(p)}g/fight{scar}</span>
-              <span className="draft-member-ability">{passive.name}</span>
-            </button>
+            <Tooltip key={ri} content={`${passive.name} — ${passive.desc}`}>
+              <button className={`draft-member${inSlot >= 0 ? ' chosen' : ''}`}
+                onClick={() => assign(ri)} aria-pressed={inSlot >= 0}
+                draggable
+                onDragStart={(e) => { dragSrc.current = { kind: 'roster', index: ri }; e.dataTransfer.effectAllowed = 'move'; }}>
+                <span className="draft-member-name">{dm.name}{inSlot >= 0 ? ` — ${SLOT_NAMES[inSlot]}` : ''}</span>
+                <span className="draft-member-stats">HP {p.maxHP} · DMG {p.damage} · {memberSalary(p)}g/fight{scar}</span>
+                <span className="draft-member-ability">{passive.name}</span>
+              </button>
+            </Tooltip>
           );
         })}
       </div>

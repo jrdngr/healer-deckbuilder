@@ -3,6 +3,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { MODIFIERS } from '../constants';
 import type { CardId, ResolvedCard } from '../constants';
 import { Icon } from './Icon';
+import { Tooltip } from './Tooltip';
 
 // Visual family of each card, for the edge tint: heals green, protective wards
 // gold, mana economy blue, aggressive power plays red-purple. Presentation only.
@@ -111,22 +112,23 @@ export function Card({ card, affordable, ineligible = false, selected, onClick, 
       }}
     >
       {channeling && (
-        <div className="channel-badge" title="This card's channel is active — playing any card cancels it.">
-          <Icon name="bolt" /> channeling · {channelingTurns} left
-        </div>
+        <Tooltip content="This card's channel is active — playing any card cancels it.">
+          <div className="channel-badge">
+            <Icon name="bolt" /> channeling · {channelingTurns} left
+          </div>
+        </Tooltip>
       )}
       <div className="cost">{card.cost}</div>
-      {card.heal != null && <div className="heal" title="Healing"><Icon name="heart" /> {card.heal}</div>}
+      {card.heal != null && <Tooltip content="Healing"><div className="heal"><Icon name="heart" /> {card.heal}</div></Tooltip>}
       <div className="cname">{card.name}</div>
       <div className="cdesc">{card.desc}</div>
       {card.upgrades.length > 0 && (
-        <div
-          className="card-upgrades"
-          title={card.upgrades.map((u) => `${MODIFIERS[u].name} — ${MODIFIERS[u].desc}`).join('\n')}
-        >
-          {card.upgrades.map((u, i) => <span key={i} className={`upgrade-pip ${u}`} />)}
-          <span className="upgrade-names">{card.upgrades.map((u) => MODIFIERS[u].name).join(' · ')}</span>
-        </div>
+        <Tooltip content={card.upgrades.map((u) => `${MODIFIERS[u].name} — ${MODIFIERS[u].desc}`).join('\n')}>
+          <div className="card-upgrades">
+            {card.upgrades.map((u, i) => <span key={i} className={`upgrade-pip ${u}`} />)}
+            <span className="upgrade-names">{card.upgrades.map((u) => MODIFIERS[u].name).join(' · ')}</span>
+          </div>
+        </Tooltip>
       )}
     </div>
   );

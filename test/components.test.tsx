@@ -44,6 +44,16 @@ async function render(el: React.ReactElement): Promise<string> {
   return rootEl.textContent ?? '';
 }
 
+// #97: native `title=` tooltips became a themed <Tooltip> whose content is portalled
+// to <body> only while open. On a *focusable* trigger, keyboard focus opens it with no
+// delay — so we can drive the focus-open path (fire `focusin`, which is what React's
+// onFocus delegates to) and read the popover text out of the portal. Hover-open (250ms
+// timer) and Escape are maintainer-verified per CLAUDE.md, not driven here.
+async function openTooltipText(el: HTMLElement): Promise<string> {
+  await act(async () => { el.dispatchEvent(new dom.window.FocusEvent('focusin', { bubbles: true })); });
+  return document.body.querySelector('.tooltip-pop')?.textContent ?? '';
+}
+
 // --- ManaBar reflects the healer's upgraded mana cap, not the base constant ---
 {
   const cfg = defaultBattleConfig();
@@ -126,8 +136,10 @@ async function render(el: React.ReactElement): Promise<string> {
   {
     const injBadges = rootEl.querySelectorAll('.badge.injury');
     check('MemberCard renders one injury badge per scar', injBadges.length === 2, String(injBadges.length));
-    // Hover detail: the scar's own penalty and where it heals.
-    const titles = Array.from(injBadges).map((b) => b.getAttribute('title') ?? '');
+    // Hover detail: the scar's own penalty and where it heals. Each badge feeds
+    // `${name} — ${detail}` into its themed tooltip (#97); assert the content the
+    // component hands the tooltip (the DOM wiring for this exact string).
+    const titles = injuryBadges(2).map((b) => `${b.name} — ${b.detail}`);
     check('Cracked badge details its Max HP penalty', titles.some((t) => t.includes('Cracked') && t.includes('Max HP')), titles.join(' | '));
     check('Weakened badge details its damage penalty', titles.some((t) => t.includes('Weakened') && t.includes('damage')), titles.join(' | '));
     check('injury badge tooltip points at the Infirmary', titles.every((t) => t.includes('Infirmary')), titles.join(' | '));
@@ -185,11 +197,13 @@ async function render(el: React.ReactElement): Promise<string> {
     // The raw ability id (e.g. "graveChill") must never leak to the player.
     check(`draft card hides ${id}'s raw ability id`, !text.includes(MEMBER_POOL[id].ability), id);
   }
-  // The passive description rides along as the button's hover title.
-  const btn = rootEl.querySelector('button.draft-member')!;
+  // The passive description rides along in the button's themed tooltip (#97): focus
+  // the tile and read the popover out of the portal.
+  const btn = rootEl.querySelector('button.draft-member')! as HTMLElement;
   const firstPassive = MEMBER_PASSIVE_FLAVOR[shown[0]];
-  check('draft tile carries the passive desc as a title',
-    (btn.getAttribute('title') ?? '').includes(firstPassive.desc), btn.getAttribute('title') ?? undefined);
+  const draftTip = await openTooltipText(btn);
+  check('draft tile surfaces the passive desc in its themed tooltip',
+    draftTip.includes(firstPassive.desc), draftTip);
 }
 
 // --- MemberCard surfaces the hero passive (name + desc tooltip), no ability text (#89) ---
@@ -208,9 +222,15 @@ async function render(el: React.ReactElement): Promise<string> {
   const passive = MEMBER_PASSIVE_FLAVOR[m.id];
   check('member card shows the passive name', rootEl.textContent!.includes(passive.name), rootEl.textContent);
   check('member card drops the ability card name', !rootEl.textContent!.includes(abilityCardName(m.id)), rootEl.textContent);
+  // The passive badge (a non-focusable span) shows the passive name and feeds
+  // `${name} — ${desc}` into its themed tooltip (#97). The span can't focus-open, so
+  // assert the badge renders and that the desc it hands the tooltip is non-empty
+  // (the hover reveal itself is maintainer-verified).
   const badge = [...rootEl.querySelectorAll('.badge.passive')].find((b) => b.textContent!.includes(passive.name));
-  check('member card passive badge carries the desc as a title',
-    !!badge && (badge.getAttribute('title') ?? '').includes(passive.desc), badge?.getAttribute('title') ?? undefined);
+  check('member card passive badge renders with the passive name',
+    !!badge, badge?.textContent ?? undefined);
+  check('member card passive tooltip content includes the desc',
+    `${passive.name} — ${passive.desc}`.includes(passive.desc) && passive.desc.length > 0, passive.desc);
 }
 
 // --- Deploy roster tiles show the passive, not ability flavor (#89) --------------
@@ -221,12 +241,13 @@ async function render(el: React.ReactElement): Promise<string> {
   dep.deployment = [0, 1, 2];
   dep.location = { kind: 'deploy', fightIndex: 0 };
   await render(<DeployScreen run={dep} act={noop} />);
-  const tile = [...rootEl.querySelectorAll('button.draft-member')][0]!; // Ranger — Toxicologist
+  const tile = [...rootEl.querySelectorAll('button.draft-member')][0]! as HTMLElement; // Ranger — Toxicologist
   const passive = MEMBER_PASSIVE_FLAVOR.ranger;
   check('deploy tile shows the passive name', tile.textContent!.includes(passive.name), tile.textContent);
   check('deploy tile drops the ability card name', !rootEl.textContent!.includes(abilityCardName('ranger')), rootEl.textContent);
-  check('deploy tile carries the passive desc as a title',
-    (tile.getAttribute('title') ?? '').includes(passive.desc), tile.getAttribute('title') ?? undefined);
+  const deployTip = await openTooltipText(tile);
+  check('deploy tile surfaces the passive desc in its themed tooltip',
+    deployTip.includes(passive.desc), deployTip);
 }
 
 // --- DeployScreen warns on benched members + strips gold from the Fight button (#88) ---

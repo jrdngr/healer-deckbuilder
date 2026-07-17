@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
+import { Tooltip } from './Tooltip';
 
 // The ⦿ gold pill shown in the topbar and on every shop/reward header.
 export function GoldTag({ gold, label = 'Gold' }: { gold: number; label?: string }) {
-  return <span className="run-gold" title={label}>⦿ {gold}</span>;
+  return <Tooltip content={label}><span className="run-gold">⦿ {gold}</span></Tooltip>;
 }
 
 // The shared header row for shop / reward / draft screens: a title on the left and

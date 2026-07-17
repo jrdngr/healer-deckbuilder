@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CARDS, MEMBER_DEFS, makeDeckCard, resolveCard } from '../constants';
 import type { GameController } from '../useGame';
 import { Card } from './Card';
+import { Tooltip } from './Tooltip';
 
 interface DevPanelProps {
   // The active fight's controller, or null when not in a fight.
@@ -32,13 +33,14 @@ export function DevPanel({ ctrl, addGold }: DevPanelProps) {
 
   return (
     <>
-      <button
-        className="dev-toggle"
-        title="Dev panel"
-        onClick={() => setOpen((v) => !v)}
-      >
-        {open ? '▶' : '◀'} DEV
-      </button>
+      <Tooltip content="Dev panel">
+        <button
+          className="dev-toggle"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? '▶' : '◀'} DEV
+        </button>
+      </Tooltip>
 
       <aside className={`dev-panel${open ? '' : ' closed'}`}>
         {libraryOpen ? (

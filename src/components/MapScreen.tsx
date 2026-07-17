@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { Run } from '../run';
 import { NODE_META } from './nodeMeta';
 import { nextFightPreview, InjuryBanner, NodeTileBody } from './MapChrome';
+import { Tooltip } from './Tooltip';
 
 interface MapScreenProps {
   run: Run;
@@ -77,13 +78,14 @@ export function MapScreen({ run, onChoose }: MapScreenProps) {
             </button>
           </div>
         ))}
-        <div
-          className={`map-node map-next-fight${boss ? ' boss' : ''}`}
-          style={{ left: '50%', top: `${FIGHT_Y}%`, '--d': '620ms' } as MapStyle}
-          title={boss ? 'An act boss — expect a signature mechanic.' : 'A normal fight.'}
-        >
-          <NodeTileBody icon="⚔" label={`Ahead: ${foe.name}`} desc={threat} />
-        </div>
+        <Tooltip content={boss ? 'An act boss — expect a signature mechanic.' : 'A normal fight.'}>
+          <div
+            className={`map-node map-next-fight${boss ? ' boss' : ''}`}
+            style={{ left: '50%', top: `${FIGHT_Y}%`, '--d': '620ms' } as MapStyle}
+          >
+            <NodeTileBody icon="⚔" label={`Ahead: ${foe.name}`} desc={threat} />
+          </div>
+        </Tooltip>
       </div>
     </main>
   );

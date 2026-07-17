@@ -1,6 +1,6 @@
 # Issue 97 — Themed tooltip component (replace native `title=`, 250ms delay)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-17 — reusable `<Tooltip>` primitive replaces all 36 native `title=` call sites; 250ms hover / immediate focus-open, Escape close, viewport-flip, portalled themed popover)
 - **Phase:** ui
 - **Depends:** —
 - **Addresses:** intake 2026-07-17 — "Tooltip revamp: use custom themed UI for tooltips instead of native; change tooltip delay before appearing to be 250ms"
@@ -90,3 +90,52 @@ The maintainer also wants the reveal delay shortened to **250ms** (native is muc
 - Touch/long-press tooltip behavior — not requested; the game is mouse/keyboard.
 - Reworking tooltip *content* wording anywhere. Preserve every current string verbatim.
 - Animation polish beyond a basic fade is optional; don't gold-plate.
+
+## Resolution (2026-07-17)
+
+**Component API** (what #98 builds on):
+
+```tsx
+<Tooltip content={reactNodeOrString}>
+  <button className="…" onClick={…}>…</button>   {/* any single element trigger */}
+</Tooltip>
+```
+
+- `src/components/Tooltip.tsx` — the primitive. Wraps a **single** trigger element
+  (button / span / div) via `cloneElement`, injecting a merged ref + hover/focus/blur/
+  keydown handlers. It **preserves** the trigger's own `onMouseEnter/Leave/onFocus/onBlur/
+  onKeyDown/ref` (called first) and never touches its `className/onClick/aria-*`.
+  - `content` is `ReactNode`. **String content is split on `\n`** into `.tooltip-line`
+    rows (handles the card-upgrades multi-line tooltip). **`content == null` ⇒ no-op**:
+    the trigger renders untouched (mirrors the old `title={undefined}` conditionals in
+    `Actions`/`EnemyPanel`). #98 can pass rich JSX (e.g. a keyword swatch) as `content`.
+  - Hover opens after the delay; leaving before it clears the timer. **Focus opens
+    immediately** but only when the trigger is genuinely focusable (`isFocusable`: button/
+    a/input/select/textarea or `tabIndex >= 0`) — no `tabIndex` is added to spans/divs.
+    Blur and **Escape** close.
+- `src/tooltip.ts` — pure, DOM-free logic (unit-tested in `test/tooltip.test.ts`):
+  - `TOOLTIP_DELAY_MS = 250` (the one obvious delay const), `TOOLTIP_GAP`, `TOOLTIP_MARGIN`.
+  - `computeTooltipPlacement(triggerRect, tipSize, viewport, gap?, margin?)` → `{ side:
+    'top'|'bottom', left, top }`: prefers below, flips above when cramped, clamps left
+    to the viewport margins. Tests assert the *decision* (side / clamp), not pixels.
+  - `hoverRevealsAt(dwellMs, delayMs?)` — the hover-through gate, expressed purely.
+- `styles.css` — `.tooltip-pop` / `.tooltip-line` (dark `--ink` panel, cream text, app
+  font, `--r-sm` radius, sticker shadow, 120ms fade, `pointer-events: none`, `z-index:1000`).
+
+**Divergence from the issue's "no portal" note:** the popover is rendered with
+`createPortal(...)` to `document.body`. This is **not** a new dependency — `createPortal`
+is part of the already-present `react-dom`. It was necessary because triggers live inside
+transformed ancestors (the card fan, member-card react animations), which would otherwise
+become the containing block for a `position: fixed` popover and mis-place / clip it.
+Positioning is still "plain React state + `getBoundingClientRect()`" measured against the
+viewport, exactly as specified — only the DOM mount point moved to `<body>`.
+
+**Call sites converted: 36 native `title=` attributes** across 22 component files
+(`Card` ×3, `EnemyPanel` ×6, `MemberCard` ×5 incl. the shared `StatusBadge`, `Topbar` ×3,
+`Hand` ×2, `Reserve` ×2, and one each in `Actions`, `DraftScreen`, `DeployScreen`,
+`RunOverScreen`, `HealerBoonScreen`, `Party`, `ManaBar`, `ChannelBanner`, `ScreenChrome`
+(GoldTag), `StarterDeckScreen`, `RelicTile`, `DevPanel`, `MapChrome`, `MapScreen`,
+`BattleScreen`). Every string is preserved **verbatim** — zero wording changes (that is
+#98). Remaining `title=` in `src/components/` are React component props named `title`
+(`ScreenHeader`/`RewardScreen`/`ShopFrame`/`PickStage` headings), not DOM tooltips, and
+are out of scope. `<title>` inside SVG icons was left untouched.

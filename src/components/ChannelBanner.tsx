@@ -1,6 +1,7 @@
 import { CARDS } from '../constants';
 import type { Game } from '../engine';
 import { Icon } from './Icon';
+import { Tooltip } from './Tooltip';
 
 interface ChannelBannerProps {
   game: Game;
@@ -28,16 +29,18 @@ export function ChannelBanner({ game }: ChannelBannerProps) {
   const pct = Math.max(0, Math.min(100, (turns / maxTurns) * 100));
 
   return (
-    <div className="cast-bar channel-banner" title="Playing any card cancels this channel.">
-      <span className="cast-label channel-label">
-        <Icon name="bolt" /> Channeling {def.name}
-        {bound && <span className="channel-target"> → {bound.name}</span>}
-        {' · '}
-        {turns} left
-      </span>
-      <div className="cast-track">
-        <div className="cast-fill channel-fill" style={{ width: `${pct}%` }} />
+    <Tooltip content="Playing any card cancels this channel.">
+      <div className="cast-bar channel-banner">
+        <span className="cast-label channel-label">
+          <Icon name="bolt" /> Channeling {def.name}
+          {bound && <span className="channel-target"> → {bound.name}</span>}
+          {' · '}
+          {turns} left
+        </span>
+        <div className="cast-track">
+          <div className="cast-fill channel-fill" style={{ width: `${pct}%` }} />
+        </div>
       </div>
-    </div>
+    </Tooltip>
   );
 }

@@ -2,6 +2,7 @@ import type { Game } from '../engine';
 import { Icon } from './Icon';
 import { CharacterBlob } from './CharacterBlob';
 import { StatBar } from './Bars';
+import { Tooltip } from './Tooltip';
 
 interface EnemyPanelProps {
   game: Game;
@@ -31,11 +32,13 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
       <div className="enemy-head">
         <CharacterBlob id={game.enemyDef.id} size={86} isEnemy />
         <h2>
-          {game.enemyDef.name} {e.enraged && <span className="enrage" title="Enraged — the enemy's attacks now hit harder for the rest of the fight.">ENRAGED</span>}
+          {game.enemyDef.name} {e.enraged && <Tooltip content="Enraged — the enemy's attacks now hit harder for the rest of the fight."><span className="enrage">ENRAGED</span></Tooltip>}
           {showCountdown && (
-            <span className="enrage-countdown" title="The enemy's attacks grow heavier when it enrages.">
-              Enrages in {untilEnrage}
-            </span>
+            <Tooltip content="The enemy's attacks grow heavier when it enrages.">
+              <span className="enrage-countdown">
+                Enrages in {untilEnrage}
+              </span>
+            </Tooltip>
           )}
         </h2>
         <StatBar className="enemy-bar" label={`${displayHp} / ${e.maxHP} HP`}>
@@ -43,13 +46,14 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
         </StatBar>
         <div className="enemy-status">
           {game.status === 'playing' && (
-            <span className="turn-chip" title="The current turn. The standing telegraph resolves at the end of it.">Turn {game.turn}</span>
+            <Tooltip content="The current turn. The standing telegraph resolves at the end of it."><span className="turn-chip">Turn {game.turn}</span></Tooltip>
           )}
-          {intent && <span className="enemy-intent" title={intentDetail ?? undefined}>Intends: {intent}</span>}
-          {e.poison > 0 ? <span className="enemy-poison" title={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}><Icon name="poison" /> Poison {e.poison}</span> : ''}
+          {intent && <Tooltip content={intentDetail ?? undefined}><span className="enemy-intent">Intends: {intent}</span></Tooltip>}
+          {e.poison > 0 ? <Tooltip content={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}><span className="enemy-poison"><Icon name="poison" /> Poison {e.poison}</span></Tooltip> : ''}
         </div>
         {channel && (
-          <div className="cast-bar" title={`${channel.channelName}: ${channel.damage} damage on resolve`}>
+          <Tooltip content={`${channel.channelName}: ${channel.damage} damage on resolve`}>
+          <div className="cast-bar">
             <span className="cast-label">
               <Icon name="bolt" /> {channel.channelName} — resolves in {castTurns} turn{castTurns === 1 ? '' : 's'} ({channel.damage})
             </span>
@@ -58,6 +62,7 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
               <div className="cast-fill" style={{ width: `${Math.max(0, 100 - castTurns * 45)}%` }} />
             </div>
           </div>
+          </Tooltip>
         )}
       </div>
     </section>

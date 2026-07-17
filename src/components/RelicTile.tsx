@@ -1,5 +1,6 @@
 import { RELICS } from '../constants';
 import type { RelicOffer } from '../constants';
+import { Tooltip } from './Tooltip';
 
 interface RelicTileProps {
   offer: RelicOffer;
@@ -13,16 +14,17 @@ export function RelicTile({ offer, affordable, onClick }: RelicTileProps) {
   const def = RELICS[offer.relicId];
   return (
     <div className="shop-offer">
-      <button
-        className={`relic-tile${affordable ? '' : ' unaffordable'}`}
-        disabled={!affordable}
-        onClick={onClick}
-        title={def.desc}
-      >
-        <span className="relic-icon">{def.icon}</span>
-        <span className="relic-name">{def.name}</span>
-        <span className="relic-desc">{def.desc}</span>
-      </button>
+      <Tooltip content={def.desc}>
+        <button
+          className={`relic-tile${affordable ? '' : ' unaffordable'}`}
+          disabled={!affordable}
+          onClick={onClick}
+        >
+          <span className="relic-icon">{def.icon}</span>
+          <span className="relic-name">{def.name}</span>
+          <span className="relic-desc">{def.desc}</span>
+        </button>
+      </Tooltip>
       <div className={`offer-price ${offer.rarity}`}>{offer.price > 0 ? `⦿ ${offer.price}` : 'Take'}</div>
     </div>
   );

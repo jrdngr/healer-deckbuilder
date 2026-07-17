@@ -1,5 +1,6 @@
 import { MemberCard } from './MemberCard';
 import { Icon } from './Icon';
+import { Tooltip } from './Tooltip';
 import type { Slot } from '../constants';
 import type { Game } from '../engine';
 import type { BattleView, MemberReactState } from '../useGame';
@@ -19,9 +20,11 @@ export function Party({ game, view, reacts, animating, isValidTarget, onMemberCl
   return (
     <section className="party">
       {game.wounded && (
-        <div className="hex-banner" title="A Hex halves all healing until it fades. Cleanse removes it.">
-          <Icon name="poison" /> Hexed — healing halved ({game.woundTurns})
-        </div>
+        <Tooltip content="A Hex halves all healing until it fades. Cleanse removes it.">
+          <div className="hex-banner">
+            <Icon name="poison" /> Hexed — healing halved ({game.woundTurns})
+          </div>
+        </Tooltip>
       )}
       {game.members.map((m) => {
         // An empty deploy slot (no member fielded here) renders as a placeholder so

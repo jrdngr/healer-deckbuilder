@@ -2,6 +2,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react';
 import { resolveCard } from '../constants';
 import type { Game } from '../engine';
 import { Card } from './Card';
+import { Tooltip } from './Tooltip';
 
 interface ReserveProps {
   game: Game;
@@ -33,26 +34,28 @@ export function Reserve({ game, animating, onCardClick, onCardPointerDown, targe
     // up while a hand-card drag is live (main.drag-from-hand). The gutter width is held so
     // the hand never shifts when a card is reserved or played back.
     return (
-      <div className="reserve reserve-empty reserve-drop"
-        title="Drag a hand card here to hold it across turns for an escalating MP upkeep.">
-        <span className="reserve-hint">Reserve</span>
-      </div>
+      <Tooltip content="Drag a hand card here to hold it across turns for an escalating MP upkeep.">
+        <div className="reserve reserve-empty reserve-drop">
+          <span className="reserve-hint">Reserve</span>
+        </div>
+      </Tooltip>
     );
   }
   const card = resolveCard(dc);
   return (
-    <div className={`reserve reserve-full${targeting ? ' targeting' : ''}`}
-      title="Click to play (then pick a target), or drag onto a hero to play — drag onto the discard pile to release.">
-      <Card
-        card={card}
-        uid={dc.uid}
-        affordable={!animating && game.mp >= game.effectiveCost(card)}
-        selected={targeting}
-        dragging={dragging}
-        onClick={onCardClick}
-        onPointerDown={onCardPointerDown}
-      />
-      <span className="reserve-tag">Reserve</span>
-    </div>
+    <Tooltip content="Click to play (then pick a target), or drag onto a hero to play — drag onto the discard pile to release.">
+      <div className={`reserve reserve-full${targeting ? ' targeting' : ''}`}>
+        <Card
+          card={card}
+          uid={dc.uid}
+          affordable={!animating && game.mp >= game.effectiveCost(card)}
+          selected={targeting}
+          dragging={dragging}
+          onClick={onCardClick}
+          onPointerDown={onCardPointerDown}
+        />
+        <span className="reserve-tag">Reserve</span>
+      </div>
+    </Tooltip>
   );
 }

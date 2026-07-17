@@ -1,5 +1,6 @@
 import type { Run } from '../run';
 import { FIGHT_COUNT } from '../constants';
+import { Tooltip } from './Tooltip';
 
 interface RunOverScreenProps {
   run: Run;
@@ -24,12 +25,14 @@ export function RunOverScreen({ run, onNewRun }: RunOverScreenProps) {
         {(() => {
           const s = run.runScore();
           return (
-            <p className="runover-score" title="Progress and relics score points; hoarded gold costs them — spend it next time.">
+            <Tooltip content="Progress and relics score points; hoarded gold costs them — spend it next time.">
+            <p className="runover-score">
               Score: <strong>{s.total}</strong>
               {' '}({s.fights} fights{s.relics > 0 ? ` + ${s.relics} relics` : ''}
               {s.victory > 0 ? ` + ${s.victory} victory` : ''}
               {s.goldPenalty < 0 ? ` − ${-s.goldPenalty} hoarded gold` : ''})
             </p>
+            </Tooltip>
           );
         })()}
         <button className="primary" onClick={onNewRun}>New Run</button>

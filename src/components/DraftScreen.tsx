@@ -3,6 +3,7 @@ import type { RunAct } from '../useRun';
 import { MEMBER_POOL, MEMBER_PASSIVE_FLAVOR, CONVENTIONALLY_HEALABLE } from '../constants';
 import type { MemberId } from '../constants';
 import { ScreenHeader } from './ScreenChrome';
+import { Tooltip } from './Tooltip';
 
 // One member offer button — shared by the pick-one draft and the Recruit node. Shows
 // the hero's always-on passive (name + hover description), never the raw id (#37/#89);
@@ -12,13 +13,15 @@ export function MemberOfferButton({ id, onClick }: { id: MemberId; onClick: () =
   const healable = CONVENTIONALLY_HEALABLE.has(id);
   const passive = MEMBER_PASSIVE_FLAVOR[id];
   return (
-    <button className="draft-member" onClick={onClick} title={`${passive.name} — ${passive.desc}`}>
-      <span className="draft-member-name">{d.name}</span>
-      <span className="draft-member-stats">
-        HP {d.maxHP} · DMG {d.damage}{healable ? '' : ' · self-reliant'}
-      </span>
-      <span className="draft-member-ability">{passive.name}</span>
-    </button>
+    <Tooltip content={`${passive.name} — ${passive.desc}`}>
+      <button className="draft-member" onClick={onClick}>
+        <span className="draft-member-name">{d.name}</span>
+        <span className="draft-member-stats">
+          HP {d.maxHP} · DMG {d.damage}{healable ? '' : ' · self-reliant'}
+        </span>
+        <span className="draft-member-ability">{passive.name}</span>
+      </button>
+    </Tooltip>
   );
 }
 

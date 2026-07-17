@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ENEMY_HP_BY_FIGHT, FIGHT_COUNT, isActBoss, memberDefAt } from '../constants';
 import type { Run } from '../run';
+import { Tooltip } from './Tooltip';
 
 // The next fight is shared by both fork paths and by the branch hub — preview its
 // foe and a rough threat rating (flaw #15: no blind forks). peekEncounter is
@@ -22,9 +23,11 @@ export function InjuryBanner({ run }: { run: Run }) {
     .filter(({ p }) => p.injuries > 0);
   if (injured.length === 0) return null;
   return (
-    <p className="map-sub party-injuries" title="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
-      🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}
-    </p>
+    <Tooltip content="Lasting injuries reduce a member's stats until healed at an Infirmary (or a Field Hospital / the Mending Totem).">
+      <p className="map-sub party-injuries">
+        🩹 Injured: {injured.map(({ p, name }) => `${name} ×${p.injuries}`).join(' · ')}
+      </p>
+    </Tooltip>
   );
 }
 

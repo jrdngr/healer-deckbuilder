@@ -6,6 +6,7 @@ import {
 } from '../constants';
 import type { CardId, StarterDeckId } from '../constants';
 import { Card } from './Card';
+import { Tooltip } from './Tooltip';
 import { ScreenHeader } from './ScreenChrome';
 
 // Summarize a card list as "3x Quick Heal · Heal · ..." so the player sees what a
@@ -64,16 +65,16 @@ export function StarterDeckScreen({ run, act }: StarterDeckScreenProps) {
         {STARTER_DECK_IDS.map((id: StarterDeckId) => {
           const d = STARTER_DECKS[id];
           return (
-            <button
-              key={id}
-              className="draft-member"
-              onClick={() => act((r) => r.chooseStarterMode(id))}
-              title={d.desc}
-            >
-              <span className="draft-member-name">{d.name}</span>
-              <span className="draft-member-stats">{d.desc}</span>
-              <span className="draft-member-ability">{summaries[id]}</span>
-            </button>
+            <Tooltip key={id} content={d.desc}>
+              <button
+                className="draft-member"
+                onClick={() => act((r) => r.chooseStarterMode(id))}
+              >
+                <span className="draft-member-name">{d.name}</span>
+                <span className="draft-member-stats">{d.desc}</span>
+                <span className="draft-member-ability">{summaries[id]}</span>
+              </button>
+            </Tooltip>
           );
         })}
       </div>

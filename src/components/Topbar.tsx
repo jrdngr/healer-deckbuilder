@@ -4,6 +4,7 @@ import { RELICS } from '../constants';
 import type { DeckCard, RelicId } from '../constants';
 import { groupPile } from '../deckView';
 import { GoldTag } from './ScreenChrome';
+import { Tooltip } from './Tooltip';
 
 interface TopbarProps {
   seedField: string;
@@ -29,28 +30,32 @@ export function Topbar({ seedField, onSeedChange, onNewRun, gold, progress, reli
         {relics.length > 0 && (
           <span className="relic-row" aria-label="Relics">
             {relics.map((id) => (
-              <span key={id} className="relic-badge" title={`${RELICS[id].name} — ${RELICS[id].desc}`}>
-                {RELICS[id].icon}
-              </span>
+              <Tooltip key={id} content={`${RELICS[id].name} — ${RELICS[id].desc}`}>
+                <span className="relic-badge">
+                  {RELICS[id].icon}
+                </span>
+              </Tooltip>
             ))}
           </span>
         )}
       </div>
       <div className="newgame">
-        <button
-          className="view-deck"
-          title="View your full run deck"
-          onClick={() => setViewingDeck(true)}
-        >
-          View Deck ({deck.length})
-        </button>
-        <button
-          className="speed-toggle"
-          title="Animation speed"
-          onClick={() => { toggleAnimSpeed(); forceSpeed((x) => x + 1); }}
-        >
-          Speed {animSpeedLabel()}
-        </button>
+        <Tooltip content="View your full run deck">
+          <button
+            className="view-deck"
+            onClick={() => setViewingDeck(true)}
+          >
+            View Deck ({deck.length})
+          </button>
+        </Tooltip>
+        <Tooltip content="Animation speed">
+          <button
+            className="speed-toggle"
+            onClick={() => { toggleAnimSpeed(); forceSpeed((x) => x + 1); }}
+          >
+            Speed {animSpeedLabel()}
+          </button>
+        </Tooltip>
         <label htmlFor="seed">
           Seed{' '}
           <input

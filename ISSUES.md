@@ -36,5 +36,4 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 97 | 📋 Open | [Themed tooltip component (replace native title=, 250ms delay)](issues/97-themed-tooltip-component.md) | ui | — | intake 07-17 |
 | 98 | 📋 Open | [Status-effect keyword tooltips (highlight, strip parentheticals, reword)](issues/98-status-effect-keyword-tooltips.md) | ui + content | #97 | intake 07-17 |

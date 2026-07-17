@@ -13,6 +13,7 @@ import { Reserve } from './Reserve';
 import { Hand } from './Hand';
 import { Card } from './Card';
 import { Actions } from './Actions';
+import { Tooltip } from './Tooltip';
 import { CombatLog } from './CombatLog';
 import { GameOverlay } from './GameOverlay';
 import { AttackLines } from './AttackLines';
@@ -381,10 +382,11 @@ export function BattleScreen({
             />
           </div>
           {game.status === 'playing' && game.reserveCard != null && (
-            <div className="reserve-upkeep"
-              title="MP charged at the end of this turn while a card is reserved. It rises by 1 each turn the card stays in the Reserve.">
-              Reserve upkeep: {game.reserveNextUpkeep()} MP
-            </div>
+            <Tooltip content="MP charged at the end of this turn while a card is reserved. It rises by 1 each turn the card stays in the Reserve.">
+              <div className="reserve-upkeep">
+                Reserve upkeep: {game.reserveNextUpkeep()} MP
+              </div>
+            </Tooltip>
           )}
         </div>
       </div>

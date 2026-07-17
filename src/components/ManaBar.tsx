@@ -1,6 +1,7 @@
 import type { Game } from '../engine';
 import { Icon } from './Icon';
 import { StatBar } from './Bars';
+import { Tooltip } from './Tooltip';
 
 export function ManaBar({ game, animating }: { game: Game; animating: boolean }) {
   const live = !animating && game.status === 'playing';
@@ -19,7 +20,7 @@ export function ManaBar({ game, animating }: { game: Game; animating: boolean })
         label={`MP ${game.mp} / ${max}`}
         extra={<>
           {game.refresh > 0 && <span className="refresh-pill"><Icon name="plus" /> +{game.refresh}</span>}
-          {siphon > 0 && <span className="siphon-pill" title="The enemy will drain this much MP next turn."><Icon name="drop" /> −{siphon}</span>}
+          {siphon > 0 && <Tooltip content="The enemy will drain this much MP next turn."><span className="siphon-pill"><Icon name="drop" /> −{siphon}</span></Tooltip>}
         </>}
       >
         <div className="seg mp" style={{ left: 0, width: `${mpPct}%` }} />
