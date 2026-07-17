@@ -17,8 +17,8 @@ import type { RelicId } from './relics';
 // ---------------------------------------------------------------------------
 
 // Card upgrade modifiers. Cards carry up to two of these in their upgrade slots.
-// (Retain was removed in 91a — the Card Bank slot ("The Reserve") is now the single
-// hand-holding mechanism; see src/engine/core.ts bankCard.)
+// (Retain was removed in 91a — "The Reserve" is now the single hand-holding
+// mechanism; see src/engine/core.ts reserveCard.)
 export type ModifierId = 'efficient' | 'potent' | 'lingering';
 
 // A concrete card instance in the run deck: a base card id plus the upgrade

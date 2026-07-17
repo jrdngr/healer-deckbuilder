@@ -18,7 +18,7 @@ import {
   SKALD_DMG_CAP, SKALD_DMG_PER_CARD, memberDefAt,
   DRAFT_RATING, CONVENTIONAL_STRIKERS, MEMBER_POOL, ABILITY_CARD,
   INFIRMARY_HP_PRICE, INFIRMARY_INJURY_PRICE, SAP_VULN_CAP, PASSIVE_MP_CAP,
-  BANK_UPKEEP_PER_TURN,
+  RESERVE_UPKEEP_PER_TURN,
 } from '../src/constants';
 import type { CardId, Slot, RelicId, AbilityId, MemberId } from '../src/constants';
 import type { SkillProfile } from './profile';
@@ -461,11 +461,11 @@ function tryCleanseThreat(game: Game): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Card Bank slot / "The Reserve" (91a) tactics. Banking is FREE but holding a card
+// "The Reserve" (91a) tactics. Reserving is FREE but holding a card
 // costs escalating end-of-turn MP (pressure-positive), so a good player only reserves
 // a *situational answer* it expects to use — a Shield for a big telegraphed hit, a
 // Cleanse for a recurring Mark/Poison — and plays it back the turn it is needed. These
-// exercise the mechanic in the sim: banking is USED, but never free (the upkeep taxes
+// exercise the mechanic in the sim: the Reserve is USED, but never free (the upkeep taxes
 // the same MP the fight already runs dry). Bounded (one slot) so they cannot loop.
 // ---------------------------------------------------------------------------
 
@@ -476,22 +476,22 @@ const RESERVE_ANSWERS: CardId[] = ['shield', 'cleanse'];
 // member facing a (near-)lethal incoming hit, or a held Cleanse when a Mark / heavy
 // Poison lands. Tried alongside the survival guards so the answer beats offense.
 function tryPlayReserve(game: Game): boolean {
-  const dc = game.bankCard;
+  const dc = game.reserveCard;
   if (dc == null) return false;
   const card = resolveCard(dc);
   if (card.id === 'cleanse') {
-    if (game.canPlayBanked(null) !== null) return false; // unaffordable / no board play
+    if (game.canPlayReserved(null) !== null) return false; // unaffordable / no board play
     const marked = game.livingMembers().some((m) => m.markTurns > 0);
     const heavyPoison = game.livingMembers().some((m) => m.poisonTurns > 0 && m.poison * m.poisonTurns >= m.hp * 0.5);
     if (!marked && !heavyPoison) return false;
-    return game.playBankedCard(null).ok;
+    return game.playReservedCard(null).ok;
   }
   if (card.id === 'shield') {
     const incoming = incomingDamage(game);
     const victim = saveOrder(game).find((m) =>
-      !m.shield && game.canPlayBanked(m.slot) === null && (incoming.get(m.slot) ?? 0) >= m.hp);
+      !m.shield && game.canPlayReserved(m.slot) === null && (incoming.get(m.slot) ?? 0) >= m.hp);
     if (!victim) return false;
-    return game.playBankedCard(victim.slot).ok;
+    return game.playReservedCard(victim.slot).ok;
   }
   return false;
 }
@@ -502,12 +502,12 @@ function tryPlayReserve(game: Game): boolean {
 // real play. Reserving no longer refills the freed hand slot (engine rule), so the reserved
 // answer genuinely costs a card in hand until the turn it is played back.
 function tryReserveAnswer(game: Game): boolean {
-  if (game.bankCard != null) return false;
+  if (game.reserveCard != null) return false;
   if (channelThreatUnanswered(game)) return false;
-  if (game.mp < BANK_UPKEEP_PER_TURN) return false; // must be able to pay the first upkeep
+  if (game.mp < RESERVE_UPKEEP_PER_TURN) return false; // must be able to pay the first upkeep
   for (const id of RESERVE_ANSWERS) {
     const idx = handIndexOf(game, id);
-    if (idx >= 0) return game.bank(idx).ok;
+    if (idx >= 0) return game.reserve(idx).ok;
   }
   return false;
 }
@@ -516,7 +516,7 @@ const STICK_TACTICS: Tactic[] = [
   tryBraceChannel, tryRetaunt, tryProvoke, tryPlayReserve, tryCleanseThreat, tryPreventLethal, tryCallBoar, tryCleanse, tryGroupHeal, tryResurrect,
   // Hex before offense so the Vulnerability amplifies this phase's strikes (#39).
   tryHex, tryBolt, tryPoison, tryRampage, tryCrescendo, tryHeal, tryRegenTank, tryRefresh, trySkaldTempo,
-  // Bank slot (91a): reserve a leftover situational answer instead of discarding it — LAST.
+  // Reserve (91a): reserve a leftover situational answer instead of discarding it — LAST.
   tryReserveAnswer,
 ];
 
@@ -554,16 +554,16 @@ export interface FightMpTelemetry {
   starvedTurns: number; // phases that ended with NO card in hand affordable (hard-dry)
   hitZero: boolean;     // MP reached exactly 0 at some end-of-phase this fight
   minMp: number;        // lowest end-of-phase MP seen this fight (Infinity if no phase closed)
-  // Card Bank slot / "The Reserve" (91a): banking telemetry. Read-only, so passing a
+  // "The Reserve" (91a): reserve telemetry. Read-only, so passing a
   // collector still leaves the pinned line byte-identical.
-  bankHeldPhases: number;   // player phases that closed with a card still in the Reserve
-  bankHoldTurnsSum: number; // sum of bankHoldTurns sampled at those closes (hold-depth proxy)
+  reserveHeldPhases: number;   // player phases that closed with a card still in the Reserve
+  reserveHoldTurnsSum: number; // sum of reserveHoldTurns sampled at those closes (hold-depth proxy)
 }
 
 export function newMpTelemetry(): FightMpTelemetry {
   return {
     playerTurns: 0, restTurns: 0, starvedTurns: 0, hitZero: false, minMp: Infinity,
-    bankHeldPhases: 0, bankHoldTurnsSum: 0,
+    reserveHeldPhases: 0, reserveHoldTurnsSum: 0,
   };
 }
 
@@ -577,10 +577,10 @@ function recordMpTurn(game: Game, tel: FightMpTelemetry): void {
   if (game.hand.length === 0 || game.mp < minCost) tel.starvedTurns++;
   if (game.mp < tel.minMp) tel.minMp = game.mp;
   if (game.mp === 0) tel.hitZero = true;
-  // Bank telemetry: a card still reserved at phase close is being HELD across the
-  // turn — it will pay the (escalating) upkeep at the end-of-turn. bankHoldTurns is the
+  // Reserve telemetry: a card still reserved at phase close is being HELD across the
+  // turn — it will pay the (escalating) upkeep at the end-of-turn. reserveHoldTurns is the
   // count of turn-ends it has already survived, so it is a proxy for hold-depth.
-  if (game.bankCard != null) { tel.bankHeldPhases++; tel.bankHoldTurnsSum += game.bankHoldTurns; }
+  if (game.reserveCard != null) { tel.reserveHeldPhases++; tel.reserveHoldTurnsSum += game.reserveHoldTurns; }
 }
 
 // Play a single player phase to a natural close (rest or end turn). A mistake roll (only

@@ -52,9 +52,9 @@ export interface GameController {
   endTurn: () => void;
   /** Card Bank slot / "The Reserve" (91a): reserve a hand card (free, not an action),
    *  play the reserved card, or release it to the discard for the whole turn. */
-  bankCard: (handIndex: number) => void;
-  playBankedCard: (target: number | null) => void;
-  unbankDiscard: () => void;
+  reserveCard: (handIndex: number) => void;
+  playReservedCard: (target: number | null) => void;
+  releaseReserved: () => void;
   /** Dev-panel cheat hook: run an arbitrary engine mutation through the normal
    *  dispatch path so its events animate and the view/re-render stay in sync. */
   devAction: (mutate: (g: Game) => void) => void;
@@ -295,28 +295,28 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
 
   // Reserve a hand card (91a). Free and not an action, so it neither ends the turn nor
   // locks input — a live dispatch that just re-syncs the view (bank emits no timeline fx).
-  const bankCard = useCallback((handIndex: number) => {
+  const reserveCard = useCallback((handIndex: number) => {
     const g = ref.current!;
     if (g.status !== 'playing' || g.phase !== 'player') return;
     if (animatingRef.current) return;
-    dispatch(() => g.bank(handIndex), false);
+    dispatch(() => g.reserve(handIndex), false);
   }, [dispatch]);
 
   // Play the reserved card. Like a hand play, it does not end the turn — live dispatch
   // so its effect fx layer over the board without locking input.
-  const playBankedCard = useCallback((target: number | null) => {
+  const playReservedCard = useCallback((target: number | null) => {
     const g = ref.current!;
     if (g.status !== 'playing' || g.phase !== 'player') return;
     if (animatingRef.current) return;
-    dispatch(() => g.playBankedCard(target), false);
+    dispatch(() => g.playReservedCard(target), false);
   }, [dispatch]);
 
   // Release the reserved card to the discard for the whole turn (0 MP). It advances the
   // turn like Rest, so it is a staged sequence.
-  const unbankDiscard = useCallback(() => {
+  const releaseReserved = useCallback(() => {
     const g = ref.current!;
-    if (!g.canUnbankDiscard()) return;
-    dispatch(() => g.unbankDiscard(), true);
+    if (!g.canReleaseReserved()) return;
+    dispatch(() => g.releaseReserved(), true);
   }, [dispatch]);
 
   const skipTurn = useCallback(() => {
@@ -344,6 +344,6 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const controllerRef = useRef<GameController>({} as GameController);
   return Object.assign(controllerRef.current, {
     game: ref.current, view, fx, reacts, animating, shakeTick, newGame, playCard, skipTurn, endTurn,
-    bankCard, playBankedCard, unbankDiscard, devAction,
+    reserveCard, playReservedCard, releaseReserved, devAction,
   });
 }

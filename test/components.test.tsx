@@ -292,7 +292,7 @@ async function render(el: React.ReactElement): Promise<string> {
     <BattleScreen
       game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
       playCard={() => {}} skipTurn={() => {}} endTurn={() => {}}
-      bankCard={() => {}} playBankedCard={() => {}} unbankDiscard={() => {}}
+      reserveCard={() => {}} playReservedCard={() => {}} releaseReserved={() => {}}
       onWinFx={() => 0} onBattleEnd={() => {}}
     />,
   );

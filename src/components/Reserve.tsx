@@ -23,7 +23,7 @@ interface ReserveProps {
 // heal) for a blow you see telegraphed, then play or release it.
 export function Reserve({ game, animating, onPlay, onUnbank, targeting }: ReserveProps) {
   if (game.status !== 'playing') return null;
-  const dc = game.bankCard;
+  const dc = game.reserveCard;
   if (dc == null) {
     // Empty slot: keep the reserved gutter space (and a hint) so the row never shifts.
     return (
@@ -33,10 +33,10 @@ export function Reserve({ game, animating, onPlay, onUnbank, targeting }: Reserv
     );
   }
   const card = resolveCard(dc);
-  const nextUpkeep = game.bankNextUpkeep();
-  const drops = game.bankDropTargets();
+  const nextUpkeep = game.reserveNextUpkeep();
+  const drops = game.reserveDropTargets();
   const canPlay = !animating && (drops.board || drops.slots.length > 0);
-  const canUnbank = !animating && game.canUnbankDiscard();
+  const canUnbank = !animating && game.canReleaseReserved();
   return (
     <div className={`reserve reserve-full${targeting ? ' targeting' : ''}`}>
       <span className="reserve-title">The Reserve</span>

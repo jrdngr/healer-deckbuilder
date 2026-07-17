@@ -1457,125 +1457,125 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   check('carryover 0 keeps no card', !g.hand.some((c) => c.uid === -220 || c.uid === -221));
 }
 
-// --- Card Bank slot / "The Reserve" (91a) ----------------------------------
+// --- "The Reserve" (91a) ----------------------------------------------------
 {
-  // Bank is FREE and not an action: 0 MP, cardsPlayedThisPhase unchanged, the card
+  // Reserve is FREE and not an action: 0 MP, cardsPlayedThisPhase unchanged, the card
   // leaves the hand into the slot, and the hand does NOT redraw (no free card advantage).
   const g = new Game(300); g.start();
   const mp0 = g.mp, cpp0 = g.cardsPlayedThisPhase;
   const i = giveCard(g, 'shield');
   const handBefore = g.hand.length;
-  const r = g.bank(i);
-  check('bank ok', r.ok);
-  eq('bank spends 0 MP', g.mp, mp0);
-  eq('bank does not bump cardsPlayedThisPhase', g.cardsPlayedThisPhase, cpp0);
-  eq('the card sits in the Reserve', g.bankCard?.id, 'shield');
-  eq('bankHoldTurns resets to 0 on a fresh bank', g.bankHoldTurns, 0);
+  const r = g.reserve(i);
+  check('reserve ok', r.ok);
+  eq('reserve spends 0 MP', g.mp, mp0);
+  eq('reserve does not bump cardsPlayedThisPhase', g.cardsPlayedThisPhase, cpp0);
+  eq('the card sits in the Reserve', g.reserveCard?.id, 'shield');
+  eq('reserveHoldTurns resets to 0 on a fresh reserve', g.reserveHoldTurns, 0);
   eq('reserving does not refill the hand', g.hand.length, handBefore - 1);
-  check('the banked card left the hand', !g.hand.some((c) => c.id === 'shield' && c.uid < 0));
+  check('the reserved card left the hand', !g.hand.some((c) => c.id === 'shield' && c.uid < 0));
 }
 {
-  // Bank rejections: a full slot, and outside the player phase.
+  // Reserve rejections: a full slot, and outside the player phase.
   const g = new Game(301); g.start();
-  g.bank(giveCard(g, 'shield'));
-  check('a second bank is rejected while the slot is full', !g.bank(giveCard(g, 'lowHeal')).ok);
+  g.reserve(giveCard(g, 'shield'));
+  check('a second reserve is rejected while the slot is full', !g.reserve(giveCard(g, 'lowHeal')).ok);
   const g2 = new Game(302); g2.start();
   g2.phase = 'over';
-  check('banking outside the player phase is rejected', !g2.bank(giveCard(g2, 'shield')).ok);
+  check('reserving outside the player phase is rejected', !g2.reserve(giveCard(g2, 'shield')).ok);
 }
 {
-  // The banked card survives the end-of-turn discard, and the hand still redraws to
+  // The reserved card survives the end-of-turn discard, and the hand still redraws to
   // handSize on the next player phase.
   const g = new Game(303); g.start();
-  g.bank(giveCard(g, 'shield'));
+  g.reserve(giveCard(g, 'shield'));
   g.mp = 20; // enough to pay the first upkeep so the card is held, not lost
   g.endTurn();
-  eq('banked card survives the discard', g.bankCard?.id, 'shield');
+  eq('reserved card survives the discard', g.reserveCard?.id, 'shield');
   eq('hand redraws to handSize next player phase', g.hand.length, g.handSize);
 }
 {
-  // Escalating upkeep, charged once per turn-end and reset per fresh bank. Driven
-  // directly through _bankUpkeep so the ramp is isolated from combat.
+  // Escalating upkeep, charged once per turn-end and reset per fresh reserve. Driven
+  // directly through _reserveUpkeep so the ramp is isolated from combat.
   const g = new Game(304); g.start(); g.mp = 30;
-  g.bank(giveCard(g, 'shield'));
+  g.reserve(giveCard(g, 'shield'));
   let mp = g.mp;
-  g._bankUpkeep(); eq('first held end-of-turn charges 1', mp - g.mp, 1); eq('hold now 1', g.bankHoldTurns, 1); mp = g.mp;
-  g._bankUpkeep(); eq('second charges 2', mp - g.mp, 2); mp = g.mp;
-  g._bankUpkeep(); eq('third charges 3', mp - g.mp, 3);
-  // Resolve the slot (play it) then bank a fresh card -> the ramp resets to 1.
-  g.playBankedCard(SLOT.CENTER);
-  check('slot cleared after playing from the bank', g.bankCard === null);
-  g.bank(giveCard(g, 'shield'));
+  g._reserveUpkeep(); eq('first held end-of-turn charges 1', mp - g.mp, 1); eq('hold now 1', g.reserveHoldTurns, 1); mp = g.mp;
+  g._reserveUpkeep(); eq('second charges 2', mp - g.mp, 2); mp = g.mp;
+  g._reserveUpkeep(); eq('third charges 3', mp - g.mp, 3);
+  // Resolve the slot (play it) then reserve a fresh card -> the ramp resets to 1.
+  g.playReservedCard(SLOT.CENTER);
+  check('slot cleared after playing from the reserve', g.reserveCard === null);
+  g.reserve(giveCard(g, 'shield'));
   mp = g.mp;
-  g._bankUpkeep(); eq('a fresh bank charges 1 again', mp - g.mp, 1);
+  g._reserveUpkeep(); eq('a fresh reserve charges 1 again', mp - g.mp, 1);
 }
 {
   // A slot resolved during the player phase never reaches the end-of-turn upkeep.
   const g = new Game(305); g.start(); g.mp = 30;
-  g.bank(giveCard(g, 'shield'));
-  g.playBankedCard(SLOT.CENTER); // resolved before end of turn
+  g.reserve(giveCard(g, 'shield'));
+  g.playReservedCard(SLOT.CENTER); // resolved before end of turn
   const mp = g.mp;
-  g._bankUpkeep();
+  g._reserveUpkeep();
   eq('a resolved slot charges 0 at turn-end', g.mp, mp);
 }
 {
-  // Can't pay -> auto-discard: the banked card goes to the discard pile, the slot
+  // Can't pay -> auto-discard: the reserved card goes to the discard pile, the slot
   // clears, no MP is charged, and MP never goes negative.
   const g = new Game(306); g.start();
-  g.bank(giveCard(g, 'shield'));
+  g.reserve(giveCard(g, 'shield'));
   g.mp = 0; // below the 1-MP first upkeep
-  g._bankUpkeep();
+  g._reserveUpkeep();
   check('unpaid Reserve is discarded', g.discardPile.some((c) => c.id === 'shield'));
-  check('slot cleared after the card slips away', g.bankCard === null);
-  eq('hold reset after auto-discard', g.bankHoldTurns, 0);
+  check('slot cleared after the card slips away', g.reserveCard === null);
+  eq('hold reset after auto-discard', g.reserveHoldTurns, 0);
   eq('no MP charged on auto-discard', g.mp, 0);
   check('MP never went negative', g.mp >= 0);
 }
 {
-  // Play from bank: pays cost, applies the effect, -> discard, bumps
+  // Play from reserve: pays cost, applies the effect, -> discard, bumps
   // cardsPlayedThisPhase, and is allowed even AFTER another card was played this turn.
   const g = new Game(307); g.start(); g.mp = 20;
   g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // one prior play this turn
   const cpp = g.cardsPlayedThisPhase;
   const mpBefore = g.mp;
-  g.bank(giveCard(g, 'shield'));
-  const r = g.playBankedCard(SLOT.CENTER);
-  check('playing from the bank is allowed after another play', r.ok);
-  eq('play from bank pays the card cost', mpBefore - g.mp, resolveCard(makeDeckCard('shield', 0)).cost);
-  eq('play from bank bumps cardsPlayedThisPhase', g.cardsPlayedThisPhase, cpp + 1);
-  check('the played bank card went to discard', g.discardPile.some((c) => c.id === 'shield'));
+  g.reserve(giveCard(g, 'shield'));
+  const r = g.playReservedCard(SLOT.CENTER);
+  check('playing from the reserve is allowed after another play', r.ok);
+  eq('play from reserve pays the card cost', mpBefore - g.mp, resolveCard(makeDeckCard('shield', 0)).cost);
+  eq('play from reserve bumps cardsPlayedThisPhase', g.cardsPlayedThisPhase, cpp + 1);
+  check('the played reserve card went to discard', g.discardPile.some((c) => c.id === 'shield'));
   check('the tank received the Shield', g.tank.shield);
-  check('slot cleared after playing from the bank', g.bankCard === null);
+  check('slot cleared after playing from the reserve', g.reserveCard === null);
 }
 {
-  // Unbank -> discard: free, whole-turn, 0 MP, advances to the next player phase; and
-  // it is blocked once any card has been played this turn (while playBankedCard is not).
+  // Release -> discard: free, whole-turn, 0 MP, advances to the next player phase; and
+  // it is blocked once any card has been played this turn (while playReservedCard is not).
   const g = new Game(308); g.start();
   const mp0 = g.mp, turn0 = g.turn;
-  g.bank(giveCard(g, 'shield'));
-  check('unbank is enabled when no card has been played', g.canUnbankDiscard());
-  const r = g.unbankDiscard();
-  check('unbank ok', r.ok);
-  check('unbanked card went to discard', g.discardPile.some((c) => c.id === 'shield'));
-  check('slot cleared after unbank', g.bankCard === null);
-  eq('unbank grants/spends 0 MP', g.mp, mp0);
-  check('unbank advanced to the next player phase', g.phase === 'player' && g.turn > turn0);
+  g.reserve(giveCard(g, 'shield'));
+  check('release is enabled when no card has been played', g.canReleaseReserved());
+  const r = g.releaseReserved();
+  check('release ok', r.ok);
+  check('released card went to discard', g.discardPile.some((c) => c.id === 'shield'));
+  check('slot cleared after release', g.reserveCard === null);
+  eq('release grants/spends 0 MP', g.mp, mp0);
+  check('release advanced to the next player phase', g.phase === 'player' && g.turn > turn0);
 
   const g2 = new Game(309); g2.start(); g2.mp = 20;
   g2.playCard(giveCard(g2, 'lowHeal'), SLOT.CENTER); // a card has now been played
-  g2.bank(giveCard(g2, 'shield'));
-  check('unbank is disabled after a card was played', !g2.canUnbankDiscard());
-  check('unbank is rejected after a card was played', !g2.unbankDiscard().ok);
-  check('the slot still holds the card after a rejected unbank', g2.bankCard?.id === 'shield');
-  check('playBankedCard is still allowed after a play', g2.canPlayBanked(SLOT.CENTER) === null);
+  g2.reserve(giveCard(g2, 'shield'));
+  check('release is disabled after a card was played', !g2.canReleaseReserved());
+  check('release is rejected after a card was played', !g2.releaseReserved().ok);
+  check('the slot still holds the card after a rejected release', g2.reserveCard?.id === 'shield');
+  check('playReservedCard is still allowed after a play', g2.canPlayReserved(SLOT.CENTER) === null);
 }
 {
   // Shared-tail ordering (#63): the per-type tally lands AFTER _applyCard, so a
   // count-reading card sees only the plays BEFORE it — identically on the hand and
-  // banked paths. No shipped card reads the counter today, so we observe it directly
+  // reserved paths. No shipped card reads the counter today, so we observe it directly
   // by wrapping _applyCard. A regression that moves the tally before _applyCard would
   // make `seen` read 3 instead of 2.
-  for (const viaBank of [false, true]) {
+  for (const viaReserve of [false, true]) {
     const g = new Game(310); g.start(); g.mp = 50;
     g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // holy #1
     g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); // holy #2
@@ -1586,34 +1586,34 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
         if (cardType(card.id as never) === 'holy') seen = g.typePlayedThisTurn.holy;
         return orig(card as never, target);
       };
-    if (viaBank) { g.bank(giveCard(g, 'lowHeal')); g.playBankedCard(SLOT.CENTER); }
+    if (viaReserve) { g.reserve(giveCard(g, 'lowHeal')); g.playReservedCard(SLOT.CENTER); }
     else { g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER); }
-    eq(`count-reading card sees 2 prior holy plays via ${viaBank ? 'bank' : 'hand'}`, seen, 2);
+    eq(`count-reading card sees 2 prior holy plays via ${viaReserve ? 'reserve' : 'hand'}`, seen, 2);
   }
 }
 {
-  // Banking a channel card then playing it STARTS the channel (same path as a hand play).
+  // Reserving a channel card then playing it STARTS the channel (same path as a hand play).
   const g = new Game(311); g.start(); g.mp = 20;
-  g.bank(giveCard(g, 'mendingStream'));
-  g.playBankedCard(SLOT.CENTER);
-  check('a banked channel card starts the channel when played', g.channelActive() && g.channelCard === 'mendingStream');
+  g.reserve(giveCard(g, 'mendingStream'));
+  g.playReservedCard(SLOT.CENTER);
+  check('a reserved channel card starts the channel when played', g.channelActive() && g.channelCard === 'mendingStream');
 }
 {
-  // Banking an `exhaust` card (Sacrifice) then PLAYING it exhausts (never reaches the
-  // discard); unbank->discard instead sends it to the discard pile.
+  // Reserving an `exhaust` card (Sacrifice) then PLAYING it exhausts (never reaches the
+  // discard); release->discard instead sends it to the discard pile.
   const cfg = defaultBattleConfig();
   cfg.party = partyFromMembers(['warlock', 'tank', 'mage']);
   cfg.party[0].learned = ['sacrifice']; // the Warlock owns the ability the card fires
   const g = new Game(312, cfg); g.start(); g.mp = 20;
-  g.bank(giveCard(g, 'sacrifice'));
-  const r = g.playBankedCard(SLOT.CENTER); // the tank pays the HP
-  check('playing a banked exhaust card resolves', r.ok);
+  g.reserve(giveCard(g, 'sacrifice'));
+  const r = g.playReservedCard(SLOT.CENTER); // the tank pays the HP
+  check('playing a reserved exhaust card resolves', r.ok);
   check('the exhausted card is NOT in the discard', !g.discardPile.some((c) => c.id === 'sacrifice'));
 
   const g2 = new Game(313, cfg); g2.start();
-  g2.bank(giveCard(g2, 'sacrifice'));
-  g2.unbankDiscard();
-  check('an unbanked exhaust card IS sent to the discard', g2.discardPile.some((c) => c.id === 'sacrifice'));
+  g2.reserve(giveCard(g2, 'sacrifice'));
+  g2.releaseReserved();
+  check('an released exhaust card IS sent to the discard', g2.discardPile.some((c) => c.id === 'sacrifice'));
 }
 
 // --- data-driven EnemyDef plumbing (issue 07) ------------------------------

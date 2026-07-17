@@ -38,7 +38,7 @@ import {
   DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, REFRESH_CHANNEL_MP, MENDING_STREAM_HEAL,
   SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_VULN_TURNS,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
-  SKIP_REGEN_DECAYED, REFRESH_MP_CAP, BANK_UPKEEP_PER_TURN,
+  SKIP_REGEN_DECAYED, REFRESH_MP_CAP, RESERVE_UPKEEP_PER_TURN,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
@@ -246,12 +246,12 @@ export type GameEvent =
   | { kind: 'bloodPay'; slot: Slot; amount: number; hp: number } // Blood card HP cost paid (#16)
   | { kind: 'cleanse'; slot: Slot }
   | { kind: 'rest'; amount: number; mp: number }
-  // Card Bank slot / "The Reserve" (91a): reserve a card / pay its upkeep / it slips
-  // away unpaid / release it to the discard for the whole turn.
-  | { kind: 'bank'; card: CardId }
-  | { kind: 'bankUpkeep'; charge: number; mp: number }
-  | { kind: 'bankExpire'; card: CardId }
-  | { kind: 'unbank'; card: CardId }
+  // "The Reserve" (91a): reserve a card / pay its upkeep / it slips away unpaid /
+  // release it to the discard for the whole turn.
+  | { kind: 'reserve'; card: CardId }
+  | { kind: 'reserveUpkeep'; charge: number; mp: number }
+  | { kind: 'reserveExpire'; card: CardId }
+  | { kind: 'release'; card: CardId }
   // --- abilities ---
   | { kind: 'poisonApplied'; slot: Slot; amount: number; poison: number }
   | { kind: 'taunt'; slot: Slot; turns: number }
@@ -295,12 +295,12 @@ export class Game {
   channelCard: CardId | null;
   channelTarget: number | null;
   channelTurns: number;
-  // Card Bank slot / "The Reserve" (91a): one reserved card carried across turns
-  // instead of discarded. `bankCard` is the held instance (null = empty slot);
-  // `bankHoldTurns` counts how many end-of-turns it has survived, driving the
+  // "The Reserve" (91a): one reserved card carried across turns
+  // instead of discarded. `reserveCard` is the held instance (null = empty slot);
+  // `reserveHoldTurns` counts how many end-of-turns it has survived, driving the
   // escalating 1/2/3… MP upkeep. Per-fight, NEVER serialized (like channelCard).
-  bankCard: DeckCard | null;
-  bankHoldTurns: number;
+  reserveCard: DeckCard | null;
+  reserveHoldTurns: number;
   // Channel keep-alive (#70): card INSTANCE uids whose play is exempt from breaking a
   // running channel. Attunement stamps its own uid and the card it draws. Per-fight.
   channelExemptUids: Set<number>;
@@ -428,8 +428,8 @@ export class Game {
     this.channelCard = null;   // no channel running at fight start (#64)
     this.channelTarget = null;
     this.channelTurns = 0;
-    this.bankCard = null;      // The Reserve is empty at fight start (91a)
-    this.bankHoldTurns = 0;
+    this.reserveCard = null;      // The Reserve is empty at fight start (91a)
+    this.reserveHoldTurns = 0;
     this.channelExemptUids = new Set(); // no channel-exempt cards at fight start (#70)
     this.woundTurns = 0;    // no Hex active at fight start
     this.lensArmed = false; // no Arcane Lens armed at fight start (#70)
@@ -2024,7 +2024,7 @@ export class Game {
   }
 
   // Shared playability check for a concrete card instance, from either the hand
-  // (canPlay) or the Reserve (canPlayBanked). Returns null if ok, else a reason string.
+  // (canPlay) or the Reserve (canPlayReserved). Returns null if ok, else a reason string.
   // Assumes the caller has already verified the player phase and that the card exists.
   _canPlayCard(dc: DeckCard, target: number | null): string | null {
     const card = resolveCard(dc);
@@ -2122,7 +2122,7 @@ export class Game {
 
   // The shared post-resolveCard tail of a card play (91a): spend MP, discard-unless-
   // exhaust, count the play, break a running channel, apply the effect, THEN tally the
-  // per-type counter. Both playCard (from the hand) and playBankedCard (from the
+  // per-type counter. Both playCard (from the hand) and playReservedCard (from the
   // Reserve) call this after removing the card from its source, so the two paths stay
   // bit-identical. Ordering is load-bearing: the per-type tally lands AFTER _applyCard
   // so a count-reading card sees only the plays BEFORE it (see #63).
@@ -2154,125 +2154,125 @@ export class Game {
     this.typePlayedThisFight[ct] += 1;
   }
 
-  // ---- Card Bank slot / "The Reserve" (91a) --------------------------------
+  // ---- "The Reserve" (91a) -------------------------------------------------
 
-  // Reserve a hand card in the Bank slot. FREE and NOT an action: no MP is spent and
+  // Reserve a hand card in the Reserve slot. FREE and NOT an action: no MP is spent and
   // cardsPlayedThisPhase / the Rest + passive-MP restraint gates are untouched. The
   // reserved card simply leaves the hand for the slot — the hand does NOT redraw to
-  // replace it (that made reserving a free card-advantage engine). Any card is bankable
+  // replace it (that made reserving a free card-advantage engine). Any card is reservable
   // (including per-member ability cards — the accepted burst watch-item). Rejected if it
   // is not the player phase, the slot is already full, or the index is invalid.
-  bank(handIndex: number): PlayResult {
+  reserve(handIndex: number): PlayResult {
     if (this.phase !== 'player') return { ok: false, reason: 'not your phase' };
-    if (this.bankCard != null) return { ok: false, reason: 'the Reserve is full' };
+    if (this.reserveCard != null) return { ok: false, reason: 'the Reserve is full' };
     const dc = this.hand[handIndex];
     if (dc == null) return { ok: false, reason: 'no such card' };
     this.events = [];
     this.hand.splice(handIndex, 1);
-    this.bankCard = dc;
-    this.bankHoldTurns = 0; // a fresh bank resets the escalating upkeep ramp
+    this.reserveCard = dc;
+    this.reserveHoldTurns = 0; // a fresh reserve resets the escalating upkeep ramp
     this._log(`Reserved ${resolveCard(dc).name}.`, 'system');
-    this._emit({ kind: 'bank', card: dc.id });
+    this._emit({ kind: 'reserve', card: dc.id });
     return { ok: true };
   }
 
-  // Whether the banked card can be PLAYED right now (slot full, player phase,
+  // Whether the reserved card can be PLAYED right now (slot full, player phase,
   // affordable, target/eligibility gates pass). Mirrors canPlay but reads the Reserve.
-  // Note it never gates on cardsPlayedThisPhase — playing from the bank is allowed even
+  // Note it never gates on cardsPlayedThisPhase — playing from the Reserve is allowed even
   // after another card was played this turn.
-  canPlayBanked(target: number | null): string | null {
+  canPlayReserved(target: number | null): string | null {
     if (this.phase !== 'player') return 'not your phase';
-    if (this.bankCard == null) return 'the Reserve is empty';
-    return this._canPlayCard(this.bankCard, target);
+    if (this.reserveCard == null) return 'the Reserve is empty';
+    return this._canPlayCard(this.reserveCard, target);
   }
 
-  // Play the banked card: pays its cost, applies its effect through the SAME shared
+  // Play the reserved card: pays its cost, applies its effect through the SAME shared
   // tail as a hand play (so modifiers/channels/exhaust/type-tally all behave
   // identically), and clears the slot. Counts as a card played (cardsPlayedThisPhase++
   // happens inside the shared tail). Allowed even after another card this turn.
-  playBankedCard(target: number | null = null): PlayResult {
-    const reason = this.canPlayBanked(target);
+  playReservedCard(target: number | null = null): PlayResult {
+    const reason = this.canPlayReserved(target);
     if (reason) return { ok: false, reason };
     this.events = [];
-    const dc = this.bankCard as DeckCard;
+    const dc = this.reserveCard as DeckCard;
     const card = resolveCard(dc);
     // Clear the slot before resolving: the card is now played, not held, so the
     // end-of-turn upkeep must not see it.
-    this.bankCard = null;
-    this.bankHoldTurns = 0;
+    this.reserveCard = null;
+    this.reserveHoldTurns = 0;
     this._resolvePlayedCard(dc, card, target);
     return { ok: true };
   }
 
-  // Where the banked card may legally be played, for the Reserve zone UI. Mirrors
-  // dropTargets but reads the Bank slot and validates via canPlayBanked, so the same
+  // Where the reserved card may legally be played, for the Reserve zone UI. Mirrors
+  // dropTargets but reads the Reserve slot and validates via canPlayReserved, so the same
   // hero-highlight machinery lights the valid targets when playing from the Reserve.
-  bankDropTargets(): { slots: number[]; board: boolean } {
-    const dc = this.bankCard;
+  reserveDropTargets(): { slots: number[]; board: boolean } {
+    const dc = this.reserveCard;
     if (dc == null) return { slots: [], board: false };
     const card = resolveCard(dc);
     if (card.ability != null && card.target !== 'single') {
       const m = this._abilityMember(card.ability);
-      if (m && this.canPlayBanked(null) === null) return { slots: [m.slot], board: false };
+      if (m && this.canPlayReserved(null) === null) return { slots: [m.slot], board: false };
       return { slots: [], board: false };
     }
     if (card.target === 'single' || card.target === 'dead') {
       const slots = this.members
-        .filter((m) => this.canPlayBanked(m.slot) === null)
+        .filter((m) => this.canPlayReserved(m.slot) === null)
         .map((m) => m.slot);
       return { slots, board: false };
     }
-    return { slots: [], board: this.canPlayBanked(null) === null };
+    return { slots: [], board: this.canPlayReserved(null) === null };
   }
 
   // The MP the Reserve will cost at the NEXT end-of-turn if the card is still held —
-  // the 1→2→3 forecast the UI shows (bankHoldTurns has not yet ticked for this turn).
-  bankNextUpkeep(): number {
-    return this.bankCard == null ? 0 : (this.bankHoldTurns + 1) * BANK_UPKEEP_PER_TURN;
+  // the 1→2→3 forecast the UI shows (reserveHoldTurns has not yet ticked for this turn).
+  reserveNextUpkeep(): number {
+    return this.reserveCard == null ? 0 : (this.reserveHoldTurns + 1) * RESERVE_UPKEEP_PER_TURN;
   }
 
   // Charge the Reserve's escalating end-of-turn upkeep. Called once per turn-end from
-  // _endTurnInternal while a card is banked: the hold count ticks up and the charge is
-  // bankHoldTurns * BANK_UPKEEP_PER_TURN (1, then 2, then 3…). If MP can't cover it the
+  // _endTurnInternal while a card is reserved: the hold count ticks up and the charge is
+  // reserveHoldTurns * RESERVE_UPKEEP_PER_TURN (1, then 2, then 3…). If MP can't cover it the
   // card slips away to the discard (no MP charged, no effect); otherwise the MP is
   // spent. A slot resolved during the player phase is already empty here and never charges.
-  _bankUpkeep(): void {
-    const dc = this.bankCard;
+  _reserveUpkeep(): void {
+    const dc = this.reserveCard;
     if (dc == null) return;
-    this.bankHoldTurns += 1;
-    const charge = this.bankHoldTurns * BANK_UPKEEP_PER_TURN;
+    this.reserveHoldTurns += 1;
+    const charge = this.reserveHoldTurns * RESERVE_UPKEEP_PER_TURN;
     if (this.mp < charge) {
-      // Can't pay -> auto-discard the banked card. No MP is charged (never goes negative).
-      this.bankCard = null;
-      this.bankHoldTurns = 0;
+      // Can't pay -> auto-discard the reserved card. No MP is charged (never goes negative).
+      this.reserveCard = null;
+      this.reserveHoldTurns = 0;
       this.discardPile.push(dc);
       this._log(`The Reserve slips away — ${resolveCard(dc).name} lost (needed ${charge} MP).`, 'system');
-      this._emit({ kind: 'bankExpire', card: dc.id });
+      this._emit({ kind: 'reserveExpire', card: dc.id });
       return;
     }
     this.mp -= charge;
     this._log(`The Reserve costs ${charge} MP upkeep. (MP ${this.mp})`, 'mp');
-    this._emit({ kind: 'bankUpkeep', charge, mp: this.mp });
+    this._emit({ kind: 'reserveUpkeep', charge, mp: this.mp });
   }
 
   // Whether the "release the Reserve" escape valve is available: player phase, a card
-  // banked, and no card played yet this turn (releasing consumes the whole turn).
-  canUnbankDiscard(): boolean {
-    return this.phase === 'player' && this.bankCard != null && this.cardsPlayedThisPhase === 0;
+  // reserved, and no card played yet this turn (releasing consumes the whole turn).
+  canReleaseReserved(): boolean {
+    return this.phase === 'player' && this.reserveCard != null && this.cardsPlayedThisPhase === 0;
   }
 
-  // Release the banked card to the discard for free (0 MP), consuming the WHOLE turn
+  // Release the reserved card to the discard for free (0 MP), consuming the WHOLE turn
   // (the enemy phase runs, like Rest but without the +5 MP). Only when no card has been
   // played this turn. The escape valve for a held card you can no longer use.
-  unbankDiscard(): PlayResult {
-    if (!this.canUnbankDiscard()) return { ok: false, reason: 'cannot release the Reserve now' };
+  releaseReserved(): PlayResult {
+    if (!this.canReleaseReserved()) return { ok: false, reason: 'cannot release the Reserve now' };
     this.events = [];
-    const dc = this.bankCard as DeckCard;
+    const dc = this.reserveCard as DeckCard;
     this.discardPile.push(dc);
-    this.bankCard = null;   // cleared before the turn advance, so upkeep charges 0 this turn
-    this.bankHoldTurns = 0;
+    this.reserveCard = null;   // cleared before the turn advance, so upkeep charges 0 this turn
+    this.reserveHoldTurns = 0;
     this._log(`Released ${resolveCard(dc).name} from the Reserve.`, 'system');
-    this._emit({ kind: 'unbank', card: dc.id });
+    this._emit({ kind: 'release', card: dc.id });
     this._endTurnInternal(); // advance the turn (enemy phase); no MP granted
     return { ok: true };
   }
@@ -2363,11 +2363,11 @@ export class Game {
   _endTurnInternal(): void {
     this.lensArmed = false;    // Arcane Lens (#70) is "this turn" only — an unspent arming fizzles
 
-    // Charge the Card Bank slot's escalating end-of-turn upkeep (91a) BEFORE the
+    // Charge the Reserve slot's escalating end-of-turn upkeep (91a) BEFORE the
     // discard — a slot still held at turn-end pays 1, then 2, then 3… (reset per fresh
-    // bank); can't-pay auto-discards it. A slot resolved during the player phase (played
-    // or unbanked) is already empty here and never charges.
-    this._bankUpkeep();
+    // reserve); can't-pay auto-discards it. A slot resolved during the player phase (played
+    // or released) is already empty here and never charges.
+    this._reserveUpkeep();
 
     // Discard the hand from the end (same ordering the prototype used, so existing
     // seeds reshuffle identically).

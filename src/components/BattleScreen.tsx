@@ -50,9 +50,9 @@ interface BattleScreenProps {
   skipTurn: () => void;
   endTurn: () => void;
   // Card Bank slot / "The Reserve" (91a).
-  bankCard: (handIndex: number) => void;
-  playBankedCard: (target: number | null) => void;
-  unbankDiscard: () => void;
+  reserveCard: (handIndex: number) => void;
+  playReservedCard: (target: number | null) => void;
+  releaseReserved: () => void;
   // Play the end-of-fight gold burst over the live board on a win (#59); returns how
   // long (ms) to hold the result overlay while it plays.
   onWinFx: () => number;
@@ -62,7 +62,7 @@ interface BattleScreenProps {
 
 export function BattleScreen({
   game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn,
-  bankCard, playBankedCard, unbankDiscard, onWinFx, onBattleEnd,
+  reserveCard, playReservedCard, releaseReserved, onWinFx, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
   const [dragView, setDragView] = useState<DragView | null>(null);
@@ -107,7 +107,7 @@ export function BattleScreen({
   // Cancel any pending targeting once a sequence starts playing.
   useEffect(() => { if (animating) { setSelected(null); setDragView(null); setBankTargeting(false); } }, [animating]);
   // A resolved / lost Reserve clears any pending bank targeting.
-  useEffect(() => { if (game.bankCard == null) setBankTargeting(false); }, [game.bankCard]);
+  useEffect(() => { if (game.reserveCard == null) setBankTargeting(false); }, [game.reserveCard]);
 
   // Escape cancels targeting.
   useEffect(() => {
@@ -135,7 +135,7 @@ export function BattleScreen({
   const activeIndex = dragView ? dragView.handIndex : selected?.handIndex ?? null;
   // When playing the reserved card (bankTargeting), the hero highlights read the
   // Reserve's own drop targets instead of a hand card's.
-  const dropSpec = bankTargeting && !animating ? game.bankDropTargets()
+  const dropSpec = bankTargeting && !animating ? game.reserveDropTargets()
     : activeIndex != null && !animating ? game.dropTargets(activeIndex)
     : null;
 
@@ -178,9 +178,9 @@ export function BattleScreen({
     if (animating) return;
     // Playing the reserved card: a hero pick resolves the banked card on that hero.
     if (bankTargeting) {
-      if (game.bankDropTargets().slots.includes(slot)) {
+      if (game.reserveDropTargets().slots.includes(slot)) {
         setBankTargeting(false);
-        playBankedCard(slot);
+        playReservedCard(slot);
       }
       return;
     }
@@ -194,27 +194,27 @@ export function BattleScreen({
   // Reserve a hand card (91a): free, not a turn action. Cancel any pending targeting.
   const onBank = (handIndex: number) => {
     if (animating || game.status !== 'playing' || game.phase !== 'player') return;
-    if (game.bankCard != null) return; // one slot only
+    if (game.reserveCard != null) return; // one slot only
     setSelected(null);
     setDragView(null);
-    bankCard(handIndex);
+    reserveCard(handIndex);
   };
 
   // Play the reserved card. A no-target card resolves immediately; a single/dead-target
   // card enters bank targeting so a hero pick can finish it.
   const onReservePlay = () => {
-    if (animating || game.bankCard == null) return;
-    const drops = game.bankDropTargets();
-    if (drops.board) { playBankedCard(null); return; }
+    if (animating || game.reserveCard == null) return;
+    const drops = game.reserveDropTargets();
+    if (drops.board) { playReservedCard(null); return; }
     if (drops.slots.length === 0) return; // nothing legal to target right now
     setSelected(null);
     setBankTargeting(true);
   };
 
   const onReserveUnbank = () => {
-    if (!game.canUnbankDiscard()) return;
+    if (!game.canReleaseReserved()) return;
     setBankTargeting(false);
-    unbankDiscard();
+    releaseReserved();
   };
 
   // Resolve where a drag was released. A no-target ('board') card plays wherever it
@@ -335,7 +335,7 @@ export function BattleScreen({
         draggingUid={dragView?.uid ?? null}
         // The Bank affordance shows only while a card can be reserved: player phase,
         // the Reserve empty, nothing animating.
-        onBank={!animating && game.status === 'playing' && game.phase === 'player' && game.bankCard == null ? onBank : undefined}
+        onBank={!animating && game.status === 'playing' && game.phase === 'player' && game.reserveCard == null ? onBank : undefined}
       />
       <CombatLog game={game} />
       {/* The standing telegraph would flash the *next* turn's lines mid-sequence. */}

@@ -122,9 +122,9 @@ export interface DojoOffer { member: MemberId; ability: AbilityId }
 // members carry a `learned` ability list, and a new 'dojo' node type / {type:'dojo'}
 // content teaches them; the roster is also hard-capped at 3. Old saves lack `learned`
 // and can hold a map without the Dojo, so they are discarded rather than resumed.
-// v19: Retain modifier removed, replaced by the Card Bank slot ("The Reserve", 91a).
-// The 'retain' ModifierId is gone, so any saved deck carrying it no longer resolves;
-// old saves are discarded rather than resumed. (Bank state is per-fight and never
+// v19: Retain modifier removed, replaced by "The Reserve" (91a). The 'retain'
+// ModifierId is gone, so any saved deck carrying it no longer resolves; old saves
+// are discarded rather than resumed. (Reserve state is per-fight and never
 // serialized, so it adds no new snapshot fields.)
 export const RUN_SAVE_VERSION = 19;
 
