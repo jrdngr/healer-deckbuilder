@@ -30,8 +30,7 @@ data: the ground rules above, the Intake list, and the table.
 Brief notes I've taken that need to be written up as issues — see the `issues` skill for the intake
 process.
 
-_(none)_
-
+_(empty)_
 
 ## Issues (implementation order)
 
@@ -41,3 +40,5 @@ _(none)_
 | 94 | 📋 Open | [Defer draw to player turn; animate discards out / draws in](issues/94-draw-discard-animation.md) | ui + engine | #93 | intake 07-17 |
 | 95 | 📋 Open | [Animate end-of-fight healing concurrent with gold burst](issues/95-end-of-fight-heal-fx.md) | ui | — | intake 07-17 |
 | 96 | 📋 Open | [Back button on reward screens to recover a skip](issues/96-reward-back-button.md) | ui | — | intake 07-17 |
+| 97 | 📋 Open | [Themed tooltip component (replace native title=, 250ms delay)](issues/97-themed-tooltip-component.md) | ui | — | intake 07-17 |
+| 98 | 📋 Open | [Status-effect keyword tooltips (highlight, strip parentheticals, reword)](issues/98-status-effect-keyword-tooltips.md) | ui + content | #97 | intake 07-17 |
