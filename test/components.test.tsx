@@ -312,6 +312,31 @@ async function render(el: React.ReactElement): Promise<string> {
   check('hand cards carry no Reserve button (drag-to-slot only)', !rootEl.querySelector('.card-reserve-btn'));
 }
 
+// --- Overlapping single-row hand (#93): a large hand never wraps to a second row ---
+{
+  const game = new Game(5, defaultBattleConfig()).start();
+  // Stuff the hand well past what fits at normal spacing (8 fixed-width cards).
+  game.hand = [];
+  for (let i = 0; i < 8; i++) game.hand.push(makeDeckCard('lowHeal', 900 + i, []));
+  await render(
+    <Hand
+      game={game} disabled={false} selectedIndex={null} selectedCard={null}
+      onCardClick={() => {}} onCardPointerDown={() => {}} draggingUid={null}
+    />,
+  );
+  const hand = rootEl.querySelector('.hand') as HTMLElement;
+  check('the hand renders a single .hand row (no second-row wrapper)', !!hand);
+  const cards = hand.querySelectorAll('.card');
+  check('every hand card is a direct child of the single row (no wrap container)',
+    cards.length === 8 && Array.prototype.every.call(cards, (c: Element) => c.parentElement === hand),
+    `cards=${cards.length}`);
+  // The overlap math is driven entirely by --n; assert it is threaded onto each card so
+  // the CSS can compress the row. Actual pixel overlap is maintainer-verified (jsdom has
+  // no layout), per CLAUDE.md.
+  check('each card carries --n = hand size so CSS can compute the overlap',
+    Array.prototype.every.call(cards, (c: Element) => (c as HTMLElement).style.getPropertyValue('--n') === '8'));
+}
+
 // --- reworked Reserve (91a): reserved card lives in the slot, upkeep reads under MP,
 // --- and the Play/Release buttons are gone (drag + two-click only) --------------
 {

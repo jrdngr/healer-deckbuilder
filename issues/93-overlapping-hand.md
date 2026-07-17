@@ -1,6 +1,6 @@
 # Issue 93 — Overlapping single-row hand (Slay-the-Spire style), no second row
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-17 — hand is a single non-wrapping row; cards overlap only when crowded via a container-query `margin-left`, hover lifts the card to the top z-order and pushes neighbors apart)
 - **Phase:** ui (battle polish)   **Size:** M
 - **Depends on:** #92 (relies on a fixed card size)   **Blocks:** —
 - **Addresses:** intake 2026-07-17 — "Get rid of the second row of hand cards… Instead, start

@@ -36,7 +36,6 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 93 | 📋 Open | [Overlapping single-row hand (StS), no second row](issues/93-overlapping-hand.md) | ui | #92 | intake 07-17 |
 | 94 | 📋 Open | [Defer draw to player turn; animate discards out / draws in](issues/94-draw-discard-animation.md) | ui + engine | #93 | intake 07-17 |
 | 95 | 📋 Open | [Animate end-of-fight healing concurrent with gold burst](issues/95-end-of-fight-heal-fx.md) | ui | — | intake 07-17 |
 | 96 | 📋 Open | [Back button on reward screens to recover a skip](issues/96-reward-back-button.md) | ui | — | intake 07-17 |

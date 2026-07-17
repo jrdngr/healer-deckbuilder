@@ -525,8 +525,11 @@ button.danger:hover:not(:disabled) { color: #fff; }
 .hand-wrap h3 { margin: 0 0 8px; font-size: 14px; font-family: var(--f-ui); font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px; color: var(--faint); }
 #hand-prompt.targeting { color: var(--c-mp); }
 .hand-area { display: flex; align-items: flex-start; gap: 16px; }
-/* Extra headroom so fanned/lifted cards don't clip against the sections above. */
-.hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 158px; padding-top: 16px; }
+/* Extra headroom so fanned/lifted cards don't clip against the sections above.
+   Single row, never wrapping (#93): when the hand holds more fixed-width cards than
+   fit, they overlap instead of breaking onto a second row. `container-type` exposes
+   the hand's own width as `cqw` so the per-card overlap (below) is pure CSS. */
+.hand { flex: 1; display: flex; flex-wrap: nowrap; min-height: 158px; padding-top: 16px; container-type: inline-size; }
 .card {
   /* Fixed box (#92): every card is exactly 132×158 regardless of text length, so
      the hand never renders ragged. Overflow is a backstop only — real card text is
@@ -561,18 +564,32 @@ button.danger:hover:not(:disabled) { color: #fff; }
   animation: card-in 260ms ease-out backwards;
   animation-delay: calc(var(--i, 0) * 45ms);
 }
+/* Overlap-when-crowded (#93): every card after the first advances by a gap that is
+   the normal 12px until the row would overflow, then shrinks — going negative so the
+   cards overlap — so all `--n` cards always fit one row. `100cqw` is the hand's width;
+   the per-card advance to fit n cards with the first fully shown is (width−cardW)/(n−1),
+   and margin = advance − cardW. `min(..,12px)` keeps normal spacing when uncrowded;
+   the clamp floor leaves ≥24px of each overlapped card visible. Later cards paint over
+   earlier ones (DOM order), so hover math is predictable. */
+.hand .card + .card {
+  margin-left: clamp(-108px, calc((100cqw - 132px) / max(1, var(--n, 1) - 1) - 132px), 12px);
+}
 @keyframes card-in {
   from { opacity: 0; transform: translateY(16px) scale(.94); }
 }
 .hand .card:hover:not(.unaffordable):not(.ineligible) {
   transform: translateY(-14px) scale(1.05);
-  z-index: 3;
+  /* The hovered card always wins z-order so its full name + description read even
+     when the row is overlapping (#93) — sits above both neighbors and the lift. */
+  z-index: 10;
   /* The lift + shadow already read as hover; the border stays ink so it never
      competes with the mana-blue selected/channel cues. */
   border-color: var(--ink);
 }
-.hand .card:has(+ .card:hover:not(.unaffordable):not(.ineligible)) { --part: -8px; }
-.hand .card:hover:not(.unaffordable):not(.ineligible) + .card { --part: 8px; }
+/* StS reveal: the neighbors on either side slide apart so the hovered (overlapping)
+   card's text is unobscured. A generous push clears the fixed card box (#93). */
+.hand .card:has(+ .card:hover:not(.unaffordable):not(.ineligible)) { --part: -32px; }
+.hand .card:hover:not(.unaffordable):not(.ineligible) + .card { --part: 32px; }
 /* Press-down: the card gives under the click before it flies off. */
 .hand .card:active:not(.unaffordable):not(.ineligible) {
   transform: translateY(-10px) scale(.99);
