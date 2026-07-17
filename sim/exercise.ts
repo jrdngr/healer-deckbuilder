@@ -187,6 +187,8 @@ function runExerciseFight(cfg: BattleConfig, cov: Coverage, where: string, preKi
       if (game.phase !== 'player') break;
       if (game.canSkip() && game.mp < game.maxMana) game.skipTurn();
       else game.endTurn();
+      // #94: the draw is deferred out of endTurn — begin the next player turn to refill.
+      if (game.status === 'playing') game.beginPlayerTurn();
     }
     for (const r of cfg.relics ?? []) {
       const mark = RELIC_LOG_MARK[r];

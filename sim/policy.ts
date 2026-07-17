@@ -611,6 +611,9 @@ function takeFightTurn(game: Game, tactics: Tactic[], mistakeProb: number, rng: 
   // committed the turn to a card; otherwise let the party phase run.
   if (game.canSkip() && game.mp < game.maxMana) { if (tel) tel.restTurns++; game.skipTurn(); }
   else game.endTurn();
+  // #94: the per-turn draw is deferred out of endTurn — begin the next player turn so
+  // the hand refills (mirrors what the UI does after the enemy phase animates).
+  if (game.status === 'playing') game.beginPlayerTurn();
 }
 
 // Play a fight from a fresh Game to completion. A turn cap guards against a

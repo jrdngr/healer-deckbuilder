@@ -554,6 +554,7 @@ import { check, eq, results } from './harness';
       }
       if (game.phase !== 'player') continue;
       if (game.canSkip() && game.mp < game.maxMana) game.skipTurn(); else game.endTurn();
+      if (game.status === 'playing') game.beginPlayerTurn(); // #94: draw the next hand
     }
   }
 

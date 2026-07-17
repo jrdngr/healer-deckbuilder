@@ -211,7 +211,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   // (end turn / rest) lock input and step the view through the enemy/party phase;
   // unstaged actions (playing a card) keep input responsive. A play that ends the
   // fight is always staged so the win/lose flourish lands before the result card.
-  const dispatch = useCallback((run: () => void, staged: boolean) => {
+  const dispatch = useCallback((run: () => void, staged: boolean, onDone?: () => void) => {
     const g = ref.current!;
     if (animatingRef.current) return; // a staged sequence is mid-play — block input
     run();
@@ -219,18 +219,30 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     if (staged || g.status !== 'playing') {
       // The view already holds the pre-action HP (every path leaves it synced to
       // the engine); the timeline patches it forward in step with the effects.
-      if (timeline.entries.length === 0) { setView(snapshot(g)); force(); return; }
+      if (timeline.entries.length === 0) { setView(snapshot(g)); force(); onDone?.(); return; }
       animatingRef.current = true;
       setAnimating(true);
       force();
-      playStaged(timeline);
+      playStaged(timeline, onDone);
     } else {
       // Reflect the play immediately, then play its effects live over the top.
       setView(snapshot(g));
       force();
       if (timeline.entries.length > 0) playLive(timeline);
+      onDone?.();
     }
   }, [playStaged, playLive]);
+
+  // #94: the per-turn draw is deferred out of endTurn — after the staged enemy phase
+  // finishes, the UI advances to the player's turn as a SECOND staged sequence, which
+  // runs the deferred draw + regen/MP/charge and refills the (until-now empty) hand.
+  // Routed through dispatch so its events animate and the empty->full hand re-renders;
+  // it no-ops once the fight is decided (no draw into a won/lost battle).
+  const beginPlayerTurn = useCallback(() => {
+    const g = ref.current!;
+    if (g.status !== 'playing') return;
+    dispatch(() => g.beginPlayerTurn(), true);
+  }, [dispatch]);
 
   // Animate the captured turn-1 enemy phase as a staged sequence, with the view
   // starting at full health (set by the caller) so the opening blow lands on
@@ -316,20 +328,22 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const releaseReserved = useCallback(() => {
     const g = ref.current!;
     if (!g.canReleaseReserved()) return;
-    dispatch(() => g.releaseReserved(), true);
-  }, [dispatch]);
+    dispatch(() => g.releaseReserved(), true, beginPlayerTurn); // then draw the next hand (#94)
+  }, [dispatch, beginPlayerTurn]);
 
   const skipTurn = useCallback(() => {
     const g = ref.current!;
     if (!g.canSkip()) return;
-    dispatch(() => g.skipTurn(), true); // ends the turn -> staged enemy/party phase
-  }, [dispatch]);
+    // ends the turn -> staged enemy/party phase, then the deferred player-phase draw (#94)
+    dispatch(() => g.skipTurn(), true, beginPlayerTurn);
+  }, [dispatch, beginPlayerTurn]);
 
   const endTurn = useCallback(() => {
     const g = ref.current!;
     if (g.status !== 'playing') return;
-    dispatch(() => g.endTurn(), true); // staged enemy/party phase
-  }, [dispatch]);
+    // staged enemy/party phase, then the deferred player-phase draw (#94)
+    dispatch(() => g.endTurn(), true, beginPlayerTurn);
+  }, [dispatch, beginPlayerTurn]);
 
   const devAction = useCallback((mutate: (g: Game) => void) => {
     dispatch(() => mutate(ref.current!), false);

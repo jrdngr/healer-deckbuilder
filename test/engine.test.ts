@@ -28,6 +28,17 @@ import {
   gatewardenGame, hexweaverGame, devourerGame, sentinelBossGame,
 } from './factories';
 
+// #94: the per-turn draw (and the rest of _startPlayerPhase) is deferred out of
+// endTurn — after endTurn() the hand is genuinely empty and the phase parks at 'idle'
+// until beginPlayerTurn() runs the draw. Most tests just want to advance a whole turn
+// cycle the way the UI/sim do; this helper ends the turn and, if the fight is still
+// going, begins the next player turn (draws the new hand). Tests that assert the
+// deferred-draw split itself call the two halves directly.
+function runTurn(g: Game): void {
+  g.endTurn();
+  if (g.status === 'playing') g.beginPlayerTurn();
+}
+
 // --- deck composition -------------------------------------------------------
 // #86: the starter deck is the heal-only six of #51 — 1× Group Heal, 3× Quick
 // Heal, 2× Heal — plus one Resurrect (heroes die often enough that a revive
@@ -381,13 +392,17 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   // turn is the regen heal (isolating the tick's timing).
   g.telegraph = { type: 'single', hidden: false, damage: 4, targets: [SLOT.LEFT], enraged: false, forTurn: g.turn + 1 };
   g.endTurn();
+  // #94: the enemy attack resolves inside the endTurn feed; the Regen tick is deferred
+  // to the player-phase start (beginPlayerTurn), so it still lands AFTER the enemy
+  // attack — now guaranteed by ordering the two calls rather than one shared feed.
+  const atkIdx = g.events.findIndex((e) => e.kind === 'enemyAttack');
+  check('enemy attack resolved during the enemy phase', atkIdx >= 0, `atkIdx=${atkIdx}`);
+  eq('regen has not ticked before the player phase begins', tank.regen, 2);
+  g.beginPlayerTurn();
   eq('regen healed +2 at player-phase start', tank.hp, 7);
   eq('regen decayed to 1 after the tick', tank.regen, 1);
-  // The heal must land after the enemy attack in the event feed, not before it.
-  const atkIdx = g.events.findIndex((e) => e.kind === 'enemyAttack');
   const regIdx = g.events.findIndex((e) => e.kind === 'regenTick');
-  check('regenTick lands after the enemy attack', atkIdx >= 0 && regIdx > atkIdx,
-    `atkIdx=${atkIdx} regIdx=${regIdx}`);
+  check('regenTick fires on the deferred player-phase start', regIdx >= 0, `regIdx=${regIdx}`);
 }
 
 // --- stacking is ADDITIVE (#52): the card's amount adds to the running Regen ---
@@ -457,13 +472,13 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   g.mp = 10;
   g.playCard(giveAbility(g, SLOT.CENTER)); // taunt -> defense 4
   eq('defense starts at 4', tank.defense, 4);
-  tank.hp = tank.maxHP; g.endTurn();
+  tank.hp = tank.maxHP; runTurn(g);
   eq('defense after 1 enemy turn', tank.defense, 3);
-  tank.hp = tank.maxHP; g.endTurn();
+  tank.hp = tank.maxHP; runTurn(g);
   eq('defense after 2 enemy turns', tank.defense, 2);
-  tank.hp = tank.maxHP; g.endTurn();
+  tank.hp = tank.maxHP; runTurn(g);
   eq('defense after 3 enemy turns', tank.defense, 1);
-  tank.hp = tank.maxHP; g.endTurn();
+  tank.hp = tank.maxHP; runTurn(g);
   eq('defense after 4 enemy turns', tank.defense, 0);
 }
 
@@ -1047,6 +1062,68 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
     JSON.stringify(party.map((e: any) => e.enemyHp)));
 }
 
+// --- #94: the per-turn draw is DEFERRED out of endTurn ----------------------
+{
+  // After endTurn() the hand is GENUINELY EMPTY — it discarded, ran the party +
+  // enemy phases, and STOPPED before the draw. beginPlayerTurn() then refills to
+  // handSize, conserving pile sizes (discarded => discard grows, drawn => draw
+  // shrinks). This is the honest timing the discard-out / draw-in animations ride.
+  const g = new Game(555);
+  g.start();
+  eq('opening hand drew to handSize', g.hand.length, g.handSize);
+
+  const handBefore = g.hand.length;
+  const drawBefore = g.drawPile.length;
+  const discardBefore = g.discardPile.length;
+
+  g.endTurn();
+  eq('hand is empty after endTurn', g.hand.length, 0);
+  check('endTurn parks the phase off the player turn', g.phase !== 'player');
+  // The whole hand went to the discard (default carryover 0); nothing drawn yet.
+  eq('discarded hand landed in the discard pile', g.discardPile.length, discardBefore + handBefore);
+  eq('no cards drawn during endTurn', g.drawPile.length, drawBefore);
+
+  const drawAtTurnStart = g.drawPile.length;
+  const r = g.beginPlayerTurn();
+  check('beginPlayerTurn ok', r.ok);
+  eq('phase back to player', g.phase, 'player');
+  eq('hand refilled to handSize', g.hand.length, g.handSize);
+  eq('the draw pile shrank by exactly the cards drawn',
+    drawAtTurnStart - g.drawPile.length, g.hand.length);
+
+  // Idempotent: a second beginPlayerTurn does NOT draw again (no double-draw).
+  const handAfter = g.hand.length, drawAfter = g.drawPile.length;
+  check('a second beginPlayerTurn is a no-op', !g.beginPlayerTurn().ok);
+  eq('no double-draw on a repeated beginPlayerTurn', g.hand.length, handAfter);
+  eq('the draw pile is untouched by the no-op', g.drawPile.length, drawAfter);
+}
+{
+  // Per-turn draw count is unchanged across several turns INCLUDING a reshuffle when
+  // the draw pile empties: the hand always refills to handSize and the total card
+  // count (hand + draw + discard) is conserved.
+  const g = new Game(556);
+  g.start();
+  const total = g.hand.length + g.drawPile.length + g.discardPile.length;
+  for (let t = 0; t < 6 && g.status === 'playing'; t++) {
+    g.endTurn();
+    if (g.status !== 'playing') break;
+    g.beginPlayerTurn();
+    eq(`turn ${t}: hand refilled to handSize`, g.hand.length, g.handSize);
+    eq(`turn ${t}: no cards created or lost`,
+      g.hand.length + g.drawPile.length + g.discardPile.length, total);
+  }
+  // Force a reshuffle: after the hand empties at end of turn, pour the draw pile into
+  // the discard so the next player-phase draw must recycle it — the hand still refills.
+  g.endTurn();
+  if (g.status === 'playing') {
+    g.discardPile.push(...g.drawPile.splice(0)); // draw now empty; discard holds the rest
+    g.beginPlayerTurn();                          // _drawOne reshuffles the discard back in
+    eq('reshuffle still refills the hand to handSize', g.hand.length, g.handSize);
+    eq('reshuffle conserves the total card count',
+      g.hand.length + g.drawPile.length + g.discardPile.length, total);
+  }
+}
+
 // --- events: heal records amount + resulting HP ----------------------------
 {
   const g = new Game(21);
@@ -1218,6 +1295,7 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
       }
       if (!acted && g.canSkip() && g.mp < 3) g.skipTurn();
       else g.endTurn();
+      if (g.status === 'playing') g.beginPlayerTurn(); // #94: draw the next hand
       check(`game seed ${seed} MP within cap`, g.mp <= MP_MAX, `got ${g.mp}`);
       guard++;
     }
@@ -1251,7 +1329,7 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   const g = new Game(3, cfg);
   g.start();
   g.mp = 0;     // spend everything
-  g.endTurn();  // party + enemy phase, then next player phase grants passive MP
+  runTurn(g);   // party + enemy phase, then next player phase grants passive MP
   check('passive MP grants at player phase start',
     g.status !== 'playing' || g.mp >= 3, `mp=${g.mp}`);
 }
@@ -1436,6 +1514,7 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   g.hand.push(makeDeckCard('lowHeal', -200, []), makeDeckCard('highHeal', -201, []), makeDeckCard('regen', -202, []));
   const drawBefore = g.drawPile.length, discardBefore = g.discardPile.length;
   g.endTurn();
+  g.beginPlayerTurn(); // #94: the redraw is deferred to the player-phase start
   check('carryover keeps exactly 1 card', g.hand.filter((c) => c.uid <= -200).length === 1);
   check('carryover keeps the costliest card', g.hand.some((c) => c.uid === -201));
   check('cheaper cards were discarded', !g.hand.some((c) => c.uid === -200) && !g.hand.some((c) => c.uid === -202));
@@ -1491,6 +1570,7 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   g.mp = 20; // enough to pay the first upkeep so the card is held, not lost
   g.endTurn();
   eq('reserved card survives the discard', g.reserveCard?.id, 'shield');
+  g.beginPlayerTurn(); // #94: the redraw is deferred to the player-phase start
   eq('hand redraws to handSize next player phase', g.hand.length, g.handSize);
 }
 {
@@ -1559,7 +1639,11 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   check('released card went to discard', g.discardPile.some((c) => c.id === 'shield'));
   check('slot cleared after release', g.reserveCard === null);
   eq('release grants/spends 0 MP', g.mp, mp0);
-  check('release advanced to the next player phase', g.phase === 'player' && g.turn > turn0);
+  // #94: release ends the turn (advancing the enemy phase) but the draw is deferred, so
+  // it parks at 'idle' until beginPlayerTurn resumes the player's turn.
+  check('release advanced past the player turn', g.phase !== 'player' && g.turn > turn0);
+  g.beginPlayerTurn();
+  check('the next player phase resumes after the deferred draw', g.phase === 'player');
 
   const g2 = new Game(309); g2.start(); g2.mp = 20;
   g2.playCard(giveCard(g2, 'lowHeal'), SLOT.CENTER); // a card has now been played
@@ -2575,7 +2659,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   {
     const play = (g: Game): string => {
       g.start();
-      for (let i = 0; i < 6 && g.status === 'playing'; i++) g.endTurn();
+      for (let i = 0; i < 6 && g.status === 'playing'; i++) runTurn(g);
       return JSON.stringify(g.log) + JSON.stringify(g.members) + g.mp;
     };
     eq('relic plumbing is inert when empty', play(new Game(300)), play(relicGame(300, [])));
@@ -2753,7 +2837,7 @@ eq('non-enraged boss sweep unchanged at 20', TYPE_WEIGHTS.boss.sweep, 20);
   g.enemy.hp = 999;
   g._fireAbility(g.members[0]);
   eq('Evil Eye sets HEX_TURNS', g.enemy.vulnerableTurns, HEX_TURNS);
-  for (let i = 0; i < HEX_TURNS; i++) g.endTurn();
+  for (let i = 0; i < HEX_TURNS; i++) runTurn(g);
   eq('Vulnerability expires after HEX_TURNS enemy phases', g.enemy.vulnerableTurns, 0);
   eq('vuln magnitude resets to 0 on expiry', g.enemy.vulnerable, 0);
 }

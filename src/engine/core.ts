@@ -2360,6 +2360,20 @@ export class Game {
     return { ok: true };
   }
 
+  // #94: begin the player's turn — the deferred second half of endTurn. Runs the whole
+  // _startPlayerPhase (Regen tick, delayed starts, passive MP, Charge, then the draw) in
+  // the SAME order start() uses, and flips the phase back to 'player'. Idempotent: called
+  // while already in the player phase it is a no-op, so the UI can never double-draw, and
+  // it refuses once the battle is over (no draw into a finished fight). endTurn leaves the
+  // engine parked at phase 'idle'; this is the only path back to a playable hand mid-fight.
+  beginPlayerTurn(): PlayResult {
+    if (this.status !== 'playing') return { ok: false, reason: 'battle over' };
+    if (this.phase === 'player') return { ok: false, reason: 'already your turn' };
+    this.events = [];
+    this._startPlayerPhase();
+    return { ok: true };
+  }
+
   _endTurnInternal(): void {
     this.lensArmed = false;    // Arcane Lens (#70) is "this turn" only — an unspent arming fizzles
 
@@ -2399,7 +2413,14 @@ export class Game {
     // and telegraphs the next (player-first ordering, #26 — the turn no longer
     // increments before the enemy phase; _runEnemyPhase owns the advance).
     this._runEnemyPhase();
-    if (this.status === 'playing') this._startPlayerPhase();
+    // #94: the player-phase start (Regen tick, delayed starts, passive MP, Charge, and
+    // the per-turn draw) is DEFERRED out of endTurn — the UI (and sim) run it via
+    // beginPlayerTurn() only when they advance to the player's turn. This leaves the
+    // hand GENUINELY EMPTY through the party + enemy phases, so the discard-out and
+    // draw-in animations play on honest timing rather than the next hand materializing
+    // inside the same End-Turn click. start() still opens the first hand by calling
+    // _startPlayerPhase directly. Phase parks at 'idle' so no card play / Rest slips in.
+    if (this.status === 'playing') this.phase = 'idle';
   }
 
   _runPartyPhase(): void {

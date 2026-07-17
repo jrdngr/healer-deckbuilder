@@ -34,6 +34,13 @@ import {
   gatewardenGame, hexweaverGame, devourerGame, sentinelBossGame,
 } from './factories';
 
+// #94: endTurn now leaves the hand empty and the phase parked at 'idle'; beginPlayerTurn
+// runs the deferred draw. This helper advances a full turn cycle the way the UI/sim do.
+function runTurn(g: Game): void {
+  g.endTurn();
+  if (g.status === 'playing') g.beginPlayerTurn();
+}
+
 // --- party roster wave 3: Beast Warden + Boar pet (#29) ---------------------
 function wardenGame(seed: number) {
   const cfg = defaultBattleConfig();
@@ -340,7 +347,7 @@ function wardenGame(seed: number) {
   // The fight runs to a conclusion with a single attacker — no stall/throw — and the
   // wipe only fires once the seated member falls (the empty slots never blocked it).
   let turns = 0;
-  while (g.status === 'playing' && turns < 40) { g.endTurn(); turns++; }
+  while (g.status === 'playing' && turns < 40) { runTurn(g); turns++; }
   check('a solo deployment reaches a terminal state without stalling', g.status !== 'playing');
 }
 {
@@ -352,7 +359,7 @@ function wardenGame(seed: number) {
   eq('two members deployed, one slot empty', g.livingMembers().length, 2);
   check('the empty right slot is absent', g.members[2].absent);
   let threw = false;
-  try { for (let i = 0; i < 6 && g.status === 'playing'; i++) g.endTurn(); } catch { threw = true; }
+  try { for (let i = 0; i < 6 && g.status === 'playing'; i++) runTurn(g); } catch { threw = true; }
   check('a two-member deployment runs without throwing', !threw);
 }
 
@@ -496,7 +503,7 @@ function wardenGame(seed: number) {
   eq('holy per-turn counter increments', g.typePlayedThisTurn.holy, 1);
   eq('no bleed into an unplayed type', g.typePlayedThisTurn.iron, 0);
   eq('per-fight counter mirrors the play', g.typePlayedThisFight.shadow, 1);
-  g.endTurn(); // resolve the enemy phase and start a fresh player phase
+  runTurn(g); // resolve the enemy phase and start a fresh player phase (deferred draw)
   eq('per-turn counter resets next turn', g.typePlayedThisTurn.shadow, 0);
   check('per-fight counter persists across the turn', g.typePlayedThisFight.shadow === 1);
   // Per-fight counters do not bleed across fights: a fresh Game (a new fight) is zero.
