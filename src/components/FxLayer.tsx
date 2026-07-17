@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type { CSSProperties, RefObject } from 'react';
 import { fxDuration } from '../animations';
-import type { Anchor, FxInstance, FxSpec } from '../animations';
+import type { Anchor, CardFlyEnd, FxInstance, FxSpec } from '../animations';
 import { getAnimSpeed } from '../settings';
 
 // Renders the active visual effects as absolutely-positioned, CSS-animated nodes
@@ -43,6 +43,19 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2 - mainRect.left, y: r.top + r.height / 2 - mainRect.top };
+  };
+
+  // Resolve a cardFly endpoint to a container-relative box (#94). 'draw'/'discard' are
+  // the pile buttons; a number is that hand-slot card; a CardOrigin is already a box.
+  const flyBox = (end: CardFlyEnd): { x: number; y: number; w: number; h: number } | null => {
+    if (typeof end === 'object') return end; // an explicit measured CardOrigin
+    let el: Element | null | undefined;
+    if (end === 'draw') el = main.querySelector('.draw-pile');
+    else if (end === 'discard') el = main.querySelector('.discard-pile');
+    else el = main.querySelector('.hand')?.children[end];
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left - mainRect.left, y: r.top - mainRect.top, w: r.width, h: r.height };
   };
 
   // Stable random offset set for a burst, generated once per effect id. The
@@ -198,6 +211,22 @@ export function FxLayer({ fx, containerRef }: FxLayerProps) {
             <span className="fx-ghost-name">{spec.name}</span>
           </div>
         );
+      }
+      case 'cardFly': {
+        // A card back flying between a pile and a hand slot (#94). Sized to a full
+        // hand card so both ends read as a card; the pile end is sold by the scale in
+        // the keyframes. Positioned at the `from` center and translated to `to`.
+        const from = flyBox(spec.from);
+        const to = flyBox(spec.to);
+        if (!from || !to) return null;
+        const fcx = from.x + from.w / 2, fcy = from.y + from.h / 2;
+        const tcx = to.x + to.w / 2, tcy = to.y + to.h / 2;
+        const w = Math.max(from.w, to.w), h = Math.max(from.h, to.h);
+        const style: FxStyle = {
+          left: fcx, top: fcy, width: w, height: h,
+          '--dx': `${tcx - fcx}px`, '--dy': `${tcy - fcy}px`, '--dur': dur(spec),
+        };
+        return <div key={id} className={`fx fx-card-fly ${spec.fade}`} style={style} />;
       }
       default:
         return null;

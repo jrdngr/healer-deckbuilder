@@ -953,6 +953,33 @@ main.drag-board .enemy, main.drag-board .party {
   100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.22); opacity: 0; }
 }
 
+/* Card fly — a card back sailing between a deck pile and a hand slot (#94):
+   discard-out (.out shrinks into the discard pile) and draw-in (.in grows out of the
+   draw pile, then dissolves into the real card dealing in beneath it). Sized to a hand
+   card so both ends read as a card; the pile end is sold by the scale. */
+.fx-card-fly {
+  border-radius: var(--r-md);
+  border: var(--bw-card) solid var(--ink);
+  background: repeating-linear-gradient(45deg, #bfe0d5 0 7px, #d3ebe2 7px 14px);
+  box-shadow: var(--shadow-card);
+  transform: translate(-50%, -50%);
+}
+.fx-card-fly.out {
+  background: repeating-linear-gradient(45deg, #ecd9c2 0 7px, #f4e6d4 7px 14px);
+  animation: fx-card-fly-out var(--dur, 460ms) cubic-bezier(.5,.05,.7,.4) forwards;
+}
+.fx-card-fly.in { animation: fx-card-fly-in var(--dur, 460ms) cubic-bezier(.3,.7,.4,1) forwards; }
+@keyframes fx-card-fly-out {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: .95; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.34); opacity: 0; }
+}
+@keyframes fx-card-fly-in {
+  0%   { transform: translate(-50%, -50%) scale(.34); opacity: 0; }
+  30%  { opacity: 1; }
+  80%  { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); opacity: 0; }
+}
+
 /* Slash — a blade streak sweeping across the anchor at --angle. */
 .fx-slash {
   width: 130px; height: 9px; margin: -4.5px 0 0 -65px; border-radius: 6px;
@@ -1039,6 +1066,8 @@ main.drag-board .enemy, main.drag-board .party {
   .hand .card, .card.denied { animation: none; }
   .card:not(.unaffordable):not(.ineligible) .cost { animation: none; }
   .fx-card-ghost { animation: fx-fade-out var(--dur, 420ms) ease-out forwards; }
+  /* Card fly (#94) reduces to a plain fade at rest — no travel, no scale. */
+  .fx-card-fly.in, .fx-card-fly.out { animation: fx-fade-out var(--dur, 460ms) ease-out forwards; }
   /* Ambient motion goes still; auras stay visible at a fixed strength so the
      status information survives without the pulse. */
   section.enemy, .member, .member.hp-low, .member.hp-crit, .char-blob { animation: none; }

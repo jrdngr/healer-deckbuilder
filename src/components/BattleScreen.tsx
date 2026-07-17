@@ -55,12 +55,16 @@ interface BattleScreenProps {
   animating: boolean;
   shakeTick: number;
   playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
-  skipTurn: () => void;
-  endTurn: () => void;
+  // End the turn / Rest; `handBoxes` are the current hand-card positions so the discard
+  // can fly to the pile (#94).
+  skipTurn: (handBoxes?: CardOrigin[]) => void;
+  endTurn: (handBoxes?: CardOrigin[]) => void;
   // "The Reserve" (91a): reserve a hand card, play the reserved card, release it.
   reserve: (handIndex: number) => void;
   playReservedCard: (target: number | null) => void;
-  releaseReserved: () => void;
+  releaseReserved: (handBoxes?: CardOrigin[]) => void;
+  // Displayed deck-pile counts, held while cards fly (#94).
+  pileCounts: { draw: number; discard: number };
   // Play the end-of-fight gold burst over the live board on a win (#59); returns how
   // long (ms) to hold the result overlay while it plays.
   onWinFx: () => number;
@@ -70,7 +74,7 @@ interface BattleScreenProps {
 
 export function BattleScreen({
   game, view, fx, reacts, animating, shakeTick, playCard, skipTurn, endTurn,
-  reserve, playReservedCard, releaseReserved, onWinFx, onBattleEnd,
+  reserve, playReservedCard, releaseReserved, pileCounts, onWinFx, onBattleEnd,
 }: BattleScreenProps) {
   const [selected, setSelected] = useState<Selected | null>(null);
   const [dragView, setDragView] = useState<DragView | null>(null);
@@ -168,6 +172,19 @@ export function BattleScreen({
     return party ? Array.prototype.indexOf.call(party.children, memberEl) : -1;
   };
 
+  // Measure every hand card's box (container-relative), in hand order, BEFORE the turn
+  // ends and the engine discards them — so each can fly to the discard pile (#94).
+  const measureHandBoxes = (): CardOrigin[] => {
+    const main = mainRef.current;
+    const cards = main?.querySelectorAll('.hand .card');
+    if (!main || !cards) return [];
+    const mr = main.getBoundingClientRect();
+    return Array.from(cards).map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left - mr.left, y: r.top - mr.top, w: r.width, h: r.height };
+    });
+  };
+
   const onCardClick = (handIndex: number) => {
     // A just-finished drag also emits a click on the source card — swallow it so a
     // drag never doubles as a select.
@@ -247,7 +264,7 @@ export function BattleScreen({
 
     // source.kind === 'reserve'
     // Onto the discard pile -> release it (free, consumes the whole turn).
-    if (game.canReleaseReserved() && el.closest('.discard-pile')) { setReserveTargeting(false); releaseReserved(); return; }
+    if (game.canReleaseReserved() && el.closest('.discard-pile')) { setReserveTargeting(false); releaseReserved(measureHandBoxes()); return; }
     if (el.closest('.hand-wrap')) return; // released on the hand row (incl. its own slot) -> cancel
     if (spec.board) { setReserveTargeting(false); playReservedCard(null); return; }
     const memberEl = el.closest('.member');
@@ -316,8 +333,10 @@ export function BattleScreen({
     beginDrag({ kind: 'reserve' }, resolveCard(dc), dc.uid, game.reserveDropTargets(), e);
   };
 
-  const onEndTurn = () => { setSelected(null); setReserveTargeting(false); endTurn(); };
-  const onSkip = () => { setSelected(null); setReserveTargeting(false); skipTurn(); };
+  // Measure the hand BEFORE clearing selection/targeting so the discard-out fly has the
+  // cards' real positions (#94).
+  const onEndTurn = () => { const boxes = measureHandBoxes(); setSelected(null); setReserveTargeting(false); endTurn(boxes); };
+  const onSkip = () => { const boxes = measureHandBoxes(); setSelected(null); setReserveTargeting(false); skipTurn(boxes); };
 
   // While a drag is live, cue the board: hero-targeted cards light their valid heroes
   // (isValidTarget); a no-target 'board' card arms the whole board. The source also cues
@@ -371,6 +390,8 @@ export function BattleScreen({
       <Hand
         game={game}
         disabled={animating}
+        drawCount={pileCounts.draw}
+        discardCount={pileCounts.discard}
         selectedIndex={selected?.handIndex ?? null}
         selectedCard={selected?.card ?? null}
         onCardClick={onCardClick}

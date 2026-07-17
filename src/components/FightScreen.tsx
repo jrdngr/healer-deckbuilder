@@ -71,6 +71,7 @@ export function FightScreen({ run, onWinFx, onWin, onLose, onSpent, onInjuries, 
       reserve={ctrl.reserve}
       playReservedCard={ctrl.playReservedCard}
       releaseReserved={ctrl.releaseReserved}
+      pileCounts={ctrl.pileCounts}
       onWinFx={onWinFx}
       onBattleEnd={onBattleEnd}
     />

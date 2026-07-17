@@ -293,6 +293,7 @@ async function render(el: React.ReactElement): Promise<string> {
       game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
       playCard={() => {}} skipTurn={() => {}} endTurn={() => {}}
       reserve={() => {}} playReservedCard={() => {}} releaseReserved={() => {}}
+      pileCounts={{ draw: game.drawPile.length, discard: game.discardPile.length }}
       onWinFx={() => 0} onBattleEnd={() => {}}
     />,
   );
@@ -320,7 +321,8 @@ async function render(el: React.ReactElement): Promise<string> {
   for (let i = 0; i < 8; i++) game.hand.push(makeDeckCard('lowHeal', 900 + i, []));
   await render(
     <Hand
-      game={game} disabled={false} selectedIndex={null} selectedCard={null}
+      game={game} disabled={false} drawCount={game.drawPile.length} discardCount={game.discardPile.length}
+      selectedIndex={null} selectedCard={null}
       onCardClick={() => {}} onCardPointerDown={() => {}} draggingUid={null}
     />,
   );
@@ -349,6 +351,7 @@ async function render(el: React.ReactElement): Promise<string> {
       game={game} view={view} fx={[]} reacts={[null, null, null]} animating={false} shakeTick={0}
       playCard={() => {}} skipTurn={() => {}} endTurn={() => {}}
       reserve={() => {}} playReservedCard={() => {}} releaseReserved={() => {}}
+      pileCounts={{ draw: game.drawPile.length, discard: game.discardPile.length }}
       onWinFx={() => 0} onBattleEnd={() => {}}
     />,
   );
@@ -399,7 +402,7 @@ async function render(el: React.ReactElement): Promise<string> {
   const game = new Game(12, cfg).start(); // slot 0 seats dead+incapacitated, 1/2 alive
   const resurrect = resolveCard(makeDeckCard('resurrect', -1));
   const text = await render(
-    <Hand game={game} disabled={false} selectedIndex={null} selectedCard={resurrect} onCardClick={() => {}} onCardPointerDown={() => {}} draggingUid={null} />,
+    <Hand game={game} disabled={false} drawCount={game.drawPile.length} discardCount={game.discardPile.length} selectedIndex={null} selectedCard={resurrect} onCardClick={() => {}} onCardPointerDown={() => {}} draggingUid={null} />,
   );
   check('Resurrect prompt explains the incapacitated cannot be reached', text.includes("can't reach the Incapacitated"), text);
   check('Resurrect prompt points at the Infirmary', text.includes('Infirmary'), text);

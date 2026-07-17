@@ -11,7 +11,10 @@
 //   game.playCard(handIndex, target);      // during player phase
 //   game.skipTurn();                        // regen MP instead of playing (before any card)
 //   game.endTurn();                         // discard, party phase, then the enemy resolves + telegraphs next
-// Read state off the public fields; read game.log for a running event feed.
+//   game.beginPlayerTurn();                 // (#94) the deferred draw + regen/MP/charge — call after endTurn/skipTurn
+// The per-turn draw is DEFERRED: endTurn/skipTurn leave the hand empty (phase 'idle');
+// beginPlayerTurn() runs the player-phase start (draw included). start() opens the first
+// hand itself. Read state off the public fields; read game.log for a running event feed.
 
 import {
   MEMBER_DEFS, MEMBER_POOL, ATTACK_BASE_DAMAGE, SLOT_WEIGHTS,

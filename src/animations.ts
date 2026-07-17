@@ -39,11 +39,21 @@ type FxSpecBase =
   // A ghost of a just-played card: spawns at the card's measured hand position
   // (container-relative px) and flies into its target, dissolving into the
   // card's effect. 'center' is for board-wide plays with no single target.
-  | { type: 'cardGhost'; from: CardOrigin; to: Anchor | 'center'; name: string; cost: number };
+  | { type: 'cardGhost'; from: CardOrigin; to: Anchor | 'center'; name: string; cost: number }
+  // A card-shaped ghost flying between a deck pile and a hand slot (#94): the
+  // end-of-turn discard-out (a captured hand box -> the discard pile, `fade: 'out'`) and
+  // the start-of-turn draw-in (the draw pile -> a hand slot, `fade: 'in'`). Endpoints are
+  // logical and resolved live against the DOM by FxLayer — 'draw'/'discard' are the pile
+  // buttons, a number is that hand-slot card, a CardOrigin is an explicit measured box (a
+  // hand card captured just before endTurn removes it from the DOM).
+  | { type: 'cardFly'; from: CardFlyEnd; to: CardFlyEnd; fade: 'in' | 'out' };
 
 // Where a played card sat on screen (px relative to the battle container),
 // measured by the click handler before the engine removes it from the hand.
 export interface CardOrigin { x: number; y: number; w: number; h: number; }
+
+// An endpoint for a `cardFly`: a deck pile, a hand slot index, or an explicit box.
+export type CardFlyEnd = 'draw' | 'discard' | number | CardOrigin;
 
 // Every effect may override its default lifetime — a heavy slam's lobbed orb
 // hangs in the air longer than a ranger dart even though both are projectiles.
@@ -104,6 +114,7 @@ export const FX_DURATION: Record<FxSpec['type'], number> = {
   banner: 1200,
   vignette: 700,
   cardGhost: 420,
+  cardFly: 460,
 };
 
 // Dead time inserted after the biggest impacts (kills, bolt, boss beats) so the

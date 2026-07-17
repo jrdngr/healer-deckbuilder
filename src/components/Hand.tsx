@@ -9,6 +9,10 @@ import { groupPile } from '../deckView';
 interface HandProps {
   game: Game;
   disabled: boolean; // dim the hand while an animation sequence plays
+  // Displayed pile counts (#94): held at their pre-motion totals while the discard-out /
+  // draw-in cards fly, so a counter never jumps ahead of its cards.
+  drawCount: number;
+  discardCount: number;
   selectedIndex: number | null;
   selectedCard: ResolvedCard | null;
   onCardClick: (handIndex: number) => void;
@@ -37,7 +41,7 @@ function promptFor(card: ResolvedCard, game: Game): string {
   return `Select ${kind} for ${card.name} — or Cancel`;
 }
 
-export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid, reserveSlot }: HandProps) {
+export function Hand({ game, disabled, drawCount, discardCount, selectedIndex, selectedCard, onCardClick, onCardPointerDown, draggingUid, reserveSlot }: HandProps) {
   const over = game.status !== 'playing';
   // A player-cast channel (#64, #78) is tracked per card id in the engine, so any
   // in-hand copy of the channeling card gets the glow + "channeling · N left" badge.
@@ -54,7 +58,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick,
       <div className={`hand-area${disabled ? ' busy' : ''}`}>
         <button className="pile draw-pile" title="Draw pile — click to view (contents shown unordered)"
           onClick={() => setViewing(viewing === 'draw' ? null : 'draw')}>
-          <span className="pile-count">{game.drawPile.length}</span>
+          <span className="pile-count">{drawCount}</span>
           <span className="pile-label">Draw</span>
         </button>
         {reserveSlot}
@@ -86,7 +90,7 @@ export function Hand({ game, disabled, selectedIndex, selectedCard, onCardClick,
         </div>
         <button className="pile discard-pile" title="Discard pile — click to view"
           onClick={() => setViewing(viewing === 'discard' ? null : 'discard')}>
-          <span className="pile-count">{game.discardPile.length}</span>
+          <span className="pile-count">{discardCount}</span>
           <span className="pile-label">Discard</span>
         </button>
       </div>

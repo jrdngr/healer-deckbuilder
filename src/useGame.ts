@@ -15,7 +15,7 @@ import type { GameEvent } from './engine';
 import { resolveCard } from './constants';
 import type { BattleConfig, Slot } from './constants';
 import type { CardOrigin } from './animations';
-import { buildTimeline, fxDuration } from './animations';
+import { buildTimeline, fxDuration, FX_DURATION } from './animations';
 import { getAnimSpeed } from './settings';
 import type { Timeline, DisplayPatch, FxInstance, FxSpec, MemberReact, MemberReactKind } from './animations';
 
@@ -48,13 +48,19 @@ export interface GameController {
    *  click handler, before the engine removes it) — when given, a ghost of the
    *  card flies from the hand into its target. */
   playCard: (handIndex: number, target: number | null, origin?: CardOrigin) => void;
-  skipTurn: () => void;
-  endTurn: () => void;
+  /** End the turn / Rest. `handBoxes` are the measured hand-card positions (from the
+   *  caller, before the discard) so each card can fly to the discard pile (#94). */
+  skipTurn: (handBoxes?: CardOrigin[]) => void;
+  endTurn: (handBoxes?: CardOrigin[]) => void;
   /** "The Reserve" (91a): reserve a hand card (free, not an action), play the reserved
    *  card, or release it to the discard for the whole turn. */
   reserve: (handIndex: number) => void;
   playReservedCard: (target: number | null) => void;
-  releaseReserved: () => void;
+  releaseReserved: (handBoxes?: CardOrigin[]) => void;
+  /** Displayed deck-pile counts (#94): held at their pre-motion totals while the
+   *  discard-out / draw-in cards fly, then released to the live engine counts — so a
+   *  counter never jumps ahead of its cards. */
+  pileCounts: { draw: number; discard: number };
   /** Dev-panel cheat hook: run an arbitrary engine mutation through the normal
    *  dispatch path so its events animate and the view/re-render stay in sync. */
   devAction: (mutate: (g: Game) => void) => void;
@@ -63,6 +69,12 @@ export interface GameController {
 function randomSeed(): number {
   return (Math.random() * 1e9) | 0;
 }
+
+// #94 draw/discard animation timings (ms, before animation-speed scaling).
+const DISCARD_STAGGER = 55;   // gap between each discarded card leaving the hand
+const DISCARD_LEAD_MS = 260;  // the discard-out fly leads the enemy-phase visuals
+const DRAW_STAGGER = 55;      // gap between each new card flying out of the draw pile
+const DRAW_IN_DELAY = 40;     // let the freshly-drawn hand lay out before flying to it
 
 function createGame(seed?: number, config?: BattleConfig): Game {
   const g = new Game(Number.isFinite(seed) ? (seed as number) : randomSeed(), config);
@@ -109,6 +121,9 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   const [reacts, setReacts] = useState<(MemberReactState | null)[]>([null, null, null]);
   const [animating, setAnimating] = useState(false);
   const [shakeTick, setShakeTick] = useState(0);
+  // #94: displayed deck-pile counts are held at their pre-motion totals while the
+  // discard-out / draw-in cards fly (null = read the live engine count).
+  const [pileHold, setPileHold] = useState<{ draw: number | null; discard: number | null }>({ draw: null, discard: null });
 
   // A ref mirrors `animating` so the dispatch guard sees it synchronously.
   const animatingRef = useRef(false);
@@ -172,7 +187,9 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   // Staged, blocking playback for end-of-turn sequences (party + enemy phases).
   // The view is held at its pre-action values and patched forward step by step so
   // bars move with each effect; input stays locked until the sequence finishes.
-  const playStaged = useCallback((timeline: Timeline, onDone?: () => void) => {
+  // `lead` (#94) delays the whole sequence so the end-of-turn discard-out fly can play
+  // out first — the enemy-phase visuals then begin over an already-empty hand.
+  const playStaged = useCallback((timeline: Timeline, onDone?: () => void, lead = 0) => {
     const g = ref.current!;
     for (const entry of timeline.entries) {
       schedule(() => {
@@ -180,7 +197,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
         if (entry.shake) setShakeTick((x) => x + 1);
         if (entry.react) triggerReacts(entry.react);
         if (entry.fx) for (const spec of entry.fx) spawnFx(spec);
-      }, entry.at);
+      }, entry.at + lead);
     }
     // Unlock once the action has played out (paceEnd) rather than waiting for the
     // cosmetic fade-out (total) — the lingering particles/numbers finish on their
@@ -190,7 +207,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
       animatingRef.current = false;
       setAnimating(false);
       onDone?.();
-    }, timeline.paceEnd + 100);
+    }, timeline.paceEnd + 100 + lead);
   }, [schedule, applyPatch, spawnFx, triggerReacts]);
 
   // Live, non-blocking playback for the player's own card plays. The result is
@@ -211,7 +228,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   // (end turn / rest) lock input and step the view through the enemy/party phase;
   // unstaged actions (playing a card) keep input responsive. A play that ends the
   // fight is always staged so the win/lose flourish lands before the result card.
-  const dispatch = useCallback((run: () => void, staged: boolean, onDone?: () => void) => {
+  const dispatch = useCallback((run: () => void, staged: boolean, onDone?: () => void, lead = 0) => {
     const g = ref.current!;
     if (animatingRef.current) return; // a staged sequence is mid-play — block input
     run();
@@ -223,7 +240,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
       animatingRef.current = true;
       setAnimating(true);
       force();
-      playStaged(timeline, onDone);
+      playStaged(timeline, onDone, lead);
     } else {
       // Reflect the play immediately, then play its effects live over the top.
       setView(snapshot(g));
@@ -237,12 +254,39 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   // finishes, the UI advances to the player's turn as a SECOND staged sequence, which
   // runs the deferred draw + regen/MP/charge and refills the (until-now empty) hand.
   // Routed through dispatch so its events animate and the empty->full hand re-renders;
-  // it no-ops once the fight is decided (no draw into a won/lost battle).
+  // it no-ops once the fight is decided (no draw into a won/lost battle). Each new card
+  // then flies out of the draw pile into its hand slot, and the draw counter is held at
+  // its pre-draw total until the cards land so it never drops ahead of the motion.
   const beginPlayerTurn = useCallback(() => {
     const g = ref.current!;
     if (g.status !== 'playing') return;
+    const drawBefore = g.drawPile.length;
     dispatch(() => g.beginPlayerTurn(), true);
-  }, [dispatch]);
+    if (g.phase !== 'player') return; // dispatch was blocked, or the fight ended
+    const n = g.hand.length;
+    if (n === 0) return;
+    setPileHold((h) => ({ ...h, draw: drawBefore }));
+    schedule(() => {
+      for (let i = 0; i < n; i++) {
+        schedule(() => spawnFx({ type: 'cardFly', from: 'draw', to: i, fade: 'in' }), i * DRAW_STAGGER);
+      }
+    }, DRAW_IN_DELAY);
+    const settle = DRAW_IN_DELAY + (n - 1) * DRAW_STAGGER + FX_DURATION.cardFly;
+    schedule(() => setPileHold((h) => ({ ...h, draw: null })), settle);
+  }, [dispatch, schedule, spawnFx]);
+
+  // #94: fly each captured hand-card box to the discard pile, staggered, and hold the
+  // discard counter at its pre-discard total (`heldDiscard`) until the cards land — so
+  // the count never rises ahead of the cards leaving the hand.
+  const flyDiscardOut = useCallback((boxes: CardOrigin[], heldDiscard: number) => {
+    if (boxes.length === 0) return;
+    setPileHold((h) => ({ ...h, discard: heldDiscard }));
+    boxes.forEach((box, i) => {
+      schedule(() => spawnFx({ type: 'cardFly', from: box, to: 'discard', fade: 'out' }), i * DISCARD_STAGGER);
+    });
+    const settle = (boxes.length - 1) * DISCARD_STAGGER + FX_DURATION.cardFly;
+    schedule(() => setPileHold((h) => ({ ...h, discard: null })), settle);
+  }, [schedule, spawnFx]);
 
   // Animate the captured turn-1 enemy phase as a staged sequence, with the view
   // starting at full health (set by the caller) so the opening blow lands on
@@ -280,6 +324,7 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
     setFx([]);
     setReacts([null, null, null]);
     setShakeTick(0);
+    setPileHold({ draw: null, discard: null });
     setView(preStartView(g)); // full health; the opening attack patches it down
     force();
     playOpening(g.events.slice());
@@ -324,26 +369,31 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   }, [dispatch]);
 
   // Release the reserved card to the discard for the whole turn (0 MP). It advances the
-  // turn like Rest, so it is a staged sequence.
-  const releaseReserved = useCallback(() => {
+  // turn like Rest, so it is a staged sequence — the hand flies to the discard too (#94).
+  const releaseReserved = useCallback((handBoxes: CardOrigin[] = []) => {
     const g = ref.current!;
-    if (!g.canReleaseReserved()) return;
-    dispatch(() => g.releaseReserved(), true, beginPlayerTurn); // then draw the next hand (#94)
-  }, [dispatch, beginPlayerTurn]);
+    if (!g.canReleaseReserved() || animatingRef.current) return;
+    flyDiscardOut(handBoxes, g.discardPile.length);
+    dispatch(() => g.releaseReserved(), true, beginPlayerTurn, DISCARD_LEAD_MS); // then draw the next hand
+  }, [dispatch, beginPlayerTurn, flyDiscardOut]);
 
-  const skipTurn = useCallback(() => {
+  const skipTurn = useCallback((handBoxes: CardOrigin[] = []) => {
     const g = ref.current!;
-    if (!g.canSkip()) return;
-    // ends the turn -> staged enemy/party phase, then the deferred player-phase draw (#94)
-    dispatch(() => g.skipTurn(), true, beginPlayerTurn);
-  }, [dispatch, beginPlayerTurn]);
+    if (!g.canSkip() || animatingRef.current) return;
+    // fly the hand to the discard, run the staged enemy/party phase after a short lead,
+    // then the deferred player-phase draw (#94)
+    flyDiscardOut(handBoxes, g.discardPile.length);
+    dispatch(() => g.skipTurn(), true, beginPlayerTurn, DISCARD_LEAD_MS);
+  }, [dispatch, beginPlayerTurn, flyDiscardOut]);
 
-  const endTurn = useCallback(() => {
+  const endTurn = useCallback((handBoxes: CardOrigin[] = []) => {
     const g = ref.current!;
-    if (g.status !== 'playing') return;
-    // staged enemy/party phase, then the deferred player-phase draw (#94)
-    dispatch(() => g.endTurn(), true, beginPlayerTurn);
-  }, [dispatch, beginPlayerTurn]);
+    if (g.status !== 'playing' || animatingRef.current) return;
+    // fly the hand to the discard, run the staged enemy/party phase after a short lead,
+    // then the deferred player-phase draw (#94)
+    flyDiscardOut(handBoxes, g.discardPile.length);
+    dispatch(() => g.endTurn(), true, beginPlayerTurn, DISCARD_LEAD_MS);
+  }, [dispatch, beginPlayerTurn, flyDiscardOut]);
 
   const devAction = useCallback((mutate: (g: Game) => void) => {
     dispatch(() => mutate(ref.current!), false);
@@ -356,8 +406,13 @@ export function useGame(initialSeed?: number, config?: BattleConfig): GameContro
   // each render would re-fire that effect -> setState -> re-render, looping until
   // React throws "Maximum update depth exceeded".
   const controllerRef = useRef<GameController>({} as GameController);
+  const g = ref.current!;
+  const pileCounts = {
+    draw: pileHold.draw ?? g.drawPile.length,
+    discard: pileHold.discard ?? g.discardPile.length,
+  };
   return Object.assign(controllerRef.current, {
-    game: ref.current, view, fx, reacts, animating, shakeTick, newGame, playCard, skipTurn, endTurn,
+    game: g, view, fx, reacts, animating, shakeTick, pileCounts, newGame, playCard, skipTurn, endTurn,
     reserve, playReservedCard, releaseReserved, devAction,
   });
 }

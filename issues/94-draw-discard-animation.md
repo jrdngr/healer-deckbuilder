@@ -1,6 +1,6 @@
 # Issue 94 — Defer the draw to the player's turn; animate discards out and draws in
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-17 — deferred the whole `_startPlayerPhase` behind a new `beginPlayerTurn()`; hand empties on end-turn, discard-out / draw-in card flies + held pile counters)
 - **Phase:** ui (battle polish) + engine (turn timing)   **Size:** L
 - **Depends on:** #93 (draws animate into the overlapping hand) — soft; can build against either
   layout   **Blocks:** —
@@ -93,3 +93,49 @@ guard the engine change with tests.
 - Changing `handSize`, draw counts, or any card/relic draw mechanic — timing only.
 - The "+N cards" mid-turn draw float (`animations.ts:616-624`) for card-driven draws stays as-is.
 - Animating the party/enemy phase itself beyond leaving the hand empty during it.
+
+## Resolution (2026-07-17)
+
+**Deferral choice: deferred the WHOLE `_startPlayerPhase`, not just the draw.** This is
+the "simplest correct" option the issue recommended — the Regen tick, delayed-start
+effects, passive MP, Mage Charge, and the draw all keep their existing order inside
+`_startPlayerPhase`; only *when that method runs* changed.
+
+### Engine (`src/engine/core.ts`)
+- `_endTurnInternal` now ends after `_runEnemyPhase()` and parks `phase = 'idle'` instead
+  of calling `_startPlayerPhase()`. After `endTurn()`/`skipTurn()`/`releaseReserved()` the
+  `hand` is genuinely empty through the party + enemy phases, and `canSkip()`/card plays
+  (both gated on `phase === 'player'`) are inert in the gap.
+- New public `beginPlayerTurn()`: guarded (no-op if the fight is over or already the
+  player phase → no double-draw / no draw into a decided fight), resets `events`, calls
+  `_startPlayerPhase()`. `start()` still opens the first hand by calling
+  `_startPlayerPhase()` directly.
+
+### UI (`src/useGame.ts`, `FightScreen`, `BattleScreen`, `Hand`, `FxLayer`, `animations.ts`, `styles.css`)
+- `useGame` chains `beginPlayerTurn` as a **second staged sequence** (via a new `onDone`
+  arg on `dispatch`/`playStaged`) after each turn-ending action's enemy phase animates.
+- Discard-out: `BattleScreen` measures the hand-card boxes before the turn ends and passes
+  them down; `useGame` flies a `cardFly` ghost from each box to the discard pile, and the
+  enemy phase is delayed a short `lead` so the discard plays first.
+- Draw-in: after `beginPlayerTurn` draws, `useGame` flies a `cardFly` ghost from the draw
+  pile into each new hand slot; the real card's existing `card-in` deal-in is the settle,
+  and the ghost dissolves into it.
+- New `cardFly` FX type (`animations.ts` + `FxLayer` renders it, resolving `'draw'`/
+  `'discard'`/hand-slot/box endpoints) + `.fx-card-fly` CSS (with a reduced-motion fade).
+- Pile counters: `useGame` holds the displayed draw/discard counts (`pileCounts`, threaded
+  to `Hand`) at their pre-motion totals until the cards land, so a counter never jumps
+  ahead of its cards.
+
+### Divergences / notes
+- **Discard-out animates the full current hand** (not a carryover-aware subset). With the
+  default `carryover: 0` the whole hand discards, so this is exact; a non-zero carryover
+  (experimental) would briefly fly a kept card too — cosmetic only, no mechanic change.
+- The main `_drawTo` draw emits no engine event (unchanged), so the draw-in motion is a
+  pure UI FX spawned by `useGame`, not driven off a `draw` event.
+- **Test/sim impact:** `endTurn()` no longer refills the hand, so every full-turn-cycle
+  test and the sim/exerciser drive loops now call `beginPlayerTurn()` after `endTurn()`
+  (a `runTurn` helper in the engine test files). New engine tests assert the
+  empty-after-endTurn / refill-on-begin split, pile-size conservation, no double-draw, and
+  an unchanged per-turn draw count across a reshuffle.
+- Split into two commits: engine defer + wiring/tests first, the fly animations + pile
+  counters second.
