@@ -180,7 +180,7 @@ section.enemy {
    the hand never shifts when a card is reserved or played back. */
 .reserve { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .reserve-empty {
-  width: 132px; min-height: 158px; border-radius: var(--r-md);
+  width: 132px; height: 158px; border-radius: var(--r-md);
   border: var(--bw-card) dashed color-mix(in srgb, var(--ink) 32%, transparent);
   background: color-mix(in srgb, var(--fam-ward) 6%, var(--panel));
   display: flex; align-items: center; justify-content: center;
@@ -270,7 +270,9 @@ main.drag-from-reserve .discard-pile {
 .member {
   background: var(--panel); border-radius: var(--r-md); padding: 14px 12px 12px;
   border: var(--bw-card) solid var(--ink); position: relative; transition: border-color .15s, transform .12s;
-  width: 100%; max-width: 210px; min-height: 204px; margin-inline: auto;
+  /* Fixed height (#92): a hero with more text is the same height as one with less,
+     so the party grid never reflows. */
+  width: 100%; max-width: 210px; height: 204px; margin-inline: auto;
   display: flex; flex-direction: column; gap: 8px; align-items: center;
   box-shadow: var(--shadow-card);
 }
@@ -526,7 +528,10 @@ button.danger:hover:not(:disabled) { color: #fff; }
 /* Extra headroom so fanned/lifted cards don't clip against the sections above. */
 .hand { flex: 1; display: flex; gap: 12px; flex-wrap: wrap; min-height: 158px; padding-top: 16px; }
 .card {
-  width: 132px; min-height: 158px; background: var(--panel);
+  /* Fixed box (#92): every card is exactly 132×158 regardless of text length, so
+     the hand never renders ragged. Overflow is a backstop only — real card text is
+     kept short enough (in the card data) to fit without triggering the clip. */
+  width: 132px; height: 158px; overflow: hidden; background: var(--panel);
   border: var(--bw-card) solid var(--ink); border-radius: var(--r-md);
   /* top padding reserves a strip for the family tick / heal pill so text starts below them */
   padding: 28px 10px 10px; cursor: pointer; transition: transform .14s ease; position: relative;
@@ -1256,8 +1261,14 @@ main.drag-board .enemy, main.drag-board .party {
 .deploy-slot-clear:hover { color: #e0637a; }
 .deploy-roster { display: flex; flex-wrap: wrap; gap: 12px; }
 
-/* An empty deploy slot rendered in the battle party panel. */
-.member-empty { display: flex; align-items: center; justify-content: center; border: var(--bw) dashed var(--faint); opacity: .5; }
+/* An empty deploy slot rendered in the battle party panel. Fixed to the same
+   footprint as a filled `.member` (#92) so the grid never reflows when a slot
+   fills or empties, even when every slot is empty. */
+.member-empty {
+  width: 100%; max-width: 210px; height: 204px; margin-inline: auto;
+  border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center; border: var(--bw) dashed var(--faint); opacity: .5;
+}
 .member-empty-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 
 /* ---- Events -------------------------------------------------------------- */

@@ -874,9 +874,9 @@ function dndGame(seed: number): Game {
   // Channel banner effect-line derivation (#78): a pure helper that strips the
   // "Channel:" prefix and the trailing cancel/lifetime sentence from a channel
   // card's desc, leaving just the per-tick effect for the banner to show.
-  eq('Mending Stream effect line drops the "Ends if they die..." tail',
+  eq('Mending Stream effect line drops the "Ends on death..." tail',
     channelEffectLine('mendingStream'),
-    `heal a member for ${MENDING_STREAM_HEAL} each turn (up to ${MENDING_STREAM_MAX_TURNS} turns)`);
+    `heal a member ${MENDING_STREAM_HEAL}/turn (up to ${MENDING_STREAM_MAX_TURNS})`);
   check('Sap effect line has no leading "Channel:"', !channelEffectLine('sap').startsWith('Channel'));
   check('Sap effect line drops the play-a-card warning', !/play a card/i.test(channelEffectLine('sap')));
 }

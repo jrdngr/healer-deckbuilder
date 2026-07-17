@@ -46,32 +46,32 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // En Garde (#74): the Duelist Provokes a chosen member (Taunt) and grants them the
   // persistent Riposte stance (herself included).
   enGarde: { id: 'enGarde', name: 'En Garde', cost: 2, target: 'single', ability: 'enGarde',
-    desc: `Through the Duelist, a chosen member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} enemy turns — they counter every hit that strikes them.` },
+    desc: `A member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} turns — they counter every hit.` },
   // Feat of Strength (#75) is a Blood ability card (incite precedent — target 'none', counts
   // toward the blood type counters). It carries NO selfDamage field: the payment is not the
   // clamped canPlay Blood gate but a raw lethal drain in _fireAbility (this ability is meant to
   // be castable at any HP — a lethal Feat is a legal, informed sacrifice, so there is no
   // ">N HP" playability gate). The Sanguine surcharge is applied in the engine, not via _bloodCost.
   penance: { id: 'penance', name: 'Feat of Strength', cost: 2, target: 'none', ability: 'penance',
-    desc: `Through the Strongman, pay ${PENANCE_HP} HP (no clamp — it can kill him); every living member's auto deals +${PENANCE_STRIKE_BONUS} for 2 enemy turns.` },
+    desc: `Pay ${PENANCE_HP} HP (no clamp — can kill him); every member's auto deals +${PENANCE_STRIKE_BONUS} for 2 turns.` },
   // --- learned ability cards (Training Dojo, 2026-07): two extra per hero -------
   // Acquired at the Dojo node; injected on deploy only for the hero that learned them.
   twinShot: { id: 'twinShot', name: 'Twin Shot', cost: 2, target: 'none', ability: 'twinShot',
     desc: `The Ranger looses ${TWIN_SHOT_HITS} arrows — she strikes twice (each takes Toxicologist).` },
   concVenom: { id: 'concVenom', name: 'Concentrated Venom', cost: 1, target: 'none', ability: 'concVenom',
-    desc: `Double the enemy's current Poison-per-turn (its duration is unchanged).` },
+    desc: `Double the enemy's Poison-per-turn (its duration is unchanged).` },
   shieldWall: { id: 'shieldWall', name: 'Shield Wall', cost: 2, target: 'none', ability: 'shieldWall',
     desc: `Every living member gains Defense ${SHIELD_WALL_DEFENSE} for ${SHIELD_WALL_TURNS} enemy turns.` },
   holdLine: { id: 'holdLine', name: 'Hold the Line', cost: 1, target: 'none', ability: 'holdLine',
-    desc: `The Tank braces (Defense ${HOLD_LINE_DEFENSE} for ${HOLD_LINE_TURNS} turns); while it stands, the damage he soaks banks double for Grudge.` },
+    desc: `The Tank braces (Defense ${HOLD_LINE_DEFENSE}, ${HOLD_LINE_TURNS} turns); while it holds, damage he soaks banks double Grudge.` },
   arcaneSurge: { id: 'arcaneSurge', name: 'Arcane Surge', cost: 1, target: 'none', ability: 'arcaneSurge',
     desc: `The Mage gains ${ARCANE_SURGE_CHARGE} Charge at once.` },
   drainLife: { id: 'drainLife', name: 'Drain Life', cost: 2, target: 'none', ability: 'drainLife',
-    desc: `Deal ${DRAIN_LIFE_DMG} to the enemy (more if it is Vulnerable); the most wounded member heals for the damage dealt.` },
+    desc: `Deal ${DRAIN_LIFE_DMG} (more if Vulnerable); the most wounded member heals for the damage dealt.` },
   doom: { id: 'doom', name: 'Doom', cost: 3, target: 'none', ability: 'doom',
     desc: `Curse the enemy: after ${DOOM_DELAY} enemy turns it takes ${DOOM_DAMAGE} damage (its Vulnerability then scales it).` },
   sacrifice: { id: 'sacrifice', name: 'Sacrifice', cost: 1, target: 'single', ability: 'sacrifice', exhaust: true,
-    desc: `A chosen ally pays ${SACRIFICE_HP} HP (clamps to 1); the Warlock gains +${SACRIFICE_DMG} damage & +${SACRIFICE_POWER} ability power for the fight. Consumed after one use.` },
+    desc: `An ally pays ${SACRIFICE_HP} HP (min 1); the Warlock gains +${SACRIFICE_DMG} damage & +${SACRIFICE_POWER} ability power this fight. One use.` },
   finale: { id: 'finale', name: 'Finale', cost: 2, target: 'none', ability: 'finale',
     desc: `The Busker strikes for ${FINALE_MULT}× his cards-played value this turn.` },
   duet: { id: 'duet', name: 'Duet', cost: 1, target: 'single', ability: 'duet',
@@ -93,7 +93,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   flurry: { id: 'flurry', name: 'Flurry', cost: 2, target: 'none', ability: 'flurry',
     desc: `The Duelist strikes ${FLURRY_HITS} times, each for her auto − ${FLURRY_REDUCTION}.` },
   strongest: { id: 'strongest', name: 'Strongest in the World', cost: 2, target: 'none', ability: 'strongest',
-    desc: `The Strongman pays ${STRONGEST_HP} HP (no clamp — it can kill him); every living member's auto lands doubled this turn.` },
+    desc: `Pay ${STRONGEST_HP} HP (no clamp — can kill him); every member's auto lands doubled this turn.` },
   deadlift: { id: 'deadlift', name: 'Deadlift', cost: 1, target: 'single', ability: 'deadlift',
     desc: `Hoist a chosen ally clear — the enemy cannot target them next enemy turn.` },
   lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
@@ -153,7 +153,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // turns left) through _damageEnemy, so Vulnerability multiplies the cash-out (the
   // poison ticks it consumes stay unmultiplied). needsPoison-gated.
   hemorrhage: { id: 'hemorrhage', name: 'Goo Burst', cost: 3, target: 'none', needsPoison: true,
-    desc: `Consume the enemy's Poison and deal its whole remaining damage (per-turn × turns left) at once.` },
+    desc: `Consume the enemy's Poison and deal its whole remaining damage at once.` },
   // Trash Talk shaves the standing telegraph by 1 per target (floor 0) — stacks
   // with every other reduction to zero out a sweep.
   dreadWhisper: { id: 'dreadWhisper', name: 'Trash Talk', cost: 1, target: 'none',
@@ -187,14 +187,14 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // applies its full amount to the most wounded other member (routes through the normal
   // heal pipeline, so Field Triage / Twin Censer / Beacon all interact). Splash-heal tool.
   arcaneLens: { id: 'arcaneLens', name: 'Arcane Lens', cost: 2, target: 'none',
-    desc: 'Your next single-target heal this turn also heals the most wounded other member for the same amount.' },
+    desc: 'Your next single-target heal this turn also hits the most wounded other member.' },
   // --- channeled cards (#64): sustained effects that end when you play a card ------
   mendingStream: { id: 'mendingStream', name: 'Mending Stream', cost: 2, target: 'single',
     channel: { maxTurns: MENDING_STREAM_MAX_TURNS, single: true },
-    desc: `Channel: heal a member for ${MENDING_STREAM_HEAL} each turn (up to ${MENDING_STREAM_MAX_TURNS} turns). Ends if they die or you play a card.` },
+    desc: `Channel: heal a member ${MENDING_STREAM_HEAL}/turn (up to ${MENDING_STREAM_MAX_TURNS}). Ends on death or any card.` },
   sap: { id: 'sap', name: 'Sap', cost: 2, target: 'none',
     channel: { maxTurns: SAP_MAX_TURNS },
-    desc: `Channel: each turn make the enemy more Vulnerable (+${Math.round(SAP_VULN_PER_TICK * 100)}% up to +${Math.round(SAP_VULN_CAP * 100)}%), for up to ${SAP_MAX_TURNS} turns. Playing any card ends it.` },
+    desc: `Channel: each turn the enemy grows +${Math.round(SAP_VULN_PER_TICK * 100)}% Vulnerable (up to +${Math.round(SAP_VULN_CAP * 100)}%), for ${SAP_MAX_TURNS} turns. Ends on any card.` },
   // --- hero buff card batch (#62): proactive per-hero buffs -------------------
   guard: { id: 'guard', name: 'Guard', cost: 1, target: 'single',
     desc: `A hero takes ${GUARD_DR} less damage per hit for ${GUARD_TURNS} enemy turns. Stacks with Defense, not with itself.` },

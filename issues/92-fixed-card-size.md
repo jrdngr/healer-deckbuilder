@@ -1,6 +1,6 @@
 # Issue 92 — Cards (and empty slots) are a single fixed size; shorten text that doesn't fit
 
-- **Status:** 📋 Open
+- **Status:** ✅ Done
 - **Phase:** ui (battle polish)   **Size:** M
 - **Depends on:** —   **Blocks:** #93 (overlapping hand math relies on a fixed card size)
 - **Addresses:** intake 2026-07-17 — "Cards sometimes change size. They should always be the
@@ -68,6 +68,43 @@ approval (the maintainer's standing per-item loop) before editing them.
 - `test/engine.test.ts`: this is CSS + data wording; the only engine-relevant risk is a renamed/short
   `desc` breaking a substring assertion. Grep tests for any `.desc`/log-substring probe on the
   edited cards and update. No new mechanic to test.
+
+## Resolution (2026-07-17)
+
+**CSS — locked every card/slot to a fixed size** (`styles.css`):
+
+- `.card`: `min-height:158px` → `height:158px` + `overflow:hidden` (backstop only — real
+  text is kept short enough not to trigger the clip).
+- `.reserve-empty`: `min-height:158px` → `height:158px` (matches a filled reserved `.card`).
+- `.member`: `min-height:204px` → `height:204px`.
+- `.member-empty`: was un-sized (relied on grid stretch, collapsing when all slots empty);
+  now `width:100%; max-width:210px; height:204px; margin-inline:auto` — exactly a `.member`.
+
+Global `* { box-sizing: border-box }` means each fixed height IS the rendered box, so filled
+and empty slots match to the pixel and grids never reflow.
+
+**Card text — shortened the 11 descs that overflowed the fixed 132×158 box** (measured via a
+word-wrap line-count model; all other cards fit verbatim). Wording approved per the per-item
+loop, mechanics/numbers/interpolated constants preserved. Old → new:
+
+| Card | Old | New |
+|---|---|---|
+| En Garde | Through the Duelist, a chosen member Provokes (enemy aims at them) and gains Riposte for 3 enemy turns — they counter every hit that strikes them. | A member Provokes (enemy aims at them) and gains Riposte for 3 turns — they counter every hit. |
+| Feat of Strength | Through the Strongman, pay 4 HP (no clamp — it can kill him); every living member's auto deals +2 for 2 enemy turns. | Pay 4 HP (no clamp — can kill him); every member's auto deals +2 for 2 turns. |
+| Strongest in the World | The Strongman pays 5 HP (no clamp — it can kill him); every living member's auto lands doubled this turn. | Pay 5 HP (no clamp — can kill him); every member's auto lands doubled this turn. |
+| Sacrifice | A chosen ally pays 6 HP (clamps to 1); the Warlock gains +2 damage & +2 ability power for the fight. Consumed after one use. | An ally pays 6 HP (min 1); the Warlock gains +2 damage & +2 ability power this fight. One use. |
+| Sap | Channel: each turn make the enemy more Vulnerable (+25% up to +75%), for up to 4 turns. Playing any card ends it. | Channel: each turn the enemy grows +25% Vulnerable (up to +75%), for 4 turns. Ends on any card. |
+| Concentrated Venom | Double the enemy's current Poison-per-turn (its duration is unchanged). | Double the enemy's Poison-per-turn (its duration is unchanged). |
+| Mending Stream | Channel: heal a member for 3 each turn (up to 4 turns). Ends if they die or you play a card. | Channel: heal a member 3/turn (up to 4). Ends on death or any card. |
+| Hold the Line | The Tank braces (Defense 3 for 2 turns); while it stands, the damage he soaks banks double for Grudge. | The Tank braces (Defense 3, 2 turns); while it holds, damage he soaks banks double Grudge. |
+| Drain Life | Deal 3 to the enemy (more if it is Vulnerable); the most wounded member heals for the damage dealt. | Deal 3 (more if Vulnerable); the most wounded member heals for the damage dealt. |
+| Goo Burst | Consume the enemy's Poison and deal its whole remaining damage (per-turn × turns left) at once. | Consume the enemy's Poison and deal its whole remaining damage at once. |
+| Arcane Lens | Your next single-target heal this turn also heals the most wounded other member for the same amount. | Your next single-target heal this turn also hits the most wounded other member. |
+
+**Test touch:** Mending Stream's shorter tail ("Ends on death…") changed the channel-effect-line
+derivation. Generalized `channelEffectLine`'s cancel-sentence regex (`src/channelView.ts`) to
+strip `Ends (if|on) …`, and updated the one asserting test (`engine.archetypes.test.ts`) to the
+new effect line. `npm test` (all suites), `npm run typecheck`, `npm run build` clean.
 
 ## Out of scope
 
