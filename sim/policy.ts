@@ -499,8 +499,8 @@ function tryPlayReserve(game: Game): boolean {
 // Reserve a leftover situational answer instead of discarding it — carry it to the turn
 // it is needed. Tried LAST (only ever replaces a Rest/discard), Reserve empty, and only
 // when the first upkeep is affordable, so it deepens the MP squeeze without stealing a
-// real play. The bank refills the freed hand slot (engine rule), so the tactic loop may
-// then spend that fresh card — modelling the card advantage banking trades for MP.
+// real play. Reserving no longer refills the freed hand slot (engine rule), so the reserved
+// answer genuinely costs a card in hand until the turn it is played back.
 function tryReserveAnswer(game: Game): boolean {
   if (game.bankCard != null) return false;
   if (channelThreatUnanswered(game)) return false;

@@ -1460,17 +1460,18 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
 // --- Card Bank slot / "The Reserve" (91a) ----------------------------------
 {
   // Bank is FREE and not an action: 0 MP, cardsPlayedThisPhase unchanged, the card
-  // leaves the hand into the slot, and the hand redraws to handSize.
+  // leaves the hand into the slot, and the hand does NOT redraw (no free card advantage).
   const g = new Game(300); g.start();
   const mp0 = g.mp, cpp0 = g.cardsPlayedThisPhase;
   const i = giveCard(g, 'shield');
+  const handBefore = g.hand.length;
   const r = g.bank(i);
   check('bank ok', r.ok);
   eq('bank spends 0 MP', g.mp, mp0);
   eq('bank does not bump cardsPlayedThisPhase', g.cardsPlayedThisPhase, cpp0);
   eq('the card sits in the Reserve', g.bankCard?.id, 'shield');
   eq('bankHoldTurns resets to 0 on a fresh bank', g.bankHoldTurns, 0);
-  eq('hand redraws to handSize after banking', g.hand.length, g.handSize);
+  eq('reserving does not refill the hand', g.hand.length, handBefore - 1);
   check('the banked card left the hand', !g.hand.some((c) => c.id === 'shield' && c.uid < 0));
 }
 {

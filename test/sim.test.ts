@@ -435,7 +435,13 @@ import { check, eq, results } from './harness';
   //     a touch harder at the A1 boss: F1 174->173, F2 152->148, F4 135->139, F5 134->138, F6 132->138,
   //     F7 130->135, F8 123->128 (F0/F3 unchanged). Full-run held ~60.9% (N=1000); all band/CI/boss
   //     gates below still hold. Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([180, 173, 148, 141, 139, 138, 138, 135, 128]));
+  //   • Reserve refill removed (2026-07-16 cleanup): reserving a card no longer redraws the freed hand
+  //     slot — the free card-advantage engine is gone, so a reserved answer now genuinely costs a card
+  //     in hand until it is played. The good-player line loses that late-game card advantage, so the
+  //     back half ticks DOWN and the A1 boss recovers: F1 173->174, F2 148->151, F3 141->143, F5 138->136,
+  //     F6 138->135, F7 135->133, F8 128->125 (F0/F4 unchanged). All band/CI/boss gates below still hold.
+  //     Re-pinned on the new observed numbers.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([180, 174, 151, 143, 139, 136, 135, 133, 125]));
   // Full-run gate around the ~60% OPTIMAL ceiling the flawless STICK line now hits (#90 re-anchor).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy build while a
   // real drift (e.g. back up toward the old ~76% "too easy" baseline) still trips it.

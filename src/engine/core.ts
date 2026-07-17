@@ -2158,9 +2158,10 @@ export class Game {
 
   // Reserve a hand card in the Bank slot. FREE and NOT an action: no MP is spent and
   // cardsPlayedThisPhase / the Rest + passive-MP restraint gates are untouched. The
-  // hand redraws to full to replace the reserved card. Any card is bankable (including
-  // per-member ability cards — the accepted burst watch-item). Rejected if it is not
-  // the player phase, the slot is already full, or the index is invalid.
+  // reserved card simply leaves the hand for the slot — the hand does NOT redraw to
+  // replace it (that made reserving a free card-advantage engine). Any card is bankable
+  // (including per-member ability cards — the accepted burst watch-item). Rejected if it
+  // is not the player phase, the slot is already full, or the index is invalid.
   bank(handIndex: number): PlayResult {
     if (this.phase !== 'player') return { ok: false, reason: 'not your phase' };
     if (this.bankCard != null) return { ok: false, reason: 'the Reserve is full' };
@@ -2170,7 +2171,6 @@ export class Game {
     this.hand.splice(handIndex, 1);
     this.bankCard = dc;
     this.bankHoldTurns = 0; // a fresh bank resets the escalating upkeep ramp
-    this._drawTo(this.handSize); // refill the freed hand slot
     this._log(`Reserved ${resolveCard(dc).name}.`, 'system');
     this._emit({ kind: 'bank', card: dc.id });
     return { ok: true };
