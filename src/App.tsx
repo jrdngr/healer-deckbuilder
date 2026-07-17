@@ -7,6 +7,8 @@ import { planGoldFx } from './goldFx';
 import { getAnimSpeed } from './settings';
 import { GoldFx, GOLD_FX_TOTAL_MS } from './components/GoldFx';
 import type { GoldFxJob, GoldFxTarget } from './components/GoldFx';
+import { HealFx, HEAL_FX_TOTAL_MS } from './components/HealFx';
+import type { HealFxJob, HealFxTarget } from './components/HealFx';
 import { Topbar } from './components/Topbar';
 import { StartScreen } from './components/StartScreen';
 import { StarterDeckScreen } from './components/StarterDeckScreen';
@@ -99,6 +101,10 @@ export function App() {
   const [goldOverride, setGoldOverride] = useState<number | null>(null);
   const goldFxNonce = useRef(0);
   const goldTickRef = useRef(0); // the total the counter climbs to as the coins land
+  // End-of-fight heal burst (#95): the active heal-float job, fired concurrently
+  // with the gold burst so the party visibly recovers HP as the coins are handed out.
+  const [healFxJob, setHealFxJob] = useState<HealFxJob | null>(null);
+  const healFxNonce = useRef(0);
 
   // Fire the end-of-fight gold burst (#59) the instant the enemy falls — over the
   // still-live battle board, BEFORE the Victory overlay. Uses a bounty PREVIEW so
@@ -108,24 +114,48 @@ export function App() {
   // 0 means no burst played (reduced motion, final boss, or nothing to measure), so
   // the overlay appears at once. The topbar counter holds its pre-win total until
   // the player's coins arrive, then climbs to the new total.
-  const onWinFx = (): number => {
+  const onWinFx = (hpBySlot: (number | null)[]): number => {
     if (prefersReducedMotion()) return 0;
+    // Measure the live board once and share the slot centers between both bursts —
+    // the coins fly to member cards, the heal floats pop on the same cards.
+    const geom = measureGoldGeometry(run);
+
+    // Gold burst (#59): the seat-scaled bounty split, previewed (winFight banks it
+    // on Continue). Holds the topbar counter at the pre-win total until the coins land.
+    let goldHold = 0;
     const { playerGold, salaries } = run.winBountyPreview();
     const plan = planGoldFx(playerGold, salaries);
-    if (plan.total === 0) return 0;
-
-    const geom = measureGoldGeometry(run);
-    const targets: GoldFxTarget[] = [];
-    for (const t of plan.targets) {
-      const pt = t.kind === 'player' ? geom.goldEl : geom.members[t.slot ?? -1];
-      if (pt) targets.push({ x: pt.x, y: pt.y, particles: t.particles });
+    if (plan.total > 0) {
+      const targets: GoldFxTarget[] = [];
+      for (const t of plan.targets) {
+        const pt = t.kind === 'player' ? geom.goldEl : geom.members[t.slot ?? -1];
+        if (pt) targets.push({ x: pt.x, y: pt.y, particles: t.particles });
+      }
+      if (targets.length > 0) {
+        goldTickRef.current = run.gold + playerGold;
+        setGoldOverride(run.gold); // hold the counter at the pre-win total
+        setGoldFxJob({ nonce: ++goldFxNonce.current, origin: geom.origin, targets });
+        goldHold = GOLD_FX_TOTAL_MS * getAnimSpeed();
+      }
     }
-    if (targets.length === 0) return 0;
 
-    goldTickRef.current = run.gold + playerGold;
-    setGoldOverride(run.gold); // hold the counter at the pre-win total
-    setGoldFxJob({ nonce: ++goldFxNonce.current, origin: geom.origin, targets });
-    return GOLD_FX_TOTAL_MS * getAnimSpeed();
+    // Heal burst (#95): the between-fight heal previewed non-mutating from run
+    // state + this fight's ending HP, floated on each member card that gained HP —
+    // concurrent with the gold coins. Full-HP members (no delta) show nothing.
+    let healHold = 0;
+    const healTargets: HealFxTarget[] = [];
+    for (const h of run.winHealPreview(hpBySlot)) {
+      if (h.toHP <= h.fromHP) continue;
+      const pt = geom.members[h.slot];
+      if (pt) healTargets.push({ x: pt.x, y: pt.y, amount: h.toHP - h.fromHP });
+    }
+    if (healTargets.length > 0) {
+      setHealFxJob({ nonce: ++healFxNonce.current, targets: healTargets });
+      healHold = HEAL_FX_TOTAL_MS * getAnimSpeed();
+    }
+
+    // Hold the result overlay for whichever burst runs longer (0 if neither played).
+    return Math.max(goldHold, healHold);
   };
 
   // Continue past the Victory overlay: NOW bank the win (the burst has already
@@ -211,6 +241,7 @@ export function App() {
         onArrive={() => setGoldOverride(goldTickRef.current)}
         onDone={() => setGoldFxJob(null)}
       />
+      <HealFx job={healFxJob} onDone={() => setHealFxJob(null)} />
       {import.meta.env.DEV && <DevPanel ctrl={gameCtrl} addGold={() => act((r) => { r.gold += 100; })} />}
     </>
   );

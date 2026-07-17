@@ -858,6 +858,16 @@ main.drag-board .enemy, main.drag-board .party {
   100% { transform: translate(var(--ex), var(--ey)) scale(.5); opacity: 0; }
 }
 
+/* End-of-fight heal burst (#95). Sibling of the gold layer: a full-viewport,
+   click-through overlay so a healed member's recovery floats on their party card
+   at the same beat the coins fly. Each float is an absolutely-placed .fx-float
+   (green), anchored at the slot center (its own translate(-50%) recenters it). */
+.heal-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 51; overflow: visible; }
+.heal-float {
+  position: absolute; color: #6ee7a8;
+  text-shadow: 0 2px 4px #000, 0 0 10px #3fae76;
+}
+
 /* Floating number / label — pops then drifts upward and fades. */
 .fx-float {
   font-weight: 800; font-size: 18px; color: currentColor; white-space: nowrap;
@@ -1086,6 +1096,9 @@ main.drag-board .enemy, main.drag-board .party {
   /* Gold burst is skipped entirely (App also declines to spawn it), but hide any
      coins outright as a belt-and-braces guard against a lingering node. */
   .gold-fx-layer { display: none; }
+  /* Heal burst is likewise skipped (App declines to spawn it under reduced motion);
+     hide the layer outright as the same belt-and-braces guard. */
+  .heal-fx-layer { display: none; }
 }
 @keyframes fx-fade-out { to { opacity: 0; } }
 @keyframes fx-banner-reduced {

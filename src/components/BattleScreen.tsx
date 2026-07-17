@@ -65,9 +65,10 @@ interface BattleScreenProps {
   releaseReserved: (handBoxes?: CardOrigin[]) => void;
   // Displayed deck-pile counts, held while cards fly (#94).
   pileCounts: { draw: number; discard: number };
-  // Play the end-of-fight gold burst over the live board on a win (#59); returns how
-  // long (ms) to hold the result overlay while it plays.
-  onWinFx: () => number;
+  // Play the end-of-fight reward bursts over the live board on a win (gold #59 +
+  // heal #95); receives each battle slot's ending HP for the heal float and returns
+  // how long (ms) to hold the result overlay while they play.
+  onWinFx: (hpBySlot: (number | null)[]) => number;
   // Resolve the fight within the run (win -> advance, loss -> run over).
   onBattleEnd: () => void;
 }
@@ -108,7 +109,7 @@ export function BattleScreen({
     if (animating || game.status === 'playing' || resultFired.current) return;
     resultFired.current = true;
     if (game.status === 'win') {
-      const holdMs = onWinFxRef.current();
+      const holdMs = onWinFxRef.current(game.memberHPBySlot());
       if (holdMs <= 0) { setResultReady(true); return; }
       const t = setTimeout(() => setResultReady(true), holdMs);
       return () => clearTimeout(t);

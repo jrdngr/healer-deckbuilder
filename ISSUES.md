@@ -36,7 +36,6 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 95 | 📋 Open | [Animate end-of-fight healing concurrent with gold burst](issues/95-end-of-fight-heal-fx.md) | ui | — | intake 07-17 |
 | 96 | 📋 Open | [Back button on reward screens to recover a skip](issues/96-reward-back-button.md) | ui | — | intake 07-17 |
 | 97 | 📋 Open | [Themed tooltip component (replace native title=, 250ms delay)](issues/97-themed-tooltip-component.md) | ui | — | intake 07-17 |
 | 98 | 📋 Open | [Status-effect keyword tooltips (highlight, strip parentheticals, reword)](issues/98-status-effect-keyword-tooltips.md) | ui + content | #97 | intake 07-17 |

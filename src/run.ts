@@ -663,6 +663,34 @@ export class Run {
     return { playerGold: Math.max(0, reward - this.deployedSalary()), salaries };
   }
 
+  // Preview the between-fight heal for the end-of-fight heal FX (#95) WITHOUT
+  // mutating run state — winFight banks it on Continue, exactly like the gold
+  // burst uses winBountyPreview. Mirrors _captureFightHP + _healBetweenFights for
+  // each DEPLOYED battle slot: `fromHP` is the member's ending HP (this fight's
+  // ending HP for the slot when provided, clamped to max, else their persisted
+  // HP), `toHP` is that plus the recovered fraction (same SURGEON_THREAD/HEAL_TUNING
+  // rule as _healBetweenFights), clamped to max. A member left at 0 HP (dead at the
+  // end of a won fight) previews as a from-0 revive; a member already at full HP has
+  // fromHP === toHP. Indexed by battle slot like winBountyPreview, so the FX reuses
+  // the same slot centers the coins fly to. Returns [] off a fight and on the final
+  // boss (which skips the heal), so the FX is skipped there too — matching the gold burst.
+  winHealPreview(hpBySlot?: (number | null)[]): { slot: number; fromHP: number; toHP: number }[] {
+    if (this.location.kind !== 'fight' || this.location.fightIndex >= FIGHT_COUNT - 1) return [];
+    const pct = this.hasRelic('surgeonsThread') ? SURGEON_THREAD_HEAL_PCT : HEAL_TUNING.pct;
+    const out: { slot: number; fromHP: number; toHP: number }[] = [];
+    for (let s = 0; s < this.deployment.length; s++) {
+      const ri = this.deployment[s];
+      if (ri == null) continue;
+      const p = this.roster[ri];
+      if (!p) continue;
+      const ending = hpBySlot?.[s];
+      const from = ending != null ? Math.min(p.maxHP, ending) : (p.hp ?? p.maxHP);
+      const to = Math.min(p.maxHP, from + Math.round(p.maxHP * pct));
+      out.push({ slot: s, fromHP: from, toHP: to });
+    }
+    return out;
+  }
+
   winFight(hpBySlot?: (number | null)[]): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;

@@ -1,6 +1,6 @@
 # Issue 95 — Animate heroes healing at end of fight, concurrent with the gold burst
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-17 — non-mutating `winHealPreview` + a `HealFx` overlay that floats each member's between-fight HP gain concurrently with the gold burst)
 - **Phase:** ui (juice)   **Size:** M
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** intake 2026-07-17 — "Animate heroes healing at the end of a fight at the same time
@@ -68,6 +68,33 @@ wires the data + timing and provides a functional heal animation.
 - `test/engine.test.ts` (run-level): assert the new heal-preview method returns the same post-heal
   HP that `_healBetweenFights` produces (preview == applied), including a from-0 revive case and a
   full-HP member (from == to). No FX assertion (visual, maintainer-verified).
+
+## Resolution (2026-07-17)
+
+Delivered close to the straw-man, with these specifics/divergences:
+
+- **Engine:** added `Run.winHealPreview(hpBySlot?)` (`src/run.ts`, right after
+  `winBountyPreview`). It mirrors `_captureFightHP` + `_healBetweenFights` for each
+  DEPLOYED battle slot without mutating: `fromHP` is the slot's ending HP clamped to
+  max (else the member's persisted HP), `toHP` adds `round(pct·max)` under the same
+  Surgeon's Thread / `HEAL_TUNING` rule, clamped. Returns `[]` off a fight and on the
+  final boss, so the FX is skipped there — matching the gold burst. Indexed by battle
+  slot like `winBountyPreview`.
+- **UI:** new `HealFx` overlay (`src/components/HealFx.tsx`), a sibling of `GoldFx` —
+  a fixed, click-through layer that floats `+N` green heal numbers on each healed
+  party card. Fired from `App.onWinFx` in the **same** call as the gold burst, off a
+  single `measureGoldGeometry` read so both reuse the same slot centers; `onWinFx`
+  now returns `max(goldHold, healHold)` so the result overlay waits for whichever
+  burst runs longer. The `goldOverride` topbar hold is untouched (only set when the
+  gold burst plays). To feed the heal its `fromHP`, `onWinFx` now receives the
+  fight's ending `hpBySlot` (threaded through `BattleScreen`/`FightScreen` from
+  `game.memberHPBySlot()`). Reduced motion still returns 0 (skips both), with a
+  belt-and-braces `.heal-fx-layer { display: none }` guard.
+- **Tests:** the run-level assertions live in `test/run.test.ts` (the actual
+  run-layer harness, which `npm test` runs) rather than `test/engine.test.ts` — the
+  latter is the DOM-free engine harness and does not import `Run`. Covers preview ==
+  applied for a hurt survivor, a from-0 revive, and a full-HP (no-delta) member, plus
+  the off-a-fight and final-boss empty-preview guards.
 
 ## Out of scope
 

@@ -442,6 +442,48 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
     bossPreview.playerGold === 0 && bossPreview.salaries.length === 0);
 }
 
+// --- end-of-fight heal burst (#95): winHealPreview == what winFight banks -------
+{
+  const run = new Run(72);
+  startRun(run); // location: fight 0, default trio deployed [0,1,2]
+  // Contrive three cases via this fight's ending HP (indexed by battle slot):
+  //   slot 0 — hurt survivor (from a low positive HP, heals up but not to full)
+  //   slot 1 — dead at end (0 HP), revived to the recovered amount (from 0)
+  //   slot 2 — ended at full HP (no delta: fromHP === toHP)
+  const max0 = run.roster[0].maxHP, max1 = run.roster[1].maxHP, max2 = run.roster[2].maxHP;
+  const hpBySlot: (number | null)[] = [2, 0, max2];
+  const pct = HERO_HEAL_PCT; // no Surgeon's Thread relic on this run
+
+  const preview = run.winHealPreview(hpBySlot);
+  eq('winHealPreview covers every deployed member', preview.length, 3);
+  const bySlot = (s: number) => preview.find((h) => h.slot === s)!;
+
+  // The preview's from/to mirror _captureFightHP (clamp ending HP to max) then
+  // _healBetweenFights (add round(pct*max), clamp to max).
+  eq('slot 0 fromHP is the clamped ending HP', bySlot(0).fromHP, 2);
+  eq('slot 0 toHP heals up by round(pct*max)', bySlot(0).toHP, Math.min(max0, 2 + Math.round(max0 * pct)));
+  eq('slot 1 (dead) previews a from-0 revive', bySlot(1).fromHP, 0);
+  eq('slot 1 revives to the recovered amount', bySlot(1).toHP, Math.min(max1, Math.round(max1 * pct)));
+  check('slot 1 revive is a real gain from 0', bySlot(1).toHP > 0 && bySlot(1).fromHP === 0);
+  eq('slot 2 (full HP) fromHP === toHP (no delta)', bySlot(2).fromHP, bySlot(2).toHP);
+  eq('slot 2 stays at full HP', bySlot(2).toHP, max2);
+
+  // preview == applied: winFight (capture + heal) banks exactly the previewed toHP.
+  run.winFight(hpBySlot);
+  eq('slot 0 applied HP matches preview', run.roster[0].hp, bySlot(0).toHP);
+  eq('slot 1 applied HP matches preview', run.roster[1].hp, bySlot(1).toHP);
+  eq('slot 2 applied HP matches preview', run.roster[2].hp, bySlot(2).toHP);
+
+  // Off a fight (winFight moved to cardReward), the preview is empty — no burst.
+  eq('no heal preview once the fight has resolved', run.winHealPreview(hpBySlot).length, 0);
+
+  // The final boss skips the heal (winFight returns early), so its preview is empty
+  // too — matching the skipped gold burst.
+  const boss = new Run(73);
+  boss.location = { kind: 'fight', fightIndex: FIGHT_COUNT - 1 };
+  eq('the final boss heal preview is empty (no heal burst)', boss.winHealPreview([1, 1, 1]).length, 0);
+}
+
 // --- branch hub: a mid-branch save/resume keeps the cached stops ---------------
 {
   const run = new Run(33);

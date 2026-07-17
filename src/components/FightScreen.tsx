@@ -7,9 +7,11 @@ import { BattleScreen } from './BattleScreen';
 
 interface FightScreenProps {
   run: Run;
-  // Play the end-of-fight gold burst the moment the enemy dies, over the live board
-  // (#59). Returns how long (ms) to hold the result overlay while it plays.
-  onWinFx: () => number;
+  // Play the end-of-fight reward bursts (gold #59 + heal #95) the moment the enemy
+  // dies, over the live board. Receives each battle slot's ending HP so the heal
+  // burst can float the between-fight recovery. Returns how long (ms) to hold the
+  // result overlay while they play.
+  onWinFx: (hpBySlot: (number | null)[]) => number;
   // Win handler — receives each battle slot's ending HP (#58) so the run can carry
   // it back onto the deployed roster members.
   onWin: (hpBySlot: (number | null)[]) => void;
