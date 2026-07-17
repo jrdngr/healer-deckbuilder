@@ -27,11 +27,11 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   imbuePoison: { id: 'imbuePoison', name: 'Poison Tip', cost: 2, target: 'none', ability: 'poison',
     desc: 'Dip the Ranger\'s arrows — Poison the enemy.' },
   bolster: { id: 'bolster', name: 'Bolster', cost: 2, target: 'none', ability: 'taunt',
-    desc: 'Steel the Tank — they Taunt the enemy and brace.' },
+    desc: 'Steel the Tank — applies Taunt and Defense to him.' },
   unleash: { id: 'unleash', name: 'Unleash', cost: 2, target: 'none', ability: 'bolt',
     desc: 'Unleash the Mage\'s stored Charge as a Lightning Bolt.' },
   hex: { id: 'hex', name: 'Evil Eye', cost: 2, target: 'none', ability: 'hex',
-    desc: 'The Warlock gives the enemy the Evil Eye — it takes more damage (more with fewer allies).' },
+    desc: "The Warlock's Evil Eye applies Vulnerable to the enemy — deeper with fewer allies." },
   conduct: { id: 'conduct', name: 'Conduct', cost: 2, target: 'none', ability: 'crescendo',
     desc: 'Cue the Busker\'s Crescendo — draw cards.' },
   incite: { id: 'incite', name: 'Rile Up', cost: 2, target: 'none', ability: 'rampage',
@@ -46,7 +46,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // En Garde (#74): the Duelist Provokes a chosen member (Taunt) and grants them the
   // persistent Riposte stance (herself included).
   enGarde: { id: 'enGarde', name: 'En Garde', cost: 2, target: 'single', ability: 'enGarde',
-    desc: `A member Provokes (enemy aims at them) and gains Riposte for ${EN_GARDE_TURNS} turns — they counter every hit.` },
+    desc: `Applies Taunt to a member and Riposte for ${EN_GARDE_TURNS} turns — they counter every hit.` },
   // Feat of Strength (#75) is a Blood ability card (incite precedent — target 'none', counts
   // toward the blood type counters). It carries NO selfDamage field: the payment is not the
   // clamped canPlay Blood gate but a raw lethal drain in _fireAbility (this ability is meant to
@@ -89,7 +89,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   bigTop: { id: 'bigTop', name: 'Big Top', cost: 2, target: 'none', ability: 'bigTop',
     desc: `The whole party takes ${BIG_TOP_DR} less from every hit for the next enemy turn.` },
   lunge: { id: 'lunge', name: 'Lunge', cost: 2, target: 'none', ability: 'lunge',
-    desc: `The Duelist strikes for ${LUNGE_MULT}× and Provokes (the enemy aims at her) for ${LUNGE_TAUNT_TURNS} turns.` },
+    desc: `The Duelist strikes for ${LUNGE_MULT}× and applies Taunt to herself for ${LUNGE_TAUNT_TURNS} turns.` },
   flurry: { id: 'flurry', name: 'Flurry', cost: 2, target: 'none', ability: 'flurry',
     desc: `The Duelist strikes ${FLURRY_HITS} times, each for her auto − ${FLURRY_REDUCTION}.` },
   strongest: { id: 'strongest', name: 'Strongest in the World', cost: 2, target: 'none', ability: 'strongest',
@@ -136,7 +136,7 @@ const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
   // Taunt-lite (#31): make any member the enemy's aim — the taunt-less draft's
   // redirection tool, so the Tank isn't mandatory in every party.
   provoke: { id: 'provoke', name: 'Provoke', cost: 1, target: 'single',
-    desc: 'The target Taunts (enemy aims at them) for 2 enemy turns.' },
+    desc: 'Applies Taunt to the target for 2 enemy turns.' },
   // --- Iron mitigation web (#65): steer hits onto one member ------------------
   // Feint redirects EVERY hit of the standing telegraph onto one member (a
   // multi-hit blow stacks all its hits on them) — reuses the taunt-retarget path,

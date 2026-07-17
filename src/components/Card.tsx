@@ -4,6 +4,7 @@ import { MODIFIERS } from '../constants';
 import type { CardId, ResolvedCard } from '../constants';
 import { Icon } from './Icon';
 import { Tooltip } from './Tooltip';
+import { KeywordText } from './KeywordText';
 
 // Visual family of each card, for the edge tint: heals green, protective wards
 // gold, mana economy blue, aggressive power plays red-purple. Presentation only.
@@ -121,7 +122,7 @@ export function Card({ card, affordable, ineligible = false, selected, onClick, 
       <div className="cost">{card.cost}</div>
       {card.heal != null && <Tooltip content="Healing"><div className="heal"><Icon name="heart" /> {card.heal}</div></Tooltip>}
       <div className="cname">{card.name}</div>
-      <div className="cdesc">{card.desc}</div>
+      <div className="cdesc"><KeywordText>{card.desc}</KeywordText></div>
       {card.upgrades.length > 0 && (
         <Tooltip content={card.upgrades.map((u) => `${MODIFIERS[u].name} — ${MODIFIERS[u].desc}`).join('\n')}>
           <div className="card-upgrades">

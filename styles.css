@@ -34,6 +34,10 @@
   --fam-mana: #6a9fe6;
   --fam-power: #c78ae0;
 
+  /* status-effect keyword highlight (#98): one distinct color for every effect
+     keyword rendered in text, wherever it appears (card faces, readouts, banners). */
+  --keyword: #8a4fce;
+
   /* feedback text */
   --c-heal: #2f9c88; --c-dmg: #e86a50; --c-mp: #4a80cc; --c-sys: #c08428; --c-log: #8a7568;
 
@@ -676,6 +680,12 @@ main.drag-board .enemy, main.drag-board .party {
 .card .heal svg { color: #fff; }
 .card .cname { font-family: var(--f-disp); font-weight: 700; font-size: 15.5px; margin: 0 0 6px; text-align: center; }
 .card .cdesc { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.45; }
+
+/* Status-effect keyword (#98): a distinct color + dotted underline signalling the
+   hover-for-a-gloss tooltip. Inherits the surrounding font-size so it fits any label
+   (card desc, enemy readout, hex banner). */
+.keyword { color: var(--keyword); font-weight: 800; text-decoration: underline dotted;
+  text-decoration-thickness: 1px; text-underline-offset: 2px; cursor: help; }
 .card.unaffordable { opacity: .45; cursor: not-allowed; }
 .card.unaffordable:hover { transform: none; }
 /* Ineligible reads differently from too-expensive: washed out, not just dim. */

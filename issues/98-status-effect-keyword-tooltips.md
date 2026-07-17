@@ -1,6 +1,6 @@
 # Issue 98 — Status-effect keyword tooltips (highlight in text, strip parentheticals, reword to effect-noun form)
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-17 — keyword registry + pure tokenizer + KeywordText helper; parentheticals stripped and 5 descs reworded to effect-noun form)
 - **Phase:** ui + content
 - **Depends:** #97 (themed tooltip component)
 - **Addresses:** intake 2026-07-17 — "Add tooltips for status effects within text. When an effect (e.g. Provoke) appears in ability text it should be highlighted a separate color and carry a tooltip describing its effect, so we can remove the parenthetical gloss. Do this for every effect in the UI and remove the accompanying parenthetical text. Word things to be singular, e.g. instead of 'A member Provokes', write 'Applies Provoke to the caster'."
@@ -155,3 +155,76 @@ gloss text is unit-testable and lives in one place). Candidate keywords, with th
 - Renaming cards (the card named "Provoke" keeps its name even if the keyword canonicalizes to
   "Taunt", and vice-versa).
 - Localization / i18n of the glosses.
+
+## Resolution (2026-07-17)
+
+**Framework.** New DOM-free module `src/data/keywords.ts` (re-exported from the
+`constants` barrel) holds the registry `KEYWORDS: Record<KeywordId, KeywordDef>`
+(`{ id, name, desc }`, mirroring `MODIFIERS`) plus a pure tokenizer
+`tokenizeKeywords(string) -> Array<{text} | {keyword, text}>` and a `keywordsIn` helper.
+Matching is whole-word (`\b…\b`), case-insensitive-find/casing-preserved, longest-term-first,
+non-overlapping. The React helper `src/components/KeywordText.tsx` (`<KeywordText>` +
+`<KeywordMark>`) maps tokens to a highlight span + a #97 `<Tooltip>` showing
+`<b>Name</b> — gloss`; a `plain` mode colours the word without a nested tooltip, for chips
+that already carry their own live-number tooltip.
+
+**Highlight color.** New token `--keyword: #8a4fce` (a readable violet, distinct from the
+family tints). `.keyword` = that colour, weight 800, dotted underline, `cursor: help`.
+
+**Final keyword list + glosses (all verified against the engine):**
+
+| Keyword | Gloss |
+|---|---|
+| Taunt | The enemy aims its next attack at this member. |
+| Riposte | The next hit that strikes them is answered with a counterattack. |
+| Defense | Reduces the damage taken from each incoming hit while it holds. |
+| Guard | Flat damage reduction on each hit. Stacks with Defense, not with itself. |
+| Shield | Fully blocks the next attack instance, then is spent. |
+| Regen | Heals a decaying amount at the start of each of your turns. |
+| Poison | The enemy takes damage at the start of each of its turns. |
+| Vulnerable | The enemy takes increased damage from all sources until it fades. |
+| Hex | Halves all party healing until it fades. Cleanse removes it. |
+| Charge | The Mage banks Charge each turn; Lightning Bolt spends it for bonus damage. |
+| Grudge | The Tank banks the damage he soaks; his next auto adds a share of it. |
+| Stun | Cancels the enemy's telegraphed action for the turn. |
+| Doom | A delayed curse that detonates for damage after several enemy turns. |
+| Enraged | The enemy's attacks hit harder for the rest of the fight. |
+| Siphon | The enemy drains your MP at the start of its turn. |
+
+Match aliases (so residual/derived text still highlights; card *names* are never
+tokenized): Taunt←Taunts/Provoke/Provokes; Vulnerable←Vulnerability; Enraged←Enrage/Enrages;
+Hex←Hexed; plus simple plurals/participles (Shields, Poisons, Stuns/Stunned, Ripostes, Siphons).
+
+**Per-card rewords (parenthetical effect glosses removed, effect-noun form):**
+
+- `provoke`: `The target Taunts (enemy aims at them) for 2 enemy turns.` → `Applies Taunt to the target for 2 enemy turns.`
+- `bolster`: `Steel the Tank — they Taunt the enemy and brace.` → `Steel the Tank — applies Taunt and Defense to him.`
+- `enGarde`: `A member Provokes (enemy aims at them) and gains Riposte for N turns — they counter every hit.` → `Applies Taunt to a member and Riposte for N turns — they counter every hit.`
+- `lunge`: `The Duelist strikes for N× and Provokes (the enemy aims at her) for N turns.` → `The Duelist strikes for N× and applies Taunt to herself for N turns.`
+- `hex` (Evil Eye — card name kept): `The Warlock gives the enemy the Evil Eye — it takes more damage (more with fewer allies).` → `The Warlock's Evil Eye applies Vulnerable to the enemy — deeper with fewer allies.`
+
+No other desc carried an effect-explanation parenthetical. Remaining parentheticals
+(`(more if Vulnerable)`, `(its Vulnerability then scales it)`, `(no clamp …)`, etc.) are
+mechanic/scaling qualifiers, not effect glosses, and are kept per the locked example
+(`Deal N (more if Vulnerable)` stays with Vulnerable highlighted in place). The bare
+keywords in every other desc (Vulnerable, Poison, Defense, Charge, Grudge, Shield, Regen,
+Stun, Doom, …) highlight automatically via the tokenizer.
+
+**Surfaces wired:** card/ability faces (`Card.tsx` cdesc → `<KeywordText>`); enemy intent
+line and Poison readout (`EnemyPanel.tsx`, `plain` highlight — chip keeps its dynamic
+tooltip); Hex banner (`Party.tsx`). `channelView.ts`'s `channelEffectLine` regex is
+unaffected — the reworded `sap`/`mendingStream` descs keep their `Channel:` prefix and
+`Ends …` suffix.
+
+**Deferred / notes for ratification:**
+- **Combat-log highlighting deferred.** The engine log emits legacy inflections
+  ("Provokes", "Taunts", "Enrages") and mixes with the existing `'status'` log styling;
+  highlighting it cleanly is a separate pass and repo memory flags log-substring coupling
+  as brittle. Aliases are already in the term map, so wiring the log later is a one-liner.
+- **Siphon pill** (`ManaBar.tsx`) shows only `−N` (no visible "Siphon" word); its tooltip
+  already explains the drain, so there was no word to highlight.
+- **ENRAGED chip** keeps its bespoke `.enrage` styling + tooltip (already a highlighted,
+  tooltip-bearing status label) rather than being recoloured to the keyword violet.
+- Names/color/glosses above are the record to ratify; all are text/presentation only — no
+  mechanic or balance change. Card-face lengths only shrank except `bolster` (+3 chars),
+  well within the #92 fixed size.

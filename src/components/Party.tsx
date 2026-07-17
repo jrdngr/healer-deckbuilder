@@ -22,7 +22,7 @@ export function Party({ game, view, reacts, animating, isValidTarget, onMemberCl
       {game.wounded && (
         <Tooltip content="A Hex halves all healing until it fades. Cleanse removes it.">
           <div className="hex-banner">
-            <Icon name="poison" /> Hexed — healing halved ({game.woundTurns})
+            <Icon name="poison" /> <span className="keyword">Hexed</span> — healing halved ({game.woundTurns})
           </div>
         </Tooltip>
       )}

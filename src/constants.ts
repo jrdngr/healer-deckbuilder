@@ -5,5 +5,6 @@ export * from './data/tuning';
 export * from './data/members';
 export * from './data/enemies';
 export * from './data/cards';
+export * from './data/keywords';
 export * from './data/run';
 export * from './data/relics';

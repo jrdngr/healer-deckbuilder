@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { CharacterBlob } from './CharacterBlob';
 import { StatBar } from './Bars';
 import { Tooltip } from './Tooltip';
+import { KeywordText } from './KeywordText';
 
 interface EnemyPanelProps {
   game: Game;
@@ -48,8 +49,8 @@ export function EnemyPanel({ game, displayHp }: EnemyPanelProps) {
           {game.status === 'playing' && (
             <Tooltip content="The current turn. The standing telegraph resolves at the end of it."><span className="turn-chip">Turn {game.turn}</span></Tooltip>
           )}
-          {intent && <Tooltip content={intentDetail ?? undefined}><span className="enemy-intent">Intends: {intent}</span></Tooltip>}
-          {e.poison > 0 ? <Tooltip content={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}><span className="enemy-poison"><Icon name="poison" /> Poison {e.poison}</span></Tooltip> : ''}
+          {intent && <Tooltip content={intentDetail ?? undefined}><span className="enemy-intent">Intends: <KeywordText plain>{intent}</KeywordText></span></Tooltip>}
+          {e.poison > 0 ? <Tooltip content={`Poison — the enemy takes ${e.poison} at the start of each of its turns (${e.poisonTurns} left).`}><span className="enemy-poison"><Icon name="poison" /> <span className="keyword">Poison</span> {e.poison}</span></Tooltip> : ''}
         </div>
         {channel && (
           <Tooltip content={`${channel.channelName}: ${channel.damage} damage on resolve`}>

@@ -36,4 +36,3 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 98 | 📋 Open | [Status-effect keyword tooltips (highlight, strip parentheticals, reword)](issues/98-status-effect-keyword-tooltips.md) | ui + content | #97 | intake 07-17 |
