@@ -23,6 +23,7 @@ export function HealerBoonScreen({ run, act }: HealerBoonScreenProps) {
       headerRight={<span className="run-gold" title="Free">Free pick</span>}
       hint={`Max Mana ${h.maxMana} · Hand ${h.handSize} · Rest +${h.restRegen} · Passive +${h.passiveMp}`}
       onSkip={() => act((r) => r.skipHealerBoon())}
+      onBack={run.canGoBack() ? () => act((r) => r.goBackToReward()) : undefined}
     >
       {offers.map((offer, i) => {
         const maxed = offer.def.stat === 'passiveMp' && passiveMaxed;

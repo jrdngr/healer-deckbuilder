@@ -1,6 +1,6 @@
 # Issue 96 — Back button on reward screens to recover an accidental skip
 
-- **Status:** 📋 Open
+- **Status:** ✅ Complete (2026-07-17 — one-step Back stash on reward screens; skip is recoverable, take is committed)
 - **Phase:** ui (run flow)   **Size:** M
 - **Depends on:** —   **Blocks:** —
 - **Addresses:** intake 2026-07-17 — "Add a back button on reward screens, particularly after
@@ -81,3 +81,29 @@ one-step undo of the most recent skip, not a full history stack.
 - Undoing a reward the player actually **took** (rerolling / returning a taken relic or card).
 - Back on non-reward screens (fork choice, map nodes, infirmary) — reward screens only.
 - Re-rolling offers or changing reward contents/odds.
+
+## Resolution (2026-07-17)
+
+Shipped as designed, with these specifics worth recording:
+
+- **Engine (`run.ts`):** a private `rewardStash` holds the last-skipped screen's
+  `{ location, nodeContent }`. `_stashReward()` captures it (guarding on the current
+  location being a real reward screen); `skipCardReward`/`skipSpoils` stash before
+  advancing. New public API: `canGoBack()` (reads the stash) and `goBackToReward()`
+  (restores `location` + the **same** `nodeContent` object — identical offers — then
+  consumes the stash). The take path clears the stash: `pickCardReward` and
+  **`pickSpoil`** (the actual take method — the issue's `takeSpoils` name; there is no
+  `takeSpoils`). The stash is also cleared at the top of `winFight`, so a skip left
+  hanging from a previous fight can never resurface a Back on the next fight's reward.
+- **Not serialized:** like Reserve state, `rewardStash` is deliberately omitted from the
+  snapshot (no `RUN_SAVE_VERSION` bump), so a skip is not recoverable across save/resume.
+  The mid-choice byte-stable round-trip test still holds.
+- **UI:** `RewardScreen` (`ScreenChrome.tsx`) gained an optional `onBack`; a `← Back`
+  button renders in a new `.reward-actions` footer row beside the skip button when
+  `run.canGoBack()`. Wired in `CardRewardScreen`, `SpoilsScreen`, **and**
+  `HealerBoonScreen` (so a skipped boss relic is recoverable from the boon screen that
+  follows it — the issue called this out).
+- **Tests:** added to `test/run.test.ts` (the run-level harness in `npm test`; the
+  engine harness `test/engine.test.ts` does not import `Run`) — card-reward skip→back→take,
+  boss spoils skip→back→take, take-directly leaves no Back, and the stale-prior-fight
+  guard.

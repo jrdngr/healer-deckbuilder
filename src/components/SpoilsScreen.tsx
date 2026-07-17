@@ -19,6 +19,7 @@ export function SpoilsScreen({ run, act }: SpoilsScreenProps) {
       title="Spoils of Victory"
       headerRight={<GoldTag gold={run.gold} />}
       onSkip={() => act((r) => r.skipSpoils())}
+      onBack={run.canGoBack() ? () => act((r) => r.goBackToReward()) : undefined}
     >
       {offers.map((offer, i) => (
         <RelicTile

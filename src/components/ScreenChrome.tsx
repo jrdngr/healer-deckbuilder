@@ -22,13 +22,16 @@ export function ScreenHeader({ title, right }: { title: string; right?: ReactNod
 // shared shell — header, an optional hint line, the offer row, and a skip button.
 // The offers themselves (a Card, a RelicTile, a boon button) are passed as children.
 export function RewardScreen({
-  title, headerRight, hint, skipLabel = 'Take nothing', onSkip, children,
+  title, headerRight, hint, skipLabel = 'Take nothing', onSkip, onBack, children,
 }: {
   title: string;
   headerRight?: ReactNode;
   hint?: ReactNode;
   skipLabel?: string;
   onSkip: () => void;
+  // Present only when the previous screen was a reward the player skipped (#96):
+  // renders a one-step Back control that returns to it with the same offers.
+  onBack?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -36,7 +39,12 @@ export function RewardScreen({
       <ScreenHeader title={title} right={headerRight} />
       {hint != null && <p className="shop-hint">{hint}</p>}
       <div className="shop-offers">{children}</div>
-      <button className="leave-btn" onClick={onSkip}>{skipLabel}</button>
+      <div className="reward-actions">
+        {onBack != null && (
+          <button className="leave-btn back-btn" onClick={onBack}>← Back</button>
+        )}
+        <button className="leave-btn" onClick={onSkip}>{skipLabel}</button>
+      </div>
     </main>
   );
 }

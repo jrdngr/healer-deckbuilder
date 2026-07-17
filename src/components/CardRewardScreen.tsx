@@ -20,6 +20,7 @@ export function CardRewardScreen({ run, act }: CardRewardScreenProps) {
       title="Spoils of Battle"
       headerRight={<GoldTag gold={run.gold} />}
       onSkip={() => act((r) => r.skipCardReward())}
+      onBack={run.canGoBack() ? () => act((r) => r.goBackToReward()) : undefined}
     >
       {offers.map((offer, i) => (
         <div className="shop-offer" key={offer.cardId}>

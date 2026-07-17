@@ -2045,5 +2045,76 @@ const NET_GOLD = GOLD_PER_FIGHT - TRIO_SALARY;
   check("Nap Sack and Spare Bandages are spoils-eligible", spoilsPool.includes('pilgrimsFlask') && spoilsPool.includes('surgeonsThread'));
   check("Beggar's Bowl is excluded from the spoils pool", !spoilsPool.includes('beggarsBowl'));
 }
+{
+  // Back on the card reward (#96): a skip is recoverable, restoring the SAME offers,
+  // and taking then clears the stash so Back can't replay a stale screen.
+  const run = new Run(960);
+  startRun(run);
+  check('fresh run cannot go back', !run.canGoBack());
+  run.winFight();
+  eq('win -> card reward', run.location.kind, 'cardReward');
+  check('no Back offered before a skip', !run.canGoBack());
+  const offers = run.nodeContent?.type === 'cardReward' ? run.nodeContent.offers : [];
+  run.skipCardReward();
+  check('skip stashes a recoverable reward', run.canGoBack());
+  run.goBackToReward();
+  eq('Back restores the card reward', run.location.kind, 'cardReward');
+  check('Back restores the EXACT same offer array',
+    run.nodeContent?.type === 'cardReward' && run.nodeContent.offers === offers);
+  check('Back is one step only — the stash is consumed', !run.canGoBack());
+  const deckBefore = run.deck.length;
+  run.pickCardReward(0);
+  eq('re-chosen reward still lands a card', run.deck.length, deckBefore + 1);
+  check('taking clears the stash', !run.canGoBack());
+}
+{
+  // Taking a reward directly (no skip) leaves nothing to go back to (#96): a take is
+  // a committed choice.
+  const run = new Run(961);
+  startRun(run);
+  run.winFight();
+  run.pickCardReward(0);
+  check('a taken reward is not undoable', !run.canGoBack());
+}
+{
+  // Back on the boss relic spoils (#96): skipping the relic drops onto the healer
+  // boon with a Back to the just-skipped spoils, restoring the same relic offers;
+  // taking then clears the stash.
+  const run = new Run(505);
+  run.beginDraft();
+  run.chooseDraftMember((run.nodeContent as { options: MemberId[] }).options[0]);
+  run.location = { kind: 'fight', fightIndex: 2 } as RunLocation; // act-1 boss
+  run.winFight();
+  run.pickCardReward(0); // take the card so the stash tracks spoils, not the card
+  eq('boss card reward -> spoils', run.location.kind, 'spoils');
+  check('taking the card left no Back', !run.canGoBack());
+  const spoilOffers = run.nodeContent?.type === 'spoils' ? run.nodeContent.offers : [];
+  run.skipSpoils();
+  eq('skipping spoils -> healer boon', run.location.kind, 'healerBoon');
+  check('the skipped spoils is recoverable', run.canGoBack());
+  run.goBackToReward();
+  eq('Back restores the spoils', run.location.kind, 'spoils');
+  check('Back restores the EXACT same relic offers',
+    run.nodeContent?.type === 'spoils' && run.nodeContent.offers === spoilOffers);
+  check('the spoils stash is consumed', !run.canGoBack());
+  const relicsBefore = run.relics.length;
+  run.pickSpoil(0);
+  eq('re-chosen spoils still grants a relic', run.relics.length, relicsBefore + 1);
+  check('taking the spoils clears the stash', !run.canGoBack());
+  eq('taking spoils advances to the healer boon', run.location.kind, 'healerBoon');
+}
+{
+  // A stale prior-fight stash never resurfaces (#96): skipping fight 0's card reward
+  // then winning fight 1 must not offer Back on the new reward.
+  const run = new Run(962);
+  startRun(run);
+  run.winFight();
+  run.skipCardReward(); // stash holds fight 0's card reward
+  check('stash survives into the fork', run.canGoBack());
+  crossBranch(run, 0); // fight 0 -> fork -> fight 1
+  run.winFight(); // opens fight 1's card reward
+  eq('next fight opens a fresh card reward', run.location.kind, 'cardReward');
+  check('the stale prior-fight stash was cleared', !run.canGoBack());
+}
 
 finish();

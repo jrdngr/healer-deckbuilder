@@ -183,6 +183,13 @@ export class Run {
   // revisits see the same stock/state instead of a fresh roll.
   branchContent: (NodeContent | null)[];
   currentEnemyDef: EnemyDef | null; // enemy rolled for the current fight (stable for the visit)
+  // One-step Back stash (#96): the reward screen the player most recently SKIPPED,
+  // captured (location + rolled offers) just before advancing. goBackToReward restores
+  // it so an accidental skip can be undone. It holds only the LAST skip (not a history
+  // stack), is cleared on any TAKE, once Back is consumed, and at the start of each new
+  // fight cycle (winFight) so a stale prior-fight reward can't resurface. Deliberately
+  // NOT serialized (like Reserve state) — a skip is not recoverable across save/resume.
+  private rewardStash: { location: RunLocation; nodeContent: NodeContent } | null;
   private nextUid: number;
 
   constructor(seed: number = Date.now()) {
@@ -208,6 +215,7 @@ export class Run {
     this.nodeContent = null;
     this.branchContent = [];
     this.currentEnemyDef = null;
+    this.rewardStash = null;
   }
 
   // `party` is a read/write alias for the roster — the run-layer screens that show
@@ -694,6 +702,9 @@ export class Run {
   winFight(hpBySlot?: (number | null)[]): void {
     if (this.location.kind !== 'fight') return;
     const fi = this.location.fightIndex;
+    // New fight cycle: drop any Back stash left over from the previous fight's reward
+    // chain (#96), so the reward this win opens never surfaces a Back to a stale screen.
+    this.rewardStash = null;
     this.fightsWon += 1;
     // Carry HP back onto the roster before the between-fight heal (#58). Deployed
     // survivors keep their ending HP; the heal below tops everyone up and revives
@@ -773,13 +784,18 @@ export class Run {
     if (this.location.kind !== 'cardReward' || this.nodeContent?.type !== 'cardReward') return null;
     const offer = this.nodeContent.offers[index];
     if (!offer) return null;
+    this.rewardStash = null; // a TAKE is committed — nothing to go back to (#96)
     this.addCard(offer.cardId);
     this._leaveCardReward();
     return offer.cardId;
   }
 
-  // Skip the card reward empty-handed (allowed, mirroring spoils) and move on.
-  skipCardReward(): void { this._leaveCardReward(); }
+  // Skip the card reward empty-handed (allowed, mirroring spoils) and move on. Stash
+  // the screen first (#96) so the skip is recoverable via goBackToReward.
+  skipCardReward(): void {
+    this._stashReward();
+    this._leaveCardReward();
+  }
 
   // Leave the spoils screen (with or without a pick) on to the post-boss healer boon
   // (#83), which then leads to the fork. The post-boss member draft was removed with
@@ -795,12 +811,46 @@ export class Run {
     if (this.location.kind !== 'spoils' || this.nodeContent?.type !== 'spoils') return null;
     const offer = this.nodeContent.offers[index];
     if (!offer) return null;
+    this.rewardStash = null; // a TAKE is committed — nothing to go back to (#96)
     this.addRelic(offer.relicId);
     this._leaveSpoils();
     return offer.relicId;
   }
 
-  skipSpoils(): void { this._leaveSpoils(); }
+  // Skip the relic spoils empty-handed. Stash the screen first (#96) so an accidental
+  // skip of a boss relic can be undone from the next screen (the healer boon).
+  skipSpoils(): void {
+    this._stashReward();
+    this._leaveSpoils();
+  }
+
+  // ---- one-step Back on reward screens (#96) -------------------------------
+  // Capture the current reward screen (its location + rolled offers) as the Back
+  // stash, replacing any prior stash — Back is one step only, the most recent skip.
+  // Only stashes an actual reward screen; anything else is a no-op.
+  _stashReward(): void {
+    if (
+      (this.location.kind === 'cardReward' && this.nodeContent?.type === 'cardReward') ||
+      (this.location.kind === 'spoils' && this.nodeContent?.type === 'spoils')
+    ) {
+      this.rewardStash = { location: this.location, nodeContent: this.nodeContent };
+    }
+  }
+
+  // Whether a just-skipped reward can be returned to. True only after a skip and
+  // before the stash is consumed/cleared; never on the run's first screen.
+  canGoBack(): boolean { return this.rewardStash != null; }
+
+  // Undo the most recent skip: restore the stashed reward screen (same location, the
+  // EXACT same rolled offers — not a fresh roll) and consume the stash, so Back is a
+  // single step. No-op when there is nothing stashed.
+  goBackToReward(): void {
+    const stash = this.rewardStash;
+    if (!stash) return;
+    this.location = stash.location;
+    this.nodeContent = stash.nodeContent;
+    this.rewardStash = null;
+  }
 
   // ---- post-boss healer boon (#83) -----------------------------------------
   // A FREE pick of one of all four HEALER_UPGRADES after a boss, replacing the

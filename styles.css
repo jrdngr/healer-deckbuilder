@@ -1288,6 +1288,8 @@ main.drag-board .enemy, main.drag-board .party {
 .member-stats { font-size: 11px; color: var(--muted); }
 
 .leave-btn { justify-self: start; width: max-content; }
+/* Reward footer row: an optional Back control (#96) beside the skip button. */
+.reward-actions { display: flex; gap: 8px; justify-self: start; align-items: center; }
 
 /* ---- Draft (#27 skeleton) ------------------------------------------------ */
 .draft-offers { margin-top: 4px; }
