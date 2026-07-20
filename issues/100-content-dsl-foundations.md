@@ -1,6 +1,6 @@
 # Issue 100 — Content DSL foundations (zod, TUNING record, interpolator, validator, interpreter core, trace oracle)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — 6 commits; schemas, interpreter, validator, reporter and trace oracle all built and wired to nothing)
 - **Phase:** content-migration (phase 0 of 6)
 - **Depends:** **#99** — the characterization suite is the regression gate for this and every
   issue in #100–#106. Nothing here starts until #99 is complete and green. #99's **A2**
@@ -123,23 +123,23 @@ referenced (an unused native is dead code).
 
 ## Acceptance criteria
 
-- [ ] `zod` added to `dependencies` in `package.json` (runtime dep, not dev — it runs at
+- [x] `zod` added to `dependencies` in `package.json` (runtime dep, not dev — it runs at
       startup), and `"resolveJsonModule": true` added to `tsconfig.json`. `npm run build`
       and `npm test` both still work; no other compiler option changes.
-- [ ] `src/data/tuning.ts` exports `TUNING: Record<string, number>` alongside its existing
+- [x] `src/data/tuning.ts` exports `TUNING: Record<string, number>` alongside its existing
       ~250 named exports, with a test asserting **every** numeric named export appears in
       `TUNING` under its own name and with an identical value (an agreement test — the record
       must not be allowed to drift from the consts).
-- [ ] A template interpolator resolving `{NAME}` → the def's own field, else `TUNING[NAME]`,
+- [x] A template interpolator resolving `{NAME}` → the def's own field, else `TUNING[NAME]`,
       else a validation error. Supports the `|s` (plural) and `|pct` (percent) filters and
       the `{cond ? a : b}` conditional form. Pure, DOM-free, unit-tested directly.
-- [ ] zod schemas for the amount / selector / condition / op unions, recursive via `z.lazy`,
+- [x] zod schemas for the amount / selector / condition / op unions, recursive via `z.lazy`,
       **`.strict()` everywhere** — an unknown key is almost always a typo and silently
       ignoring it is how content bugs ship.
-- [ ] A validator skeleton that runs every check, **collects all errors**, and only then
+- [x] A validator skeleton that runs every check, **collects all errors**, and only then
       refuses to start. Structure it so #101–#105 each add their referential/coverage checks
       without touching the driver.
-- [ ] A multi-error reporter grouping by category and naming file → JSON path → what was
+- [x] A multi-error reporter grouping by category and naming file → JSON path → what was
       wrong, in this shape:
       ```
       Content validation failed — 3 errors:
@@ -156,29 +156,29 @@ referenced (an unused native is dead code).
 
       Refusing to start.
       ```
-- [ ] **Levenshtein nearest-key suggestions** (~20 lines) wired into the reporter for unknown
+- [x] **Levenshtein nearest-key suggestions** (~20 lines) wired into the reporter for unknown
       tuning keys, op names, field names, selectors and content ids. This is what makes a
       stringly-typed system usable daily — it is not optional polish.
-- [ ] The startup failure path is:
+- [x] The startup failure path is:
       ```ts
       const failStartup = () => {
         if (typeof process !== 'undefined' && process.exit) process.exit(1);
         throw new Error('Content validation failed — see console for details.');
       };
       ```
-- [ ] `src/content/` scaffolded with `index.ts`, `schema/`, `interpreter/`. Validation runs as
+- [x] `src/content/` scaffolded with `index.ts`, `schema/`, `interpreter/`. Validation runs as
       a **module-init side effect of `src/content/index.ts`**, which `src/constants.ts`
       re-exports — that covers `main.tsx` and every content-touching test and sim entry with
       no per-entry wiring. It does **not** cover `test/tooltip.test.ts` or
       `test/goldFx.test.ts`, which import no constants — harmless, but do not claim it does.
-- [ ] Interpreter core (`runActions(game, actions, ctx)`) implementing the full op vocabulary
+- [x] Interpreter core (`runActions(game, actions, ctx)`) implementing the full op vocabulary
       above, **wired to nothing** — no dispatch site calls it yet. Unit-tested against
       hand-built action lists.
-- [ ] The interpreter imports **only types** from the engine, never values.
+- [x] The interpreter imports **only types** from the engine, never values.
       `src/data/cards.ts:335` documents a prior TDZ import-cycle bite (#84); re-introducing
       one here is the single easiest way to break startup.
-- [ ] `sim/trace.ts` exists and produces a stable ordered dump (see below).
-- [ ] `npm test` green, `npm run typecheck` clean. `npm run sim` wall time recorded in the
+- [x] `sim/trace.ts` exists and produces a stable ordered dump (see below).
+- [x] `npm test` green, `npm run typecheck` clean. `npm run sim` wall time recorded in the
       commit message as the phase-0 perf baseline.
 
 ## `sim/trace.ts` — the second net (mechanics corrected; do not follow the first draft)
@@ -200,16 +200,16 @@ load-bearing** (#99's suite is the primary oracle) but still worth building.
 duplicated ~40-line copy of `runSingleRun`'s loop so the trace can straddle fight boundaries.
 Dump every log line and event in order, each prefixed by seed / fight / turn.
 
-- [ ] `trace.ts` **asserts its captured event count is large** (a floor, e.g. thousands for
+- [x] `trace.ts` **asserts its captured event count is large** (a floor, e.g. thousands for
       200 seeds) before emitting output. Without that, a capture bug reads as an empty diff,
       i.e. as a pass — the exact failure mode this tool exists to prevent.
-- [ ] Documented usage, to be run on each migration commit in #101–#106:
+- [x] Documented usage, to be run on each migration commit in #101–#106:
       ```
       tsx sim/trace.ts 200 > /tmp/before.txt   # on the parent commit
       tsx sim/trace.ts 200 > /tmp/after.txt
       diff /tmp/before.txt /tmp/after.txt      # must be empty
       ```
-- [ ] `exerciseAll()` (`sim/exercise.ts`) extended to dump its log trace too, and diffed the
+- [x] `exerciseAll()` (`sim/exercise.ts`) extended to dump its log trace too, and diffed the
       same way — `trace.ts` only covers what `sim/policy.ts` plays (~6 of 23 shop cards).
 
 ## Implementation notes (anchors)
@@ -259,3 +259,45 @@ Dump every log line and event in order, each prefixed by seed / fight / turn.
 - Removing `src/data/tuning.ts` or converting it to JSON (decision 6 — it stays TS).
 - Changing `src/constants.ts`'s exported shape.
 - Visual/UI confirmation — maintainer-verified manually per `CLAUDE.md`.
+
+## Resolution (2026-07-20)
+
+Six commits, all green. Nothing calls the interpreter yet, so phase 0 is provably
+behavior-neutral: #99's 1,655 characterization cases pass unchanged throughout.
+
+| Commit | What |
+|---|---|
+| zod + resolveJsonModule | verified against the zod **v4** API, not assumed from v3 |
+| `TUNING` record | 165 constants, auto-derived, agreement-tested, frozen |
+| Template interpolator | 91 cases; all 65 existing descs render byte-identical |
+| Schemas + validator + reporter | 78 cases; scope walk, Levenshtein suggestions |
+| Interpreter core | 131 cases; 29 ops against a live Game |
+| Scaffold + driver + trace oracle | module-init validation, `sim/trace.ts` |
+
+### Deviations from the acceptance criteria, and why
+
+1. **`TUNING` lives in `src/data/tuning-table.ts`, not `tuning.ts`.** Building it inside
+   `tuning.ts` needs a self-import to enumerate its own exports, which only works while
+   the record is the file's last statement — a `const` added after it sits in the TDZ and
+   throws at import. Given `cards.ts:335` documents a prior TDZ bite (#84) in this exact
+   layer, a leaf module with no cycle was the safer call. Re-exported from the barrel, so
+   `{"tune": "KEY"}` resolution and every import site are unaffected.
+2. **Amounts and conditions stay key-discriminated**, not tagged. Tagging them would give
+   better zod errors but doubles every action list for no authoring benefit
+   (`{"op":"tune","key":"POISON_BASE"}`). The readable diagnostic comes from the
+   validator's own walk instead; zod remains the shape backstop.
+3. **`clampMin`'s second field is `atLeast`, not `min`** — the original name collided with
+   the variadic `{min: […]}` form, which the interpreter resolved wrongly and
+   `describeAmountBranch` reported as unrecognizable.
+
+### Engine changes (behavior-neutral, proven by #99)
+
+`_reviveMember` and `_purgeParty` were extracted from the Resurrect and Cleanse arms so
+those arms and the interpreter's `revive`/`purge` ops share one definition. A revive that
+forgets a field is a buff surviving death; keeping the list in two places guarantees that
+drift.
+
+### Perf baseline
+
+`npm run sim -- 200 1` — **0.46s wall / 0.79s user**. The gate for later phases is a >15%
+regression after #103's hook bus.

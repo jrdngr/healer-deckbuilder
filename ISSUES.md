@@ -36,7 +36,6 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 100 | 📋 Planned | [Content DSL foundations (zod, TUNING, interpolator, validator, interpreter, trace oracle)](./issues/100-content-dsl-foundations.md) | content-migration | #99 | migration plan 2026-07-20, phase 0 |
 | 101 | 📋 Planned | [Cards to JSON (cards.json + dual dispatch, delete the _applyCard switch)](./issues/101-cards-to-json.md) | content-migration | #99, #100 | migration plan 2026-07-20, phase 1 |
 | 102 | 📋 Planned | [Abilities to JSON (abilities.json + dual dispatch, delete the _fireAbility switch)](./issues/102-abilities-to-json.md) | content-migration | #99, #101 | migration plan 2026-07-20, phase 2 |
 | 103 | 📋 Planned | [Relic hook bus, run-layer hooks, relics.json, and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | #99, #102 | migration plan 2026-07-20, phase 3 (riskiest commit) |
