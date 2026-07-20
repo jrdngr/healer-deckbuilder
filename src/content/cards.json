@@ -403,7 +403,55 @@
     "buyValue": 1,
     "heal": 2,
     "desc": "Heal a member for 2.",
-    "actions": []
+    "actions": [
+      {
+        "op": "let",
+        "bind": "amount",
+        "value": {
+          "sum": [
+            {
+              "card": "heal"
+            },
+            {
+              "holyHealBonus": true
+            }
+          ]
+        }
+      },
+      {
+        "op": "heal",
+        "to": "$target",
+        "amount": {
+          "var": "amount"
+        },
+        "direct": true,
+        "bind": "healed"
+      },
+      {
+        "op": "log",
+        "kind": "heal",
+        "text": "{card.name}: {target.name} heals {healed}. ({target.hp}/{target.maxHP})"
+      },
+      {
+        "op": "emit",
+        "kind": "heal",
+        "slot": "$target",
+        "amount": {
+          "var": "healed"
+        },
+        "hp": {
+          "stat": "hp",
+          "of": "$target"
+        }
+      },
+      {
+        "op": "healCardSplash",
+        "primary": "$target",
+        "amount": {
+          "var": "amount"
+        }
+      }
+    ]
   },
   "highHeal": {
     "id": "highHeal",
@@ -416,7 +464,55 @@
     "buyValue": 6,
     "heal": 4,
     "desc": "Heal a member for 4.",
-    "actions": []
+    "actions": [
+      {
+        "op": "let",
+        "bind": "amount",
+        "value": {
+          "sum": [
+            {
+              "card": "heal"
+            },
+            {
+              "holyHealBonus": true
+            }
+          ]
+        }
+      },
+      {
+        "op": "heal",
+        "to": "$target",
+        "amount": {
+          "var": "amount"
+        },
+        "direct": true,
+        "bind": "healed"
+      },
+      {
+        "op": "log",
+        "kind": "heal",
+        "text": "{card.name}: {target.name} heals {healed}. ({target.hp}/{target.maxHP})"
+      },
+      {
+        "op": "emit",
+        "kind": "heal",
+        "slot": "$target",
+        "amount": {
+          "var": "healed"
+        },
+        "hp": {
+          "stat": "hp",
+          "of": "$target"
+        }
+      },
+      {
+        "op": "healCardSplash",
+        "primary": "$target",
+        "amount": {
+          "var": "amount"
+        }
+      }
+    ]
   },
   "aoeHeal": {
     "id": "aoeHeal",
@@ -429,7 +525,47 @@
     "buyValue": 4,
     "heal": 2,
     "desc": "Heal all living members for 2.",
-    "actions": []
+    "actions": [
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "heal",
+            "to": "$target",
+            "amount": {
+              "sum": [
+                {
+                  "card": "heal"
+                },
+                {
+                  "holyHealBonus": true
+                }
+              ]
+            },
+            "direct": true,
+            "bind": "healed"
+          },
+          {
+            "op": "emit",
+            "kind": "heal",
+            "slot": "$target",
+            "amount": {
+              "var": "healed"
+            },
+            "hp": {
+              "stat": "hp",
+              "of": "$target"
+            }
+          }
+        ]
+      },
+      {
+        "op": "log",
+        "kind": "heal",
+        "text": "Group Heal: all living members heal up to {heal}."
+      }
+    ]
   },
   "regen": {
     "id": "regen",
@@ -442,7 +578,31 @@
     "buyValue": 3,
     "regen": 2,
     "desc": "Regen +2: heal 2, then 1, decaying each turn. Adds to an existing Regen.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "regen",
+        "amount": {
+          "card": "regen"
+        },
+        "mode": "add"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Regen on {target.name} (Regen {target.regen}, decays each turn)."
+      },
+      {
+        "op": "emit",
+        "kind": "regenApplied",
+        "slot": "$target",
+        "stack": {
+          "stat": "regen",
+          "of": "$target"
+        }
+      }
+    ]
   },
   "shield": {
     "id": "shield",
@@ -454,7 +614,27 @@
     "family": "ward",
     "buyValue": 5,
     "desc": "Fully block the next attack instance on a member.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "shield",
+        "turns": {
+          "tune": "SHIELD_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Shield raised on {target.name} (fades in {SHIELD_TURNS} enemy turns)."
+      },
+      {
+        "op": "emit",
+        "kind": "shieldApplied",
+        "slot": "$target"
+      }
+    ]
   },
   "resurrect": {
     "id": "resurrect",
@@ -491,7 +671,46 @@
     "buyValue": 2,
     "needsRegen": true,
     "desc": "Consume a member's Regen: heal them for its full remaining amount at once.",
-    "actions": []
+    "actions": [
+      {
+        "op": "consume",
+        "on": "$target",
+        "tag": "regen",
+        "bind": "ticks",
+        "deferEndHook": true
+      },
+      {
+        "op": "heal",
+        "to": "$target",
+        "amount": {
+          "var": "ticks"
+        },
+        "direct": true,
+        "bind": "healed"
+      },
+      {
+        "op": "log",
+        "kind": "heal",
+        "text": "Bloom consumes {target.name}'s Regen: heals {healed}. ({target.hp}/{target.maxHP})"
+      },
+      {
+        "op": "emit",
+        "kind": "heal",
+        "slot": "$target",
+        "amount": {
+          "var": "healed"
+        },
+        "hp": {
+          "stat": "hp",
+          "of": "$target"
+        }
+      },
+      {
+        "op": "regenEnded",
+        "on": "$target",
+        "consumed": true
+      }
+    ]
   },
   "fontOfMana": {
     "id": "fontOfMana",
@@ -533,7 +752,40 @@
     "buyValue": 2,
     "regen": 2,
     "desc": "Regen +2 (decays each turn); when it ends while the target lives, burst-heal 3.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "regen",
+        "amount": {
+          "card": "regen"
+        },
+        "mode": "add"
+      },
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "bloomBurst",
+        "amount": {
+          "tune": "LIFEBLOOM_BURST"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Lifebloom on {target.name} (Regen {target.regen}, decays each turn; bursts {LIFEBLOOM_BURST} when it ends)."
+      },
+      {
+        "op": "emit",
+        "kind": "regenApplied",
+        "slot": "$target",
+        "stack": {
+          "stat": "regen",
+          "of": "$target"
+        }
+      }
+    ]
   },
   "battleHymn": {
     "id": "battleHymn",
@@ -557,7 +809,33 @@
     "family": "ward",
     "buyValue": 2,
     "desc": "Every living member gains a Shield; unused ones fade after the next enemy phase.",
-    "actions": []
+    "actions": [
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "status",
+            "on": "$target",
+            "tag": "shield",
+            "turns": {
+              "tune": "BARRIER_TURNS"
+            },
+            "mode": "keepLonger"
+          },
+          {
+            "op": "emit",
+            "kind": "shieldApplied",
+            "slot": "$target"
+          }
+        ]
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Barrier: every living member gains a Shield (fades after the next enemy phase)."
+      }
+    ]
   },
   "bloodTithe": {
     "id": "bloodTithe",
