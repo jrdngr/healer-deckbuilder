@@ -16,7 +16,10 @@
     "name": "Haggler's Charm",
     "rarity": "common",
     "icon": "🪙",
-    "desc": "All shop prices −{HAGGLER_DISCOUNT_PCT|pct}%."
+    "desc": "All shop prices −{HAGGLER_DISCOUNT_PCT|pct}%.",
+    "hooks": {
+      "modifyShopPrice": { "mul": { "tune": "HAGGLER_PRICE_MULT" } }
+    }
   },
   "fieldTriage": {
     "id": "fieldTriage",
@@ -144,6 +147,11 @@
         },
         "add": {
           "tune": "RUSTY_CROWN_ATTACK"
+        }
+      },
+      "modifyFightGold": {
+        "add": {
+          "tune": "RUSTY_CROWN_GOLD"
         }
       }
     }
@@ -340,7 +348,10 @@
     "name": "Spare Bandages",
     "rarity": "common",
     "icon": "🧵",
-    "desc": "Between-fight recovery rises to {SURGEON_THREAD_HEAL_PCT|pct}% of max HP (from {HERO_HEAL_PCT|pct}%)."
+    "desc": "Between-fight recovery rises to {SURGEON_THREAD_HEAL_PCT|pct}% of max HP (from {HERO_HEAL_PCT|pct}%).",
+    "hooks": {
+      "modifyRecoveryPct": { "set": { "tune": "SURGEON_THREAD_HEAL_PCT" } }
+    }
   },
   "beggarsBowl": {
     "id": "beggarsBowl",
@@ -348,6 +359,10 @@
     "rarity": "rare",
     "icon": "🥣",
     "curse": true,
-    "desc": "CURSE — card rewards after a won fight offer {BEGGARS_BOWL_REWARD_SIZE} choices instead of 3; +{BEGGARS_BOWL_GOLD}g per won fight."
+    "desc": "CURSE — card rewards after a won fight offer {BEGGARS_BOWL_REWARD_SIZE} choices instead of 3; +{BEGGARS_BOWL_GOLD}g per won fight.",
+    "hooks": {
+      "modifyFightGold": { "add": { "tune": "BEGGARS_BOWL_GOLD" } },
+      "modifyRewardSize": { "set": { "tune": "BEGGARS_BOWL_REWARD_SIZE" } }
+    }
   }
 }

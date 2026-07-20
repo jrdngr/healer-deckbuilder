@@ -20,7 +20,7 @@
 // one more thing that can drift out of sync with the seams it claims to describe, which
 // is the very problem being fixed.
 import { readFileSync } from 'node:fs';
-import { VALUE_HOOKS, EVENT_HOOKS } from '../../src/content/hooks';
+import { VALUE_HOOKS, EVENT_HOOKS, RUN_HOOKS } from '../../src/content/hooks';
 import { check, eq, finish } from '../harness';
 
 // Every file that may host a hook seam. The run layer is included because #103's
@@ -44,7 +44,8 @@ check('hook-sites: the scanner finds seams at all', fired.size > 0,
 check('hook-sites: the scanner sees a known seam', fired.has('onAbilityCast'),
   'onAbilityCast is fired from effects.ts; not seeing it means the scan is wrong');
 
-const declared: readonly string[] = [...VALUE_HOOKS, ...EVENT_HOOKS];
+// Run hooks count as declared: they are fired from src/run.ts, which the scan covers.
+const declared: readonly string[] = [...VALUE_HOOKS, ...EVENT_HOOKS, ...RUN_HOOKS];
 
 eq('hook-sites: every declared hook name has a call site',
   declared.filter((n) => !fired.has(n)).join(', '), '');

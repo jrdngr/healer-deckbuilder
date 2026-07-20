@@ -27,6 +27,10 @@ export interface RelicDef {
 
 // Relic magnitudes (kept here so balance passes can reach them).
 export const HAGGLER_DISCOUNT_PCT = 0.10; // Haggler's Charm: fraction off every shop price (rounds down)
+// The same number as a MULTIPLIER, derived rather than restated so the two can never
+// drift. The relic's hook is a `mul`, and `{mul: {sum: [1, {mul: [-1, {tune: …}]}]}}`
+// spells "1 - pct" in JSON at a cost in legibility that nobody should have to pay.
+export const HAGGLER_PRICE_MULT = 1 - HAGGLER_DISCOUNT_PCT;
 export const TITHE_CANDLE_MP = 1;
 // Per-fight bound on the Candle's MP — every MP engine in this game is capped
 // (the flaw-#7 law; cf. REFRESH_MP_CAP), and an uncapped Candle reads +15-25 MP

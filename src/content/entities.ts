@@ -10,7 +10,10 @@ import memberJson from './members.json';
 import { registerCheck } from './validate/driver';
 import { renderTemplate } from './interpreter/template';
 import { CONTENT_TUNING, CONTENT_TUNING_KEYS } from './tuning';
-import { HookBlockSchema, isValueHookName, isEventHookName, ALL_HOOK_NAMES, HOOK_CTX_VARS } from './hooks';
+import {
+  HookBlockSchema, isValueHookName, isEventHookName, isRunHookName, ALL_HOOK_NAMES, HOOK_CTX_VARS,
+} from './hooks';
+import { isStaticAmount, STATIC_AMOUNT_KEYS } from './interpreter/run';
 import type { HookBlock } from './hooks';
 import { validateActions } from './validate/actions';
 import { NATIVE_NAMES } from './natives';
@@ -71,8 +74,30 @@ registerCheck({
         }
         for (const [name, def] of Object.entries(r.hooks)) {
           // A hook name the engine never fires is dead content that looks alive.
-          if (!isValueHookName(name) && !isEventHookName(name)) {
+          if (!isValueHookName(name) && !isEventHookName(name) && !isRunHookName(name)) {
             errs.unknown('ref', 'relics.json', `${id}.hooks.${name}`, 'hook', name, ALL_HOOK_NAMES);
+            continue;
+          }
+          // Run-layer hooks are read by `Run`, which has no Game — so their amounts must
+          // be evaluable without one. An amount reaching into combat state would silently
+          // read 0 at runtime and quietly zero a shop price or a gold reward.
+          if (isRunHookName(name)) {
+            if (Array.isArray(def)) {
+              errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
+                message: `${name} is a run-layer value hook and takes {when, set, mul, add}, not an action list` });
+              continue;
+            }
+            if (def.when) {
+              errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
+                message: `${name} runs outside a fight, where no condition can be evaluated — drop "when"` });
+            }
+            for (const key of ['set', 'mul', 'add'] as const) {
+              const amt = def[key];
+              if (amt !== undefined && !isStaticAmount(amt)) {
+                errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}.${key}`,
+                  message: `run-layer hooks have no Game, so this must be a number or an arithmetic tree over ${STATIC_AMOUNT_KEYS.join('/')} — got something needing combat state` });
+              }
+            }
             continue;
           }
           // A VALUE hook must not be an action list and vice versa — the two are

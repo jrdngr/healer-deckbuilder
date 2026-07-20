@@ -91,7 +91,14 @@ export const HOOK_CTX_VARS: Record<string, readonly string[]> = Object.freeze({
 export interface ValueHook {
   /** Gate. Absent means "always". */
   when?: Condition;
-  /** Added to the running value. */
+  /**
+   * The three ways a value hook can move a number, applied in the order SET, MUL, ADD
+   * regardless of the order the keys appear in JSON. Fixing the order matters because
+   * `{set: 10, add: 2}` is otherwise ambiguous; declaring more than one is legal and
+   * means exactly this pipeline. Most hooks use exactly one.
+   */
+  set?: Amount;
+  mul?: Amount;
   add?: Amount;
   /** Returned as a boolean answer (allowRest, revealHidden, channelExempt, vetoDeath). */
   answer?: boolean;
@@ -105,10 +112,33 @@ export interface HookBlock {
 
 export const ValueHookSchema: z.ZodType<ValueHook> = z.strictObject({
   when: ConditionSchema.optional(),
+  set: AmountSchema.optional(),
+  mul: AmountSchema.optional(),
   add: AmountSchema.optional(),
   answer: z.boolean().optional(),
   consumes: z.string().optional(),
 });
+
+/**
+ * RUN-LAYER value hooks. Same JSON shape, different bus: these are read by `Run`, which
+ * has no `Game`, no members and no combat state — so their amounts must be STATIC
+ * (a number or a {tune}/arithmetic tree over numbers). `evalStaticAmount` enforces that,
+ * and the validator rejects a run hook whose amount reaches for game state, because at
+ * runtime such an amount would silently evaluate to 0 and quietly zero a price or a gold
+ * reward.
+ *
+ * Deliberately NOT indexed per-Run the way the combat hooks are indexed per-Game. That
+ * index exists because `memberDamage` runs in the sim's hottest loop; the run layer reads
+ * these a handful of times per screen, over a relic list that is never more than a dozen
+ * long. A cache here would buy nothing and would need invalidating on every relic gain and
+ * every save load — a real bug surface traded for no measurable win.
+ */
+export const RUN_HOOKS = [
+  'modifyShopPrice', 'modifyRecoveryPct', 'modifyFightGold', 'modifyRewardSize',
+] as const;
+export type RunHookName = (typeof RUN_HOOKS)[number];
+export const isRunHookName = (n: string): n is RunHookName =>
+  (RUN_HOOKS as readonly string[]).includes(n);
 
 export const HookBlockSchema = z.record(z.string(), z.union([ValueHookSchema, ActionListSchema]));
 
@@ -116,7 +146,9 @@ export const isValueHookName = (n: string): n is ValueHookName =>
   (VALUE_HOOKS as readonly string[]).includes(n);
 export const isEventHookName = (n: string): n is EventHookName =>
   (EVENT_HOOKS as readonly string[]).includes(n);
-export const ALL_HOOK_NAMES: readonly string[] = Object.freeze([...VALUE_HOOKS, ...EVENT_HOOKS].sort());
+export const ALL_HOOK_NAMES: readonly string[] = Object.freeze(
+  [...VALUE_HOOKS, ...EVENT_HOOKS, ...RUN_HOOKS].sort(),
+);
 
 /** One hook plus the id that declared it, for diagnostics and consumable flags. */
 export interface CompiledValueHook { owner: string; hook: ValueHook }

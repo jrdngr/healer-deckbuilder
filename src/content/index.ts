@@ -47,7 +47,12 @@ export { runActions, evalAmount, evalCondition, resolveSelector, STATUS_WRITERS 
 export type { ActionCtx, NativeFn } from './interpreter/run';
 export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/template';
 export { NATIVES, NATIVE_NAMES } from './natives';
-export { compileHooks, EMPTY_HOOKS, VALUE_HOOKS, EVENT_HOOKS, ALL_HOOK_NAMES, isValueHookName, isEventHookName } from './hooks';
+export {
+  compileHooks, EMPTY_HOOKS, VALUE_HOOKS, EVENT_HOOKS, RUN_HOOKS, ALL_HOOK_NAMES,
+  HOOK_CTX_VARS, isValueHookName, isEventHookName, isRunHookName,
+} from './hooks';
+export type { RunHookName } from './hooks';
+export { evalStaticAmount, isStaticAmount, STATIC_AMOUNT_KEYS } from './interpreter/run';
 export type { HookIndex, HookBlock, ValueHook, ValueHookName, EventHookName, CompiledValueHook, CompiledEventHook } from './hooks';
 export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
 export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';

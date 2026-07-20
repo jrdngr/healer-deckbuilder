@@ -21,13 +21,14 @@ import {
   DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, ACT_BOSS_DEFS, ENCOUNTER_TABLE, ENEMY_DEF_BY_ID,
   RELICS, RELIC_IDS, RELIC_PRICE, ACT3_COUNTER_RELICS,
   SPOILS_OFFER_SIZE, RELIQUARY_STOCK, RELIQUARY_REMOVALS_MAX,
-  HAGGLER_DISCOUNT_PCT, CURSE_PRICE, CURSE_SHRINE_GOLD, RUSTY_CROWN_GOLD,
-  SURGEON_THREAD_HEAL_PCT, BEGGARS_BOWL_GOLD, BEGGARS_BOWL_REWARD_SIZE,
+  CURSE_PRICE, CURSE_SHRINE_GOLD,
   MAX_INJURIES, injuryMaxHPPenalty, injuryDamagePenalty, injuryAbilityPenalty,
   injuryRecordCap, injuryIncapacitates, injuryKills,
   partyFromMembers, DRAFT_POOL, CLASSIC_TRIO, ROSTER_CAP,
   DRAFT_OFFER_SIZE, RECRUIT_OFFER_SIZE, memberSalary,
+  RELIC_JSON, evalStaticAmount,
 } from './constants';
+import type { RunHookName } from './content';
 import type {
   Slot, CardId, ModifierId, DeckCard, PartyMemberConfig, HealerConfig, BattleConfig, MemberId, AbilityId,
   NodeType, PartyUpgradeDef, HealerUpgradeDef, EventDef, EnemyDef, RelicId,
@@ -639,7 +640,7 @@ export class Run {
   _healBetweenFights(): void {
     // Surgeon's Thread (#71) lifts the recovery fraction from the moment it's owned;
     // otherwise the run uses the default HEAL_TUNING.pct.
-    const pct = this.hasRelic('surgeonsThread') ? SURGEON_THREAD_HEAL_PCT : HEAL_TUNING.pct;
+    const pct = this._hookValue('modifyRecoveryPct', HEAL_TUNING.pct);
     const heal = (max: number): number => Math.round(max * pct);
     for (const p of this.roster) {
       const cur = p.hp ?? p.maxHP;
@@ -658,9 +659,7 @@ export class Run {
       return { playerGold: 0, salaries: [] };
     }
     const bounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * this.emptySeats()));
-    const reward = bounty
-      + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
-      + (this.hasRelic('beggarsBowl') ? BEGGARS_BOWL_GOLD : 0);
+    const reward = this._hookValue('modifyFightGold', bounty);
     const salaries: { slot: number; gold: number }[] = [];
     for (let s = 0; s < this.deployment.length; s++) {
       const ri = this.deployment[s];
@@ -684,7 +683,7 @@ export class Run {
   // boss (which skips the heal), so the FX is skipped there too — matching the gold burst.
   winHealPreview(hpBySlot?: (number | null)[]): { slot: number; fromHP: number; toHP: number }[] {
     if (this.location.kind !== 'fight' || this.location.fightIndex >= FIGHT_COUNT - 1) return [];
-    const pct = this.hasRelic('surgeonsThread') ? SURGEON_THREAD_HEAL_PCT : HEAL_TUNING.pct;
+    const pct = this._hookValue('modifyRecoveryPct', HEAL_TUNING.pct);
     const out: { slot: number; fromHP: number; toHP: number }[] = [];
     for (let s = 0; s < this.deployment.length; s++) {
       const ri = this.deployment[s];
@@ -716,9 +715,7 @@ export class Run {
     // seats, so an undermanned win pays a premium. The Rusty Crown (#22) bonus is
     // added after (a flat reward for a harder fight, not scaled by seats).
     const bounty = Math.round(GOLD_PER_FIGHT * (1 + EMPTY_SEAT_GOLD_BONUS * this.emptySeats()));
-    const reward = bounty
-      + (this.hasRelic('rustyCrown') ? RUSTY_CROWN_GOLD : 0)
-      + (this.hasRelic('beggarsBowl') ? BEGGARS_BOWL_GOLD : 0);
+    const reward = this._hookValue('modifyFightGold', bounty);
     // Pay each DEPLOYED member their salary out of the winnings (2026-07); benched
     // members are free, so fielding fewer keeps more gold. Gold never goes negative.
     this.gold = Math.max(0, this.gold + reward - this.deployedSalary());
@@ -740,7 +737,7 @@ export class Run {
     const sub = makeRng((this.seed ^ Math.imul(fightIndex + 1, 0x85ebca6b)) >>> 0);
     // Beggar's Bowl (#71) shrinks the reward roll to 2 distinct offers (skip stays
     // allowed) — a mild deck-dilution relief traded for the +20g rider above.
-    const size = this.hasRelic('beggarsBowl') ? BEGGARS_BOWL_REWARD_SIZE : CARD_REWARD_SIZE;
+    const size = this._hookValue('modifyRewardSize', CARD_REWARD_SIZE);
     const ids = this._pickDistinct(
       CARD_POOL.map((id): [CardId, number] => [id, RARITY_WEIGHT[CARD_RARITY[id]]]),
       size,
@@ -1175,6 +1172,33 @@ export class Run {
 
   hasRelic(id: RelicId): boolean { return this.relics.includes(id); }
 
+  /**
+   * The run-layer hook bus (#103). Same `hooks` block in relics.json that drives combat,
+   * a different hook set — see RUN_HOOKS.
+   *
+   * No compiled index, unlike the per-Game one. That index earns its keep because
+   * `memberDamage` runs in the sim's hottest loop; these are read a handful of times per
+   * screen over a relic list that never exceeds a dozen entries, so a cache would buy
+   * nothing measurable and would need invalidating on every relic gain and every save
+   * load. Walking the list is the cheaper correctness story.
+   *
+   * Amounts must be static (no Game exists here). `evalStaticAmount` returns null for
+   * anything reaching into combat state, and the validator rejects that at startup — so a
+   * null here is unreachable rather than silently zeroing a price.
+   */
+  _hookValue(name: RunHookName, base: number): number {
+    let out = base;
+    for (const id of this.relics) {
+      const hook = RELIC_JSON[id]?.hooks?.[name];
+      if (!hook || Array.isArray(hook)) continue;
+      // SET, then MUL, then ADD — the same fixed order the combat bus uses.
+      if (hook.set !== undefined) out = evalStaticAmount(hook.set) ?? out;
+      if (hook.mul !== undefined) out *= evalStaticAmount(hook.mul) ?? 1;
+      if (hook.add !== undefined) out += evalStaticAmount(hook.add) ?? 0;
+    }
+    return out;
+  }
+
   addRelic(id: RelicId): void {
     if (!this.hasRelic(id)) this.relics.push(id);
   }
@@ -1189,7 +1213,7 @@ export class Run {
   // down). Applied at roll time, so offers already on the table keep the price they
   // were rolled at.
   discountedPrice(base: number): number {
-    return this.hasRelic('hagglersCharm') ? Math.floor(base * (1 - HAGGLER_DISCOUNT_PCT)) : base;
+    return Math.floor(this._hookValue('modifyShopPrice', base));
   }
 
   // Relics dead for the REMAINDER of the run, recomputed at each spoils roll

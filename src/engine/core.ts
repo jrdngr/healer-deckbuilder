@@ -516,6 +516,10 @@ export class Game {
     for (const { hook } of hooks) {
       const ctx = { self: subject, card, vars: {} };
       if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
+      // SET, then MUL, then ADD — the fixed order documented on ValueHook, so a hook
+      // declaring more than one is unambiguous rather than key-order-dependent.
+      if (hook.set !== undefined) out = evalAmount(this, hook.set, ctx);
+      if (hook.mul !== undefined) out *= evalAmount(this, hook.mul, ctx);
       if (hook.add !== undefined) out += evalAmount(this, hook.add, ctx);
     }
     return out;

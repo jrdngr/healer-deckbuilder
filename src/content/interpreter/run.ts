@@ -231,6 +231,45 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
   return 0;
 }
 
+/** The amount branches that need no Game — the run layer's whole vocabulary. */
+export const STATIC_AMOUNT_KEYS: readonly string[] = Object.freeze([
+  'tune', 'sum', 'mul', 'max', 'min', 'floor', 'clampMin',
+]);
+
+/**
+ * Evaluate an amount with NO Game in scope, for the run-layer hook bus (#103).
+ *
+ * Returns null — not 0 — for anything that would need combat state. That distinction is
+ * the point: a run hook reaching for `{stat: "hp"}` is a content bug, and silently
+ * yielding 0 would turn it into a free shop or a zeroed reward that nobody notices.
+ * `isStaticAmount` lets the validator reject it at startup instead.
+ */
+export function evalStaticAmount(amt: Amount): number | null {
+  if (typeof amt === 'number') return amt;
+  if (amt == null || typeof amt !== 'object') return null;
+  const a = amt as Record<string, unknown>;
+  const all = (xs: unknown): number[] | null => {
+    const vs = (xs as Amount[]).map(evalStaticAmount);
+    return vs.some((v) => v == null) ? null : (vs as number[]);
+  };
+  if ('tune' in a) return TUNING[a.tune as string] ?? 0;
+  if ('sum' in a) { const v = all(a.sum); return v && v.reduce((s, x) => s + x, 0); }
+  if ('mul' in a) { const v = all(a.mul); return v && v.reduce((s, x) => s * x, 1); }
+  if ('max' in a) { const v = all(a.max); return v && Math.max(...v); }
+  if ('min' in a) { const v = all(a.min); return v && Math.min(...v); }
+  if ('floor' in a) { const v = evalStaticAmount(a.floor as Amount); return v == null ? null : Math.floor(v); }
+  if ('clampMin' in a) {
+    const v = evalStaticAmount(a.clampMin as Amount);
+    return v == null ? null : Math.max(a.atLeast as number, v);
+  }
+  return null;
+}
+
+/** Whether an amount is evaluable without a Game — the run-layer validator's gate. */
+export function isStaticAmount(amt: Amount): boolean {
+  return evalStaticAmount(amt) != null;
+}
+
 // ---------------------------------------------------------------------------
 // Conditions
 // ---------------------------------------------------------------------------
