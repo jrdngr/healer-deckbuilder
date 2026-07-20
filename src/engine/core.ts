@@ -71,7 +71,7 @@ import type {
 import { makeRng, shuffle, weightedPick } from '../rng';
 // #103: the relic/passive hook bus. Compiled once per Game (see _hooks below) so the
 // hot path is a Map.get, never an interpreter walk.
-import { compileHooks, EMPTY_HOOKS, RELIC_JSON, evalCondition, evalAmount } from '../content';
+import { compileHooks, EMPTY_HOOKS, RELIC_JSON, evalCondition, evalAmount, runActions, NATIVES } from '../content';
 import type { HookIndex } from '../content';
 import type { Rng } from '../rng';
 
@@ -533,6 +533,13 @@ export class Game {
       return true;
     }
     return false;
+  }
+
+  /** Run every event hook registered under `name`. Unlike value hooks these may act. */
+  _hookEvent(name: string, ctx: { self?: Member; card?: ResolvedCard; vars: Record<string, unknown> }): void {
+    const hooks = this._hooks.event.get(name);
+    if (!hooks) return;
+    for (const { actions } of hooks) runActions(this, actions, ctx, NATIVES);
   }
 
   /**

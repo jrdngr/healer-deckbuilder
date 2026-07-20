@@ -53,7 +53,7 @@ Game.prototype._applyCard = function (card, target) {
 
 Game.prototype._fireAbility = function (m, target = null, ability = m.ability) {
     // War Drum (#21): any Ability cast primes the caster's next auto to double.
-    if (this.hasRelic('warDrum')) m.drumPrimed = true;
+    this._hookEvent('onAbilityCast', { self: m, vars: {} });
     // Empower (#62): a one-shot +abilityPower on this ability. Every case reads
     // m.abilityPower synchronously inside the switch, so temporarily bump it here
     // and restore below — the bonus is consumed exactly once.

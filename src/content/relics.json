@@ -41,7 +41,17 @@
     "name": "War Drum",
     "rarity": "uncommon",
     "icon": "🥁",
-    "desc": "After a member casts their Ability, their next auto-attack deals double."
+    "desc": "After a member casts their Ability, their next auto-attack deals double.",
+    "hooks": {
+      "onAbilityCast": [
+        {
+          "op": "status",
+          "on": "$self",
+          "tag": "drumPrimed",
+          "mode": "set"
+        }
+      ]
+    }
   },
   "prayerBeads": {
     "id": "prayerBeads",
