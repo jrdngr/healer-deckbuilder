@@ -47,44 +47,12 @@ export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'ram
   | 'standingOvation' | 'bigTop'    // Showstopper
   | 'lunge' | 'flurry'              // Duelist
   | 'strongest' | 'deadlift';       // Strongman
-export type CardId =
-  | 'lowHeal' | 'highHeal' | 'aoeHeal'
-  | 'regen' | 'shield' | 'resurrect' | 'cleanse'
-  | 'bloom' | 'fontOfMana' | 'inspiration'
-  | 'lifebloom' | 'battleHymn' | 'barrier'
-  | 'bloodTithe' | 'martyrsGift'
-  | 'phalanx' | 'provoke'
-  // Iron mitigation web (#65): steer telegraphed hits, get paid for blocking.
-  | 'feint'
-  // Regen conversions (#66): turn Regen into enemy Poison.
-  | 'sporeburst'
-  // Status-window management (#67): manage enemy Poison / Vulnerability windows.
-  | 'hemorrhage' | 'dreadWhisper'
-  // Blood + cycling (#68): HP as a spendable resource — draw, shields,
-  // redistribution, and party offense, all priced in HP the healer manages.
-  | 'crimsonPact' | 'scarletWard' | 'transfusion' | 'bloodBanner'
-  // Holy board-state payoffs (#69): a healthy party becomes a plan.
-  | 'sunriseVigil' | 'consecration'
-  // Arcane support (#70): a splash enabler.
-  | 'arcaneLens'
-  // Channeled cards (#64): hold an effect across turns while you play nothing else.
-  // Sap reads Shadow, Mending Stream Holy.
-  | 'mendingStream' | 'sap'
-  // Hero buff card batch (#62): proactive per-hero buffs. Standing buffs (Guard,
-  // Sharpen) decay over N enemy turns; the one-shots (Double Strike, Empower,
-  // Riposte) are consumed on use.
-  | 'guard' | 'sharpen' | 'doubleStrike' | 'empower' | 'riposte'
-  // Per-member ability cards (#44): one bound card per member, inserted into the
-  // battle deck when that member is deployed and firing their ability. The healer
-  // enables the member's move — the player no longer picks which member acts.
-  | 'imbuePoison' | 'bolster' | 'unleash' | 'hex'
-  | 'conduct' | 'incite' | 'beckon' | 'stagger' | 'enGarde' | 'penance'
-  // Learned ability cards (Training Dojo, 2026-07): two extra ability cards per hero.
-  // Card id == its AbilityId; injected on deploy only for the hero that learned it.
-  | 'twinShot' | 'concVenom' | 'shieldWall' | 'holdLine' | 'arcaneSurge' | 'drainLife'
-  | 'doom' | 'sacrifice' | 'finale' | 'duet' | 'bloodbath' | 'whirlwind'
-  | 'sicEm' | 'mendBeast' | 'standingOvation' | 'bigTop' | 'lunge' | 'flurry'
-  | 'strongest' | 'deadlift';
+// #106: card ids are plain strings — cards.json is the source of truth, so a new card
+// is authored there with no TypeScript edit. The exhaustiveness the union used to give
+// `Record<CardId, …>` maps is replaced by startup coverage checks in the content
+// validator (family/buyValue/type/rarity) and by test/content/coverage.test.ts for the
+// presentation and sim-policy tables the engine must not import.
+export type CardId = string;
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
 // healing for a few turns; 'siphon' drains healer MP; 'consume' (Devourer, #14)

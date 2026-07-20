@@ -1,14 +1,11 @@
 import type { CardId, CardType, CardDef, AbilityId, MemberId } from './tuning';
+// #106: the card table is read from cards.json. Imported DIRECTLY rather than through
+// src/content — content imports data/run, which imports this module, so the other
+// direction would close a cycle. A raw JSON import has no imports of its own.
+import CARD_JSON_RAW from '../content/cards.json';
+import { renderTemplate } from '../content/interpreter/template';
+import { TUNING } from './tuning-table';
 import { MOD_EFFICIENT_COST, MOD_POTENT_STRENGTH, MOD_LINGERING_TURNS, REFRESH_MP_CAP, REFRESH_TURNS } from './tuning';
-import {
-  BLOOD_BANNER_BONUS, BLOOD_BANNER_HP, BLOOD_BANNER_TURNS, CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS, CRIMSON_PACT_DRAW, CRIMSON_PACT_HP, DREAD_WHISPER_REDUCTION, EMPOWER_BONUS, EN_GARDE_TURNS, FONT_MP_CAP, GUARD_DR, GUARD_TURNS, MENDING_STREAM_HEAL, MENDING_STREAM_MAX_TURNS, PENANCE_HP, PENANCE_STRIKE_BONUS, SAP_MAX_TURNS, SAP_VULN_CAP, SAP_VULN_PER_TICK, SCARLET_WARD_HP, SHARPEN_BONUS, SHARPEN_TURNS, SPOREBURST_POISON, SUNRISE_VIGIL_HEAL, TRANSFUSION_HEAL, TRANSFUSION_HP
-} from './tuning';
-import {
-  TWIN_SHOT_HITS, SHIELD_WALL_DEFENSE, SHIELD_WALL_TURNS, HOLD_LINE_DEFENSE, HOLD_LINE_TURNS,
-  ARCANE_SURGE_CHARGE, DRAIN_LIFE_DMG, DOOM_DELAY, DOOM_DAMAGE, SACRIFICE_HP, SACRIFICE_DMG, SACRIFICE_POWER,
-  FINALE_MULT, WHIRLWIND_HITS, SIC_EM_MULT, MEND_BEAST_HEAL, BIG_TOP_DR,
-  LUNGE_MULT, LUNGE_TAUNT_TURNS, FLURRY_HITS, FLURRY_REDUCTION, STRONGEST_HP,
-} from './tuning';
 import type { DeckCard, ResolvedCard } from './run';
 
 
@@ -20,247 +17,38 @@ import type { DeckCard, ResolvedCard } from './run';
 // These raw defs omit `type`; CARDS (below the table) folds in each card's type
 // from the exhaustive CARD_TYPE map, so the taxonomy lives in one legible place
 // while CardDef.type stays a required field on the assembled table.
-const CARD_DEFS: Record<CardId, Omit<CardDef, 'type'>> = {
-  // --- per-member ability cards (#44): the healer enables the member's move ----
-  // One is inserted into the battle deck for each deployed member; cost mirrors the
-  // old generic Ability card (2 MP). Unplayable while the bound member is down.
-  imbuePoison: { id: 'imbuePoison', name: 'Poison Tip', cost: 2, target: 'none', ability: 'poison',
-    desc: 'Dip the Ranger\'s arrows — Poison the enemy.' },
-  bolster: { id: 'bolster', name: 'Bolster', cost: 2, target: 'none', ability: 'taunt',
-    desc: 'Steel the Tank — applies Taunt and Defense to him.' },
-  unleash: { id: 'unleash', name: 'Unleash', cost: 2, target: 'none', ability: 'bolt',
-    desc: 'Unleash the Mage\'s stored Charge as a Lightning Bolt.' },
-  hex: { id: 'hex', name: 'Evil Eye', cost: 2, target: 'none', ability: 'hex',
-    desc: "The Warlock's Evil Eye applies Vulnerable to the enemy — deeper with fewer allies." },
-  conduct: { id: 'conduct', name: 'Conduct', cost: 2, target: 'none', ability: 'crescendo',
-    desc: 'Cue the Busker\'s Crescendo — draw cards.' },
-  incite: { id: 'incite', name: 'Rile Up', cost: 2, target: 'none', ability: 'rampage',
-    desc: 'Rile up the Berserker — a doubled strike at an HP cost.' },
-  beckon: { id: 'beckon', name: 'Beckon', cost: 2, target: 'none', ability: 'callBoar',
-    desc: 'Beckon the Beast Warden\'s Boar to soak hits at her side.' },
-  // Halt! (#61) costs 5 MP — the higher price (vs the 2 MP other ability cards) is
-  // the balance lever: no once-per-fight cap, the MP burn plus the tempo lost toward
-  // enrage is what limits stunning.
-  stagger: { id: 'stagger', name: 'Halt!', cost: 5, target: 'none', ability: 'stun',
-    desc: 'Through the Showstopper, Stun the enemy — cancel its telegraphed action.' },
-  // En Garde (#74): the Duelist Provokes a chosen member (Taunt) and grants them the
-  // persistent Riposte stance (herself included).
-  enGarde: { id: 'enGarde', name: 'En Garde', cost: 2, target: 'single', ability: 'enGarde',
-    desc: `Applies Taunt to a member and Riposte for ${EN_GARDE_TURNS} turns — they counter every hit.` },
-  // Feat of Strength (#75) is a Blood ability card (incite precedent — target 'none', counts
-  // toward the blood type counters). It carries NO selfDamage field: the payment is not the
-  // clamped canPlay Blood gate but a raw lethal drain in _fireAbility (this ability is meant to
-  // be castable at any HP — a lethal Feat is a legal, informed sacrifice, so there is no
-  // ">N HP" playability gate). The Sanguine surcharge is applied in the engine, not via _bloodCost.
-  penance: { id: 'penance', name: 'Feat of Strength', cost: 2, target: 'none', ability: 'penance',
-    desc: `Pay ${PENANCE_HP} HP (no clamp — can kill him); every member's auto deals +${PENANCE_STRIKE_BONUS} for 2 turns.` },
-  // --- learned ability cards (Training Dojo, 2026-07): two extra per hero -------
-  // Acquired at the Dojo node; injected on deploy only for the hero that learned them.
-  twinShot: { id: 'twinShot', name: 'Twin Shot', cost: 2, target: 'none', ability: 'twinShot',
-    desc: `The Ranger looses ${TWIN_SHOT_HITS} arrows — she strikes twice (each takes Toxicologist).` },
-  concVenom: { id: 'concVenom', name: 'Concentrated Venom', cost: 1, target: 'none', ability: 'concVenom',
-    desc: `Double the enemy's Poison-per-turn (its duration is unchanged).` },
-  shieldWall: { id: 'shieldWall', name: 'Shield Wall', cost: 2, target: 'none', ability: 'shieldWall',
-    desc: `Every living member gains Defense ${SHIELD_WALL_DEFENSE} for ${SHIELD_WALL_TURNS} enemy turns.` },
-  holdLine: { id: 'holdLine', name: 'Hold the Line', cost: 1, target: 'none', ability: 'holdLine',
-    desc: `The Tank braces (Defense ${HOLD_LINE_DEFENSE}, ${HOLD_LINE_TURNS} turns); while it holds, damage he soaks banks double Grudge.` },
-  arcaneSurge: { id: 'arcaneSurge', name: 'Arcane Surge', cost: 1, target: 'none', ability: 'arcaneSurge',
-    desc: `The Mage gains ${ARCANE_SURGE_CHARGE} Charge at once.` },
-  drainLife: { id: 'drainLife', name: 'Drain Life', cost: 2, target: 'none', ability: 'drainLife',
-    desc: `Deal ${DRAIN_LIFE_DMG} (more if Vulnerable); the most wounded member heals for the damage dealt.` },
-  doom: { id: 'doom', name: 'Doom', cost: 3, target: 'none', ability: 'doom',
-    desc: `Curse the enemy: after ${DOOM_DELAY} enemy turns it takes ${DOOM_DAMAGE} damage (its Vulnerability then scales it).` },
-  sacrifice: { id: 'sacrifice', name: 'Sacrifice', cost: 1, target: 'single', ability: 'sacrifice', exhaust: true,
-    desc: `An ally pays ${SACRIFICE_HP} HP (min 1); the Warlock gains +${SACRIFICE_DMG} damage & +${SACRIFICE_POWER} ability power this fight. One use.` },
-  finale: { id: 'finale', name: 'Finale', cost: 2, target: 'none', ability: 'finale',
-    desc: `The Busker strikes for ${FINALE_MULT}× his cards-played value this turn.` },
-  duet: { id: 'duet', name: 'Duet', cost: 1, target: 'single', ability: 'duet',
-    desc: `A chosen other member immediately makes a bonus auto-attack.` },
-  bloodbath: { id: 'bloodbath', name: 'Bloodbath', cost: 2, target: 'none', ability: 'bloodbath',
-    desc: `The Berserker strikes for his MISSING HP — the more hurt, the harder it hits.` },
-  whirlwind: { id: 'whirlwind', name: 'Whirlwind', cost: 2, target: 'none', ability: 'whirlwind',
-    desc: `The Berserker strikes ${WHIRLWIND_HITS}× (a 3rd time while in his hottest rage band).` },
-  sicEm: { id: 'sicEm', name: "Sic 'Em", cost: 1, target: 'none', ability: 'sicEm', needsBoar: true,
-    desc: `The Beast Warden's Boar lunges — deal ${SIC_EM_MULT}× its strike bonus to the enemy.` },
-  mendBeast: { id: 'mendBeast', name: 'Mend Beast', cost: 1, target: 'none', ability: 'mendBeast', needsBoar: true,
-    desc: `Heal the Boar ${MEND_BEAST_HEAL} and extend its stay by 1 enemy turn.` },
-  standingOvation: { id: 'standingOvation', name: 'Standing Ovation', cost: 2, target: 'none', ability: 'standingOvation',
-    desc: `Every living member's next attack this turn lands doubled.` },
-  bigTop: { id: 'bigTop', name: 'Big Top', cost: 2, target: 'none', ability: 'bigTop',
-    desc: `The whole party takes ${BIG_TOP_DR} less from every hit for the next enemy turn.` },
-  lunge: { id: 'lunge', name: 'Lunge', cost: 2, target: 'none', ability: 'lunge',
-    desc: `The Duelist strikes for ${LUNGE_MULT}× and applies Taunt to herself for ${LUNGE_TAUNT_TURNS} turns.` },
-  flurry: { id: 'flurry', name: 'Flurry', cost: 2, target: 'none', ability: 'flurry',
-    desc: `The Duelist strikes ${FLURRY_HITS} times, each for her auto − ${FLURRY_REDUCTION}.` },
-  strongest: { id: 'strongest', name: 'Strongest in the World', cost: 2, target: 'none', ability: 'strongest',
-    desc: `Pay ${STRONGEST_HP} HP (no clamp — can kill him); every member's auto lands doubled this turn.` },
-  deadlift: { id: 'deadlift', name: 'Deadlift', cost: 1, target: 'single', ability: 'deadlift',
-    desc: `Hoist a chosen ally clear — the enemy cannot target them next enemy turn.` },
-  lowHeal: { id: 'lowHeal', name: 'Quick Heal', cost: 1, target: 'single', heal: 2,
-    desc: 'Heal a member for 2.' },
-  highHeal: { id: 'highHeal', name: 'Heal', cost: 3, target: 'single', heal: 4,
-    desc: 'Heal a member for 4.' },
-  aoeHeal: { id: 'aoeHeal', name: 'Group Heal', cost: 3, target: 'all', heal: 2,
-    desc: 'Heal all living members for 2.' },
-  regen: { id: 'regen', name: 'Regen', cost: 2, target: 'single', regen: 2,
-    desc: 'Regen +2: heal 2, then 1, decaying each turn. Adds to an existing Regen.' },
-  shield: { id: 'shield', name: 'Shield', cost: 3, target: 'single',
-    desc: 'Fully block the next attack instance on a member.' },
-  // Resurrect reworked (#18, flaw #14): 6 MP -> 4. Revives to 50% max HP (the earlier
-  // return-behind-a-Shield rider was removed in the content-cut pass).
-  resurrect: { id: 'resurrect', name: 'Resurrect', cost: 4, target: 'dead',
-    desc: 'Revive a dead member to 50% max HP.' },
-  cleanse: { id: 'cleanse', name: 'Cleanse', cost: 1, target: 'none',
-    desc: 'Remove all negative status effects from the party.' },
-  bloom: { id: 'bloom', name: 'Bloom', cost: 2, target: 'single', needsRegen: true,
-    desc: 'Consume a member\'s Regen: heal them for its full remaining amount at once.' },
-  fontOfMana: { id: 'fontOfMana', name: 'Refresh', cost: 3, target: 'none',
-    refresh: 3, refreshCap: FONT_MP_CAP, engine: true,
-    desc: 'Restore 3 MP per turn for 3 enemy turns.' },
-  inspiration: { id: 'inspiration', name: 'Inspiration', cost: 2, target: 'none', draw: 2, engine: true,
-    desc: 'Draw 2 cards.' },
-  // --- card set phase B (#16): cards with small new engine state -------------
-  lifebloom: { id: 'lifebloom', name: 'Lifebloom', cost: 3, target: 'single', regen: 2,
-    desc: 'Regen +2 (decays each turn); when it ends while the target lives, burst-heal 3.' },
-  battleHymn: { id: 'battleHymn', name: 'Fight Song', cost: 1, target: 'none',
-    desc: 'Every living member\'s attack this turn deals +2.' },
-  barrier: { id: 'barrier', name: 'Barrier', cost: 4, target: 'all',
-    desc: 'Every living member gains a Shield; unused ones fade after the next enemy phase.' },
-  bloodTithe: { id: 'bloodTithe', name: 'Elbow Grease', cost: 0, target: 'single', selfDamage: 4, engine: true,
-    desc: 'A member with more than 4 HP pays 4 HP; restore 2 MP.' },
-  martyrsGift: { id: 'martyrsGift', name: 'Helping Hand', cost: 2, target: 'single', selfDamage: 3, heal: 4,
-    desc: 'A member with more than 3 HP pays 3 HP; every other living member heals 4.' },
-  // --- card set phase C (#17): the Bulwark / Defense pipeline ----------------
-  phalanx: { id: 'phalanx', name: 'Turtle Up', cost: 2, target: 'single', noDefense: true, noTaunt: true,
-    desc: 'Defense 2 for 2 enemy turns. Cannot target a defended or taunting member.' },
-  // Taunt-lite (#31): make any member the enemy's aim — the taunt-less draft's
-  // redirection tool, so the Tank isn't mandatory in every party.
-  provoke: { id: 'provoke', name: 'Provoke', cost: 1, target: 'single',
-    desc: 'Applies Taunt to the target for 2 enemy turns.' },
-  // --- Iron mitigation web (#65): steer hits onto one member ------------------
-  // Feint redirects EVERY hit of the standing telegraph onto one member (a
-  // multi-hit blow stacks all its hits on them) — reuses the taunt-retarget path,
-  // but as a card effect with no MP surcharge (the card's cost is the price).
-  feint: { id: 'feint', name: 'Feint', cost: 1, target: 'single',
-    desc: 'Redirect every hit of the standing telegraph onto the target member.' },
-  // --- Regen conversions (#66): spend Regen across domains --------------------
-  // Sporeburst consumes the whole remaining Regen and converts every consumed tick
-  // into a turn of enemy Poison (via the wave-wide poison stacking rule). needsRegen-gated.
-  sporeburst: { id: 'sporeburst', name: 'Sporeburst', cost: 2, target: 'single', needsRegen: true,
-    desc: `Consume the target's Regen; Poison the enemy ${SPOREBURST_POISON}/turn for as many turns as ticks consumed.` },
-  // --- Status-window management (#67): Poison / Vulnerability as resources -----
-  // Hemorrhage cashes the enemy's whole Poison out in one uncapped hit (per-turn ×
-  // turns left) through _damageEnemy, so Vulnerability multiplies the cash-out (the
-  // poison ticks it consumes stay unmultiplied). needsPoison-gated.
-  hemorrhage: { id: 'hemorrhage', name: 'Goo Burst', cost: 3, target: 'none', needsPoison: true,
-    desc: `Consume the enemy's Poison and deal its whole remaining damage at once.` },
-  // Trash Talk shaves the standing telegraph by 1 per target (floor 0) — stacks
-  // with every other reduction to zero out a sweep.
-  dreadWhisper: { id: 'dreadWhisper', name: 'Trash Talk', cost: 1, target: 'none',
-    desc: `The standing telegraph deals ${DREAD_WHISPER_REDUCTION} less per target (min 0).` },
-  // --- Blood + cycling (#68): HP as a spendable resource ---------------------
-  // Paper Cuts draws 2 through the normal draw path (a reshuffle mid-draw fires
-  // Fidget Beads); like Inspiration it is `engine`-tagged (draw effect), so
-  // Efficient is ineligible. 0-MP — the HP is the cost (Elbow Grease precedent).
-  crimsonPact: { id: 'crimsonPact', name: 'Paper Cuts', cost: 0, target: 'single', selfDamage: CRIMSON_PACT_HP, draw: CRIMSON_PACT_DRAW, engine: true,
-    desc: `A member with more than ${CRIMSON_PACT_HP} HP pays ${CRIMSON_PACT_HP} HP; draw ${CRIMSON_PACT_DRAW}.` },
-  scarletWard: { id: 'scarletWard', name: 'Thick Skin', cost: 1, target: 'single', selfDamage: SCARLET_WARD_HP,
-    desc: `A member with more than ${SCARLET_WARD_HP} HP pays ${SCARLET_WARD_HP} HP; gain a Shield.` },
-  transfusion: { id: 'transfusion', name: 'Blood Drive', cost: 1, target: 'single', selfDamage: TRANSFUSION_HP, heal: TRANSFUSION_HEAL,
-    desc: `A member with more than ${TRANSFUSION_HP} HP pays ${TRANSFUSION_HP} HP; the most wounded other member heals ${TRANSFUSION_HEAL}.` },
-  // Pep Rally has no ">N HP" gate (clamped, target 'none'): every living member
-  // pays, and the payment leaves each at 1 HP minimum.
-  bloodBanner: { id: 'bloodBanner', name: 'Pep Rally', cost: 2, target: 'none',
-    desc: `Every living member pays ${BLOOD_BANNER_HP} HP (clamps to 1); the party's autos deal +${BLOOD_BANNER_BONUS} for ${BLOOD_BANNER_TURNS} enemy turns.` },
-  // --- Holy board-state payoffs (#69) ----------------------------------------
-  // Special Delivery queues a delayed party heal: at the START of your next turn (after the
-  // enemy blow and the Regen tick, before the draw) every living member heals. Cast twice,
-  // it queues twice. The wave's timing tool — heal AFTER the blow lands.
-  sunriseVigil: { id: 'sunriseVigil', name: 'Special Delivery', cost: 2, target: 'none',
-    desc: `At the start of your next turn, heal every living member ${SUNRISE_VIGIL_HEAL}.` },
-  // Glow Up heals the whole party a little; members at FULL HP afterward turn the
-  // surplus into offense — a standing +auto for a couple enemy turns.
-  consecration: { id: 'consecration', name: 'Glow Up', cost: 3, target: 'all', heal: CONSECRATION_HEAL,
-    desc: `Heal all ${CONSECRATION_HEAL}; members at full HP afterward gain +${CONSECRATION_STRIKE_BONUS} auto for ${CONSECRATION_STRIKE_TURNS} enemy turns.` },
-  // --- arcane support (#70) --------------------------------------------------
-  // Arcane Lens: arm a one-shot turn flag — the NEXT single-target heal this turn also
-  // applies its full amount to the most wounded other member (routes through the normal
-  // heal pipeline, so Field Triage / Twin Censer / Beacon all interact). Splash-heal tool.
-  arcaneLens: { id: 'arcaneLens', name: 'Arcane Lens', cost: 2, target: 'none',
-    desc: 'Your next single-target heal this turn also hits the most wounded other member.' },
-  // --- channeled cards (#64): sustained effects that end when you play a card ------
-  mendingStream: { id: 'mendingStream', name: 'Mending Stream', cost: 2, target: 'single',
-    channel: { maxTurns: MENDING_STREAM_MAX_TURNS, single: true },
-    desc: `Channel: heal a member ${MENDING_STREAM_HEAL}/turn (up to ${MENDING_STREAM_MAX_TURNS}). Ends on death or any card.` },
-  sap: { id: 'sap', name: 'Sap', cost: 2, target: 'none',
-    channel: { maxTurns: SAP_MAX_TURNS },
-    desc: `Channel: each turn the enemy grows +${Math.round(SAP_VULN_PER_TICK * 100)}% Vulnerable (up to +${Math.round(SAP_VULN_CAP * 100)}%), for ${SAP_MAX_TURNS} turns. Ends on any card.` },
-  // --- hero buff card batch (#62): proactive per-hero buffs -------------------
-  guard: { id: 'guard', name: 'Guard', cost: 1, target: 'single',
-    desc: `A hero takes ${GUARD_DR} less damage per hit for ${GUARD_TURNS} enemy turns. Stacks with Defense, not with itself.` },
-  sharpen: { id: 'sharpen', name: 'Sharpen', cost: 1, target: 'single',
-    desc: `A hero's attacks deal +${SHARPEN_BONUS} for ${SHARPEN_TURNS} enemy turns.` },
-  // Encore (rare): doubles the chosen hero's next basic auto (not an ability).
-  doubleStrike: { id: 'doubleStrike', name: 'Encore', cost: 2, target: 'single',
-    desc: 'A hero\'s next basic attack lands doubled, then is spent.' },
-  empower: { id: 'empower', name: 'Empower', cost: 1, target: 'single',
-    desc: `A hero's next ability fires at +${EMPOWER_BONUS} ability power, then is spent.` },
-  riposte: { id: 'riposte', name: 'Riposte', cost: 2, target: 'single',
-    desc: 'The next attack that hits a hero, they counterattack for their damage.' },
-};
 
 // ---------------------------------------------------------------------------
-// Card types (#63): the exhaustive taxonomy. This map IS the mapping table — being
-// a Record<CardId, CardType> it is typecheck-exhaustive: every card must appear (a
-// missing one is a compile error), and CARDS folds each type onto its def below. A
-// type is a THEME, not a rulebook — the outliers are called out inline.
-// ---------------------------------------------------------------------------
-export const CARD_TYPE: Record<CardId, CardType> = {
-  // Holy — one-shot heals, resurrect, purify (the current starter core).
-  lowHeal: 'holy', highHeal: 'holy', aoeHeal: 'holy', resurrect: 'holy', cleanse: 'holy',
-  mendingStream: 'holy', /* channeled Holy heal (#64) */
-  sunriseVigil: 'holy', consecration: 'holy', /* Holy board-state payoffs (#69) */
-  // Nature — the regen family, and buffs generally (incl. combat buffs).
-  regen: 'nature', bloom: 'nature', lifebloom: 'nature',
-  sporeburst: 'nature', /* Regen conversion (#66) */
-  battleHymn: 'nature', /* outlier: offense buff */
-  imbuePoison: 'nature', /* outlier: venom/toxin DoT */ beckon: 'nature', /* outlier: summon */
-  sharpen: 'nature', doubleStrike: 'nature', empower: 'nature', riposte: 'nature',
-  // Shadow — enemy debuffs and direct damage to the enemy.
-  unleash: 'shadow', hex: 'shadow', stagger: 'shadow', /* Stun: enemy control */
-  sap: 'shadow', /* channeled Shadow (#64) */
-  hemorrhage: 'shadow', dreadWhisper: 'shadow', /* Status-window management (#67) */
-  // Blood — sacrifice something (usually HP) to gain something.
-  bloodTithe: 'blood', martyrsGift: 'blood',
-  incite: 'blood', /* outlier: HP-cost doubled strike */
-  crimsonPact: 'blood', scarletWard: 'blood', transfusion: 'blood', bloodBanner: 'blood', /* Blood + cycling (#68) */
-  penance: 'blood', /* Flagellant's lethal-blood ability card (#75); counts toward blood counters */
-  // Arcane — the mana / card-draw economy.
-  fontOfMana: 'arcane', inspiration: 'arcane', conduct: 'arcane',
-  arcaneLens: 'arcane', /* arcane support (#70) */
-  // Iron — protection: shields, Defense, Taunt/Provoke.
-  shield: 'iron', barrier: 'iron', phalanx: 'iron', provoke: 'iron',
-  bolster: 'iron', guard: 'iron',
-  feint: 'iron', /* Iron mitigation web (#65) */
-  enGarde: 'iron', /* Duelist's Provoke + persistent-Riposte stance (#74); Iron Ward's first-iron discount applies */
-  // Learned ability cards (Training Dojo, 2026-07): themed by the hero's kit.
-  twinShot: 'nature', concVenom: 'nature',       // Ranger (venom/hunter)
-  shieldWall: 'iron', holdLine: 'iron',          // Tank (protection)
-  arcaneSurge: 'arcane', drainLife: 'shadow',    // Mage (mana / enemy damage)
-  doom: 'shadow', sacrifice: 'blood',            // Warlock (curse / HP cost)
-  finale: 'nature', duet: 'nature',              // Busker (performance offense)
-  bloodbath: 'blood', whirlwind: 'blood',        // Berserker (self-harm strikes)
-  sicEm: 'nature', mendBeast: 'nature',          // Beast Warden (the pack)
-  standingOvation: 'nature', bigTop: 'iron',     // Showstopper (rally / shelter)
-  lunge: 'iron', flurry: 'iron',                 // Duelist (fencing)
-  strongest: 'blood', deadlift: 'iron',          // Strongman (blood / hoist)
-};
 
 // The assembled card table: each raw def with its type folded in. Every card in
 // CARDS therefore carries a type (typecheck-enforced by CARD_TYPE's exhaustiveness).
-export const CARDS: Record<CardId, CardDef> = Object.fromEntries(
-  (Object.keys(CARD_DEFS) as CardId[]).map((id) => [id, { ...CARD_DEFS[id], type: CARD_TYPE[id] }]),
+// #106: the card table is READ FROM cards.json, not declared here. The JSON is
+// imported directly rather than through src/content — content imports data/run, which
+// imports this module, so going the other way would close a cycle. A raw JSON import
+// has no imports of its own and is always safe.
+//
+// Desc templates are resolved here, once, so every consumer (Card.tsx, KeywordText,
+// the tooltip tests) sees the same plain strings it always has.
+export const CARDS: Record<CardId, CardDef> = Object.freeze(
+  Object.fromEntries(Object.entries(CARD_JSON_RAW).map(([id, raw]) => {
+    const def = raw as unknown as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    // Only engine-facing fields cross over; family/buyValue/rarity are authoring and
+    // presentation metadata read from the JSON directly by their own consumers.
+    for (const [k, v] of Object.entries(def)) {
+      if (k === 'actions' || k === 'family' || k === 'buyValue' || k === 'rarity') continue;
+      out[k] = v;
+    }
+    out.desc = renderTemplate(String(def.desc), { fields: def, tuning: TUNING }).text;
+    return [id, out as unknown as CardDef];
+  })),
 ) as Record<CardId, CardDef>;
+
+/** Card type, straight off the JSON. */
+export const CARD_TYPE: Record<CardId, CardType> = Object.freeze(
+  Object.fromEntries(Object.entries(CARD_JSON_RAW).map(([id, raw]) =>
+    [id, (raw as { type: CardType }).type])),
+) as Record<CardId, CardType>;
 
 // A card's primary type (#63). Single source read by pools, starter decks, and the
 // engine's per-type synergy counters.

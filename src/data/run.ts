@@ -1,4 +1,5 @@
 import type { CardId, CardType, CardTarget, CardChannelDef, AbilityId, MemberId, MemberDef } from './tuning';
+import CARD_RARITY_JSON from '../content/cards.json';
 import { MP_MAX, HAND_SIZE, SKIP_REGEN, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD } from './tuning';
 import { ENEMY_MAX_HP, DEFAULT_ENEMY_DEF } from './enemies';
 import type { EnemyDef } from './enemies';
@@ -560,53 +561,13 @@ export const SHOP_SIZE = { cardShop: 6, cardUpgrade: 3, partyUpgrade: 4 } as con
 export const SHOP_SALE_OFF = 0.25;
 
 // Rarity of each existing card (new cards are a separate design task).
-export const CARD_RARITY: Record<CardId, Rarity> = {
-  lowHeal: 'common',
-  regen: 'common',
-  battleHymn: 'common',
-  cleanse: 'uncommon',
-  highHeal: 'uncommon',
-  aoeHeal: 'uncommon',
-  shield: 'uncommon',
-  bloom: 'uncommon',
-  inspiration: 'uncommon',
-  lifebloom: 'uncommon',
-  bloodTithe: 'uncommon',
-  martyrsGift: 'uncommon',
-  phalanx: 'uncommon',
-  provoke: 'uncommon',
-  resurrect: 'rare',
-  fontOfMana: 'rare',
-  barrier: 'rare',
-  // Channeled cards (#64).
-  mendingStream: 'uncommon', sap: 'uncommon',
-  // Iron mitigation web (#65).
-  feint: 'uncommon',
-  // Regen conversions (#66).
-  sporeburst: 'uncommon',
-  // Status-window management (#67).
-  hemorrhage: 'rare', dreadWhisper: 'common',
-  // Blood + cycling (#68): Blood Banner is the rare of the set.
-  crimsonPact: 'uncommon', scarletWard: 'uncommon', transfusion: 'uncommon', bloodBanner: 'rare',
-  // Holy board-state payoffs (#69): Consecration is the rare.
-  sunriseVigil: 'common', consecration: 'rare',
-  // Arcane support (#70): Arcane Lens is the rare.
-  arcaneLens: 'rare',
-  // Hero buff card batch (#62): Double Strike is the rare of the set.
-  guard: 'common', sharpen: 'common', doubleStrike: 'rare',
-  empower: 'uncommon', riposte: 'uncommon',
-  // Per-member ability cards (#44): never shopped (excluded from CARD_POOL below);
-  // rarity is required by the Record type but inert for these.
-  imbuePoison: 'uncommon', bolster: 'uncommon', unleash: 'uncommon', hex: 'uncommon',
-  conduct: 'uncommon', incite: 'uncommon', beckon: 'uncommon', stagger: 'uncommon',
-  enGarde: 'uncommon', penance: 'uncommon',
-  // Learned ability cards (Training Dojo): also never shopped — rarity inert but required.
-  twinShot: 'uncommon', concVenom: 'uncommon', shieldWall: 'uncommon', holdLine: 'uncommon',
-  arcaneSurge: 'uncommon', drainLife: 'uncommon', doom: 'uncommon', sacrifice: 'uncommon',
-  finale: 'uncommon', duet: 'uncommon', bloodbath: 'uncommon', whirlwind: 'uncommon',
-  sicEm: 'uncommon', mendBeast: 'uncommon', standingOvation: 'uncommon', bigTop: 'uncommon',
-  lunge: 'uncommon', flurry: 'uncommon', strongest: 'uncommon', deadlift: 'uncommon',
-};
+// #106: rarities come from cards.json, like every other card field — a TS side table
+// here would mean a JSON-authored card priced NaN in every shop. Imported directly (see
+// the note in data/cards.ts about why not via src/content).
+export const CARD_RARITY: Record<CardId, Rarity> = Object.freeze(
+  Object.fromEntries(Object.entries(CARD_RARITY_JSON).map(([id, raw]) =>
+    [id, (raw as { rarity?: Rarity }).rarity ?? 'common'])),
+) as Record<CardId, Rarity>;
 
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
 // buffed 1-MP heal-2 it is a starter card, not a shop purchase. Per-member ability
