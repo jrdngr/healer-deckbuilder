@@ -113,6 +113,15 @@ function validateAmount(
       } else list.forEach((x, i) => validateAmount(x, `${path}.${branch}[${i}]`, ctx, errs, bound));
       break;
     }
+    case 'div': {
+      // Exactly two operands, unlike the variadic forms above — a 1- or 3-element div is
+      // a typo whose meaning nobody should have to guess.
+      const list = a.div as Amount[];
+      if (!Array.isArray(list) || list.length !== 2) {
+        errs.add({ category: 'ref', file: ctx.file, path: `${path}.div`, message: 'div takes exactly two operands, [numerator, denominator]' });
+      } else list.forEach((x, i) => validateAmount(x, `${path}.div[${i}]`, ctx, errs, bound));
+      break;
+    }
     default: break; // enemyStat / gameStat / telegraphStat / the three boolean forms
   }
 }

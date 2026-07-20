@@ -23,10 +23,10 @@ import {
   RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, CHANNEL_MP,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
-  TOXICOLOGIST_BONUS, GRUDGE_DIVISOR, FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER,
-  DOOM_DAMAGE, BIG_TOP_DR, HOLD_LINE_BANK_MULT,
+  FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER,
+  DOOM_DAMAGE, BIG_TOP_DR,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
-  ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT, CHARGE_MAX,
+  ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT,
   POISON_BASE, POISON_TURNS, FERMENT_TURNS, FERMENT_GROWTH,
   HERO_POISON_BASE, HERO_POISON_TURNS, MARK_TURNS,
   TAUNT_TURNS, DEFENSE_AMOUNT, DEFENSE_TURNS, SHIELD_TURNS, SLOT,
@@ -70,7 +70,10 @@ import type {
 import { makeRng, shuffle, weightedPick } from '../rng';
 // #103: the relic/passive hook bus. Compiled once per Game (see _hooks below) so the
 // hot path is a Map.get, never an interpreter walk.
-import { compileHooks, EMPTY_HOOKS, RELIC_JSON, evalCondition, evalAmount, runActions, NATIVES } from '../content';
+import {
+  compileHooks, EMPTY_HOOKS, RELIC_JSON, MEMBER_JSON, SUBJECT_SCOPED_HOOKS,
+  evalCondition, evalAmount, runActions, NATIVES,
+} from '../content';
 import type { HookIndex } from '../content';
 import type { Rng } from '../rng';
 
@@ -448,9 +451,14 @@ export class Game {
     this.relics = new Set(config.relics ?? []);
     // #103: compile the owned relics' declared hooks ONCE. Nothing walks a generic
     // interpreter tree on a read path; a hook name with no owners is a Map miss.
-    this._hooks = compileHooks(
-      [...this.relics].map((id) => ({ owner: id, hooks: RELIC_JSON[id]?.hooks })),
-    );
+    // Relics own party-wide hooks; each seated hero owns their passive, tagged with their
+    // slot so it fires for them and nobody else (see CompiledValueHook.ownerSlot). Every
+    // seat is compiled, including absent ones — an absent seat is never alive, so its
+    // passive is unreachable by the same rule the old `m.id === …` checks relied on.
+    this._hooks = compileHooks([
+      ...[...this.relics].map((id) => ({ owner: id, hooks: RELIC_JSON[id]?.hooks })),
+      ...this.members.map((m) => ({ owner: m.id, ownerSlot: m.slot, hooks: MEMBER_JSON[m.id]?.hooks })),
+    ]);
     this.titheGained = 0;
     // Martyr's Icon (#22) is now once per FIGHT — reset each fight, not read from the
     // run-level spent set.
@@ -508,12 +516,22 @@ export class Game {
   // side-effecting hook here would break the preview == applied invariant that
   // _wardedDamage's comment (core.ts:1445-1450) exists to protect.
 
+  /**
+   * A member-owned hook (a hero passive) applies only to its own hero; a relic hook has no
+   * ownerSlot and applies to whoever the seam named. This one line is what replaces every
+   * `m.id === '…'` guard the engine used to carry.
+   */
+  _ownerMatches(ownerSlot: number | undefined, subject?: Member): boolean {
+    return ownerSlot === undefined || subject?.slot === ownerSlot;
+  }
+
   /** Sum every matching value hook's `add` onto `base`. */
   _hookValue(name: string, base: number, subject?: Member, card?: ResolvedCard): number {
     const hooks = this._hooks.value.get(name);
     if (!hooks) return base;
     let out = base;
-    for (const { hook } of hooks) {
+    for (const { hook, ownerSlot } of hooks) {
+      if (!this._ownerMatches(ownerSlot, subject)) continue;
       const ctx = { self: subject, card, vars: {} };
       if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
       // SET, then MUL, then ADD — the fixed order documented on ValueHook, so a hook
@@ -529,8 +547,9 @@ export class Game {
   _hookAnswer(name: string, expect: boolean, subject?: Member, card?: ResolvedCard): boolean {
     const hooks = this._hooks.value.get(name);
     if (!hooks) return false;
-    for (const { hook } of hooks) {
+    for (const { hook, ownerSlot } of hooks) {
       if (hook.answer !== expect) continue;
+      if (!this._ownerMatches(ownerSlot, subject)) continue;
       const ctx = { self: subject, card, vars: {} };
       if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
       return true;
@@ -542,7 +561,15 @@ export class Game {
   _hookEvent(name: string, ctx: { self?: Member; card?: ResolvedCard; vars: Record<string, unknown> }): void {
     const hooks = this._hooks.event.get(name);
     if (!hooks) return;
-    for (const { actions } of hooks) runActions(this, actions, ctx, NATIVES);
+    const subjectScoped = SUBJECT_SCOPED_HOOKS.includes(name);
+    for (const { actions, ownerSlot } of hooks) {
+      // On a subject-scoped hook a passive fires only when the event is about its own
+      // hero. On the others it fires regardless, and reaches its hero through `$owner` —
+      // Dark Bargain reacts to a death that is by definition somebody else's.
+      if (subjectScoped && !this._ownerMatches(ownerSlot, ctx.self)) continue;
+      const owner = ownerSlot === undefined ? undefined : this.members[ownerSlot];
+      runActions(this, actions, { ...ctx, owner }, NATIVES);
+    }
   }
 
   /**
@@ -552,8 +579,9 @@ export class Game {
   _hookConsume(name: string, subject?: Member): boolean {
     const hooks = this._hooks.value.get(name);
     if (!hooks) return false;
-    for (const { hook } of hooks) {
+    for (const { hook, ownerSlot } of hooks) {
       if (hook.answer !== true) continue;
+      if (!this._ownerMatches(ownerSlot, subject)) continue;
       const flag = hook.consumes;
       if (flag && (this as unknown as Record<string, boolean>)[flag]) continue;
       const ctx = { self: subject, vars: {} };
@@ -606,11 +634,10 @@ export class Game {
     const bloodBanner = this.bloodBannerTurns > 0 ? BLOOD_BANNER_BONUS : 0;
     // Penance (#75): a party-wide +auto (lasts penanceTurns enemy turns), its OWN field so
     // it stacks additively with Battle Hymn's hymnBonus (both summed here).
-    // Hero passives: Toxicologist (Ranger) — +auto vs a poisoned enemy; Grudge (Tank) —
-    // half the damage banked since his last strike rides this one.
-    const toxic = m.id === 'ranger' && this.enemy.poison > 0 ? TOXICOLOGIST_BONUS : 0;
-    const grudge = m.id === 'tank' ? Math.floor(m.bankedDamage / GRUDGE_DIVISOR) : 0;
-    return base + this.hymnBonus + this.penanceBonus + relicBonus + strike + bloodBanner + toxic + grudge;
+    // Hero passives (Toxicologist's poison bonus, Grudge's banked damage) ride the SAME
+    // modifyMemberDamage hook the relics use — they are member-owned, so each fires only
+    // for its own hero. That is what `relicBonus` already carries; the name is historical.
+    return base + this.hymnBonus + this.penanceBonus + relicBonus + strike + bloodBanner;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -1936,7 +1963,10 @@ export class Game {
       const w = this._wardedDamage(m, t.damage, t.ignoreDefense, t.type);
       // Riposte Master (Duelist passive): she ALWAYS counters — exactly like a standing
       // En Garde stance, but with no card and no timer. Fold her into the same path.
-      const ripostes = m.riposteTurns > 0 || m.id === 'duelist';
+      // En Garde's timed stance OR a permanent passive (the Duelist's Riposte Master),
+      // which is a separate boolean hook precisely so it never has to live in the timed
+      // field — see the `ripostes` note in hooks.ts.
+      const ripostes = m.riposteTurns > 0 || this._hookAnswer('ripostes', true, m);
       // En Garde (#74): capture the counter magnitude NOW — before this hit spends any
       // Shield — so the live auto-damage seam (Sharpen, Battle Hymn, Lone Wolf, injuries)
       // is read even on the very hit that consumes the block. 0 when nothing counters;
@@ -1954,9 +1984,7 @@ export class Game {
       }
       const hpBefore = m.hp; // Ossuary Bell (#66): the crossing is measured across this hit
       m.hp = Math.max(0, m.hp - w.dmg);
-      // Grudge: bank what the Tank soaks — doubled while Hold the Line stands (Dojo).
-      if (m.id === 'tank') m.bankedDamage += w.dmg * (m.holdLineTurns > 0 ? HOLD_LINE_BANK_MULT : 1);
-      // #103: the damage-taken seam. Fires BEFORE death resolution, which is what banking
+      // #103: the damage-taken seam. The Tank's Grudge banks what he soaks here. Fires BEFORE death resolution, which is what banking
       // wants — a lethal hit banks and then _killMember zeroes it, netting 0. Firing this
       // after the veto instead would leave a Martyr-saved Tank holding a bank he does not
       // hold today. The post-death moment is a separate seam (onMemberSurvived, below).
@@ -2052,23 +2080,14 @@ export class Game {
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
       this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
     }
-    // Arcane Battery (Mage passive): Charge is the Mage's own resource — only he banks
-    // +1 each turn before he can act. (Bolt is the sole consumer, so gating the tick to
-    // the Mage reframes the old universal tick as his identity, no gameplay delta.)
-    for (const m of this.members) {
-      if (m.alive && m.id === 'mage') m.charge = Math.min(CHARGE_MAX, m.charge + 1);
-    }
     this._drawTo(this.handSize);
-    // #103: the turn-start seam, fired once per LIVING member so a passive can key off its
-    // own holder. Placed after _drawTo deliberately: the Busker's extra draw must land on
-    // top of a filled hand, not be absorbed by the fill.
+    // #103: the turn-start seam, fired once per LIVING member so a passive keys off its own
+    // holder — the Mage banks Charge, the Busker draws an extra card. Placed after _drawTo
+    // deliberately: the Busker's extra draw must land on top of a filled hand, not be
+    // absorbed by the fill. (The Mage's Charge tick used to run just BEFORE the draw; the
+    // move is inert because nothing between the two reads Charge.)
     for (const m of this.members) {
       if (m.alive) this._hookEvent('onTurnStart', { self: m, vars: {} });
-    }
-    // Opening Act (Busker passive): a fielded, living Busker draws one extra card each turn.
-    if (this.members.some((m) => m.alive && m.id === 'skald')) {
-      const c = this._drawOne();
-      if (c != null) { this.hand.push(c); this._emit({ kind: 'draw', count: 1 }); }
     }
     this.cardsPlayedThisPhase = 0;
     this.typePlayedThisTurn = Game._zeroTypeCounts(); // per-turn type counters reset (#63)
@@ -2538,8 +2557,10 @@ export class Game {
       }
       const killed = this._damageEnemy(dmg, `${m.name}`);
       this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
-      // Grudge (Tank passive): the banked damage rode this strike (via memberDamage) — spent now.
-      if (m.id === 'tank') m.bankedDamage = 0;
+      // #103: the post-auto seam. The Tank's Grudge zeroes its bank here — the third and
+      // last of its three sites, distinct from the read (memberDamage, which spends it)
+      // and from the banking (onMemberDamaged, which fills it).
+      this._hookEvent('onAfterAutoAttack', { self: m, vars: { dmg } });
       if (killed) this._emit({ kind: 'defeatEnemy' });
       if (this.status !== 'playing') break; // a strike can finish the enemy
     }

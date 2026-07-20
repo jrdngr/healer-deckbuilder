@@ -25,8 +25,15 @@ export interface ActionCtx {
    * cast at the point of use.
    */
   card?: { id: string; name: string };
-  /** The acting member — an ability's caster. */
+  /** The acting member — an ability's caster, or the member an event is about. */
   self?: Member;
+  /**
+   * The hero whose passive is running, for member-owned hooks (#103). Distinct from
+   * `self` precisely when a passive reacts to something that happened to someone ELSE —
+   * on `onMemberDied`, `self` is the corpse and `owner` is the Warlock feeding on it.
+   * Undefined for relic hooks and for anything outside the hook bus.
+   */
+  owner?: Member;
   /** The picked slot for a `target: 'single'` play. */
   target?: number | null;
   /** Runtime bindings created by `let`/`letStr`/`bind`. */
@@ -147,6 +154,8 @@ export function resolveSelector(game: Game, sel: Selector, ctx: ActionCtx): Memb
       if (hurt.length === 0) return [];
       return [hurt.reduce((x, y) => (y.hp / y.maxHP < x.hp / x.maxHP ? y : x))];
     }
+    // The hero whose passive is running (#103) — empty for relic hooks, which have none.
+    case '$owner': return ctx.owner ? [ctx.owner] : [];
     case '$enemy': return [];
     default: return [];
   }
@@ -216,6 +225,10 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
   if ('holyHealBonus' in a) return ctx.card ? game._holyHealBonus(ctx.card as never) : 0;
   if ('sum' in a) return (a.sum as Amount[]).reduce<number>((s, x) => s + evalAmount(game, x, ctx), 0);
   if ('mul' in a) return (a.mul as Amount[]).reduce<number>((s, x) => s * evalAmount(game, x, ctx), 1);
+  if ('div' in a) {
+    const [n, d] = (a.div as [Amount, Amount]).map((x) => evalAmount(game, x, ctx));
+    return d === 0 ? 0 : n / d; // a tuning constant set to 0 should zero the term, not poison it with Infinity
+  }
   if ('max' in a) return Math.max(...(a.max as Amount[]).map((x) => evalAmount(game, x, ctx)));
   // clampMin BEFORE min: they are distinct forms and clampMin must not be mistaken
   // for the variadic min. (Its second field is `atLeast` precisely so they cannot
@@ -231,9 +244,38 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
   return 0;
 }
 
+/**
+ * Does this member carry this status tag?
+ *
+ * The tag and the field it lives in DO NOT always share a name. Roughly half the tags are
+ * stored as `<tag>Turns` with no bare `<tag>` field at all — `guard`, `strike`, `mark`,
+ * `boar` and `holdLine` — and a naive `m[tag]` read returns undefined for every one of
+ * them, which `Boolean()` then quietly turns into "no status". That is a silent false, the
+ * worst possible failure for a gate: the content is right, the tag is in STATUS_TAGS, the
+ * validator is happy, and the condition simply never fires. It cost a real bug here (the
+ * Tank's Hold the Line double-banking read as single) and the test suite caught it only
+ * because #99 pins the doubled number exactly.
+ *
+ * So the lookup is a chain, and `statusFieldFor` exposes it to the test that asserts every
+ * declared tag resolves to something real.
+ */
+export function statusFieldFor(m: Member, tag: string): string | null {
+  const rec = m as unknown as Record<string, unknown>;
+  if (rec[tag] !== undefined) return tag;
+  if (rec[`${tag}Turns`] !== undefined) return `${tag}Turns`;
+  return null;
+}
+
+export function memberHasStatus(m: Member, tag: string): boolean {
+  const field = statusFieldFor(m, tag);
+  if (field == null) return false;
+  const v = (m as unknown as Record<string, unknown>)[field];
+  return typeof v === 'number' ? v > 0 : Boolean(v);
+}
+
 /** The amount branches that need no Game — the run layer's whole vocabulary. */
 export const STATIC_AMOUNT_KEYS: readonly string[] = Object.freeze([
-  'tune', 'sum', 'mul', 'max', 'min', 'floor', 'clampMin',
+  'tune', 'sum', 'mul', 'div', 'max', 'min', 'floor', 'clampMin',
 ]);
 
 /**
@@ -255,6 +297,7 @@ export function evalStaticAmount(amt: Amount): number | null {
   if ('tune' in a) return TUNING[a.tune as string] ?? 0;
   if ('sum' in a) { const v = all(a.sum); return v && v.reduce((s, x) => s + x, 0); }
   if ('mul' in a) { const v = all(a.mul); return v && v.reduce((s, x) => s * x, 1); }
+  if ('div' in a) { const v = all(a.div); return v && (v[1] === 0 ? 0 : v[0] / v[1]); }
   if ('max' in a) { const v = all(a.max); return v && Math.max(...v); }
   if ('min' in a) { const v = all(a.min); return v && Math.min(...v); }
   if ('floor' in a) { const v = evalStaticAmount(a.floor as Amount); return v == null ? null : Math.floor(v); }
@@ -294,8 +337,7 @@ export function evalCondition(game: Game, cond: Condition, ctx: ActionCtx, subje
   if ('hasStatus' in c) {
     const m = pick(c.on);
     if (!m) return false;
-    const v = (m as unknown as Record<string, unknown>)[c.hasStatus as string];
-    return typeof v === 'number' ? v > 0 : Boolean(v);
+    return memberHasStatus(m, c.hasStatus as string);
   }
   if ('enemyHasStatus' in c) {
     const v = (game.enemy as unknown as Record<string, unknown>)[c.enemyHasStatus as string];
@@ -581,7 +623,10 @@ export function runActions(
         const cap = action.cap ? evalAmount(game, action.cap, ctx) : undefined;
         for (const m of resolveSelector(game, action.on, ctx)) {
           const rec = m as unknown as Record<string, number>;
-          const next = rec[action.stat] + amount;
+          // `mode: "set"` REPLACES rather than accumulates. The Tank's Grudge spends its
+          // whole bank on one strike and zeroes it; expressing that as an add would mean
+          // computing the negation of a value the action list cannot see.
+          const next = action.mode === 'set' ? amount : rec[action.stat] + amount;
           rec[action.stat] = cap != null ? Math.min(cap, next) : next;
         }
         break;

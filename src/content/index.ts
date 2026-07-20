@@ -49,7 +49,7 @@ export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/te
 export { NATIVES, NATIVE_NAMES } from './natives';
 export {
   compileHooks, EMPTY_HOOKS, VALUE_HOOKS, EVENT_HOOKS, RUN_HOOKS, ALL_HOOK_NAMES,
-  HOOK_CTX_VARS, isValueHookName, isEventHookName, isRunHookName,
+  HOOK_CTX_VARS, SUBJECT_SCOPED_HOOKS, isValueHookName, isEventHookName, isRunHookName,
 } from './hooks';
 export type { RunHookName } from './hooks';
 export { evalStaticAmount, isStaticAmount, STATIC_AMOUNT_KEYS } from './interpreter/run';

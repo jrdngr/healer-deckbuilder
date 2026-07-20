@@ -60,4 +60,39 @@ check('hook-sites: the damaged/survived split is intact',
   fired.has('onMemberDamaged') && fired.has('onMemberSurvived'),
   'both seams must exist independently');
 
+// --- the status-tag / member-field trap -------------------------------------
+//
+// A status TAG and the member FIELD holding it do not always share a name: `holdLine`
+// lives in `holdLineTurns`, and four other tags are the same shape. A naive `m[tag]` read
+// returns undefined for those, which coerces to "no status" — a silent false in a gate
+// that is otherwise fully valid content. That bug shipped into this very migration (the
+// Tank's Hold the Line double-banking read as single) and only #99's exact-number
+// assertion caught it.
+//
+// So: every tag a member can carry must resolve to a real field through the same lookup
+// the condition uses. The enemy-side tags are listed explicitly rather than skipped, so
+// adding a member-facing tag to that list is a deliberate act and not an oversight.
+import { Game } from '../../src/engine';
+import { defaultBattleConfig, STATUS_TAGS } from '../../src/constants';
+import { statusFieldFor } from '../../src/content/interpreter/run';
+
+// Tags that live on the ENEMY (or on the Game), never on a Member. `{hasStatus, on}` is
+// member-scoped, so these are correctly unresolvable there.
+const ENEMY_SIDE = ['vulnerable', 'stun', 'doom', 'heroPoison', 'empower', 'untargetable'];
+
+{
+  const g = new Game(1, defaultBattleConfig());
+  g.start();
+  const m = g.members[1];
+  const unresolved = (STATUS_TAGS as readonly string[])
+    .filter((t) => !ENEMY_SIDE.includes(t))
+    .filter((t) => statusFieldFor(m, t) == null);
+  eq('hook-sites: every member-facing status tag resolves to a real field',
+    unresolved.join(', '), '');
+  // Guard the guard: if the resolver started answering for everything, the check above
+  // would pass vacuously and the trap would be wide open again.
+  eq('hook-sites: the resolver still says no to a tag that does not exist',
+    statusFieldFor(m, 'definitelyNotAStatus'), null);
+}
+
 finish('content/hook-sites');

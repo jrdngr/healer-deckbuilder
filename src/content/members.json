@@ -9,6 +9,12 @@
     "passiveFlavor": {
       "name": "Toxicologist",
       "desc": "+2 auto damage while the enemy is poisoned."
+    },
+    "hooks": {
+      "modifyMemberDamage": {
+        "when": { "enemyHasStatus": "poison" },
+        "add": { "tune": "TOXICOLOGIST_BONUS" }
+      }
     }
   },
   "tank": {
@@ -21,6 +27,27 @@
     "passiveFlavor": {
       "name": "Grudge",
       "desc": "His next auto adds the damage he has soaked since his last strike, divided by 2."
+    },
+    "hooks": {
+      "modifyMemberDamage": {
+        "add": { "floor": { "div": [{ "stat": "bankedDamage", "of": "$self" }, { "tune": "GRUDGE_DIVISOR" }] } }
+      },
+      "onMemberDamaged": [
+        {
+          "op": "addStat",
+          "on": "$self",
+          "stat": "bankedDamage",
+          "amount": {
+            "mul": [
+              { "var": "dmg" },
+              { "if": { "hasStatus": "holdLine", "on": "$self" }, "then": { "tune": "HOLD_LINE_BANK_MULT" }, "else": 1 }
+            ]
+          }
+        }
+      ],
+      "onAfterAutoAttack": [
+        { "op": "addStat", "on": "$self", "stat": "bankedDamage", "amount": 0, "mode": "set" }
+      ]
     }
   },
   "mage": {
@@ -33,6 +60,11 @@
     "passiveFlavor": {
       "name": "Arcane Battery",
       "desc": "Only the Mage banks Charge — +1 each turn (max 5); Lightning Bolt spends it for +3 damage per Charge."
+    },
+    "hooks": {
+      "onTurnStart": [
+        { "op": "addStat", "on": "$self", "stat": "charge", "amount": 1, "cap": { "tune": "CHARGE_MAX" } }
+      ]
     }
   },
   "warlock": {
@@ -57,6 +89,16 @@
     "passiveFlavor": {
       "name": "Opening Act",
       "desc": "While fielded and alive, the Busker draws +1 card at the start of each turn."
+    },
+    "hooks": {
+      "onTurnStart": [
+        { "op": "draw", "count": 1, "bind": "drawn" },
+        {
+          "op": "if",
+          "when": { "nonZero": { "var": "drawn" } },
+          "then": [{ "op": "emit", "kind": "draw", "count": { "var": "drawn" } }]
+        }
+      ]
     }
   },
   "berserker": {
@@ -105,6 +147,9 @@
     "passiveFlavor": {
       "name": "Riposte Master",
       "desc": "She always counterattacks: every hit that strikes her (fully blocked hits included) is answered for her live auto damage — no card, no timer."
+    },
+    "hooks": {
+      "ripostes": { "answer": true }
     }
   },
   "flagellant": {

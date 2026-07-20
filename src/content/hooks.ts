@@ -36,6 +36,13 @@ export const VALUE_HOOKS = [
   // is what you own. A boolean answer rather than a string-returning `logVariant` hook
   // kind — one use does not justify a third hook category.
   'narratesDoubleStrike',
+  // The Duelist's Riposte Master. A BOOLEAN HOOK, never a permanent `riposteTurns` — that
+  // field is timed and has four other owners (it decays each enemy turn, the death
+  // pipeline zeroes it, Resurrect clears it, and En Garde plain-assigns it), so parking a
+  // permanent property in it would let a single En Garde cast overwrite her passive with a
+  // 3-turn timer and delete it for good when that expired. Never overload a timed field to
+  // express a permanent property.
+  'ripostes',
 ] as const;
 export type ValueHookName = (typeof VALUE_HOOKS)[number];
 
@@ -58,6 +65,10 @@ export type ValueHookName = (typeof VALUE_HOOKS)[number];
 export const EVENT_HOOKS = [
   'onAbilityCast', 'onHealApplied', 'onHealCard', 'onReshuffle',
   'onMemberDamaged', 'onMemberSurvived', 'onRest', 'onMemberDied', 'onTurnStart',
+  // After a member's party-phase auto resolves. The Tank's Grudge SPENDS its bank on the
+  // strike (memberDamage folds it in) and zeroes it here — a third site distinct from the
+  // read and from the banking.
+  'onAfterAutoAttack',
 ] as const;
 export type EventHookName = (typeof EVENT_HOOKS)[number];
 
@@ -86,6 +97,7 @@ export const HOOK_CTX_VARS: Record<string, readonly string[]> = Object.freeze({
   onRest: ['regen'],
   onMemberDied: [],
   onTurnStart: [],
+  onAfterAutoAttack: ['dmg'],
 });
 
 export interface ValueHook {
@@ -150,9 +162,33 @@ export const ALL_HOOK_NAMES: readonly string[] = Object.freeze(
   [...VALUE_HOOKS, ...EVENT_HOOKS, ...RUN_HOOKS].sort(),
 );
 
-/** One hook plus the id that declared it, for diagnostics and consumable flags. */
-export interface CompiledValueHook { owner: string; hook: ValueHook }
-export interface CompiledEventHook { owner: string; actions: Action[] }
+/**
+ * One hook plus who declared it.
+ *
+ * `ownerSlot` is what makes hero passives expressible at all. A relic hook is owned by the
+ * PARTY and applies to whoever the seam names; a passive is owned by ONE HERO and must
+ * apply only to them — the inline form was literally `m.id === 'ranger'`. So a compiled
+ * hook with an ownerSlot fires only when the seam's member is that slot, which reproduces
+ * the id check exactly while keeping the id out of the engine. Relic hooks leave it
+ * undefined and keep applying to everyone.
+ *
+ * Slot, not member id: slots are stable for the life of a Game, ids are not unique in
+ * principle, and the seam already has a Member in hand.
+ */
+export interface CompiledValueHook { owner: string; ownerSlot?: number; hook: ValueHook }
+export interface CompiledEventHook { owner: string; ownerSlot?: number; actions: Action[] }
+
+/**
+ * Hooks where a member-owned hook fires only when the event's member IS the owner —
+ * "this happened TO me". The default for anything not listed is "this happened to
+ * someone; I react", which is what Dark Bargain needs: the Warlock reacts to a death that
+ * by definition is not his own. Getting this backwards makes a reaction passive
+ * unreachable, since its own trigger excludes it.
+ */
+export const SUBJECT_SCOPED_HOOKS: readonly string[] = Object.freeze([
+  'onTurnStart', 'onMemberDamaged', 'onMemberSurvived', 'onAbilityCast',
+  'onAfterAutoAttack',
+]);
 
 export interface HookIndex {
   value: Map<string, CompiledValueHook[]>;
@@ -163,19 +199,21 @@ export interface HookIndex {
  * Build the per-Game index from the hook blocks of everything currently owned
  * (relics held, heroes fielded). Called once at construction.
  */
-export function compileHooks(blocks: Array<{ owner: string; hooks?: HookBlock }>): HookIndex {
+export function compileHooks(
+  blocks: Array<{ owner: string; ownerSlot?: number; hooks?: HookBlock }>,
+): HookIndex {
   const value = new Map<string, CompiledValueHook[]>();
   const event = new Map<string, CompiledEventHook[]>();
-  for (const { owner, hooks } of blocks) {
+  for (const { owner, ownerSlot, hooks } of blocks) {
     if (!hooks) continue;
     for (const [name, def] of Object.entries(hooks)) {
       if (Array.isArray(def)) {
         const list = event.get(name) ?? [];
-        list.push({ owner, actions: def });
+        list.push({ owner, ownerSlot, actions: def });
         event.set(name, list);
       } else {
         const list = value.get(name) ?? [];
-        list.push({ owner, hook: def });
+        list.push({ owner, ownerSlot, hook: def });
         value.set(name, list);
       }
     }

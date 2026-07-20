@@ -27,6 +27,13 @@ export interface RelicJson {
 export interface MemberJson {
   id: string; name: string; slot: number; maxHP: number; damage: number; ability: string;
   passiveFlavor?: { name: string; desc: string };
+  /**
+   * #103: the hero's passive as data. Compiled into the per-Game hook index tagged with
+   * the hero's SLOT, so it fires for them and nobody else — which is what the inline
+   * `m.id === '…'` guards used to do. Absent means the passive is still engine code
+   * (`stuntDouble`) or the hero has none.
+   */
+  hooks?: HookBlock;
 }
 
 export const RELIC_JSON = Object.freeze(relicJson as unknown as Record<string, RelicJson>);
@@ -45,6 +52,74 @@ export const ENEMY_JSON_IDS: readonly string[] = Object.freeze(Object.keys(ENEMY
 
 const RARITIES = ['common', 'uncommon', 'rare'];
 
+/**
+ * Validate one `hooks` block, wherever it came from. Relics and hero passives declare
+ * behaviour in exactly the same shape, so they get exactly the same checks — a passive
+ * with a typo'd hook name or a value/event mixup fails the same way a relic's does.
+ */
+function validateHookBlock(
+  hooks: HookBlock, file: string, id: string, errs: Parameters<NonNullable<Parameters<typeof registerCheck>[0]['run']>>[1],
+): void {
+  const parsed = HookBlockSchema.safeParse(hooks);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      errs.add({ category: 'schema', file,
+        path: `${id}.hooks${issue.path.map((p) => `.${String(p)}`).join('')}`,
+        message: issue.message });
+    }
+    return;
+  }
+  for (const [name, def] of Object.entries(hooks)) {
+    const path = `${id}.hooks.${name}`;
+    // A hook name the engine never fires is dead content that looks alive.
+    if (!isValueHookName(name) && !isEventHookName(name) && !isRunHookName(name)) {
+      errs.unknown('ref', file, path, 'hook', name, ALL_HOOK_NAMES);
+      continue;
+    }
+    // Run-layer hooks are read by `Run`, which has no Game — so their amounts must be
+    // evaluable without one. An amount reaching into combat state would silently read 0
+    // at runtime and quietly zero a shop price or a gold reward.
+    if (isRunHookName(name)) {
+      if (Array.isArray(def)) {
+        errs.add({ category: 'ref', file, path,
+          message: `${name} is a run-layer value hook and takes {when, set, mul, add}, not an action list` });
+        continue;
+      }
+      if (def.when) {
+        errs.add({ category: 'ref', file, path,
+          message: `${name} runs outside a fight, where no condition can be evaluated — drop "when"` });
+      }
+      for (const key of ['set', 'mul', 'add'] as const) {
+        const amt = def[key];
+        if (amt !== undefined && !isStaticAmount(amt)) {
+          errs.add({ category: 'ref', file, path: `${path}.${key}`,
+            message: `run-layer hooks have no Game, so this must be a number or an arithmetic tree over ${STATIC_AMOUNT_KEYS.join('/')} — got something needing combat state` });
+        }
+      }
+      continue;
+    }
+    // A VALUE hook must not be an action list and vice versa — the two are dispatched
+    // differently and swapping them would silently do nothing.
+    if (Array.isArray(def) && isValueHookName(name)) {
+      errs.add({ category: 'ref', file, path,
+        message: `${name} is a value hook and takes {when, set, mul, add, answer}, not an action list` });
+    }
+    if (!Array.isArray(def) && isEventHookName(name)) {
+      errs.add({ category: 'ref', file, path, message: `${name} is an event hook and takes an action list` });
+    }
+    if (Array.isArray(def)) {
+      validateActions(def as Action[], {
+        file, basePath: path,
+        tuningKeys: CONTENT_TUNING_KEYS, natives: NATIVE_NAMES, declaredFields: [],
+        // The seam's payload is pre-bound, so a hook may read {var: "hpBefore"} — and ONLY
+        // the names its own seam actually provides. Reading a var from a different hook's
+        // payload is a startup error rather than a silent 0.
+        initialBindings: HOOK_CTX_VARS[name] ?? [],
+      }, errs);
+    }
+  }
+}
+
 registerCheck({
   name: 'relics.json',
   run(_b, errs) {
@@ -62,66 +137,7 @@ registerCheck({
       for (const e of renderTemplate(r.desc, { fields: r as unknown as Record<string, unknown>, tuning: CONTENT_TUNING }).errors) {
         errs.add({ category: 'template', file: 'relics.json', path: `${id}.desc`, message: e });
       }
-      if (r.hooks) {
-        const parsed = HookBlockSchema.safeParse(r.hooks);
-        if (!parsed.success) {
-          for (const issue of parsed.error.issues) {
-            errs.add({ category: 'schema', file: 'relics.json',
-              path: `${id}.hooks${issue.path.map((p) => `.${String(p)}`).join('')}`,
-              message: issue.message });
-          }
-          continue;
-        }
-        for (const [name, def] of Object.entries(r.hooks)) {
-          // A hook name the engine never fires is dead content that looks alive.
-          if (!isValueHookName(name) && !isEventHookName(name) && !isRunHookName(name)) {
-            errs.unknown('ref', 'relics.json', `${id}.hooks.${name}`, 'hook', name, ALL_HOOK_NAMES);
-            continue;
-          }
-          // Run-layer hooks are read by `Run`, which has no Game — so their amounts must
-          // be evaluable without one. An amount reaching into combat state would silently
-          // read 0 at runtime and quietly zero a shop price or a gold reward.
-          if (isRunHookName(name)) {
-            if (Array.isArray(def)) {
-              errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
-                message: `${name} is a run-layer value hook and takes {when, set, mul, add}, not an action list` });
-              continue;
-            }
-            if (def.when) {
-              errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
-                message: `${name} runs outside a fight, where no condition can be evaluated — drop "when"` });
-            }
-            for (const key of ['set', 'mul', 'add'] as const) {
-              const amt = def[key];
-              if (amt !== undefined && !isStaticAmount(amt)) {
-                errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}.${key}`,
-                  message: `run-layer hooks have no Game, so this must be a number or an arithmetic tree over ${STATIC_AMOUNT_KEYS.join('/')} — got something needing combat state` });
-              }
-            }
-            continue;
-          }
-          // A VALUE hook must not be an action list and vice versa — the two are
-          // dispatched differently and swapping them would silently do nothing.
-          if (Array.isArray(def) && isValueHookName(name)) {
-            errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
-              message: `${name} is a value hook and takes {when, add, answer}, not an action list` });
-          }
-          if (!Array.isArray(def) && isEventHookName(name)) {
-            errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
-              message: `${name} is an event hook and takes an action list` });
-          }
-          if (Array.isArray(def)) {
-            validateActions(def as Action[], {
-              file: 'relics.json', basePath: `${id}.hooks.${name}`,
-              tuningKeys: CONTENT_TUNING_KEYS, natives: NATIVE_NAMES, declaredFields: [],
-              // The seam's payload is pre-bound, so a hook may read {var: "hpBefore"} —
-              // and ONLY the names its own seam actually provides. Reading a var from a
-              // different hook's payload is a startup error rather than a silent 0.
-              initialBindings: HOOK_CTX_VARS[name] ?? [],
-            }, errs);
-          }
-        }
-      }
+      if (r.hooks) validateHookBlock(r.hooks, 'relics.json', id, errs);
     }
   },
 });
@@ -144,6 +160,8 @@ registerCheck({
       if (!m.ability) {
         errs.add({ category: 'ref', file: 'members.json', path: `${id}.ability`, message: 'ability is required' });
       }
+      // A passive gets the same treatment a relic's hooks get — same shape, same checks.
+      if (m.hooks) validateHookBlock(m.hooks, 'members.json', id, errs);
     }
   },
 });

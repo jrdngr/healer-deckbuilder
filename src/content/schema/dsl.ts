@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 export const SELECTOR_NAMES = [
   '$target', '$self', '$targetOrSelf', '$allLiving', '$allLivingOther',
-  '$mostWoundedOther', '$mostWounded', '$lowestHp', '$lowestHpFrac', '$enemy',
+  '$mostWoundedOther', '$mostWounded', '$lowestHp', '$lowestHpFrac', '$owner', '$enemy',
 ] as const;
 export type SelectorName = (typeof SELECTOR_NAMES)[number];
 
@@ -59,6 +59,8 @@ export type Amount =
   | { min: Amount[] }
   /** A conditional amount — the arithmetic counterpart to the `if` op. */
   | { if: Condition; then: Amount; else: Amount }
+  /** `a / b`, the counterpart to {mul}. Division by 0 yields 0 rather than Infinity. */
+  | { div: [Amount, Amount] }
   | { floor: Amount }
   // `atLeast`, not `min`: a second key named `min` would collide with the {min: […]}
   // form, making the shape ambiguous to both the interpreter and describeAmountBranch.
@@ -68,7 +70,7 @@ export type Amount =
 export const AMOUNT_KEYS = [
   'tune', 'card', 'stat', 'auto', 'abilityPower', 'missingHp', 'var', 'enemyStat',
   'telegraphStat', 'gameStat', 'emptySeats', 'vulnerable', 'bloodCost', 'sanguineSurcharge', 'holyHealBonus',
-  'sum', 'mul', 'max', 'min', 'floor', 'clampMin', 'if',
+  'sum', 'mul', 'div', 'max', 'min', 'floor', 'clampMin', 'if',
 ] as const;
 
 /**
@@ -181,7 +183,7 @@ export type Action =
   | { op: 'revive'; on: Selector; hpFraction: number }
   | { op: 'purge'; scope: 'party'; bind?: string }
   | { op: 'telegraph'; mode: 'reduceDamage' | 'retargetTo' | 'stun'; amount?: Amount; to?: Selector; floor?: number }
-  | { op: 'addStat'; on: Selector; stat: string; amount: Amount; cap?: Amount }
+  | { op: 'addStat'; on: Selector; stat: string; amount: Amount; cap?: Amount; mode?: 'add' | 'set' }
   | { op: 'queueDelayed'; kind: string }
   | { op: 'regenEnded'; on: Selector; consumed: boolean }
   | { op: 'healCardSplash'; primary: Selector; amount: Amount }
@@ -227,6 +229,7 @@ export const AmountSchema: z.ZodType<Amount> = z.lazy(() => z.union([
   z.strictObject({ mul: z.array(AmountSchema) }),
   z.strictObject({ max: z.array(AmountSchema) }),
   z.strictObject({ min: z.array(AmountSchema) }),
+  z.strictObject({ div: z.tuple([AmountSchema, AmountSchema]) }),
   z.strictObject({ if: ConditionSchema, then: AmountSchema, else: AmountSchema }),
   z.strictObject({ floor: AmountSchema }),
   z.strictObject({ clampMin: AmountSchema, atLeast: z.number() }),
@@ -277,7 +280,7 @@ export const ActionSchema: z.ZodType<Action> = z.lazy(() => z.discriminatedUnion
   z.strictObject({ op: z.literal('revive'), on: SelectorSchema, hpFraction: z.number() }),
   z.strictObject({ op: z.literal('purge'), scope: z.literal('party'), bind: z.string().optional() }),
   z.strictObject({ op: z.literal('telegraph'), mode: z.enum(['reduceDamage', 'retargetTo', 'stun']), amount: AmountSchema.optional(), to: SelectorSchema.optional(), floor: z.number().optional() }),
-  z.strictObject({ op: z.literal('addStat'), on: SelectorSchema, stat: z.string(), amount: AmountSchema, cap: AmountSchema.optional() }),
+  z.strictObject({ op: z.literal('addStat'), on: SelectorSchema, stat: z.string(), amount: AmountSchema, cap: AmountSchema.optional(), mode: z.enum(['add', 'set']).optional() }),
   z.strictObject({ op: z.literal('queueDelayed'), kind: z.string() }),
   z.strictObject({ op: z.literal('regenEnded'), on: SelectorSchema, consumed: z.boolean() }),
   z.strictObject({ op: z.literal('healCardSplash'), primary: SelectorSchema, amount: AmountSchema }),
