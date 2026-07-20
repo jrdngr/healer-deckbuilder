@@ -151,14 +151,10 @@ Game.prototype._applyCard = function (card, target) {
       }
       case 'resurrect': {
         const m = this.members[target as number];
-        m.alive = true;
-        m.hp = Math.ceil(m.maxHP / 2);
-        m.regen = 0; m.bloomBurst = 0;
-        m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
-        m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
-        m.empowerBonus = 0; m.riposte = false; m.riposteTurns = 0; // Riposte / En Garde stance cleared on revive
         // Reworked (#18): 6 MP -> 4, revive to 50% max HP. (The return-behind-a-Shield
-        // rider was removed in the content-cut pass.)
+        // rider was removed in the content-cut pass.) The field-clearing list lives in
+        // _reviveMember (#100) so this arm and the content interpreter cannot drift.
+        this._reviveMember(m, 0.5);
         this._log(`${m.name} is resurrected to ${m.hp} HP.`, 'status');
         this._emit({ kind: 'resurrect', slot: m.slot, hp: m.hp });
         break;
@@ -445,12 +441,9 @@ Game.prototype._applyCard = function (card, target) {
         // Hero Poison (#87 — the sole answer to the Gobbler's Sludge and the venomous
         // normal). Written as a general purge so new party/member debuffs are covered.
         // Always playable; a no-op if nothing is afflicted (the animator still gets an event).
-        let had = this.woundTurns > 0;
-        this.woundTurns = 0;
-        for (const m of this.members) {
-          if (m.poison > 0 || m.poisonTurns > 0) { had = true; m.poison = 0; m.poisonTurns = 0; }
-          if (m.markTurns > 0) { had = true; m.markTurns = 0; } // Curse/Mark cleared (#87)
-        }
+        // The sweep lives in _purgeParty (#100) so this arm and the content
+        // interpreter share one definition of "every negative party status".
+        const had = this._purgeParty();
         this._log(had ? 'Cleanse purges the party — all afflictions lifted.' : 'Cleanse finds nothing to purge.', 'status');
         this._emit({ kind: 'cleanse', slot: SLOT.CENTER });
         break;

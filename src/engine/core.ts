@@ -1355,6 +1355,35 @@ export class Game {
     this._emit({ kind: 'heroPoisonApplied', slot: m.slot, amount: perTurn, poison: m.poison });
   }
 
+  // Revive a dead member at `hpFraction` of their max, clearing every buff and stance
+  // (#18). Extracted from the Resurrect card arm (#100) so the card switch and the
+  // content interpreter share ONE field list — a revive that forgets a field is a
+  // buff surviving death, and having the list in two places guarantees that drift.
+  // State only: the log line and the event belong to the effect that called this.
+  _reviveMember(m: Member, hpFraction: number): void {
+    m.alive = true;
+    m.hp = Math.ceil(m.maxHP * hpFraction);
+    m.regen = 0; m.bloomBurst = 0;
+    m.taunt = 0; m.defense = 0; m.defenseAmount = 0; m.charge = 0; m.drumPrimed = false;
+    m.strikeBonus = 0; m.strikeTurns = 0; m.guardDR = 0; m.guardTurns = 0; // #62 buffs cleared on revive
+    m.empowerBonus = 0; m.riposte = false; m.riposteTurns = 0; // Riposte / En Garde stance cleared on revive
+  }
+
+  // Lift every negative party status: the party-wide Hex plus each member's Hero
+  // Poison and Mark (#87). Returns whether anything was actually afflicted, which the
+  // caller uses to pick its log line. Extracted from the Cleanse arm (#100) for the
+  // same reason as _reviveMember — written as a general purge so a new debuff is
+  // covered by adding it here, once.
+  _purgeParty(): boolean {
+    let had = this.woundTurns > 0;
+    this.woundTurns = 0;
+    for (const m of this.members) {
+      if (m.poison > 0 || m.poisonTurns > 0) { had = true; m.poison = 0; m.poisonTurns = 0; }
+      if (m.markTurns > 0) { had = true; m.markTurns = 0; }
+    }
+    return had;
+  }
+
   // Hero Poison (#87) tick — mirrors the enemy poison tick, run at the enemy-phase
   // boundary. Each poisoned living hero takes its magnitude RAW (past Defense/Guard/
   // Shield — Cleanse is the only answer), then the duration decays and the magnitude

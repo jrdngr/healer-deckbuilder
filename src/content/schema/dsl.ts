@@ -54,7 +54,9 @@ export type Amount =
   | { max: Amount[] }
   | { min: Amount[] }
   | { floor: Amount }
-  | { clampMin: Amount; min: number };
+  // `atLeast`, not `min`: a second key named `min` would collide with the {min: […]}
+  // form, making the shape ambiguous to both the interpreter and describeAmountBranch.
+  | { clampMin: Amount; atLeast: number };
 
 /** The single key that decides which amount branch an object is. */
 export const AMOUNT_KEYS = [
@@ -193,7 +195,7 @@ export const AmountSchema: z.ZodType<Amount> = z.lazy(() => z.union([
   z.strictObject({ max: z.array(AmountSchema) }),
   z.strictObject({ min: z.array(AmountSchema) }),
   z.strictObject({ floor: AmountSchema }),
-  z.strictObject({ clampMin: AmountSchema, min: z.number() }),
+  z.strictObject({ clampMin: AmountSchema, atLeast: z.number() }),
 ]));
 
 export const ConditionSchema: z.ZodType<Condition> = z.lazy(() => z.union([
