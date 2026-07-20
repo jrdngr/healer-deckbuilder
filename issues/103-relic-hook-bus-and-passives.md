@@ -1,6 +1,6 @@
 # Issue 103 — Relic hook bus, run-layer hooks, `relics.json`, and hero passives
 
-- **Status:** 🔨 Partially done (2026-07-20 — relics.json and members.json landed with #106; the HOOK BUS is the remaining work)
+- **Status:** 🔨 Partially done (2026-07-20 — metadata + the hook bus with 11 relics migrated; 8 relics and all 11 hero passives remain)
 - **Phase:** content-migration (phase 3 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — in particular **A7**, all 21 relics with not-owned control cases, and
@@ -254,3 +254,35 @@ hook index that keeps `memberDamage` off a generic interpreter walk.
   `core.ts:2441` (drum-doubling log text branches on `hasRelic`).
 - `core.ts:1877` Tank Grudge *banking* is a third, separate site from the read at `:540`
   and the reset at `:2455`.
+
+## Hook bus landed (2026-07-20)
+
+The bus exists and 11 relics run through it. **Perf gate passed, measured not assumed:**
+the pre-hook engine reads 0.57–0.60s on `npm run sim -- 200 1` and the hooked engine
+0.58–0.62s — the compiled index costs nothing. The apparent regression against #100's
+0.46s baseline is fixed per-process startup (content parse + validation, ~72ms,
+dominated by module init rather than zod); marginal per-seed cost is identical at
+N=200/1000/2000.
+
+**Migrated (11):** `vanguardsBanner`, `loneWolf` (modifyMemberDamage) · `rustyCrown`
+(modifyEnemyAttack) · `fieldTriage` (modifyHealAmount) · `reliquaryOfLight`
+(modifyCardHealBonus) · `venomGland` (modifyPoisonTurns) · `pactOfSilence`
+(modifyPassiveMp + allowRest) · `lantern` (revealHidden, both sites) · `chantersIdol`
+(channelExempt) · `martyrsIcon` (vetoDeath, consuming) · `warDrum` (onAbilityCast — the
+first EVENT hook, proving that half works).
+
+**Deliberately not hooked:** `focusStone` and `warband` apply in the Game *constructor*,
+before the index compiles. They stay constructor reads, and the hook-name list omits
+`modifyMaxMana`/`modifyMaxHp` so nothing declares a hook the engine never fires.
+
+## Still outstanding
+
+- **8 relics** with inline behaviour: `beaconOfSecondSun`, `twinCenser`, `prayerBeads`,
+  `ossuaryBell`, `pilgrimsFlask` (engine) and `hagglersCharm`, `surgeonsThread`,
+  `beggarsBowl` (run layer — these need the run-side hook set, which does not exist yet).
+- **All 11 hero passives.** None have moved. The three carried-forward warnings above
+  still apply, especially the Duelist.
+- The two easily-missed sites: `effects.ts:486` is now visible as a `{if, hasRelic}`
+  amount inside `abilities.json` rather than hidden in a switch arm, but it is still a
+  relic check living in ability content rather than on the bus. `core.ts:2441` (the
+  drum-doubling log text) is untouched.

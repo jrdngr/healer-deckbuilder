@@ -93,11 +93,32 @@ name the nearest valid identifier when you typo one.
 - **Status effects stay engine code**, referenced by `tag`. Adding a genuinely new
   status means adding a writer to `STATUS_WRITERS` in `src/content/interpreter/run.ts`.
 
+### Relic behaviour — the hook bus
+
+Relics may declare behaviour in `relics.json` under `hooks`. Two kinds:
+
+```json
+"vanguardsBanner": {
+  "hooks": { "modifyMemberDamage": { "when": { "hpFull": "$self" }, "add": { "tune": "VANGUARD_BONUS" } } }
+},
+"warDrum": {
+  "hooks": { "onAbilityCast": [ { "op": "status", "on": "$self", "tag": "drumPrimed", "mode": "set" } ] }
+}
+```
+
+- **Value hooks** (`modifyMemberDamage`, `modifyEnemyAttack`, `modifyHealAmount`,
+  `modifyCardHealBonus`, `modifyPoisonTurns`, `modifyPassiveMp`, `allowRest`,
+  `channelExempt`, `revealHidden`, `vetoDeath`) take `{when?, add?, answer?, consumes?}`
+  and **must be pure reads** — `memberDamage` feeds the telegraph preview.
+- **Event hooks** (`onAbilityCast`, `onHealApplied`, `onHealCard`, `onReshuffle`,
+  `onMemberDamaged`, `onRest`, `onMemberDied`, `onTurnStart`) take an action list.
+
+Hooks compile into a per-`Game` index once, so an unhooked read is a `Map` miss.
+
 ### What is still code
 
-Relic behaviour and hero passives are still inline engine checks (the `hasRelic` sites
-and the `m.id ===` branches). Their metadata is JSON; their effects are not. That is
-the remaining gap — tracked in #103.
+Eight relics still have inline behaviour, and **all 11 hero passives** do. Their
+metadata is JSON; their effects are not. Tracked in #103.
 
 ### Validation
 

@@ -36,5 +36,5 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 103 | 🔨 Partial | [Relic hook bus and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | — | metadata landed; the hook bus is the remaining work |
+| 103 | 🔨 Partial | [Relic hook bus and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | — | bus built, 11 relics migrated; 8 relics + 11 hero passives remain |
 | 107 | 📋 Planned | [Two inconsistencies surfaced by the characterization pass](./issues/107-characterization-findings.md) | cleanup | — | findings from #99 (taunt log text, gold-return convention) |
