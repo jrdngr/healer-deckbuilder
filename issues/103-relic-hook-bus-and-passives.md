@@ -262,27 +262,140 @@ the pre-hook engine reads 0.57–0.60s on `npm run sim -- 200 1` and the hooked 
 0.58–0.62s — the compiled index costs nothing. The apparent regression against #100's
 0.46s baseline is fixed per-process startup (content parse + validation, ~72ms,
 dominated by module init rather than zod); marginal per-seed cost is identical at
-N=200/1000/2000.
+N=200/1000/2000 (0.66ms/seed).
 
 **Migrated (11):** `vanguardsBanner`, `loneWolf` (modifyMemberDamage) · `rustyCrown`
 (modifyEnemyAttack) · `fieldTriage` (modifyHealAmount) · `reliquaryOfLight`
 (modifyCardHealBonus) · `venomGland` (modifyPoisonTurns) · `pactOfSilence`
 (modifyPassiveMp + allowRest) · `lantern` (revealHidden, both sites) · `chantersIdol`
-(channelExempt) · `martyrsIcon` (vetoDeath, consuming) · `warDrum` (onAbilityCast — the
-first EVENT hook, proving that half works).
+(channelExempt) · `martyrsIcon` (vetoDeath, consuming) · `warDrum` (onAbilityCast).
 
 **Deliberately not hooked:** `focusStone` and `warband` apply in the Game *constructor*,
-before the index compiles. They stay constructor reads, and the hook-name list omits
-`modifyMaxMana`/`modifyMaxHp` so nothing declares a hook the engine never fires.
+before the index compiles. They stay constructor reads of `config.relics`, and the hook
+name list omits `modifyMaxMana`/`modifyMaxHp` so nothing declares a hook that never fires.
 
-## Still outstanding
+---
 
-- **8 relics** with inline behaviour: `beaconOfSecondSun`, `twinCenser`, `prayerBeads`,
-  `ossuaryBell`, `pilgrimsFlask` (engine) and `hagglersCharm`, `surgeonsThread`,
-  `beggarsBowl` (run layer — these need the run-side hook set, which does not exist yet).
-- **All 11 hero passives.** None have moved. The three carried-forward warnings above
-  still apply, especially the Duelist.
-- The two easily-missed sites: `effects.ts:486` is now visible as a `{if, hasRelic}`
-  amount inside `abilities.json` rather than hidden in a switch arm, but it is still a
-  relic check living in ability content rather than on the bus. `core.ts:2441` (the
-  drum-doubling log text) is untouched.
+# Remaining work — re-verified 2026-07-20 against the migrated tree
+
+> **All line numbers below were re-checked after #101–#106.** The original write-up's
+> citations are obsolete: `core.ts` grew by ~120 lines and `effects.ts` shrank from 794
+> to 79, so every pre-migration anchor has moved.
+
+## ⚠️ The blocker nobody would guess: 7 of the 8 event hooks are never fired
+
+`EVENT_HOOKS` in `src/content/hooks.ts` declares eight names, but **the engine only
+calls `_hookEvent` once** — `onAbilityCast`, at `src/engine/effects.ts:56`.
+
+`onHealApplied` · `onHealCard` · `onReshuffle` · `onMemberDamaged` · `onRest` ·
+`onMemberDied` · `onTurnStart` have **no call site**. Declaring one of them in
+`relics.json` today validates cleanly and then silently does nothing.
+
+**So each remaining event-hook relic is a two-part change:** add the `_hookEvent(...)`
+call at the seam AND declare the hook in JSON. Doing only the second half is the exact
+failure this bus was built to prevent, and the validator will not catch it.
+
+**Sub-task worth doing first:** make the validator reject (or at minimum report) a
+declared hook whose name has no call site — a `FIRED_HOOKS` set exported from the engine
+and cross-checked, so this trap closes permanently.
+
+## Remaining engine relics (5)
+
+| Relic | Current site | Hook needed | Notes |
+|---|---|---|---|
+| `beaconOfSecondSun` | `core.ts:1317` in `_applyHeal` | `onHealApplied` | Gated on `direct && reachedFull`; the ctx must carry both, so the hook needs a payload richer than `{self}` — likely `vars: { direct, reachedFull }` plus a `{var}` condition. |
+| `twinCenser` | `core.ts:1343` in `_twinCenserSplash` | `onHealCard` | Fires only for single-target heal CARDS, and routes back through `_applyHeal`, so guard against recursion. |
+| `ossuaryBell` | `core.ts:1988` in `_resolveAttack` | `onMemberDamaged` | A **crossing** detector: needs `hpBefore` and `hpAfter` in the ctx. Fires on hits only — #99's A7 asserts a poison tick crossing the same threshold does NOT ring it. |
+| `prayerBeads` | `core.ts:2094` in `_drawOne` | `onReshuffle` | Conditioned on `mp < maxMana && !channelActive()`. |
+| `pilgrimsFlask` | `core.ts:2442` in `skipTurn` | `onRest` | Conditioned on `restRegenNow() > 0` — a Rest while channeling is not a real Rest. |
+
+Also `core.ts:2540` — the drum-doubling **log text** branches on `hasRelic('warDrum')`
+to pick between two strings. It fits neither hook kind. Either add a `logVariant` value
+hook or accept it as a native; decide explicitly rather than leaving it.
+
+## Remaining run-layer relics (3) — needs infrastructure that does not exist
+
+`hagglersCharm` (`run.ts:1192`), `surgeonsThread` (`run.ts:642`, `:687`),
+`beggarsBowl` (`run.ts:662`, `:663`, `:720`, `:721`, `:743`), plus `rustyCrown`'s gold
+half (`run.ts:662`, `:720` — its combat half is already hooked).
+
+**`Run` has no hook bus at all.** It has its own `hasRelic` (`run.ts:1176`,
+`relics.includes`) and no `_hooks` index. This is not "declare a hook and go" — it means
+building a second, smaller bus for the run layer with its own hook set:
+`modifyShopPrice`, `modifyRecoveryPct`, `modifyFightGold`, `modifyRewardSize`. The same
+`relics.json` `hooks` block can drive both; only the names differ.
+
+## Hero passives (11) — none migrated
+
+| Passive | Current site | Shape |
+|---|---|---|
+| Toxicologist (Ranger) | `core.ts:608` | value: `modifyMemberDamage`, `when {enemyHasStatus: "poison"}` |
+| Grudge read (Tank) | `core.ts:609` | value: `modifyMemberDamage`, `add {floor {div [bankedDamage, GRUDGE_DIVISOR]}}` — **needs a `div` amount, which does not exist yet** |
+| Grudge banking (Tank) | `core.ts:1976` | event: `onMemberDamaged`, with the `HOLD_LINE_BANK_MULT` doubling |
+| Grudge reset (Tank) | `core.ts:2554` | event: after the auto — **no `onAfterAutoAttack` hook name exists yet** |
+| Last Stand (Strongman) | `core.ts:1066` | value: `vetoDeath` with a per-MEMBER consumable (`m.lastStandUsed`), not the per-Game flag `consumes` currently supports |
+| Dark Bargain (Warlock) | `core.ts:1117` | event: `onMemberDied`; needs an `$anyLiving(id)` selector that does not exist |
+| Stunt Double (Showstopper) | `core.ts:1930` | **stays code.** It runs a speculative `_wardedDamage` preview then swaps the hit's recipient mid-loop. Declare it `{"passive": {"native": "stuntDouble"}}` so the validator knows it exists. |
+| Riposte Master (Duelist) | `core.ts:1957` | value hook — see the ⚠️ below |
+| Arcane Battery (Mage) | `core.ts:2073` | event: `onTurnStart`, `addStat charge +1 cap CHARGE_MAX` |
+| Opening Act (Busker) | `core.ts:2077` | event: `onTurnStart`, `draw 1` |
+| Feral Bond (Beast Warden) | `core.ts:2546` | a **consuming multiplier** on the strike — no hook shape supports this yet |
+
+Plus the three `m.ability`-keyed damage bands at `core.ts:585` / `:588` / `:595`
+(crescendo, rampage, callBoar). These key off the ABILITY, not the id, and #99's A8
+asserts a hero who merely *learns* one does not inherit it — preserve that.
+
+### ⚠️ The Duelist's Riposte Master must stay a value hook
+
+`core.ts:1957` reads `const ripostes = m.riposteTurns > 0 || m.id === 'duelist';`.
+
+**An earlier draft proposed replacing that with permanently-set `riposteTurns` and
+called it behavior-preserving. It is not — it is a bug.** `riposteTurns` is a *timed*
+field with four owners that would each break it:
+
+- it **decays** every enemy turn and logs when it hits 0 — `core.ts:1756`
+- the **death pipeline zeroes it** — `core.ts:1092`
+- **Resurrect clears it** — `core.ts:1439`
+- **En Garde plain-assigns it** — `abilities.json` → `enGarde`, `mode: "set"`
+
+So one En Garde cast on the Duelist would overwrite her passive with a 3-turn timer and
+permanently delete it when that expires. Keep it a `ripostes` value hook, or give her a
+distinct non-decaying flag. Never overload the timed field.
+
+## Vocabulary gaps this work will hit
+
+None of these exist yet; each is needed by at least one item above:
+
+- **`{div: [a, b]}` amount** — Grudge's `floor(banked / GRUDGE_DIVISOR)`.
+- **Per-member consumables** — `ValueHook.consumes` writes a flag on the *Game*
+  (`martyrUsed`). Last Stand needs it on the *member* (`m.lastStandUsed`).
+- **`onAfterAutoAttack`** — for the Grudge reset.
+- **A consuming multiplier hook** — Feral Bond multiplies the next strike and clears
+  its flag; `{when, add}` cannot express it.
+- **`$anyLiving(id)` selector** — Dark Bargain finds a living Warlock who is not the
+  member who just died.
+- **Richer event ctx** — `onHealApplied` needs `direct`/`reachedFull`,
+  `onMemberDamaged` needs `hpBefore`/`hpAfter`.
+
+## Acceptance criteria
+
+- [ ] A `FIRED_HOOKS` cross-check so a declared-but-never-fired hook is a validation
+      error. **Do this first** — it makes every later step self-checking.
+- [ ] The 5 remaining engine relics migrated, each with its `_hookEvent` call site.
+- [ ] The `core.ts:2540` drum log-variant decided explicitly.
+- [ ] A run-layer hook set (`modifyShopPrice`, `modifyRecoveryPct`, `modifyFightGold`,
+      `modifyRewardSize`) and the 3 run relics migrated.
+- [ ] The 10 migratable hero passives on the bus; `stuntDouble` declared as a native.
+- [ ] The vocabulary gaps above added as needed, each general rather than one-off.
+- [ ] `npm test` green (especially #99's A7 relic and A8 passive suites, which pin every
+      one of these with owned/not-owned and firing/non-firing controls).
+- [ ] `tsx sim/trace.ts 30` diff empty after every step.
+- [ ] `npm run sim -- 200 1` within 15% of the **pre-change** measurement on the same
+      machine — compare against the current tree, not #100's 0.46s baseline, which was
+      taken before content loading existed.
+
+## Out of scope
+
+- Relic and hero **metadata**, which already moved (`relics.json`, `members.json`).
+- Card and ability effects, done in #101/#102.
+- The two cosmetic inconsistencies in #107.
