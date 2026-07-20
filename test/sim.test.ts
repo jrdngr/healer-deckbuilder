@@ -441,7 +441,14 @@ import { check, eq, results } from './harness';
   //     back half ticks DOWN and the A1 boss recovers: F1 173->174, F2 148->151, F3 141->143, F5 138->136,
   //     F6 138->135, F7 135->133, F8 128->125 (F0/F4 unchanged). All band/CI/boss gates below still hold.
   //     Re-pinned on the new observed numbers.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([180, 174, 151, 143, 139, 136, 135, 133, 125]));
+  //   • Decaying Rest removed (2026-07-20): Rest is now all-or-nothing — the +1 MP consolation for
+  //     a 1-card turn is gone, and passive MP income tightened to the same 0-card gate. This is a
+  //     deliberate MP-economy tightening, not an rng-stream perturbation: the sim policy rests only
+  //     when canSkip(), so every turn it committed a card now forfeits MP it used to bank. The whole
+  //     vector drops, hardest late where the MP squeeze compounds: F0 180->172, F1 174->166,
+  //     F2 151->141, F3 143->130, F4 139->124, F5 136->116, F6 135->111, F7 133->109, F8 125->97.
+  //     Re-pinned on the new observed numbers; no other content was touched to compensate.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([172, 166, 141, 130, 124, 116, 111, 109, 97]));
   // Full-run gate around the ~60% OPTIMAL ceiling the flawless STICK line now hits (#90 re-anchor).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy build while a
   // real drift (e.g. back up toward the old ~76% "too easy" baseline) still trips it.
