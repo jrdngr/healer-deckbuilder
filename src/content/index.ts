@@ -22,6 +22,7 @@ import { TUNING_COLLISIONS } from './tuning';
 import { registerCheck } from './validate/driver';
 import './cards'; // #101 — registers the cards.json checks
 import './abilities'; // #102 — registers the abilities.json checks
+import './entities'; // #103/#106 — relics.json and members.json
 
 // A constant defined in two data modules would make {"tune": "KEY"} ambiguous.
 registerCheck({
@@ -47,6 +48,8 @@ export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/te
 export { NATIVES, NATIVE_NAMES } from './natives';
 export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
 export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';
+export { RELIC_JSON, MEMBER_JSON, RELIC_JSON_IDS, MEMBER_JSON_IDS } from './entities';
+export type { RelicJson, MemberJson } from './entities';
 export type { AbilityJson } from './abilities';
 export type { CardJson } from './cards';
 export { validateContent, registeredChecks } from './validate/driver';

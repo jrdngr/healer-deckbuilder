@@ -1,0 +1,152 @@
+{
+  "lantern": {
+    "id": "lantern",
+    "name": "Searchlight",
+    "rarity": "common",
+    "icon": "🔦",
+    "desc": "Hidden attacks reveal their target."
+  },
+  "hagglersCharm": {
+    "id": "hagglersCharm",
+    "name": "Haggler's Charm",
+    "rarity": "common",
+    "icon": "🪙",
+    "desc": "All shop prices −{HAGGLER_DISCOUNT_PCT|pct}%."
+  },
+  "fieldTriage": {
+    "id": "fieldTriage",
+    "name": "Field Triage Kit",
+    "rarity": "uncommon",
+    "icon": "🩹",
+    "desc": "Heals on a member below {FIELD_TRIAGE_THRESHOLD|pct}% max HP heal +{FIELD_TRIAGE_BONUS}."
+  },
+  "warDrum": {
+    "id": "warDrum",
+    "name": "War Drum",
+    "rarity": "uncommon",
+    "icon": "🥁",
+    "desc": "After a member casts their Ability, their next auto-attack deals double."
+  },
+  "prayerBeads": {
+    "id": "prayerBeads",
+    "name": "Fidget Beads",
+    "rarity": "common",
+    "icon": "📿",
+    "desc": "+{PRAYER_BEADS_MP} MP each time the draw pile is reshuffled."
+  },
+  "vanguardsBanner": {
+    "id": "vanguardsBanner",
+    "name": "Team Pennant",
+    "rarity": "rare",
+    "icon": "🚩",
+    "desc": "Members at full HP deal +{VANGUARD_BONUS} on their auto-attack."
+  },
+  "martyrsIcon": {
+    "id": "martyrsIcon",
+    "name": "Guardian Feather",
+    "rarity": "rare",
+    "icon": "🕊",
+    "desc": "Once per fight, a member death becomes survival at 1 HP."
+  },
+  "pactOfSilence": {
+    "id": "pactOfSilence",
+    "name": "Cursed Coffee",
+    "rarity": "rare",
+    "icon": "☕",
+    "curse": true,
+    "desc": "CURSE — you can no longer Rest; gain +{PACT_PASSIVE_MP} MP at the start of each turn."
+  },
+  "rustyCrown": {
+    "id": "rustyCrown",
+    "name": "Rusty Crown",
+    "rarity": "rare",
+    "icon": "👑",
+    "curse": true,
+    "desc": "CURSE — normal enemies attack +{RUSTY_CROWN_ATTACK} harder (bosses are proud enough); fight wins pay +{RUSTY_CROWN_GOLD}g."
+  },
+  "loneWolf": {
+    "id": "loneWolf",
+    "name": "Lone Wolf Totem",
+    "rarity": "uncommon",
+    "icon": "🐺",
+    "desc": "While fielding {SMALL_PARTY_MAX} or fewer members, each of them deals +{LONE_WOLF_DMG} damage."
+  },
+  "focusStone": {
+    "id": "focusStone",
+    "name": "Thinking Cap",
+    "rarity": "uncommon",
+    "icon": "🎩",
+    "desc": "While fielding {SMALL_PARTY_MAX} or fewer members, +{FOCUS_STONE_MP} max MP (fewer bodies to tend)."
+  },
+  "warband": {
+    "id": "warband",
+    "name": "Roomy Tent",
+    "rarity": "rare",
+    "icon": "⛺",
+    "desc": "Fielded members gain +{WARBAND_HP_PER_SEAT} max HP for each empty deploy seat."
+  },
+  "reliquaryOfLight": {
+    "id": "reliquaryOfLight",
+    "name": "Glitter Box",
+    "rarity": "uncommon",
+    "icon": "✨",
+    "desc": "Holy cards heal +{HOLY_RELIC_HEAL}."
+  },
+  "ossuaryBell": {
+    "id": "ossuaryBell",
+    "name": "Second-Wind Chime",
+    "rarity": "uncommon",
+    "icon": "🔔",
+    "desc": "Whenever a member drops below {OSSUARY_THRESHOLD|pct}% max HP, they gain Regen {OSSUARY_REGEN}."
+  },
+  "venomGland": {
+    "id": "venomGland",
+    "name": "Venom Gland",
+    "rarity": "uncommon",
+    "icon": "🦂",
+    "desc": "Poison you apply lasts +{VENOM_GLAND_BONUS_TURNS} turn."
+  },
+  "beaconOfSecondSun": {
+    "id": "beaconOfSecondSun",
+    "name": "Beacon of the Second Sun",
+    "rarity": "rare",
+    "icon": "🌅",
+    "desc": "Whenever a card heals a member to full, draw {BEACON_DRAW}."
+  },
+  "twinCenser": {
+    "id": "twinCenser",
+    "name": "Buddy System",
+    "rarity": "rare",
+    "icon": "🤝",
+    "desc": "Single-target heal cards also heal the most wounded other member {TWIN_CENSER_SPLASH}."
+  },
+  "chantersIdol": {
+    "id": "chantersIdol",
+    "name": "Chanter's Idol",
+    "rarity": "rare",
+    "icon": "🎐",
+    "desc": "The first card you play each turn does not break your channel."
+  },
+  "pilgrimsFlask": {
+    "id": "pilgrimsFlask",
+    "name": "Nap Sack",
+    "rarity": "common",
+    "icon": "🎒",
+    "desc": "Every Rest also heals your most wounded member {PILGRIM_FLASK_HEAL}."
+  },
+  "surgeonsThread": {
+    "id": "surgeonsThread",
+    "name": "Spare Bandages",
+    "rarity": "common",
+    "icon": "🧵",
+    "desc": "Between-fight recovery rises to {SURGEON_THREAD_HEAL_PCT|pct}% of max HP (from {HERO_HEAL_PCT|pct}%)."
+  },
+  "beggarsBowl": {
+    "id": "beggarsBowl",
+    "name": "Beggar's Bowl",
+    "rarity": "rare",
+    "icon": "🥣",
+    "curse": true,
+    "desc": "CURSE — card rewards after a won fight offer {BEGGARS_BOWL_REWARD_SIZE} choices instead of 3; +{BEGGARS_BOWL_GOLD}g per won fight."
+  }
+}

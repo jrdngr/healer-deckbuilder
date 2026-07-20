@@ -29,6 +29,9 @@ export const ABILITY_ACTIONS: Record<string, Action[]> = Object.freeze(
     .map(([id, def]) => [id, Object.freeze(def.actions) as Action[]])),
 );
 
+// Every ability a hero or an ability card names must exist here, or the hero fires
+// nothing and the card is a dead draw. Checked from this side because abilities.json is
+// the file that would be missing an entry.
 registerCheck({
   name: 'abilities.json',
   run(_bundle, errs: ErrorCollector) {

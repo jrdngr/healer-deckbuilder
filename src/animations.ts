@@ -153,7 +153,10 @@ type EnemyAttackEv = Extract<GameEvent, { kind: 'enemyAttack' }>;
 // member can occupy any slot in a drafted party, so signatures key off the
 // event's memberId. A builder pushes its own launch/impact entries (the lunge
 // react is shared by the caller) and returns the timeline cursor after settle.
-const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number) => number> = {
+// Exported so test/content/coverage.test.ts can assert every hero has an entry.
+// With MemberId a plain string (#106) this map is no longer exhaustiveness-checked by
+// the compiler, so the coverage test is what catches a hero added without an animation.
+export const MEMBER_STRIKE: Record<MemberId, (ev: PartyAttackEv, push: Push, t: number) => number> = {
   ranger: (ev, push, t) => {
     // Dart volley: three quick, light trail-darts; the payload lands with the last.
     const c = '#a8e85d';
@@ -490,7 +493,10 @@ export function buildTimeline(events: GameEvent[]): Timeline {
         // The striker's card lunges toward the enemy; the rest of the strike is
         // the member's own signature (see MEMBER_STRIKE).
         push({ at: t, react: [{ slot: ev.slot, kind: 'lunge' }] });
-        t = MEMBER_STRIKE[ev.memberId](ev, push, t);
+        // Fallback (#106): a hero with no signature animation still gets the generic
+        // lunge rather than crashing the animator. The coverage test makes the gap
+        // loud; this makes it survivable.
+        t = (MEMBER_STRIKE[ev.memberId] ?? MEMBER_STRIKE.ranger)(ev, push, t);
         break;
       }
 

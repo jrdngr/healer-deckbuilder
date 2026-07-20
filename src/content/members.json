@@ -1,0 +1,122 @@
+{
+  "ranger": {
+    "id": "ranger",
+    "name": "Ranger",
+    "slot": 0,
+    "maxHP": 11,
+    "damage": 4,
+    "ability": "poison",
+    "passiveFlavor": {
+      "name": "Toxicologist",
+      "desc": "+2 auto damage while the enemy is poisoned."
+    }
+  },
+  "tank": {
+    "id": "tank",
+    "name": "Tank",
+    "slot": 1,
+    "maxHP": 18,
+    "damage": 2,
+    "ability": "taunt",
+    "passiveFlavor": {
+      "name": "Grudge",
+      "desc": "His next auto adds the damage he has soaked since his last strike, divided by 2."
+    }
+  },
+  "mage": {
+    "id": "mage",
+    "name": "Mage",
+    "slot": 2,
+    "maxHP": 9,
+    "damage": 5,
+    "ability": "bolt",
+    "passiveFlavor": {
+      "name": "Arcane Battery",
+      "desc": "Only the Mage banks Charge — +1 each turn (max 5); Lightning Bolt spends it for +3 damage per Charge."
+    }
+  },
+  "warlock": {
+    "id": "warlock",
+    "name": "Warlock",
+    "slot": 0,
+    "maxHP": 14,
+    "damage": 3,
+    "ability": "hex",
+    "passiveFlavor": {
+      "name": "Dark Bargain",
+      "desc": "Each time a party member dies, a living Warlock permanently gains +1 damage and +1 ability power for the rest of the fight."
+    }
+  },
+  "skald": {
+    "id": "skald",
+    "name": "Busker",
+    "slot": 2,
+    "maxHP": 10,
+    "damage": 0,
+    "ability": "crescendo",
+    "passiveFlavor": {
+      "name": "Opening Act",
+      "desc": "While fielded and alive, the Busker draws +1 card at the start of each turn."
+    }
+  },
+  "berserker": {
+    "id": "berserker",
+    "name": "Berserker",
+    "slot": 0,
+    "maxHP": 16,
+    "damage": 2,
+    "ability": "rampage",
+    "passiveFlavor": {
+      "name": "Rage",
+      "desc": "Hits harder the lower his HP: +2 damage in his first rage band, another +2 in the second (net +2/+4). The thresholds rise with the enemy's attack."
+    }
+  },
+  "beastWarden": {
+    "id": "beastWarden",
+    "name": "Beast Warden",
+    "slot": 0,
+    "maxHP": 9,
+    "damage": 1,
+    "ability": "callBoar",
+    "passiveFlavor": {
+      "name": "Feral Bond",
+      "desc": "Her first strike after her Boar falls tears for ×3 damage."
+    }
+  },
+  "sentinel": {
+    "id": "sentinel",
+    "name": "Showstopper",
+    "slot": 0,
+    "maxHP": 16,
+    "damage": 2,
+    "ability": "stun",
+    "passiveFlavor": {
+      "name": "Stunt Double",
+      "desc": "She dives in front of any blow that would be lethal to a teammate, taking the hit — her own wards and HP — in their place."
+    }
+  },
+  "duelist": {
+    "id": "duelist",
+    "name": "Duelist",
+    "slot": 0,
+    "maxHP": 12,
+    "damage": 3,
+    "ability": "enGarde",
+    "passiveFlavor": {
+      "name": "Riposte Master",
+      "desc": "She always counterattacks: every hit that strikes her (fully blocked hits included) is answered for her live auto damage — no card, no timer."
+    }
+  },
+  "flagellant": {
+    "id": "flagellant",
+    "name": "Strongman",
+    "slot": 0,
+    "maxHP": 15,
+    "damage": 2,
+    "ability": "penance",
+    "passiveFlavor": {
+      "name": "Last Stand",
+      "desc": "Once per fight, a killing blow — a hit or a Blood cost — leaves him at 1 HP instead of dropping him."
+    }
+  }
+}

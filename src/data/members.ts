@@ -1,4 +1,5 @@
 import type { MemberId, MemberDef } from './tuning';
+import MEMBER_JSON from '../content/members.json';
 import type { PartyMemberConfig } from './run';
 import {
   BERSERKER_BAND_BONUS, BOLT_CHARGE_MULT, CHARGE_MAX, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER, FERAL_BOND_MULT, GRUDGE_DIVISOR, TOXICOLOGIST_BONUS
@@ -13,44 +14,13 @@ export const MEMBER_DEFS: MemberDef[] = [
 // Per-member identity keyed by id. The fixed demo trio is laid out by MEMBER_DEFS
 // (slot order); MEMBER_POOL is the data-driven source the post-demo roster and
 // draft (#27-#31) extend so any member can occupy any slot and carry any ability.
-export const MEMBER_POOL: Record<MemberId, MemberDef> = {
-  ranger: MEMBER_DEFS[0],
-  tank: MEMBER_DEFS[1],
-  mage: MEMBER_DEFS[2],
-  // Post-demo roster wave 1 (#27). `slot` here is a nominal home slot only — a
-  // drafted member takes whatever slot it is assigned; the engine uses the map
-  // index for placement and reads only id/name/ability/stats from the pool.
-  // Warlock (redesigned #39): a small-party CONTROLLER, not a striker. His Hex
-  // curses the enemy with Vulnerability (the party deals more damage), and the bonus
-  // is bigger the fewer members are fielded — strongest solo, where it amplifies his
-  // own low damage enough to carry act 1. No self-damage: the old Soul Tithe / Dark
-  // Bargain suicide (a permadeath magnet under the roster campaign) is gone.
-  warlock: { slot: 0, id: 'warlock', name: 'Warlock', maxHP: 14, damage: 3, ability: 'hex' },
-  // Busker: 0 base damage; his strike scales on cards played this phase (Crescendo
-  // both draws and counts toward that), attacking Rest timing.
-  skald: { slot: 2, id: 'skald', name: 'Busker', maxHP: 10, damage: 0, ability: 'crescendo' },
-  // Roster wave 2 (#28). Berserker: strongest at LOW HP — healing him is friendly fire.
-  berserker: { slot: 0, id: 'berserker', name: 'Berserker', maxHP: 16, damage: 2, ability: 'rampage' },
-  // Roster wave 3 (#29). Beast Warden: 9 HP / 1 dmg, but Call Boar summons a pet on
-  // her slot that soaks whole hits and lends her its strike — the most invasive
-  // member (a new board entity).
-  beastWarden: { slot: 0, id: 'beastWarden', name: 'Beast Warden', maxHP: 9, damage: 1, ability: 'callBoar' },
-  // Showstopper (#61): a sturdy front-line bruiser whose Stun cancels the enemy's
-  // standing telegraph — a control member. Low damage; the value is the lost enemy
-  // turn. Home slot 0 (front line).
-  // HP raised 13 -> 16 (2026-07) to pay for the Stunt Double passive: she throws herself
-  // in front of blows that would kill a teammate, so she needs a deeper pool to soak them.
-  sentinel: { slot: 0, id: 'sentinel', name: 'Showstopper', maxHP: 16, damage: 2, ability: 'stun' },
-  // Duelist (#74): a front-line skirmisher who converts being attacked well into
-  // damage. Her En Garde Provokes a chosen member (Taunt) and grants them PERSISTENT
-  // Riposte — for a few enemy turns they counterattack EVERY hit that lands on them
-  // (fully blocked hits included) for their live auto damage. Home slot 0 (front line).
-  duelist: { slot: 0, id: 'duelist', name: 'Duelist', maxHP: 12, damage: 3, ability: 'enGarde' },
-  // Strongman (#75): the blood battery. A big body, weak swing (Berserker-adjacent
-  // chassis) whose HP is the party's fuel — his Feat of Strength pays 4 HP (NO clamp,
-  // it can kill him) to buff every living member's auto +2 for 2 enemy turns. Home slot 0.
-  flagellant: { slot: 0, id: 'flagellant', name: 'Strongman', maxHP: 15, damage: 2, ability: 'penance' },
-};
+// #106: hero definitions are read from members.json.
+export const MEMBER_POOL: Record<MemberId, MemberDef> = Object.freeze(
+  Object.fromEntries(Object.entries(MEMBER_JSON).map(([id, raw]) => {
+    const m = raw as unknown as Record<string, unknown>;
+    return [id, { slot: m.slot, id, name: m.name, maxHP: m.maxHP, damage: m.damage, ability: m.ability } as MemberDef];
+  })),
+) as Record<MemberId, MemberDef>;
 
 // Build a party config from an ordered list of member ids (slot = list index).
 // Fresh members carry no injuries and the pool's base stats. Used by the draft
@@ -165,18 +135,12 @@ export const DRAFT_FALLBACK_PAIRS: MemberId[][] = [
 // ship verbatim from the engine comments (#89 — no #85 rename); each `desc` is derived
 // from the actual implementation in `engine/core.ts`, interpolating the tuning constants
 // so the text never drifts from the numbers. One entry per hero — the record is total.
-export const MEMBER_PASSIVE_FLAVOR: Record<MemberId, { name: string; desc: string }> = {
-  ranger: { name: 'Toxicologist', desc: `+${TOXICOLOGIST_BONUS} auto damage while the enemy is poisoned.` },
-  tank: { name: 'Grudge', desc: `His next auto adds the damage he has soaked since his last strike, divided by ${GRUDGE_DIVISOR}.` },
-  mage: { name: 'Arcane Battery', desc: `Only the Mage banks Charge — +1 each turn (max ${CHARGE_MAX}); Lightning Bolt spends it for +${BOLT_CHARGE_MULT} damage per Charge.` },
-  warlock: { name: 'Dark Bargain', desc: `Each time a party member dies, a living Warlock permanently gains +${DARK_BARGAIN_DMG} damage and +${DARK_BARGAIN_POWER} ability power for the rest of the fight.` },
-  skald: { name: 'Opening Act', desc: `While fielded and alive, the Busker draws +1 card at the start of each turn.` },
-  berserker: { name: 'Rage', desc: `Hits harder the lower his HP: +${BERSERKER_BAND_BONUS} damage in his first rage band, another +${BERSERKER_BAND_BONUS} in the second (net +${BERSERKER_BAND_BONUS}/+${BERSERKER_BAND_BONUS * 2}). The thresholds rise with the enemy's attack.` },
-  beastWarden: { name: 'Feral Bond', desc: `Her first strike after her Boar falls tears for ×${FERAL_BOND_MULT} damage.` },
-  sentinel: { name: 'Stunt Double', desc: `She dives in front of any blow that would be lethal to a teammate, taking the hit — her own wards and HP — in their place.` },
-  duelist: { name: 'Riposte Master', desc: `She always counterattacks: every hit that strikes her (fully blocked hits included) is answered for her live auto damage — no card, no timer.` },
-  flagellant: { name: 'Last Stand', desc: `Once per fight, a killing blow — a hit or a Blood cost — leaves him at 1 HP instead of dropping him.` },
-};
+// Passive flavour text likewise — it is hero content, not presentation code.
+export const MEMBER_PASSIVE_FLAVOR: Record<string, { name: string; desc: string }> = Object.freeze(
+  Object.fromEntries(Object.entries(MEMBER_JSON)
+    .filter(([, raw]) => (raw as { passiveFlavor?: unknown }).passiveFlavor !== undefined)
+    .map(([id, raw]) => [id, (raw as { passiveFlavor: { name: string; desc: string } }).passiveFlavor])),
+);
 
 // The MemberDef that actually sits in a party slot: the drafted member's identity
 // if one was drafted (#27), else the classic-trio def for that slot. Every run-layer
