@@ -1107,6 +1107,9 @@ export class Game {
     // Dark Bargain (Warlock passive): a living Warlock feeds on a party death — a permanent
     // +damage/+ability power for the rest of the fight (a Warlock dying alone earns nothing).
     this._darkBargain(m);
+    // #103: the true-death seam — reached only when no veto saved them, so a hook here
+    // never fires for a Martyr/Last Stand survival.
+    this._hookEvent('onMemberDied', { self: m, vars: {} });
     return true;
   }
 
@@ -1327,6 +1330,10 @@ export class Game {
         this._emit({ kind: 'draw', count: drawn });
       }
     }
+    // #103: the heal-applied seam. The ctx carries `direct` and `reachedFull` because the
+    // relic that wants this (Beacon) is gated on BOTH — a Regen tick is not direct, and a
+    // member already at full has not been topped off.
+    this._hookEvent('onHealApplied', { self: m, vars: { direct, reachedFull, healed, overheal } });
     return { healed, overheal, reachedFull };
   }
 
@@ -1371,6 +1378,10 @@ export class Game {
   // The lockstep tail every single-target heal card runs: Twin Censer splashes the
   // most-wounded other (#69), then an armed Arcane Lens refracts the full heal (#70).
   _healCardSplash(primary: Member, amount: number): void {
+    // #103: the single-target-heal-CARD seam. Distinct from onHealApplied, which fires for
+    // every heal including Regen ticks and ability heals; this one fires only for the card
+    // path, which is what Twin Censer keys off.
+    this._hookEvent('onHealCard', { self: primary, vars: { amount } });
     this._twinCenserSplash(primary);
     this._lensSplash(primary, amount);
   }
@@ -1974,6 +1985,11 @@ export class Game {
       m.hp = Math.max(0, m.hp - w.dmg);
       // Grudge: bank what the Tank soaks — doubled while Hold the Line stands (Dojo).
       if (m.id === 'tank') m.bankedDamage += w.dmg * (m.holdLineTurns > 0 ? HOLD_LINE_BANK_MULT : 1);
+      // #103: the damage-taken seam. Fires BEFORE death resolution, which is what banking
+      // wants — a lethal hit banks and then _killMember zeroes it, netting 0. Firing this
+      // after the veto instead would leave a Martyr-saved Tank holding a bank he does not
+      // hold today. The post-death moment is a separate seam (onMemberSurvived, below).
+      this._hookEvent('onMemberDamaged', { self: m, vars: { dmg: w.dmg, hpBefore, hpAfter: m.hp } });
       this._log(`${label} hits ${m.name} for ${w.dmg}. (${m.hp}/${m.maxHP})`, 'hit');
       // The Martyr's Icon (#22) may veto the death — resolve that BEFORE the
       // event is emitted so the animator never stages a death that didn't happen.
@@ -1989,6 +2005,14 @@ export class Game {
         m.regen += OSSUARY_REGEN;
         this._log(`The Second-Wind Chime rings for ${m.name} — Regen ${m.regen}.`, 'status');
         this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
+      }
+      // #103: the survived-a-hit seam. Separate from onMemberDamaged because it fires
+      // AFTER the death veto resolves and only for a member still standing — which is
+      // exactly Ossuary Bell's contract (a Martyr-saved member at 1 HP has crossed and
+      // qualifies; a corpse has not). Hits only: a poison tick crossing the same
+      // threshold must not ring the bell.
+      if (m.alive) {
+        this._hookEvent('onMemberSurvived', { self: m, vars: { dmg: w.dmg, hpBefore, hpAfter: m.hp } });
       }
       // En Garde (#74): the persistent stance counters EVERY hit that strikes the holder,
       // even a Defense/Brace-reduced hit that lands for 0. It SUPERSEDES the one-shot
@@ -2073,6 +2097,12 @@ export class Game {
       if (m.alive && m.id === 'mage') m.charge = Math.min(CHARGE_MAX, m.charge + 1);
     }
     this._drawTo(this.handSize);
+    // #103: the turn-start seam, fired once per LIVING member so a passive can key off its
+    // own holder. Placed after _drawTo deliberately: the Busker's extra draw must land on
+    // top of a filled hand, not be absorbed by the fill.
+    for (const m of this.members) {
+      if (m.alive) this._hookEvent('onTurnStart', { self: m, vars: {} });
+    }
     // Opening Act (Busker passive): a fielded, living Busker draws one extra card each turn.
     if (this.members.some((m) => m.alive && m.id === 'skald')) {
       const c = this._drawOne();
@@ -2097,6 +2127,8 @@ export class Game {
         this._log(`The Fidget Beads click: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
         this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
       }
+      // #103: the reshuffle seam — fires once per reshuffle, after the piles have swapped.
+      this._hookEvent('onReshuffle', { vars: {} });
     }
     return this.drawPile.shift() ?? null;
   }
@@ -2439,6 +2471,9 @@ export class Game {
     // (the pattern this repo already uses: Ossuary's threshold, Aegis's Ward cap). Keeping
     // the "every Rest heals" hook but narrowing to the single most-wounded member lands it
     // at +8.4pp, in band. See sim/experiments/relic-exp.ts.
+    // #103: the Rest seam. `regen` is in the ctx because a "Rest" while channeling grants
+    // no MP (restRegenNow() === 0) and is not a real Rest — a hook must be able to tell.
+    this._hookEvent('onRest', { vars: { regen: this.restRegenNow() } });
     if (this.hasRelic('pilgrimsFlask') && this.restRegenNow() > 0) {
       const wounded = this.livingMembers()
         .filter((m) => m.hp < m.maxHP)

@@ -35,10 +35,25 @@ export const VALUE_HOOKS = [
 ] as const;
 export type ValueHookName = (typeof VALUE_HOOKS)[number];
 
-/** Event hooks: fire-and-forget action lists. */
+/**
+ * Event hooks: fire-and-forget action lists.
+ *
+ * EVERY NAME HERE MUST HAVE A REAL `_hookEvent` CALL SITE. A declared hook with no seam
+ * validates cleanly and then silently does nothing — the exact failure this bus exists to
+ * prevent, and one the content validator cannot see. `test/content/hook-sites.test.ts`
+ * scans the engine and run-layer sources and fails if a name here is never fired (or a
+ * name is fired that is not listed here). Adding a hook is therefore a two-part change:
+ * the seam AND the name.
+ *
+ * `onMemberDamaged` vs `onMemberSurvived` is a deliberate split, not a duplicate:
+ * the first fires the instant HP drops, BEFORE the death veto (that is where damage
+ * banking belongs); the second fires after the veto and only for a member still standing
+ * (that is where survival payoffs belong). Collapsing them silently changes what a
+ * Martyr-saved member ends the hit holding.
+ */
 export const EVENT_HOOKS = [
   'onAbilityCast', 'onHealApplied', 'onHealCard', 'onReshuffle',
-  'onMemberDamaged', 'onRest', 'onMemberDied', 'onTurnStart',
+  'onMemberDamaged', 'onMemberSurvived', 'onRest', 'onMemberDied', 'onTurnStart',
 ] as const;
 export type EventHookName = (typeof EVENT_HOOKS)[number];
 
