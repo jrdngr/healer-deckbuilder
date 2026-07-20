@@ -147,6 +147,14 @@ function validateCondition(
     }
     if (head === 'hpAtOrBelow') validateAmount(c.hpAtOrBelow as Amount, `${path}.hpAtOrBelow`, ctx, errs, bound);
     if (head === 'nonZero') validateAmount(c.nonZero as Amount, `${path}.nonZero`, ctx, errs, bound);
+    // Both sides of a comparison are amounts and both must be checked — a mistyped tune
+    // inside one silently evaluates to 0 and quietly makes the comparison always-true or
+    // always-false, which is invisible at runtime.
+    if (head === 'gte') {
+      const [lhs, rhs] = (c.gte as [Amount, Amount]) ?? [];
+      validateAmount(lhs, `${path}.gte[0]`, ctx, errs, bound);
+      validateAmount(rhs, `${path}.gte[1]`, ctx, errs, bound);
+    }
     if (head === 'hasStatus' && !(STATUS_TAGS as readonly string[]).includes(c.hasStatus as string)) {
       errs.unknown('ref', ctx.file, `${path}.hasStatus`, 'status tag', c.hasStatus as string, STATUS_TAGS);
     }

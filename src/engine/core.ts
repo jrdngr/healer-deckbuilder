@@ -46,17 +46,16 @@ import {
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
   ANVIL_STANCE_BONUS, INTERLOCK_GUARD_DR, INTERLOCK_GUARD_TURNS, BULWARK_BRACE_TURNS, WHETSTONE_BONUS,
-  THORNSKIN_REDUCTION, SPOREBURST_POISON, OSSUARY_REGEN, OSSUARY_THRESHOLD,
+  THORNSKIN_REDUCTION, SPOREBURST_POISON,
   UMBRAL_FEAST_PER_EFFECT, DREAD_WHISPER_REDUCTION, VENOM_GLAND_BONUS_TURNS, EMBERMARK_DMG,
   CRIMSON_PACT_DRAW, SCARLET_WARD_HP, OPEN_VEINS_DMG, TRANSFUSION_HEAL,
   BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS,
   GRIMOIRE_DMG, SANGUINE_PACT_SURCHARGE, SANGUINE_PACT_AUTO_BONUS, SANGUINE_PACT_THRESHOLD,
   BENEDICTION_HEAL, BENEDICTION_PER_BUFF, SUNRISE_VIGIL_HEAL,
   CONSECRATION_HEAL, CONSECRATION_STRIKE_BONUS, CONSECRATION_STRIKE_TURNS,
-  ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS, BEACON_DRAW, TWIN_CENSER_SPLASH,
-  PILGRIM_FLASK_HEAL,
+  ABSOLUTION_HEAL, ROOTBIND_BONUS_TURNS,
   TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, FIELD_TRIAGE_THRESHOLD,
-  GROUNDING_ROD_REDUCTION, PRAYER_BEADS_MP, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
+  GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, VANGUARD_BONUS,
   WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP,
   CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK,
   isEngineCard,
@@ -1313,48 +1312,17 @@ export class Game {
     const healed = m.hp - before;
     const overheal = effective - healed;
     const reachedFull = before < m.maxHP && m.hp === m.maxHP;
-    // Beacon of the Second Sun (#69): a card-driven heal that TOPS A MEMBER OFF draws a
-    // card (uncapped). `direct` gates out the Regen tick; a member already full (before ==
-    // max) is not a heal-to-full, so no draw. Twin Censer's splash and #76 Radiance route
-    // through here too, so they trigger it as well — the draw can chain the payoff.
-    if (direct && reachedFull && this.hasRelic('beaconOfSecondSun')) {
-      let drawn = 0;
-      for (let i = 0; i < BEACON_DRAW; i++) {
-        const c = this._drawOne();
-        if (c == null) break;
-        this.hand.push(c);
-        drawn++;
-      }
-      if (drawn > 0) {
-        this._log(`Beacon of the Second Sun: ${m.name} is topped off — draw ${drawn}.`, 'status');
-        this._emit({ kind: 'draw', count: drawn });
-      }
-    }
     // #103: the heal-applied seam. The ctx carries `direct` and `reachedFull` because the
-    // relic that wants this (Beacon) is gated on BOTH — a Regen tick is not direct, and a
-    // member already at full has not been topped off.
+    // relic that wants this (Beacon of the Second Sun) is gated on BOTH — a Regen tick is
+    // not direct, and a member already at full has not been topped off. Twin Censer's
+    // splash and the delayed heals route through here too, so they trigger it as well and
+    // the draw can chain the payoff.
     this._hookEvent('onHealApplied', { self: m, vars: { direct, reachedFull, healed, overheal } });
     return { healed, overheal, reachedFull };
   }
 
   _healMember(m: Member, amount: number, direct = false): number {
     return this._applyHeal(m, amount, direct).healed;
-  }
-
-  // Twin Censer (#69): a single-target heal CARD also splashes TWIN_CENSER_SPLASH to the
-  // most wounded OTHER living member (shared _mostWoundedOther, #68). The splash routes
-  // through the normal heal pipeline (Field Triage applies; it can itself trigger Beacon).
-  // Inert when unowned or when no other member is wounded. Only the holy single-target
-  // heal cards call this — never a Regen tick, an ability heal, or an all/none heal.
-  _twinCenserSplash(primary: Member): void {
-    if (!this.hasRelic('twinCenser')) return;
-    const other = this._mostWoundedOther(primary);
-    if (!other) return;
-    const res = this._applyHeal(other, TWIN_CENSER_SPLASH, true);
-    if (res.healed > 0) {
-      this._log(`The Buddy System brings ${res.healed} to ${other.name}. (${other.hp}/${other.maxHP})`, 'heal');
-      this._emit({ kind: 'heal', slot: other.slot, amount: res.healed, hp: other.hp });
-    }
   }
 
   // Arcane Lens (#70): while a Lens is armed, the NEXT single-target heal CARD this turn
@@ -1375,14 +1343,13 @@ export class Game {
     }
   }
 
-  // The lockstep tail every single-target heal card runs: Twin Censer splashes the
-  // most-wounded other (#69), then an armed Arcane Lens refracts the full heal (#70).
+  // The lockstep tail every single-target heal card runs: the onHealCard hooks fire (Twin
+  // Censer splashes the most-wounded other, #69), then an armed Arcane Lens refracts the
+  // full heal (#70). The hook seam is distinct from onHealApplied, which fires for EVERY
+  // heal including Regen ticks and ability heals; this one fires only for the card path,
+  // which is exactly what Twin Censer keys off.
   _healCardSplash(primary: Member, amount: number): void {
-    // #103: the single-target-heal-CARD seam. Distinct from onHealApplied, which fires for
-    // every heal including Regen ticks and ability heals; this one fires only for the card
-    // path, which is what Twin Censer keys off.
     this._hookEvent('onHealCard', { self: primary, vars: { amount } });
-    this._twinCenserSplash(primary);
     this._lensSplash(primary, amount);
   }
 
@@ -1996,21 +1963,12 @@ export class Game {
       let killed = m.hp <= 0;
       if (killed) killed = this._killMember(m);
       this._emit({ kind: 'enemyAttack', slot: m.slot, amount: w.dmg, hp: m.hp, result: 'hit', killed, hidden: t.hidden, attackType: t.type });
-      // Ossuary Bell (#66): a member surviving a downward crossing of OSSUARY_THRESHOLD
-      // of max HP gains Regen. Every crossing retriggers (Regen heals above → drop below
-      // again → grants anew) — no per-fight cap; magnitude + threshold are the levers. A
-      // Martyr-saved member (still alive at 1 HP) has crossed and qualifies.
-      const half = m.maxHP * OSSUARY_THRESHOLD;
-      if (m.alive && this.hasRelic('ossuaryBell') && hpBefore >= half && m.hp < half) {
-        m.regen += OSSUARY_REGEN;
-        this._log(`The Second-Wind Chime rings for ${m.name} — Regen ${m.regen}.`, 'status');
-        this._emit({ kind: 'regenApplied', slot: m.slot, stack: m.regen });
-      }
       // #103: the survived-a-hit seam. Separate from onMemberDamaged because it fires
       // AFTER the death veto resolves and only for a member still standing — which is
-      // exactly Ossuary Bell's contract (a Martyr-saved member at 1 HP has crossed and
-      // qualifies; a corpse has not). Hits only: a poison tick crossing the same
-      // threshold must not ring the bell.
+      // exactly Ossuary Bell's contract (#66): a downward crossing of OSSUARY_THRESHOLD
+      // grants Regen, a Martyr-saved member still alive at 1 HP has crossed and qualifies,
+      // and a corpse has not. Hits only: a poison tick crossing the same threshold must
+      // not ring the bell, which is why this lives here and not in the damage helpers.
       if (m.alive) {
         this._hookEvent('onMemberSurvived', { self: m, vars: { dmg: w.dmg, hpBefore, hpAfter: m.hp } });
       }
@@ -2119,15 +2077,9 @@ export class Game {
       this.drawPile = shuffle(this.discardPile, this.rng);
       this.discardPile = [];
       this._log('Reshuffled discard into draw pile.', 'system');
-      // Fidget Beads (#21): every reshuffle restores MP — but not while channeling
-      // (#64), which suppresses all passive/over-time MP income.
-      if (this.hasRelic('prayerBeads') && this.mp < this.maxMana && !this.channelActive()) {
-        const before = this.mp;
-        this.mp = Math.min(this.maxMana, this.mp + PRAYER_BEADS_MP);
-        this._log(`The Fidget Beads click: +${this.mp - before} MP. (MP ${this.mp})`, 'mp');
-        this._emit({ kind: 'refreshTick', amount: this.mp - before, mp: this.mp });
-      }
       // #103: the reshuffle seam — fires once per reshuffle, after the piles have swapped.
+      // Fidget Beads (#21) restores MP here, but not while channeling (#64), which
+      // suppresses all passive/over-time MP income; that gate is in the relic's own hook.
       this._hookEvent('onReshuffle', { vars: {} });
     }
     return this.drawPile.shift() ?? null;
@@ -2471,21 +2423,10 @@ export class Game {
     // (the pattern this repo already uses: Ossuary's threshold, Aegis's Ward cap). Keeping
     // the "every Rest heals" hook but narrowing to the single most-wounded member lands it
     // at +8.4pp, in band. See sim/experiments/relic-exp.ts.
-    // #103: the Rest seam. `regen` is in the ctx because a "Rest" while channeling grants
-    // no MP (restRegenNow() === 0) and is not a real Rest — a hook must be able to tell.
+    // #103: the Rest seam. `regen` rides the ctx because a "Rest" while channeling grants
+    // no MP (restRegenNow() === 0) and is therefore not a real Rest — the Flask must be
+    // able to tell the difference, and only a hook payload can carry that.
     this._hookEvent('onRest', { vars: { regen: this.restRegenNow() } });
-    if (this.hasRelic('pilgrimsFlask') && this.restRegenNow() > 0) {
-      const wounded = this.livingMembers()
-        .filter((m) => m.hp < m.maxHP)
-        .sort((a, b) => a.hp / a.maxHP - b.hp / b.maxHP)[0];
-      if (wounded) {
-        const res = this._applyHeal(wounded, PILGRIM_FLASK_HEAL, true);
-        if (res.healed > 0) {
-          this._log(`The Nap Sack restores ${wounded.name} ${res.healed}. (${wounded.hp}/${wounded.maxHP})`, 'heal');
-          this._emit({ kind: 'heal', slot: wounded.slot, amount: res.healed, hp: wounded.hp });
-        }
-      }
-    }
     this._endTurnInternal();
     return { ok: true };
   }
@@ -2572,7 +2513,15 @@ export class Game {
       if (m.drumPrimed) {
         dmg *= 2;
         m.drumPrimed = false;
-        this._log(this.hasRelic('warDrum')
+        // #103: which of the two lines to print is a boolean ANSWER, so it reuses the
+        // value-hook machinery rather than earning a new `logVariant` hook kind that
+        // returns strings — one string-valued hook used once is not worth a third hook
+        // category, and `channelExempt` (chantersIdol only) already sets the precedent for
+        // a narrowly-named boolean hook. Note this keys on OWNING the drum, not on the
+        // drum being what primed this member: a Double Strike cast while holding the drum
+        // has always printed the drum's line. Preserved deliberately — #99 pins both
+        // strings exactly, and changing it is a behaviour change, not a refactor.
+        this._log(this._hookAnswer('narratesDoubleStrike', true)
           ? `The War Drum beats — ${m.name}'s strike doubles!`
           : `${m.name}'s strike lands doubled!`, 'status');
       }

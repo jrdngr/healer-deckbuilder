@@ -50,7 +50,8 @@
           "tag": "drumPrimed",
           "mode": "set"
         }
-      ]
+      ],
+      "narratesDoubleStrike": { "answer": true }
     }
   },
   "prayerBeads": {
@@ -58,7 +59,26 @@
     "name": "Fidget Beads",
     "rarity": "common",
     "icon": "📿",
-    "desc": "+{PRAYER_BEADS_MP} MP each time the draw pile is reshuffled."
+    "desc": "+{PRAYER_BEADS_MP} MP each time the draw pile is reshuffled.",
+    "hooks": {
+      "onReshuffle": [
+        {
+          "op": "if",
+          "when": {
+            "all": [
+              { "not": { "gte": [{ "gameStat": "mp" }, { "gameStat": "maxMana" }] } },
+              { "not": { "channeling": true } }
+            ]
+          },
+          "then": [
+            { "op": "mp", "delta": { "tune": "PRAYER_BEADS_MP" }, "bind": "gained" },
+            { "op": "let", "bind": "mpNow", "value": { "gameStat": "mp" } },
+            { "op": "log", "kind": "mp", "text": "The Fidget Beads click: +{gained} MP. (MP {mpNow})" },
+            { "op": "emit", "kind": "refreshTick", "amount": { "var": "gained" }, "mp": { "gameStat": "mp" } }
+          ]
+        }
+      ]
+    }
   },
   "vanguardsBanner": {
     "id": "vanguardsBanner",
@@ -181,7 +201,26 @@
     "name": "Second-Wind Chime",
     "rarity": "uncommon",
     "icon": "🔔",
-    "desc": "Whenever a member drops below {OSSUARY_THRESHOLD|pct}% max HP, they gain Regen {OSSUARY_REGEN}."
+    "desc": "Whenever a member drops below {OSSUARY_THRESHOLD|pct}% max HP, they gain Regen {OSSUARY_REGEN}.",
+    "hooks": {
+      "onMemberSurvived": [
+        { "op": "let", "bind": "half", "value": { "mul": [{ "stat": "maxHP", "of": "$self" }, { "tune": "OSSUARY_THRESHOLD" }] } },
+        {
+          "op": "if",
+          "when": {
+            "all": [
+              { "gte": [{ "var": "hpBefore" }, { "var": "half" }] },
+              { "not": { "gte": [{ "var": "hpAfter" }, { "var": "half" }] } }
+            ]
+          },
+          "then": [
+            { "op": "status", "on": "$self", "tag": "regen", "amount": { "tune": "OSSUARY_REGEN" }, "mode": "add" },
+            { "op": "log", "kind": "status", "text": "The Second-Wind Chime rings for {self.name} — Regen {self.regen}." },
+            { "op": "emit", "kind": "regenApplied", "slot": "$self", "stack": { "stat": "regen", "of": "$self" } }
+          ]
+        }
+      ]
+    }
   },
   "venomGland": {
     "id": "venomGland",
@@ -202,14 +241,52 @@
     "name": "Beacon of the Second Sun",
     "rarity": "rare",
     "icon": "🌅",
-    "desc": "Whenever a card heals a member to full, draw {BEACON_DRAW}."
+    "desc": "Whenever a card heals a member to full, draw {BEACON_DRAW}.",
+    "hooks": {
+      "onHealApplied": [
+        {
+          "op": "if",
+          "when": { "all": [{ "nonZero": { "var": "direct" } }, { "nonZero": { "var": "reachedFull" } }] },
+          "then": [
+            { "op": "draw", "count": { "tune": "BEACON_DRAW" }, "bind": "drawn" },
+            {
+              "op": "if",
+              "when": { "nonZero": { "var": "drawn" } },
+              "then": [
+                { "op": "log", "kind": "status", "text": "Beacon of the Second Sun: {self.name} is topped off — draw {drawn}." },
+                { "op": "emit", "kind": "draw", "count": { "var": "drawn" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
   },
   "twinCenser": {
     "id": "twinCenser",
     "name": "Buddy System",
     "rarity": "rare",
     "icon": "🤝",
-    "desc": "Single-target heal cards also heal the most wounded other member {TWIN_CENSER_SPLASH}."
+    "desc": "Single-target heal cards also heal the most wounded other member {TWIN_CENSER_SPLASH}.",
+    "hooks": {
+      "onHealCard": [
+        {
+          "op": "forEach",
+          "over": "$mostWoundedOther",
+          "do": [
+            { "op": "heal", "to": "$target", "amount": { "tune": "TWIN_CENSER_SPLASH" }, "direct": true, "bind": "splashed" },
+            {
+              "op": "if",
+              "when": { "nonZero": { "var": "splashed" } },
+              "then": [
+                { "op": "log", "kind": "heal", "text": "The Buddy System brings {splashed} to {target.name}. ({target.hp}/{target.maxHP})" },
+                { "op": "emit", "kind": "heal", "slot": "$target", "amount": { "var": "splashed" }, "hp": { "stat": "hp", "of": "$target" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
   },
   "chantersIdol": {
     "id": "chantersIdol",
@@ -231,7 +308,32 @@
     "name": "Nap Sack",
     "rarity": "common",
     "icon": "🎒",
-    "desc": "Every Rest also heals your most wounded member {PILGRIM_FLASK_HEAL}."
+    "desc": "Every Rest also heals your most wounded member {PILGRIM_FLASK_HEAL}.",
+    "hooks": {
+      "onRest": [
+        {
+          "op": "if",
+          "when": { "nonZero": { "var": "regen" } },
+          "then": [
+            {
+              "op": "forEach",
+              "over": "$lowestHpFrac",
+              "do": [
+                { "op": "heal", "to": "$target", "amount": { "tune": "PILGRIM_FLASK_HEAL" }, "direct": true, "bind": "healed" },
+                {
+                  "op": "if",
+                  "when": { "nonZero": { "var": "healed" } },
+                  "then": [
+                    { "op": "log", "kind": "heal", "text": "The Nap Sack restores {target.name} {healed}. ({target.hp}/{target.maxHP})" },
+                    { "op": "emit", "kind": "heal", "slot": "$target", "amount": { "var": "healed" }, "hp": { "stat": "hp", "of": "$target" } }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
   },
   "surgeonsThread": {
     "id": "surgeonsThread",

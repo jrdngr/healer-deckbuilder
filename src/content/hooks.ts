@@ -32,6 +32,10 @@ export const VALUE_HOOKS = [
   // Game CONSTRUCTOR, before the hook index is compiled — they are config-time, not
   // runtime, and stay as constructor reads of config.relics.
   'allowRest', 'channelExempt', 'revealHidden', 'vetoDeath',
+  // Flavour, not mechanics: the doubled-strike line reads differently when the War Drum
+  // is what you own. A boolean answer rather than a string-returning `logVariant` hook
+  // kind — one use does not justify a third hook category.
+  'narratesDoubleStrike',
 ] as const;
 export type ValueHookName = (typeof VALUE_HOOKS)[number];
 
@@ -56,6 +60,33 @@ export const EVENT_HOOKS = [
   'onMemberDamaged', 'onMemberSurvived', 'onRest', 'onMemberDied', 'onTurnStart',
 ] as const;
 export type EventHookName = (typeof EVENT_HOOKS)[number];
+
+/**
+ * The ctx contract: which `{var}` names each seam binds before it runs its hooks.
+ *
+ * This is the other half of the declared-but-never-fired problem. A seam that passes
+ * `{hpBefore, hpAfter}` and a hook that reads `{var: "hpBefor"}` agree about nothing, and
+ * the mistake is invisible at runtime — `{var}` on an unbound name evaluates to 0, so the
+ * comparison just quietly stops being true. Declaring the payload here lets the validator
+ * check hook bodies against it exactly the way it already checks card action lists against
+ * their own bindings, so a typo is a startup error naming the nearest match.
+ *
+ * KEEP IN SYNC WITH THE SEAM. Adding a var to a `_hookEvent` call without adding it here
+ * makes it unusable (the validator rejects reads of it); adding it here without the seam
+ * makes it silently 0. `test/content/hook-sites.test.ts` catches the missing seam; only
+ * review catches a payload that drifts.
+ */
+export const HOOK_CTX_VARS: Record<string, readonly string[]> = Object.freeze({
+  onAbilityCast: [],
+  onHealApplied: ['direct', 'reachedFull', 'healed', 'overheal'],
+  onHealCard: ['amount'],
+  onReshuffle: [],
+  onMemberDamaged: ['dmg', 'hpBefore', 'hpAfter'],
+  onMemberSurvived: ['dmg', 'hpBefore', 'hpAfter'],
+  onRest: ['regen'],
+  onMemberDied: [],
+  onTurnStart: [],
+});
 
 export interface ValueHook {
   /** Gate. Absent means "always". */

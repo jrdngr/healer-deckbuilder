@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 export const SELECTOR_NAMES = [
   '$target', '$self', '$targetOrSelf', '$allLiving', '$allLivingOther',
-  '$mostWoundedOther', '$mostWounded', '$lowestHp', '$enemy',
+  '$mostWoundedOther', '$mostWounded', '$lowestHp', '$lowestHpFrac', '$enemy',
 ] as const;
 export type SelectorName = (typeof SELECTOR_NAMES)[number];
 
@@ -111,13 +111,23 @@ export type Condition =
   | { cardType: string }
   /** Exactly N cards have been played this phase (chantersIdol's first-card rule). */
   | { cardsPlayedIs: number }
+  /**
+   * `a >= b` over two amounts — the general numeric comparison. One primitive rather
+   * than a family: `<` is `{not: {gte}}`, `>` is `{not: {gte: [b, a]}}`, and `==` is the
+   * conjunction of both directions. Ossuary Bell's threshold crossing needs to compare a
+   * bound var against a tuned fraction of maxHP, which no hp-specific condition expresses
+   * (`hpBelowFrac` takes a literal fraction and only reads live HP, not a captured one).
+   */
+  | { gte: [Amount, Amount] }
+  /** A player-cast channel is running — suppresses passive/over-time MP income (#64). */
+  | { channeling: true }
   | { not: Condition }
   | { all: Condition[] }
   | { any: Condition[] };
 
 export const CONDITION_KEYS = [
   'hpFull', 'hpAtOrBelow', 'hpBelowFrac', 'alive', 'exists', 'hasStatus',
-  'enemyHasStatus', 'telegraph', 'hasRelic', 'berserkerBandHot', 'won', 'isSelf', 'nonZero', 'smallParty', 'bossFight', 'cardType', 'cardsPlayedIs', 'not', 'all', 'any',
+  'enemyHasStatus', 'telegraph', 'hasRelic', 'berserkerBandHot', 'won', 'isSelf', 'nonZero', 'smallParty', 'bossFight', 'cardType', 'cardsPlayedIs', 'gte', 'channeling', 'not', 'all', 'any',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -240,6 +250,8 @@ export const ConditionSchema: z.ZodType<Condition> = z.lazy(() => z.union([
   z.strictObject({ bossFight: z.literal(true) }),
   z.strictObject({ cardType: z.string() }),
   z.strictObject({ cardsPlayedIs: z.number() }),
+  z.strictObject({ gte: z.tuple([AmountSchema, AmountSchema]) }),
+  z.strictObject({ channeling: z.literal(true) }),
   z.strictObject({ not: ConditionSchema }),
   z.strictObject({ all: z.array(ConditionSchema) }),
   z.strictObject({ any: z.array(ConditionSchema) }),

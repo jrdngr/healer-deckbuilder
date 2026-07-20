@@ -137,6 +137,16 @@ export function resolveSelector(game: Game, sel: Selector, ctx: ActionCtx): Memb
       const slot = game._lowestHpSlot();
       return slot == null ? [] : [game.members[slot]];
     }
+    // Most wounded by FRACTION of max HP, and only among the actually-wounded — distinct
+    // from $mostWounded (absolute deficit, and happy to name a member at full HP) and from
+    // $lowestHp (absolute HP). A 10/18 Tank and a 4/9 Mage disagree under the two rules,
+    // so the difference is load-bearing wherever a heal is meant to find whoever is
+    // proportionally worst off. Empty when nobody is hurt.
+    case '$lowestHpFrac': {
+      const hurt = game.livingMembers().filter((m) => m.hp < m.maxHP);
+      if (hurt.length === 0) return [];
+      return [hurt.reduce((x, y) => (y.hp / y.maxHP < x.hp / x.maxHP ? y : x))];
+    }
     case '$enemy': return [];
     default: return [];
   }
@@ -163,6 +173,10 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
   }
   if ('var' in a) {
     const v = ctx.vars[a.var as string];
+    // Booleans read as 1/0 so a boolean the seam bound (onHealApplied's `direct` and
+    // `reachedFull`) is testable with {nonZero} like any other amount, instead of needing
+    // a parallel boolean-only condition family.
+    if (typeof v === 'boolean') return v ? 1 : 0;
     return typeof v === 'number' ? v : 0;
   }
   if ('stat' in a) {
@@ -255,6 +269,11 @@ export function evalCondition(game: Game, cond: Condition, ctx: ActionCtx, subje
   if ('bossFight' in c) return game.config.enemy.boss === true;
   if ('cardType' in c) return ctx.card != null && cardTypeOf(ctx.card.id) === c.cardType;
   if ('cardsPlayedIs' in c) return game.cardsPlayedThisPhase === c.cardsPlayedIs;
+  if ('gte' in c) {
+    const [a, b] = c.gte as [Amount, Amount];
+    return evalAmount(game, a, ctx) >= evalAmount(game, b, ctx);
+  }
+  if ('channeling' in c) return game.channelActive();
   if ('isSelf' in c) {
     const m = resolveOne(game, c.isSelf as Selector, ctx);
     return !!m && !!ctx.self && m.slot === ctx.self.slot;
@@ -431,7 +450,14 @@ export function runActions(
         if (action.tag === 'poison') {
           if (action.mode === 'keepStronger') {
             e.poison = Math.max(e.poison, amount);
-            e.poisonTurns = turns;
+            // #103: keepStronger writes poisonTurns directly instead of routing through
+            // _applyPoison (which would stack the amount rather than take the stronger),
+            // so it has to apply the duration hook ITSELF. Before this, the one relic that
+            // extends poison had its rule written twice — once as this hook and once as an
+            // inline `{if hasRelic: venomGland}` in the ability that uses keepStronger. The
+            // two happened to agree; nothing made them agree, and a `when` added to the
+            // hook would have silently desynced them.
+            e.poisonTurns = game._hookValue('modifyPoisonTurns', turns);
           } else if (action.mode === 'mul') {
             e.poison *= amount;
           } else {

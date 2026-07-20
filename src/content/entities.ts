@@ -10,7 +10,7 @@ import memberJson from './members.json';
 import { registerCheck } from './validate/driver';
 import { renderTemplate } from './interpreter/template';
 import { CONTENT_TUNING, CONTENT_TUNING_KEYS } from './tuning';
-import { HookBlockSchema, isValueHookName, isEventHookName, ALL_HOOK_NAMES } from './hooks';
+import { HookBlockSchema, isValueHookName, isEventHookName, ALL_HOOK_NAMES, HOOK_CTX_VARS } from './hooks';
 import type { HookBlock } from './hooks';
 import { validateActions } from './validate/actions';
 import { NATIVE_NAMES } from './natives';
@@ -89,6 +89,10 @@ registerCheck({
             validateActions(def as Action[], {
               file: 'relics.json', basePath: `${id}.hooks.${name}`,
               tuningKeys: CONTENT_TUNING_KEYS, natives: NATIVE_NAMES, declaredFields: [],
+              // The seam's payload is pre-bound, so a hook may read {var: "hpBefore"} —
+              // and ONLY the names its own seam actually provides. Reading a var from a
+              // different hook's payload is a startup error rather than a silent 0.
+              initialBindings: HOOK_CTX_VARS[name] ?? [],
             }, errs);
           }
         }

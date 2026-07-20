@@ -23,22 +23,7 @@
         "op": "let",
         "bind": "turns",
         "value": {
-          "if": {
-            "hasRelic": "venomGland"
-          },
-          "then": {
-            "sum": [
-              {
-                "tune": "POISON_TURNS"
-              },
-              {
-                "tune": "VENOM_GLAND_BONUS_TURNS"
-              }
-            ]
-          },
-          "else": {
-            "tune": "POISON_TURNS"
-          }
+          "tune": "POISON_TURNS"
         }
       },
       {
