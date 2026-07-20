@@ -13,6 +13,7 @@ import {
   ErrorCollector, formatReport, editDistance, nearest, suggest,
 } from '../../src/content/validate/report';
 import { validateActions } from '../../src/content/validate/actions';
+import { validateContent, registerCheck, registeredChecks } from '../../src/content/validate/driver';
 import { TUNING_KEYS } from '../../src/constants';
 import { check, eq, finish } from '../harness';
 
@@ -215,6 +216,35 @@ REJECTS('a log with an unknown filter',
   ]);
   check('the error path names the failing index',
     e.errors.some((x) => x.path.startsWith('testCard.actions[1]')), e.errors.map((x) => x.path).join(','));
+}
+
+// --- the driver ------------------------------------------------------------
+{ // an empty bundle with no failing checks passes
+  const r = validateContent({});
+  check('a clean bundle validates', r.ok);
+  eq('a clean bundle has no errors', r.errors.length, 0);
+  eq('a clean bundle produces no report', r.report, '');
+}
+{ // registered checks all run, and every one of them contributes errors
+  registerCheck({ name: 'testA', run: (_b, errs) => {
+    errs.add({ category: 'ref', file: 'a.json', path: 'x', message: 'from A' });
+  } });
+  registerCheck({ name: 'testB', run: (_b, errs) => {
+    errs.add({ category: 'coverage', file: 'b.json', path: '', message: 'from B' });
+  } });
+  const r = validateContent({});
+  check('the driver refuses', !r.ok);
+  eq('EVERY check contributed, not just the first', r.errors.length, 2);
+  check('the report names both', r.report.includes('from A') && r.report.includes('from B'));
+  check('registered checks are listed', registeredChecks().includes('testA'));
+}
+{ // a check that THROWS is reported, not allowed to take the process down —
+  // otherwise one malformed file hides every other error in the run
+  registerCheck({ name: 'testThrows', run: () => { throw new Error('kaboom'); } });
+  const r = validateContent({});
+  check('a throwing check does not propagate', !r.ok);
+  check('the throw is reported as an error', r.errors.some((e) => e.message.includes('kaboom')));
+  check('the checks after it still ran', r.errors.length >= 3);
 }
 
 finish('content/validate');

@@ -12,3 +12,8 @@ export * from './data/cards';
 export * from './data/keywords';
 export * from './data/run';
 export * from './data/relics';
+// Last, and deliberately: importing this VALIDATES ALL CONTENT and refuses to start on
+// any error. Placing it at the tail means every data module above is fully initialised
+// before a check can read one. Because every content-touching entry point reaches
+// constants, this one line is the whole validation wiring (#100).
+export * from './content';
