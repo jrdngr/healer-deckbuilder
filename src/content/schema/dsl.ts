@@ -55,6 +55,8 @@ export type Amount =
   | { mul: Amount[] }
   | { max: Amount[] }
   | { min: Amount[] }
+  /** A conditional amount — the arithmetic counterpart to the `if` op. */
+  | { if: Condition; then: Amount; else: Amount }
   | { floor: Amount }
   // `atLeast`, not `min`: a second key named `min` would collide with the {min: […]}
   // form, making the shape ambiguous to both the interpreter and describeAmountBranch.
@@ -64,7 +66,7 @@ export type Amount =
 export const AMOUNT_KEYS = [
   'tune', 'card', 'stat', 'auto', 'abilityPower', 'missingHp', 'var', 'enemyStat',
   'telegraphStat', 'gameStat', 'vulnerable', 'bloodCost', 'sanguineSurcharge', 'holyHealBonus',
-  'sum', 'mul', 'max', 'min', 'floor', 'clampMin',
+  'sum', 'mul', 'max', 'min', 'floor', 'clampMin', 'if',
 ] as const;
 
 /**
@@ -93,13 +95,19 @@ export type Condition =
   | { telegraph: 'damaging' | 'redirectable' | 'interruptible' }
   | { hasRelic: string }
   | { berserkerBandHot: Selector }
+  /** The enemy has just been defeated — gates the trailing defeatEnemy emits. */
+  | { won: true }
+  /** The selector resolves to the acting member — drives possessive prose. */
+  | { isSelf: Selector }
+  /** The amount evaluates to something other than 0 — gates conditional emits. */
+  | { nonZero: Amount }
   | { not: Condition }
   | { all: Condition[] }
   | { any: Condition[] };
 
 export const CONDITION_KEYS = [
   'hpFull', 'hpAtOrBelow', 'hpBelowFrac', 'alive', 'exists', 'hasStatus',
-  'enemyHasStatus', 'telegraph', 'hasRelic', 'berserkerBandHot', 'not', 'all', 'any',
+  'enemyHasStatus', 'telegraph', 'hasRelic', 'berserkerBandHot', 'won', 'isSelf', 'nonZero', 'not', 'all', 'any',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -131,7 +139,7 @@ export const OP_NAMES = [
   'heal', 'damage', 'strike', 'bloodPay', 'drain', 'status', 'clearStatus', 'consume',
   'enemyStatus', 'consumeEnemyStatus', 'partyBuff', 'draw', 'mp', 'primeRefresh',
   'revive', 'purge', 'telegraph', 'addStat', 'queueDelayed', 'regenEnded',
-  'healCardSplash', 'let', 'letStr', 'collect', 'forEach', 'if', 'log', 'emit', 'native',
+  'healCardSplash', 'let', 'letStr', 'letBool', 'collect', 'forEach', 'if', 'log', 'emit', 'native',
 ] as const;
 export type OpName = (typeof OP_NAMES)[number];
 
@@ -159,6 +167,7 @@ export type Action =
   | { op: 'healCardSplash'; primary: Selector; amount: Amount }
   | { op: 'let'; bind: string; value: Amount }
   | { op: 'letStr'; bind: string; value: string }
+  | { op: 'letBool'; bind: string; when: Condition }
   | { op: 'collect'; bind: string; over: Selector; where?: Condition; pick: string }
   | { op: 'forEach'; over: Selector; as?: string; do: Action[] }
   | { op: 'if'; when: Condition; then: Action[]; else?: Action[] }
@@ -197,6 +206,7 @@ export const AmountSchema: z.ZodType<Amount> = z.lazy(() => z.union([
   z.strictObject({ mul: z.array(AmountSchema) }),
   z.strictObject({ max: z.array(AmountSchema) }),
   z.strictObject({ min: z.array(AmountSchema) }),
+  z.strictObject({ if: ConditionSchema, then: AmountSchema, else: AmountSchema }),
   z.strictObject({ floor: AmountSchema }),
   z.strictObject({ clampMin: AmountSchema, atLeast: z.number() }),
 ]));
@@ -212,6 +222,9 @@ export const ConditionSchema: z.ZodType<Condition> = z.lazy(() => z.union([
   z.strictObject({ telegraph: z.enum(['damaging', 'redirectable', 'interruptible']) }),
   z.strictObject({ hasRelic: z.string() }),
   z.strictObject({ berserkerBandHot: SelectorSchema }),
+  z.strictObject({ won: z.literal(true) }),
+  z.strictObject({ isSelf: SelectorSchema }),
+  z.strictObject({ nonZero: AmountSchema }),
   z.strictObject({ not: ConditionSchema }),
   z.strictObject({ all: z.array(ConditionSchema) }),
   z.strictObject({ any: z.array(ConditionSchema) }),
@@ -243,6 +256,7 @@ export const ActionSchema: z.ZodType<Action> = z.lazy(() => z.discriminatedUnion
   z.strictObject({ op: z.literal('healCardSplash'), primary: SelectorSchema, amount: AmountSchema }),
   z.strictObject({ op: z.literal('let'), bind: z.string(), value: AmountSchema }),
   z.strictObject({ op: z.literal('letStr'), bind: z.string(), value: z.string() }),
+  z.strictObject({ op: z.literal('letBool'), bind: z.string(), when: ConditionSchema }),
   z.strictObject({ op: z.literal('collect'), bind: z.string(), over: SelectorSchema, where: ConditionSchema.optional(), pick: z.string() }),
   z.strictObject({ op: z.literal('forEach'), over: SelectorSchema, as: z.string().optional(), do: z.array(ActionSchema) }),
   z.strictObject({ op: z.literal('if'), when: ConditionSchema, then: z.array(ActionSchema), else: z.array(ActionSchema).optional() }),

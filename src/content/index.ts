@@ -18,7 +18,21 @@ import type { ContentBundle } from './validate/driver';
 // --- the bundle ------------------------------------------------------------
 // Each loader module registers its own checks at import time, so this list is the
 // whole wiring a new content file needs.
+import { TUNING_COLLISIONS } from './tuning';
+import { registerCheck } from './validate/driver';
 import './cards'; // #101 — registers the cards.json checks
+import './abilities'; // #102 — registers the abilities.json checks
+
+// A constant defined in two data modules would make {"tune": "KEY"} ambiguous.
+registerCheck({
+  name: 'tuning',
+  run(_b, errs) {
+    for (const key of TUNING_COLLISIONS) {
+      errs.add({ category: 'ref', file: 'tuning', path: key,
+        message: `constant ${JSON.stringify(key)} is defined in more than one data module` });
+    }
+  },
+});
 
 const BUNDLE: ContentBundle = {};
 
@@ -32,8 +46,12 @@ export type { ActionCtx, NativeFn } from './interpreter/run';
 export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/template';
 export { NATIVES, NATIVE_NAMES } from './natives';
 export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
+export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';
+export type { AbilityJson } from './abilities';
 export type { CardJson } from './cards';
-export { validateContent, registerCheck, registeredChecks } from './validate/driver';
+export { validateContent, registeredChecks } from './validate/driver';
+export { registerCheck };
+export { CONTENT_TUNING, CONTENT_TUNING_KEYS } from './tuning';
 export type { ContentBundle, ContentCheck, ValidationResult } from './validate/driver';
 export { ErrorCollector, formatReport, failStartup, editDistance, nearest, suggest } from './validate/report';
 export type { ContentError, ErrorCategory } from './validate/report';

@@ -32,7 +32,7 @@ export interface ActionValidationContext {
   ambientTemplatePaths?: readonly string[];
 }
 
-const AMBIENT = ['card', 'self', 'target', 'enemy', 'intent',
+const AMBIENT = ['card', 'self', 'target', 'enemy', 'intent', 'enemyName',
   'holder', 'partner', 'ally', 'lifted', 'member'];
 
 function validateSelector(
@@ -101,6 +101,11 @@ function validateAmount(
     case 'clampMin':
       validateAmount(a.clampMin as Amount, `${path}.clampMin`, ctx, errs, bound);
       break;
+    case 'if':
+      validateCondition(a.if as Condition, `${path}.if`, ctx, errs, bound);
+      validateAmount(a.then as Amount, `${path}.then`, ctx, errs, bound);
+      validateAmount(a.else as Amount, `${path}.else`, ctx, errs, bound);
+      break;
     case 'sum': case 'mul': case 'max': case 'min': {
       const list = a[branch] as Amount[];
       if (!Array.isArray(list) || list.length === 0) {
@@ -137,10 +142,11 @@ function validateCondition(
   } else {
     if ('of' in c) validateSelector(c.of as Selector, `${path}.of`, ctx, errs);
     if ('on' in c) validateSelector(c.on as Selector, `${path}.on`, ctx, errs);
-    if (head === 'hpFull' || head === 'alive' || head === 'exists' || head === 'berserkerBandHot') {
+    if (head === 'hpFull' || head === 'alive' || head === 'exists' || head === 'berserkerBandHot' || head === 'isSelf') {
       validateSelector(c[head] as Selector, `${path}.${head}`, ctx, errs);
     }
     if (head === 'hpAtOrBelow') validateAmount(c.hpAtOrBelow as Amount, `${path}.hpAtOrBelow`, ctx, errs, bound);
+    if (head === 'nonZero') validateAmount(c.nonZero as Amount, `${path}.nonZero`, ctx, errs, bound);
     if (head === 'hasStatus' && !(STATUS_TAGS as readonly string[]).includes(c.hasStatus as string)) {
       errs.unknown('ref', ctx.file, `${path}.hasStatus`, 'status tag', c.hasStatus as string, STATUS_TAGS);
     }
@@ -244,6 +250,15 @@ export function validateActions(
         break;
       case 'log':
         validateTemplate(action.text, `${path}.text`, ctx, errs, bound);
+        break;
+      case 'letStr':
+        validateTemplate(action.value, `${path}.value`, ctx, errs, bound);
+        break;
+      case 'strike':
+        if (action.label) validateTemplate(action.label, `${path}.label`, ctx, errs, bound);
+        break;
+      case 'damage':
+        if (action.source) validateTemplate(action.source, `${path}.source`, ctx, errs, bound);
         break;
       case 'status':
         if (!(STATUS_TAGS as readonly string[]).includes(action.tag)) {

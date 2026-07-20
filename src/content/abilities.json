@@ -1,0 +1,1116 @@
+{
+  "poison": {
+    "id": "poison",
+    "actions": [
+      {
+        "op": "let",
+        "bind": "strength",
+        "value": {
+          "clampMin": {
+            "sum": [
+              {
+                "tune": "POISON_BASE"
+              },
+              {
+                "abilityPower": "$self"
+              }
+            ]
+          },
+          "atLeast": 1
+        }
+      },
+      {
+        "op": "let",
+        "bind": "turns",
+        "value": {
+          "if": {
+            "hasRelic": "venomGland"
+          },
+          "then": {
+            "sum": [
+              {
+                "tune": "POISON_TURNS"
+              },
+              {
+                "tune": "VENOM_GLAND_BONUS_TURNS"
+              }
+            ]
+          },
+          "else": {
+            "tune": "POISON_TURNS"
+          }
+        }
+      },
+      {
+        "op": "enemyStatus",
+        "tag": "poison",
+        "amount": {
+          "var": "strength"
+        },
+        "turns": {
+          "var": "turns"
+        },
+        "mode": "keepStronger"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} fires Poison Arrow ({enemy.poison}/turn for {enemy.poisonTurns})."
+      },
+      {
+        "op": "emit",
+        "kind": "poisonApplied",
+        "slot": "$self",
+        "amount": {
+          "var": "strength"
+        },
+        "poison": {
+          "enemyStat": "poison"
+        }
+      }
+    ]
+  },
+  "taunt": {
+    "id": "taunt",
+    "actions": [
+      {
+        "op": "native",
+        "fn": "tauntApply"
+      }
+    ]
+  },
+  "bolt": {
+    "id": "bolt",
+    "actions": [
+      {
+        "op": "let",
+        "bind": "base",
+        "value": {
+          "clampMin": {
+            "sum": [
+              {
+                "tune": "BOLT_BASE"
+              },
+              {
+                "abilityPower": "$self"
+              }
+            ]
+          },
+          "atLeast": 1
+        }
+      },
+      {
+        "op": "let",
+        "bind": "charge",
+        "value": {
+          "stat": "charge",
+          "of": "$self"
+        }
+      },
+      {
+        "op": "let",
+        "bind": "dmg",
+        "value": {
+          "sum": [
+            {
+              "var": "base"
+            },
+            {
+              "mul": [
+                {
+                  "tune": "BOLT_CHARGE_MULT"
+                },
+                {
+                  "var": "charge"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} casts Lightning Bolt (base {base} + {BOLT_CHARGE_MULT}×Charge {charge})."
+      },
+      {
+        "op": "status",
+        "on": "$self",
+        "tag": "charge",
+        "amount": 0,
+        "mode": "set"
+      },
+      {
+        "op": "damage",
+        "amount": {
+          "var": "dmg"
+        },
+        "source": "Lightning Bolt"
+      },
+      {
+        "op": "emit",
+        "kind": "bolt",
+        "slot": "$self",
+        "amount": {
+          "vulnerable": {
+            "var": "dmg"
+          }
+        },
+        "enemyHp": {
+          "enemyStat": "hp"
+        }
+      },
+      {
+        "op": "if",
+        "when": {
+          "won": true
+        },
+        "then": [
+          {
+            "op": "emit",
+            "kind": "defeatEnemy"
+          }
+        ]
+      }
+    ]
+  },
+  "hex": {
+    "id": "hex",
+    "actions": [
+      {
+        "op": "native",
+        "fn": "hexApply"
+      }
+    ]
+  },
+  "crescendo": {
+    "id": "crescendo",
+    "actions": [
+      {
+        "op": "draw",
+        "count": {
+          "tune": "CRESCENDO_DRAW"
+        },
+        "bind": "drawn"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} plays a Crescendo — draws {drawn}."
+      },
+      {
+        "op": "emit",
+        "kind": "draw",
+        "count": {
+          "var": "drawn"
+        }
+      }
+    ]
+  },
+  "rampage": {
+    "id": "rampage",
+    "actions": [
+      {
+        "op": "let",
+        "bind": "dmg",
+        "value": {
+          "sum": [
+            {
+              "mul": [
+                2,
+                {
+                  "auto": "$self"
+                }
+              ]
+            },
+            {
+              "abilityPower": "$self"
+            }
+          ]
+        }
+      },
+      {
+        "op": "damage",
+        "amount": {
+          "var": "dmg"
+        },
+        "source": "{self.name} (Rampage)"
+      },
+      {
+        "op": "emit",
+        "kind": "partyAttack",
+        "slot": "$self",
+        "memberId": "$self.id",
+        "amount": {
+          "vulnerable": {
+            "var": "dmg"
+          }
+        },
+        "enemyHp": {
+          "enemyStat": "hp"
+        }
+      },
+      {
+        "op": "if",
+        "when": {
+          "won": true
+        },
+        "then": [
+          {
+            "op": "emit",
+            "kind": "defeatEnemy"
+          }
+        ]
+      },
+      {
+        "op": "bloodPay",
+        "from": "$self",
+        "amount": {
+          "tune": "RAMPAGE_SELF_DMG"
+        }
+      }
+    ]
+  },
+  "callBoar": {
+    "id": "callBoar",
+    "actions": [
+      {
+        "op": "status",
+        "on": "$self",
+        "tag": "boar",
+        "amount": {
+          "sum": [
+            {
+              "tune": "BOAR_HP"
+            },
+            {
+              "abilityPower": "$self"
+            }
+          ]
+        },
+        "turns": {
+          "tune": "BOAR_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} calls a Boar ({self.boarHp} HP) to her side for {self.boarTurns} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "boarSummon",
+        "slot": "$self",
+        "hp": {
+          "stat": "boarHp",
+          "of": "$self"
+        },
+        "turns": {
+          "stat": "boarTurns",
+          "of": "$self"
+        }
+      }
+    ]
+  },
+  "stun": {
+    "id": "stun",
+    "actions": [
+      {
+        "op": "if",
+        "when": {
+          "telegraph": "interruptible"
+        },
+        "then": [
+          {
+            "op": "letStr",
+            "bind": "cancelled",
+            "value": "{intent}"
+          },
+          {
+            "op": "telegraph",
+            "mode": "stun"
+          },
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "{self.name} Stuns the {enemyName} — its {cancelled} is cancelled."
+          },
+          {
+            "op": "emit",
+            "kind": "stun",
+            "slot": "$self",
+            "intent": {
+              "var": "cancelled"
+            }
+          }
+        ],
+        "else": [
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "{self.name} winds up to Stun, but there is nothing to interrupt."
+          }
+        ]
+      }
+    ]
+  },
+  "enGarde": {
+    "id": "enGarde",
+    "actions": [
+      {
+        "op": "status",
+        "on": "$targetOrSelf",
+        "tag": "taunt",
+        "turns": {
+          "tune": "EN_GARDE_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "status",
+        "on": "$targetOrSelf",
+        "tag": "riposte",
+        "turns": {
+          "tune": "EN_GARDE_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "let",
+        "bind": "isSelf",
+        "value": {
+          "if": {
+            "isSelf": "$targetOrSelf"
+          },
+          "then": 1,
+          "else": 0
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} sets {isSelf ? her own : {$targetOrSelf.name}'s} guard — En Garde: {$targetOrSelf.name} Provokes and counters every hit for {EN_GARDE_TURNS} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "taunt",
+        "slot": "$targetOrSelf",
+        "turns": {
+          "tune": "EN_GARDE_TURNS"
+        }
+      },
+      {
+        "op": "emit",
+        "kind": "enGarde",
+        "slot": "$targetOrSelf",
+        "turns": {
+          "tune": "EN_GARDE_TURNS"
+        }
+      }
+    ]
+  },
+  "penance": {
+    "id": "penance",
+    "actions": [
+      {
+        "op": "let",
+        "bind": "cost",
+        "value": {
+          "sum": [
+            {
+              "tune": "PENANCE_HP"
+            },
+            {
+              "sanguineSurcharge": true
+            }
+          ]
+        }
+      },
+      {
+        "op": "drain",
+        "from": "$self",
+        "amount": {
+          "var": "cost"
+        }
+      },
+      {
+        "op": "letBool",
+        "bind": "died",
+        "when": {
+          "not": {
+            "alive": "$self"
+          }
+        }
+      },
+      {
+        "op": "partyBuff",
+        "field": "penanceBonus",
+        "amount": {
+          "tune": "PENANCE_STRIKE_BONUS"
+        },
+        "mode": "keepStronger"
+      },
+      {
+        "op": "partyBuff",
+        "field": "penanceTurns",
+        "turns": {
+          "tune": "PENANCE_STRIKE_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "collect",
+        "bind": "slots",
+        "over": "$allLiving",
+        "pick": "slot"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{died ? {self.name} gives everything for one last Feat of Strength. Every living member's auto deals +{PENANCE_STRIKE_BONUS} for {PENANCE_STRIKE_TURNS} enemy turns. : {self.name} strains himself (-{cost} HP) — Feat of Strength: every living member's auto deals +{PENANCE_STRIKE_BONUS} for {PENANCE_STRIKE_TURNS} enemy turns.}"
+      },
+      {
+        "op": "emit",
+        "kind": "penance",
+        "slot": "$self",
+        "bonus": {
+          "tune": "PENANCE_STRIKE_BONUS"
+        },
+        "died": {
+          "var": "died"
+        },
+        "slots": {
+          "var": "slots"
+        }
+      }
+    ]
+  },
+  "twinShot": {
+    "id": "twinShot",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "auto": "$self"
+        },
+        "times": {
+          "tune": "TWIN_SHOT_HITS"
+        },
+        "label": "{self.name} (Twin Shot)"
+      }
+    ]
+  },
+  "concVenom": {
+    "id": "concVenom",
+    "actions": [
+      {
+        "op": "if",
+        "when": {
+          "enemyHasStatus": "poisonTurns"
+        },
+        "then": [
+          {
+            "op": "enemyStatus",
+            "tag": "poison",
+            "amount": {
+              "tune": "CONC_VENOM_MULT"
+            },
+            "mode": "mul"
+          },
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "{self.name} concentrates the venom — Poison {enemy.poison}/turn."
+          },
+          {
+            "op": "emit",
+            "kind": "poisonApplied",
+            "slot": "$self",
+            "amount": {
+              "enemyStat": "poison"
+            },
+            "poison": {
+              "enemyStat": "poison"
+            }
+          }
+        ],
+        "else": [
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "{self.name} finds no venom to concentrate."
+          }
+        ]
+      }
+    ]
+  },
+  "shieldWall": {
+    "id": "shieldWall",
+    "actions": [
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "status",
+            "on": "$target",
+            "tag": "defense",
+            "amount": {
+              "tune": "SHIELD_WALL_DEFENSE"
+            },
+            "turns": {
+              "tune": "SHIELD_WALL_TURNS"
+            },
+            "mode": "keepStrongerIfActive"
+          },
+          {
+            "op": "emit",
+            "kind": "defenseApplied",
+            "slot": "$target",
+            "amount": {
+              "tune": "SHIELD_WALL_DEFENSE"
+            }
+          }
+        ]
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} raises a Shield Wall — the party braces (Defense {SHIELD_WALL_DEFENSE} for {SHIELD_WALL_TURNS} turns)."
+      }
+    ]
+  },
+  "holdLine": {
+    "id": "holdLine",
+    "actions": [
+      {
+        "op": "status",
+        "on": "$self",
+        "tag": "defense",
+        "amount": {
+          "tune": "HOLD_LINE_DEFENSE"
+        },
+        "turns": {
+          "tune": "HOLD_LINE_TURNS"
+        },
+        "mode": "keepStrongerIfActive"
+      },
+      {
+        "op": "status",
+        "on": "$self",
+        "tag": "holdLine",
+        "turns": {
+          "tune": "HOLD_LINE_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "emit",
+        "kind": "defenseApplied",
+        "slot": "$self",
+        "amount": {
+          "tune": "HOLD_LINE_DEFENSE"
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} holds the line (Defense {HOLD_LINE_DEFENSE}) — the blows he soaks now bank double for Grudge."
+      }
+    ]
+  },
+  "arcaneSurge": {
+    "id": "arcaneSurge",
+    "actions": [
+      {
+        "op": "addStat",
+        "on": "$self",
+        "stat": "charge",
+        "amount": {
+          "tune": "ARCANE_SURGE_CHARGE"
+        },
+        "cap": {
+          "tune": "CHARGE_MAX"
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} surges with arcane power — Charge {self.charge}."
+      }
+    ]
+  },
+  "drainLife": {
+    "id": "drainLife",
+    "actions": [
+      {
+        "op": "let",
+        "bind": "raw",
+        "value": {
+          "sum": [
+            {
+              "tune": "DRAIN_LIFE_DMG"
+            },
+            {
+              "abilityPower": "$self"
+            }
+          ]
+        }
+      },
+      {
+        "op": "let",
+        "bind": "dealt",
+        "value": {
+          "vulnerable": {
+            "var": "raw"
+          }
+        }
+      },
+      {
+        "op": "damage",
+        "amount": {
+          "var": "raw"
+        },
+        "source": "{self.name} (Drain Life)"
+      },
+      {
+        "op": "emit",
+        "kind": "partyAttack",
+        "slot": "$self",
+        "memberId": "$self.id",
+        "amount": {
+          "var": "dealt"
+        },
+        "enemyHp": {
+          "enemyStat": "hp"
+        }
+      },
+      {
+        "op": "if",
+        "when": {
+          "won": true
+        },
+        "then": [
+          {
+            "op": "emit",
+            "kind": "defeatEnemy"
+          }
+        ]
+      },
+      {
+        "op": "heal",
+        "to": "$mostWounded",
+        "amount": {
+          "var": "dealt"
+        },
+        "direct": true,
+        "bind": "healed"
+      },
+      {
+        "op": "if",
+        "when": {
+          "nonZero": {
+            "var": "healed"
+          }
+        },
+        "then": [
+          {
+            "op": "emit",
+            "kind": "heal",
+            "slot": "$mostWounded",
+            "amount": {
+              "var": "healed"
+            },
+            "hp": {
+              "stat": "hp",
+              "of": "$mostWounded"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "doom": {
+    "id": "doom",
+    "actions": [
+      {
+        "op": "enemyStatus",
+        "tag": "doom",
+        "turns": {
+          "tune": "DOOM_DELAY"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} pronounces Doom — the enemy is struck in {DOOM_DELAY} turns."
+      }
+    ]
+  },
+  "sacrifice": {
+    "id": "sacrifice",
+    "actions": [
+      {
+        "op": "bloodPay",
+        "from": "$targetOrSelf",
+        "amount": {
+          "tune": "SACRIFICE_HP"
+        }
+      },
+      {
+        "op": "addStat",
+        "on": "$self",
+        "stat": "damage",
+        "amount": {
+          "tune": "SACRIFICE_DMG"
+        }
+      },
+      {
+        "op": "addStat",
+        "on": "$self",
+        "stat": "abilityPower",
+        "amount": {
+          "tune": "SACRIFICE_POWER"
+        }
+      },
+      {
+        "op": "letBool",
+        "bind": "isSelf",
+        "when": {
+          "isSelf": "$targetOrSelf"
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} sacrifices {isSelf ? his own : {$targetOrSelf.name}'s} blood — +{SACRIFICE_DMG} damage, +{SACRIFICE_POWER} power for the fight."
+      }
+    ]
+  },
+  "finale": {
+    "id": "finale",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "mul": [
+            {
+              "tune": "FINALE_MULT"
+            },
+            {
+              "auto": "$self"
+            }
+          ]
+        },
+        "label": "{self.name} (Finale)"
+      }
+    ]
+  },
+  "duet": {
+    "id": "duet",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$targetOrSelf",
+        "amount": {
+          "auto": "$targetOrSelf"
+        },
+        "label": "{$targetOrSelf.name} (Duet)"
+      }
+    ]
+  },
+  "bloodbath": {
+    "id": "bloodbath",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "sum": [
+            {
+              "mul": [
+                {
+                  "missingHp": "$self"
+                },
+                {
+                  "tune": "BLOODBATH_PER_MISSING"
+                }
+              ]
+            },
+            {
+              "abilityPower": "$self"
+            }
+          ]
+        },
+        "label": "{self.name} (Bloodbath)"
+      }
+    ]
+  },
+  "whirlwind": {
+    "id": "whirlwind",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "auto": "$self"
+        },
+        "times": {
+          "if": {
+            "berserkerBandHot": "$self"
+          },
+          "then": {
+            "sum": [
+              {
+                "tune": "WHIRLWIND_HITS"
+              },
+              1
+            ]
+          },
+          "else": {
+            "tune": "WHIRLWIND_HITS"
+          }
+        },
+        "label": "{self.name} (Whirlwind)"
+      }
+    ]
+  },
+  "sicEm": {
+    "id": "sicEm",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "sum": [
+            {
+              "mul": [
+                {
+                  "tune": "SIC_EM_MULT"
+                },
+                {
+                  "tune": "BOAR_STRIKE_BONUS"
+                }
+              ]
+            },
+            {
+              "abilityPower": "$self"
+            }
+          ]
+        },
+        "label": "{self.name}'s Boar (Sic 'Em)"
+      }
+    ]
+  },
+  "mendBeast": {
+    "id": "mendBeast",
+    "actions": [
+      {
+        "op": "addStat",
+        "on": "$self",
+        "stat": "boarHp",
+        "amount": {
+          "tune": "MEND_BEAST_HEAL"
+        }
+      },
+      {
+        "op": "addStat",
+        "on": "$self",
+        "stat": "boarTurns",
+        "amount": 1
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} mends her Boar ({self.boarHp} HP, {self.boarTurns} turns)."
+      },
+      {
+        "op": "emit",
+        "kind": "boarSummon",
+        "slot": "$self",
+        "hp": {
+          "stat": "boarHp",
+          "of": "$self"
+        },
+        "turns": {
+          "stat": "boarTurns",
+          "of": "$self"
+        }
+      }
+    ]
+  },
+  "standingOvation": {
+    "id": "standingOvation",
+    "actions": [
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "status",
+            "on": "$target",
+            "tag": "drumPrimed",
+            "mode": "set"
+          }
+        ]
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} brings the house down — every member's next strike lands doubled!"
+      }
+    ]
+  },
+  "bigTop": {
+    "id": "bigTop",
+    "actions": [
+      {
+        "op": "partyBuff",
+        "field": "bigTopTurns",
+        "turns": {
+          "tune": "BIG_TOP_TURNS"
+        },
+        "mode": "keepStronger"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} raises the big top — the party takes less from every hit next turn."
+      }
+    ]
+  },
+  "lunge": {
+    "id": "lunge",
+    "actions": [
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "mul": [
+            {
+              "tune": "LUNGE_MULT"
+            },
+            {
+              "auto": "$self"
+            }
+          ]
+        },
+        "label": "{self.name} (Lunge)"
+      },
+      {
+        "op": "status",
+        "on": "$self",
+        "tag": "taunt",
+        "turns": {
+          "tune": "LUNGE_TAUNT_TURNS"
+        },
+        "mode": "keepLonger"
+      },
+      {
+        "op": "emit",
+        "kind": "taunt",
+        "slot": "$self",
+        "turns": {
+          "tune": "LUNGE_TAUNT_TURNS"
+        }
+      }
+    ]
+  },
+  "flurry": {
+    "id": "flurry",
+    "actions": [
+      {
+        "op": "let",
+        "bind": "each",
+        "value": {
+          "clampMin": {
+            "sum": [
+              {
+                "auto": "$self"
+              },
+              {
+                "mul": [
+                  -1,
+                  {
+                    "tune": "FLURRY_REDUCTION"
+                  }
+                ]
+              }
+            ]
+          },
+          "atLeast": 1
+        }
+      },
+      {
+        "op": "strike",
+        "from": "$self",
+        "amount": {
+          "var": "each"
+        },
+        "times": {
+          "tune": "FLURRY_HITS"
+        },
+        "label": "{self.name} (Flurry)"
+      }
+    ]
+  },
+  "strongest": {
+    "id": "strongest",
+    "actions": [
+      {
+        "op": "drain",
+        "from": "$self",
+        "amount": {
+          "tune": "STRONGEST_HP"
+        }
+      },
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "status",
+            "on": "$target",
+            "tag": "drumPrimed",
+            "mode": "set"
+          }
+        ]
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} shows the world his strength — every member's next strike lands doubled!"
+      }
+    ]
+  },
+  "deadlift": {
+    "id": "deadlift",
+    "actions": [
+      {
+        "op": "status",
+        "on": "$targetOrSelf",
+        "tag": "untargetable",
+        "turns": {
+          "tune": "DEADLIFT_TURNS"
+        },
+        "mode": "keepLonger"
+      },
+      {
+        "op": "letBool",
+        "bind": "isSelf",
+        "when": {
+          "isSelf": "$targetOrSelf"
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{self.name} hoists {isSelf ? himself : {$targetOrSelf.name}} clear — out of reach next turn."
+      }
+    ]
+  }
+}

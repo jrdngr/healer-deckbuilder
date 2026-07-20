@@ -10,7 +10,7 @@
 import type { Game, Member } from '../../engine';
 import type { Action, Amount, Condition, Selector, StatusTag, WriteMode } from '../schema/dsl';
 import { renderTemplate, templateRefs } from './template';
-import { TUNING } from '../../data/tuning-table';
+import { CONTENT_TUNING as TUNING } from '../tuning';
 
 /** What an action list is running against. */
 export interface ActionCtx {
@@ -203,6 +203,11 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
   // share a key, but the ordering is kept explicit anyway.)
   if ('clampMin' in a) return Math.max(a.atLeast as number, evalAmount(game, a.clampMin as Amount, ctx));
   if ('min' in a) return Math.min(...(a.min as Amount[]).map((x) => evalAmount(game, x, ctx)));
+  if ('if' in a) {
+    return evalCondition(game, a.if as Condition, ctx)
+      ? evalAmount(game, a.then as Amount, ctx)
+      : evalAmount(game, a.else as Amount, ctx);
+  }
   if ('floor' in a) return Math.floor(evalAmount(game, a.floor as Amount, ctx));
   return 0;
 }
@@ -239,6 +244,12 @@ export function evalCondition(game: Game, cond: Condition, ctx: ActionCtx, subje
     return typeof v === 'number' ? v > 0 : Boolean(v);
   }
   if ('hasRelic' in c) return game.hasRelic(c.hasRelic as never);
+  if ('won' in c) return game.status === 'win';
+  if ('nonZero' in c) return evalAmount(game, c.nonZero as Amount, ctx) !== 0;
+  if ('isSelf' in c) {
+    const m = resolveOne(game, c.isSelf as Selector, ctx);
+    return !!m && !!ctx.self && m.slot === ctx.self.slot;
+  }
   if ('berserkerBandHot' in c) {
     const m = pick(c.berserkerBandHot);
     return !!m && m.hp <= game.berserkerThresholds()[1];
@@ -280,6 +291,7 @@ function render(game: Game, tpl: string, ctx: ActionCtx): string {
     // The standing telegraph's readable name, with the same 'attack' fallback the
     // arms used. Several logs name what they are steering or cancelling.
     intent: game.telegraphIntent() ?? 'attack',
+    enemyName: game.enemyDef.name,
     ...ctx.vars,
   };
   const refs = templateRefs(tpl);
@@ -312,12 +324,15 @@ function emitPayload(game: Game, action: Record<string, unknown>, ctx: ActionCtx
       else payload[k] = evalAmount(game, v as Amount, ctx);
     }
   }
-  // Bare selector strings ('$target') arrive as strings; map the common slot keys.
-  for (const key of ['slot']) {
-    const raw = action[key];
-    if (typeof raw === 'string' && raw.startsWith('$')) {
-      payload[key] = resolveOne(game, raw as Selector, ctx)?.slot;
-    }
+  // Selector strings: '$target' means that member's SLOT (the common case), while
+  // '$self.id' addresses a named field on the resolved member.
+  for (const [k, v] of Object.entries(action)) {
+    if (typeof v !== 'string' || !v.startsWith('$')) continue;
+    const dot = v.indexOf('.');
+    const m = resolveOne(game, (dot === -1 ? v : v.slice(0, dot)) as Selector, ctx);
+    payload[k] = dot === -1
+      ? m?.slot
+      : (m as unknown as Record<string, unknown> | undefined)?.[v.slice(dot + 1)];
   }
   game._emit(payload as never);
 }
@@ -348,7 +363,10 @@ export function runActions(
       }
       case 'damage': {
         const amount = evalAmount(game, action.amount, ctx);
-        const killed = game._damageEnemy(amount, action.source ?? ctx.card?.name ?? 'effect');
+        // `source` is a TEMPLATE: several arms name the striker ('Berserker (Rampage)'),
+        // and that string reaches the combat log verbatim.
+        const source = action.source ? render(game, action.source, ctx) : (ctx.card?.name ?? 'effect');
+        const killed = game._damageEnemy(amount, source);
         if (action.nuke) game._emitEnemyNuke(amount, killed);
         bind(amount);
         break;
@@ -359,7 +377,8 @@ export function runActions(
         const times = action.times ? evalAmount(game, action.times, ctx) : 1;
         for (let i = 0; i < times; i++) {
           const dmg = evalAmount(game, action.amount, ctx);
-          if (game._strikeEnemy(from, dmg, action.label ?? from.name)) break;
+          const label = action.label ? render(game, action.label, ctx) : from.name;
+          if (game._strikeEnemy(from, dmg, label)) break;
         }
         break;
       }
@@ -511,6 +530,11 @@ export function runActions(
         break;
       case 'letStr':
         ctx.vars[action.bind] = render(game, action.value, ctx);
+        break;
+      // A real boolean, not 1/0 — GameEvent payloads carry booleans (penance.died)
+      // and an emitted 1 would not equal the `false` the animator and tests expect.
+      case 'letBool':
+        ctx.vars[action.bind] = evalCondition(game, action.when, ctx);
         break;
       case 'collect': {
         const picked: unknown[] = [];

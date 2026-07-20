@@ -12,7 +12,7 @@ import { ActionListSchema } from './schema/dsl';
 import type { Action } from './schema/dsl';
 import { renderTemplate } from './interpreter/template';
 import { registerCheck } from './validate/driver';
-import { TUNING, TUNING_KEYS } from '../data/tuning-table';
+import { CONTENT_TUNING as TUNING, CONTENT_TUNING_KEYS } from './tuning';
 import { NATIVE_NAMES } from './natives';
 import { validateActions } from './validate/actions';
 import type { ErrorCollector } from './validate/report';
@@ -96,7 +96,7 @@ registerCheck({
       validateActions(parsed.data as Action[], {
         file: 'cards.json',
         basePath: `${id}.actions`,
-        tuningKeys: TUNING_KEYS,
+        tuningKeys: CONTENT_TUNING_KEYS,
         natives: NATIVE_NAMES,
         declaredFields: CARD_AMOUNT_FIELDS.filter((f) => def[f] !== undefined),
       }, errs);

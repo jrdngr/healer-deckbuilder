@@ -128,7 +128,7 @@ const REJECTS = (name: string, actions: unknown[], needle: string) => {
     ActionSchema.safeParse({ op: 'emit', kind: 'heal', slot: 1, amount: 4, hp: 12 }).success);
 }
 {
-  eq('every op name has a schema branch', OP_NAMES.length, 29);
+  eq('every op name has a schema branch', OP_NAMES.length, 30);
   check('describeAmountBranch names a branch', describeAmountBranch({ tune: 'X' }) === 'tune');
   check('describeAmountBranch rejects two keys', describeAmountBranch({ tune: 'X', var: 'y' }) === null);
   check('describeAmountBranch handles numbers', describeAmountBranch(3) === 'number');
