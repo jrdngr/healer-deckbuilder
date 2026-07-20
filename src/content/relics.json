@@ -4,7 +4,12 @@
     "name": "Searchlight",
     "rarity": "common",
     "icon": "🔦",
-    "desc": "Hidden attacks reveal their target."
+    "desc": "Hidden attacks reveal their target.",
+    "hooks": {
+      "revealHidden": {
+        "answer": true
+      }
+    }
   },
   "hagglersCharm": {
     "id": "hagglersCharm",
@@ -18,7 +23,18 @@
     "name": "Field Triage Kit",
     "rarity": "uncommon",
     "icon": "🩹",
-    "desc": "Heals on a member below {FIELD_TRIAGE_THRESHOLD|pct}% max HP heal +{FIELD_TRIAGE_BONUS}."
+    "desc": "Heals on a member below {FIELD_TRIAGE_THRESHOLD|pct}% max HP heal +{FIELD_TRIAGE_BONUS}.",
+    "hooks": {
+      "modifyHealAmount": {
+        "when": {
+          "hpBelowFrac": 0.5,
+          "of": "$self"
+        },
+        "add": {
+          "tune": "FIELD_TRIAGE_BONUS"
+        }
+      }
+    }
   },
   "warDrum": {
     "id": "warDrum",
@@ -39,14 +55,30 @@
     "name": "Team Pennant",
     "rarity": "rare",
     "icon": "🚩",
-    "desc": "Members at full HP deal +{VANGUARD_BONUS} on their auto-attack."
+    "desc": "Members at full HP deal +{VANGUARD_BONUS} on their auto-attack.",
+    "hooks": {
+      "modifyMemberDamage": {
+        "when": {
+          "hpFull": "$self"
+        },
+        "add": {
+          "tune": "VANGUARD_BONUS"
+        }
+      }
+    }
   },
   "martyrsIcon": {
     "id": "martyrsIcon",
     "name": "Guardian Feather",
     "rarity": "rare",
     "icon": "🕊",
-    "desc": "Once per fight, a member death becomes survival at 1 HP."
+    "desc": "Once per fight, a member death becomes survival at 1 HP.",
+    "hooks": {
+      "vetoDeath": {
+        "answer": true,
+        "consumes": "martyrUsed"
+      }
+    }
   },
   "pactOfSilence": {
     "id": "pactOfSilence",
@@ -54,7 +86,17 @@
     "rarity": "rare",
     "icon": "☕",
     "curse": true,
-    "desc": "CURSE — you can no longer Rest; gain +{PACT_PASSIVE_MP} MP at the start of each turn."
+    "desc": "CURSE — you can no longer Rest; gain +{PACT_PASSIVE_MP} MP at the start of each turn.",
+    "hooks": {
+      "modifyPassiveMp": {
+        "add": {
+          "tune": "PACT_PASSIVE_MP"
+        }
+      },
+      "allowRest": {
+        "answer": false
+      }
+    }
   },
   "rustyCrown": {
     "id": "rustyCrown",
@@ -62,14 +104,36 @@
     "rarity": "rare",
     "icon": "👑",
     "curse": true,
-    "desc": "CURSE — normal enemies attack +{RUSTY_CROWN_ATTACK} harder (bosses are proud enough); fight wins pay +{RUSTY_CROWN_GOLD}g."
+    "desc": "CURSE — normal enemies attack +{RUSTY_CROWN_ATTACK} harder (bosses are proud enough); fight wins pay +{RUSTY_CROWN_GOLD}g.",
+    "hooks": {
+      "modifyEnemyAttack": {
+        "when": {
+          "not": {
+            "bossFight": true
+          }
+        },
+        "add": {
+          "tune": "RUSTY_CROWN_ATTACK"
+        }
+      }
+    }
   },
   "loneWolf": {
     "id": "loneWolf",
     "name": "Lone Wolf Totem",
     "rarity": "uncommon",
     "icon": "🐺",
-    "desc": "While fielding {SMALL_PARTY_MAX} or fewer members, each of them deals +{LONE_WOLF_DMG} damage."
+    "desc": "While fielding {SMALL_PARTY_MAX} or fewer members, each of them deals +{LONE_WOLF_DMG} damage.",
+    "hooks": {
+      "modifyMemberDamage": {
+        "when": {
+          "smallParty": true
+        },
+        "add": {
+          "tune": "LONE_WOLF_DMG"
+        }
+      }
+    }
   },
   "focusStone": {
     "id": "focusStone",
@@ -90,7 +154,17 @@
     "name": "Glitter Box",
     "rarity": "uncommon",
     "icon": "✨",
-    "desc": "Holy cards heal +{HOLY_RELIC_HEAL}."
+    "desc": "Holy cards heal +{HOLY_RELIC_HEAL}.",
+    "hooks": {
+      "modifyCardHealBonus": {
+        "when": {
+          "cardType": "holy"
+        },
+        "add": {
+          "tune": "HOLY_RELIC_HEAL"
+        }
+      }
+    }
   },
   "ossuaryBell": {
     "id": "ossuaryBell",
@@ -104,7 +178,14 @@
     "name": "Venom Gland",
     "rarity": "uncommon",
     "icon": "🦂",
-    "desc": "Poison you apply lasts +{VENOM_GLAND_BONUS_TURNS} turn."
+    "desc": "Poison you apply lasts +{VENOM_GLAND_BONUS_TURNS} turn.",
+    "hooks": {
+      "modifyPoisonTurns": {
+        "add": {
+          "tune": "VENOM_GLAND_BONUS_TURNS"
+        }
+      }
+    }
   },
   "beaconOfSecondSun": {
     "id": "beaconOfSecondSun",
@@ -125,7 +206,15 @@
     "name": "Chanter's Idol",
     "rarity": "rare",
     "icon": "🎐",
-    "desc": "The first card you play each turn does not break your channel."
+    "desc": "The first card you play each turn does not break your channel.",
+    "hooks": {
+      "channelExempt": {
+        "when": {
+          "cardsPlayedIs": 1
+        },
+        "answer": true
+      }
+    }
   },
   "pilgrimsFlask": {
     "id": "pilgrimsFlask",

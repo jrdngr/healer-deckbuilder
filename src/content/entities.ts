@@ -9,10 +9,17 @@ import enemyJson from './enemies.json';
 import memberJson from './members.json';
 import { registerCheck } from './validate/driver';
 import { renderTemplate } from './interpreter/template';
-import { CONTENT_TUNING } from './tuning';
+import { CONTENT_TUNING, CONTENT_TUNING_KEYS } from './tuning';
+import { HookBlockSchema, isValueHookName, isEventHookName, ALL_HOOK_NAMES } from './hooks';
+import type { HookBlock } from './hooks';
+import { validateActions } from './validate/actions';
+import { NATIVE_NAMES } from './natives';
+import type { Action } from './schema/dsl';
 
 export interface RelicJson {
   id: string; name: string; rarity: string; icon: string; curse?: boolean; desc: string;
+  /** #103: declarative behaviour. Absent means the relic's effect is still engine code. */
+  hooks?: HookBlock;
 }
 export interface MemberJson {
   id: string; name: string; slot: number; maxHP: number; damage: number; ability: string;
@@ -51,6 +58,40 @@ registerCheck({
       }
       for (const e of renderTemplate(r.desc, { fields: r as unknown as Record<string, unknown>, tuning: CONTENT_TUNING }).errors) {
         errs.add({ category: 'template', file: 'relics.json', path: `${id}.desc`, message: e });
+      }
+      if (r.hooks) {
+        const parsed = HookBlockSchema.safeParse(r.hooks);
+        if (!parsed.success) {
+          for (const issue of parsed.error.issues) {
+            errs.add({ category: 'schema', file: 'relics.json',
+              path: `${id}.hooks${issue.path.map((p) => `.${String(p)}`).join('')}`,
+              message: issue.message });
+          }
+          continue;
+        }
+        for (const [name, def] of Object.entries(r.hooks)) {
+          // A hook name the engine never fires is dead content that looks alive.
+          if (!isValueHookName(name) && !isEventHookName(name)) {
+            errs.unknown('ref', 'relics.json', `${id}.hooks.${name}`, 'hook', name, ALL_HOOK_NAMES);
+            continue;
+          }
+          // A VALUE hook must not be an action list and vice versa — the two are
+          // dispatched differently and swapping them would silently do nothing.
+          if (Array.isArray(def) && isValueHookName(name)) {
+            errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
+              message: `${name} is a value hook and takes {when, add, answer}, not an action list` });
+          }
+          if (!Array.isArray(def) && isEventHookName(name)) {
+            errs.add({ category: 'ref', file: 'relics.json', path: `${id}.hooks.${name}`,
+              message: `${name} is an event hook and takes an action list` });
+          }
+          if (Array.isArray(def)) {
+            validateActions(def as Action[], {
+              file: 'relics.json', basePath: `${id}.hooks.${name}`,
+              tuningKeys: CONTENT_TUNING_KEYS, natives: NATIVE_NAMES, declaredFields: [],
+            }, errs);
+          }
+        }
       }
     }
   },

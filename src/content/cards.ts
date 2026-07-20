@@ -57,6 +57,9 @@ export const CARD_ACTIONS: Record<string, Action[]> = Object.freeze(
 
 export const CARD_JSON: Record<string, CardJson> = Object.freeze(RAW);
 
+/** A card's type, straight off the JSON — used by the `cardType` hook condition. */
+export const CARD_TYPE_OF = (id: string): string | undefined => RAW[id]?.type;
+
 /** Card fields an action may reference via {"card": "…"}. */
 const CARD_AMOUNT_FIELDS = ['heal', 'regen', 'draw', 'refresh', 'refreshTurns', 'refreshCap', 'selfDamage', 'cost'];
 

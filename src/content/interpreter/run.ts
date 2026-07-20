@@ -11,6 +11,10 @@ import type { Game, Member } from '../../engine';
 import type { Action, Amount, Condition, Selector, StatusTag, WriteMode } from '../schema/dsl';
 import { renderTemplate, templateRefs } from './template';
 import { CONTENT_TUNING as TUNING } from '../tuning';
+// Two engine facts the hook conditions need. Imported from the data leaves directly,
+// never through the constants barrel — that re-exports content and would close a cycle.
+import { SMALL_PARTY_MAX } from '../../data/tuning';
+import { CARD_TYPE_OF as cardTypeOf } from '../cards';
 
 /** What an action list is running against. */
 export interface ActionCtx {
@@ -186,6 +190,7 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
     const v = (game as unknown as Record<string, unknown>)[a.gameStat as string];
     return typeof v === 'number' ? v : 0;
   }
+  if ('emptySeats' in a) return game.members.filter((m) => m.absent).length;
   if ('telegraphStat' in a) {
     const t = game.telegraph as unknown as Record<string, unknown> | null;
     const v = t ? t[a.telegraphStat as string] : 0;
@@ -246,6 +251,10 @@ export function evalCondition(game: Game, cond: Condition, ctx: ActionCtx, subje
   if ('hasRelic' in c) return game.hasRelic(c.hasRelic as never);
   if ('won' in c) return game.status === 'win';
   if ('nonZero' in c) return evalAmount(game, c.nonZero as Amount, ctx) !== 0;
+  if ('smallParty' in c) return game.fieldedPartySize() <= SMALL_PARTY_MAX;
+  if ('bossFight' in c) return game.config.enemy.boss === true;
+  if ('cardType' in c) return ctx.card != null && cardTypeOf(ctx.card.id) === c.cardType;
+  if ('cardsPlayedIs' in c) return game.cardsPlayedThisPhase === c.cardsPlayedIs;
   if ('isSelf' in c) {
     const m = resolveOne(game, c.isSelf as Selector, ctx);
     return !!m && !!ctx.self && m.slot === ctx.self.slot;

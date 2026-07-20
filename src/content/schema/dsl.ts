@@ -42,6 +42,8 @@ export type Amount =
   | { enemyStat: string }
   /** An engine-level field: hymnBonus, refresh, bloodBannerTurns… */
   | { gameStat: string }
+  /** Empty deploy seats — warband scales on them. */
+  | { emptySeats: true }
   | { telegraphStat: string }
   /** vulnerableAmount() — post-Vulnerability scaling. */
   | { vulnerable: Amount }
@@ -65,7 +67,7 @@ export type Amount =
 /** The single key that decides which amount branch an object is. */
 export const AMOUNT_KEYS = [
   'tune', 'card', 'stat', 'auto', 'abilityPower', 'missingHp', 'var', 'enemyStat',
-  'telegraphStat', 'gameStat', 'vulnerable', 'bloodCost', 'sanguineSurcharge', 'holyHealBonus',
+  'telegraphStat', 'gameStat', 'emptySeats', 'vulnerable', 'bloodCost', 'sanguineSurcharge', 'holyHealBonus',
   'sum', 'mul', 'max', 'min', 'floor', 'clampMin', 'if',
 ] as const;
 
@@ -101,13 +103,21 @@ export type Condition =
   | { isSelf: Selector }
   /** The amount evaluates to something other than 0 — gates conditional emits. */
   | { nonZero: Amount }
+  /** Fielded party size is at or below SMALL_PARTY_MAX (loneWolf, focusStone). */
+  | { smallParty: true }
+  /** This fight is against a boss (rustyCrown spares them). */
+  | { bossFight: true }
+  /** The card in scope has this type (reliquaryOfLight is Holy-only). */
+  | { cardType: string }
+  /** Exactly N cards have been played this phase (chantersIdol's first-card rule). */
+  | { cardsPlayedIs: number }
   | { not: Condition }
   | { all: Condition[] }
   | { any: Condition[] };
 
 export const CONDITION_KEYS = [
   'hpFull', 'hpAtOrBelow', 'hpBelowFrac', 'alive', 'exists', 'hasStatus',
-  'enemyHasStatus', 'telegraph', 'hasRelic', 'berserkerBandHot', 'won', 'isSelf', 'nonZero', 'not', 'all', 'any',
+  'enemyHasStatus', 'telegraph', 'hasRelic', 'berserkerBandHot', 'won', 'isSelf', 'nonZero', 'smallParty', 'bossFight', 'cardType', 'cardsPlayedIs', 'not', 'all', 'any',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -197,6 +207,7 @@ export const AmountSchema: z.ZodType<Amount> = z.lazy(() => z.union([
   z.strictObject({ var: z.string() }),
   z.strictObject({ enemyStat: z.string() }),
   z.strictObject({ gameStat: z.string() }),
+  z.strictObject({ emptySeats: z.literal(true) }),
   z.strictObject({ telegraphStat: z.string() }),
   z.strictObject({ vulnerable: AmountSchema }),
   z.strictObject({ bloodCost: z.literal(true) }),
@@ -225,6 +236,10 @@ export const ConditionSchema: z.ZodType<Condition> = z.lazy(() => z.union([
   z.strictObject({ won: z.literal(true) }),
   z.strictObject({ isSelf: SelectorSchema }),
   z.strictObject({ nonZero: AmountSchema }),
+  z.strictObject({ smallParty: z.literal(true) }),
+  z.strictObject({ bossFight: z.literal(true) }),
+  z.strictObject({ cardType: z.string() }),
+  z.strictObject({ cardsPlayedIs: z.number() }),
   z.strictObject({ not: ConditionSchema }),
   z.strictObject({ all: z.array(ConditionSchema) }),
   z.strictObject({ any: z.array(ConditionSchema) }),

@@ -69,6 +69,10 @@ import type {
   TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind, RelicId, CardType,
 } from '../constants';
 import { makeRng, shuffle, weightedPick } from '../rng';
+// #103: the relic/passive hook bus. Compiled once per Game (see _hooks below) so the
+// hot path is a Map.get, never an interpreter walk.
+import { compileHooks, EMPTY_HOOKS, RELIC_JSON, evalCondition, evalAmount } from '../content';
+import type { HookIndex } from '../content';
 import type { Rng } from '../rng';
 
 export type Phase = 'idle' | 'player' | 'over';
@@ -319,6 +323,7 @@ export class Game {
   // start. Sunrise Vigil pushes one entry per cast (two casts -> two heals).
   delayedStartEffects: DelayedStartEffect[];
   relics: Set<RelicId>;   // run-long passives (#21); empty set = fully inert
+  _hooks: HookIndex;      // #103: compiled once at construction from the owned relics
   titheGained: number;    // Tithe Candle MP granted this fight (capped per fight)
   martyrUsed: boolean;    // Martyr's Icon (#22): its once-per-FIGHT save has fired
   drawPile: DeckCard[];
@@ -442,6 +447,11 @@ export class Game {
     this.bigTopTurns = 0;      // no Big Top DR aura at fight start (Dojo)
     this.delayedStartEffects = []; // no queued delayed effects at fight start (#69)
     this.relics = new Set(config.relics ?? []);
+    // #103: compile the owned relics' declared hooks ONCE. Nothing walks a generic
+    // interpreter tree on a read path; a hook name with no owners is a Map miss.
+    this._hooks = compileHooks(
+      [...this.relics].map((id) => ({ owner: id, hooks: RELIC_JSON[id]?.hooks })),
+    );
     this.titheGained = 0;
     // Martyr's Icon (#22) is now once per FIGHT — reset each fight, not read from the
     // run-level spent set.
@@ -494,6 +504,56 @@ export class Game {
 
   hasRelic(id: RelicId): boolean { return this.relics.has(id); }
 
+  // --- hook bus (#103) ------------------------------------------------------
+  // Value hooks are PURE READS. memberDamage feeds attackTargets()'s preview, so a
+  // side-effecting hook here would break the preview == applied invariant that
+  // _wardedDamage's comment (core.ts:1445-1450) exists to protect.
+
+  /** Sum every matching value hook's `add` onto `base`. */
+  _hookValue(name: string, base: number, subject?: Member, card?: ResolvedCard): number {
+    const hooks = this._hooks.value.get(name);
+    if (!hooks) return base;
+    let out = base;
+    for (const { hook } of hooks) {
+      const ctx = { self: subject, card, vars: {} };
+      if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
+      if (hook.add !== undefined) out += evalAmount(this, hook.add, ctx);
+    }
+    return out;
+  }
+
+  /** True when some matching value hook answers `expect`. */
+  _hookAnswer(name: string, expect: boolean, subject?: Member, card?: ResolvedCard): boolean {
+    const hooks = this._hooks.value.get(name);
+    if (!hooks) return false;
+    for (const { hook } of hooks) {
+      if (hook.answer !== expect) continue;
+      const ctx = { self: subject, card, vars: {} };
+      if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * A consuming answer: the first matching hook whose `consumes` flag is still unset
+   * wins and spends it. Martyr's Icon is once per fight.
+   */
+  _hookConsume(name: string, subject?: Member): boolean {
+    const hooks = this._hooks.value.get(name);
+    if (!hooks) return false;
+    for (const { hook } of hooks) {
+      if (hook.answer !== true) continue;
+      const flag = hook.consumes;
+      if (flag && (this as unknown as Record<string, boolean>)[flag]) continue;
+      const ctx = { self: subject, vars: {} };
+      if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
+      if (flag) (this as unknown as Record<string, boolean>)[flag] = true;
+      return true;
+    }
+    return false;
+  }
+
   // Whether a player-cast channel (#64) is currently running (a card is channeling
   // with ticks still to come). Read by the MP-suppression gates and the UI badge.
   channelActive(): boolean { return this.channelCard != null && this.channelTurns > 0; }
@@ -507,7 +567,10 @@ export class Game {
   // Battle Hymn (#16) adds its bonus here for the phase it was sung in;
   // Vanguard's Banner (#21) rewards a member kept at full HP.
   memberDamage(m: Member): number {
-    const banner = this.hasRelic('vanguardsBanner') && m.hp === m.maxHP ? VANGUARD_BONUS : 0;
+    // #103: relic damage terms come from the hook bus. PURE READS — attackTargets()
+    // calls this for the telegraph preview, so a side effect here would make the
+    // preview disagree with the damage applied (the invariant at _wardedDamage).
+    const relicBonus = this._hookValue('modifyMemberDamage', 0, m);
     // The Skald (#27) has no fixed strike — it scales on cards played this phase
     // (capped), so a busy turn hits hard and a Rest turn barely swings. His base
     // `damage` is 0, but a Weakened scar can push it below 0; fold that in, floored.
@@ -527,7 +590,6 @@ export class Game {
       base += BOAR_STRIKE_BONUS;
     }
     // Lone Wolf Totem (#42): a small fielded party hits harder per body.
-    const lone = this.hasRelic('loneWolf') && this.fieldedPartySize() <= SMALL_PARTY_MAX ? LONE_WOLF_DMG : 0;
     // Sharpen (#62): a standing +damage buff on this hero, decays in _decayBuffs.
     const strike = m.strikeTurns > 0 ? m.strikeBonus : 0;
     // Blood Banner (#68): a party-wide standing +auto buff, additive with Hymn.
@@ -538,7 +600,7 @@ export class Game {
     // half the damage banked since his last strike rides this one.
     const toxic = m.id === 'ranger' && this.enemy.poison > 0 ? TOXICOLOGIST_BONUS : 0;
     const grudge = m.id === 'tank' ? Math.floor(m.bankedDamage / GRUDGE_DIVISOR) : 0;
-    return base + this.hymnBonus + this.penanceBonus + banner + lone + strike + bloodBanner + toxic + grudge;
+    return base + this.hymnBonus + this.penanceBonus + relicBonus + strike + bloodBanner + toxic + grudge;
   }
 
   // The Berserker's two fight-relative HP thresholds [band1, band2] (#28). Public so
@@ -592,8 +654,7 @@ export class Game {
   attackDamageOf(base: number, turn: number): number {
     // The Rusty Crown's price (#22) is paid against NORMAL enemies only — a
     // forced +1 on the tightly-tuned bosses read as a pure trap (F5 ~55%).
-    const crown = this.hasRelic('rustyCrown') && !this.config.enemy.boss ? RUSTY_CROWN_ATTACK : 0;
-    const b = base + this.config.enemy.attackBonus + crown;
+    const b = this._hookValue('modifyEnemyAttack', base + this.config.enemy.attackBonus);
     return this.isEnraged(turn) ? Math.ceil(b * ENRAGE_MULT) : b;
   }
 
@@ -670,7 +731,7 @@ export class Game {
     if (t.targetLowest) parts.push('Aimed at your lowest-HP hero.');
     if (t.ignoreTaunt) parts.push('Cannot be pulled away by Taunt.');
     if (t.ignoreDefense) parts.push('Ignores Defense.');
-    if (t.hidden && !this.hasRelic('lantern')) parts.push('Its target is concealed until it lands.');
+    if (t.hidden && !this._hookAnswer('revealHidden', true)) parts.push('Its target is concealed until it lands.');
     if (t.enraged) parts.push('Enraged — it hits harder.');
     return parts.join(' ');
   }
@@ -874,7 +935,7 @@ export class Game {
     // its lines collapse from the every-member fan-out to the true target(s)
     // (the magnitude was already revealed by flaw #11's fix). Still drawn in
     // the hidden style — the enemy is concealing it; the lantern sees through.
-    if (t.hidden && !this.hasRelic('lantern')) {
+    if (t.hidden && !this._hookAnswer('revealHidden', true)) {
       // Reveal the magnitude, hide the target (flaw #11) — per member: each line
       // shows what THAT member would take if the blow lands on them (the full
       // Defense -> Brace -> Shield pipeline folded in), keeping preview ==
@@ -987,7 +1048,11 @@ export class Game {
   // save, in which case they survive at 1 HP with every status stripped (the
   // wipe check sees a living member either way). Returns true if they died.
   _killMember(m: Member): boolean {
-    const martyr = !this.martyrUsed && this.hasRelic('martyrsIcon');
+    // #103: the relic half of the death veto comes from the hook bus and SPENDS its
+    // once-per-fight flag as it answers. Ordering is unchanged and load-bearing: the
+    // Martyr's Icon is consulted FIRST, so when both could save, only the relic is
+    // spent and the Strongman keeps his Last Stand.
+    const martyr = this._hookConsume('vetoDeath', m);
     // Last Stand (Strongman passive): once per fight a killing blow — a hit OR a Blood
     // cost — leaves him at 1 HP instead. Yields to the Martyr's Icon (either save is
     // enough; only one is spent). Like Martyr, it strips his statuses and clears the scar.
@@ -1127,7 +1192,7 @@ export class Game {
   // only SKIPS the cancel step; it never ticks the channel (the enemy-phase tick is
   // still gated on a fully restrained turn) and never re-enables Rest / passive MP.
   _channelExempt(dc: DeckCard): boolean {
-    if (this.hasRelic('chantersIdol') && this.cardsPlayedThisPhase === 1) return true;
+    if (this._hookAnswer('channelExempt', true)) return true;
     return this.channelExemptUids.has(dc.uid);
   }
 
@@ -1207,7 +1272,7 @@ export class Game {
   // CARD (not per _healMember call) so only Holy card heals are boosted — a ticking
   // Regen (Nature) or a Blood card's spillover heal is untouched.
   _holyHealBonus(card: ResolvedCard): number {
-    return this.hasRelic('reliquaryOfLight') && cardType(card.id) === 'holy' ? HOLY_RELIC_HEAL : 0;
+    return this._hookValue('modifyCardHealBonus', 0, undefined, card);
   }
 
   // Central heal path for every healing source (direct heal cards AND the Regen
@@ -1228,11 +1293,9 @@ export class Game {
   _applyHeal(m: Member, amount: number, direct = false, captureOverheal = false): HealResult {
     const none: HealResult = { healed: 0, overheal: 0, reachedFull: false };
     if (!m.alive || amount <= 0) return none;
-    // Field Triage Kit (#21): heals on a member below half max HP heal harder.
-    // The bonus lands before the Hex halving — the curse dominates everything.
-    if (this.hasRelic('fieldTriage') && m.hp < m.maxHP * FIELD_TRIAGE_THRESHOLD) {
-      amount += FIELD_TRIAGE_BONUS;
-    }
+    // #103: heal-amount hooks (Field Triage Kit) land BEFORE the Hex halving — the
+    // curse dominates everything. Pure reads, so the preview stays honest.
+    amount = this._hookValue('modifyHealAmount', amount, m);
     const effective = this.woundTurns > 0 ? Math.floor(amount * WOUND_HEAL_FACTOR) : amount;
     if (effective <= 0) return none;
     const before = m.hp;
@@ -1340,7 +1403,7 @@ export class Game {
   // retroactively to a running poison) — the duration bump rides the stacking max.
   _applyPoison(perTurn: number, turns: number): void {
     if (perTurn <= 0 || turns <= 0) return;
-    const dur = turns + (this.hasRelic('venomGland') ? VENOM_GLAND_BONUS_TURNS : 0);
+    const dur = this._hookValue('modifyPoisonTurns', turns);
     this.enemy.poison += perTurn;
     this.enemy.poisonTurns = Math.max(this.enemy.poisonTurns, dur);
   }
@@ -1989,7 +2052,7 @@ export class Game {
     // first player phase the count is still its 0 init, so the opening turn grants.
     // Channeling (#64) suppresses passive MP income too — the channel's own return
     // is the only MP a channeling player gets.
-    const passive = this.passiveMp + (this.hasRelic('pactOfSilence') ? PACT_PASSIVE_MP : 0);
+    const passive = this.passiveMp + this._hookValue('modifyPassiveMp', 0);
     if (passive > 0 && this.cardsPlayedThisPhase <= 1 && this.mp < this.maxMana && !this.channelActive()) {
       const before = this.mp;
       this.mp = Math.min(this.maxMana, this.mp + passive);
@@ -2334,7 +2397,7 @@ export class Game {
   // Decaying Rest (flaw #5): you may still Rest after playing a single card, but
   // it yields less. Resting is off the table once two or more cards are played.
   canSkip(): boolean {
-    if (this.hasRelic('pactOfSilence')) return false; // the Pact forbids Rest (#22)
+    if (this._hookAnswer('allowRest', false)) return false; // the Pact forbids Rest (#22)
     return this.phase === 'player' && this.cardsPlayedThisPhase <= 1;
   }
 

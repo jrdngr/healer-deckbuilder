@@ -47,6 +47,8 @@ export { runActions, evalAmount, evalCondition, resolveSelector, STATUS_WRITERS 
 export type { ActionCtx, NativeFn } from './interpreter/run';
 export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/template';
 export { NATIVES, NATIVE_NAMES } from './natives';
+export { compileHooks, EMPTY_HOOKS, VALUE_HOOKS, EVENT_HOOKS, ALL_HOOK_NAMES, isValueHookName, isEventHookName } from './hooks';
+export type { HookIndex, HookBlock, ValueHook, ValueHookName, EventHookName, CompiledValueHook, CompiledEventHook } from './hooks';
 export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
 export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';
 export { RELIC_JSON, MEMBER_JSON, ENEMY_JSON, RELIC_JSON_IDS, MEMBER_JSON_IDS, ENEMY_JSON_IDS } from './entities';
