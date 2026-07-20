@@ -106,19 +106,41 @@ Relics may declare behaviour in `relics.json` under `hooks`. Two kinds:
 }
 ```
 
-- **Value hooks** (`modifyMemberDamage`, `modifyEnemyAttack`, `modifyHealAmount`,
-  `modifyCardHealBonus`, `modifyPoisonTurns`, `modifyPassiveMp`, `allowRest`,
-  `channelExempt`, `revealHidden`, `vetoDeath`) take `{when?, add?, answer?, consumes?}`
-  and **must be pure reads** — `memberDamage` feeds the telegraph preview.
+- **Value hooks** (`modifyMemberDamage`, `modifyAutoStrike`, `modifyEnemyAttack`,
+  `modifyHealAmount`, `modifyCardHealBonus`, `modifyPoisonTurns`, `modifyPassiveMp`,
+  `allowRest`, `channelExempt`, `revealHidden`, `ripostes`, `narratesDoubleStrike`,
+  `vetoDeath`) take `{when?, set?, mul?, add?, answer?, consumes?, consumesMember?,
+  clearsMember?, onApply?}`. `set`/`mul`/`add` apply in that fixed order.
+  **The reads must be pure** — `memberDamage` feeds the telegraph preview. The consuming
+  ones (`vetoDeath`, `modifyAutoStrike`) run through their own dispatchers, never through
+  `_hookValue`, precisely so the preview path cannot act.
 - **Event hooks** (`onAbilityCast`, `onHealApplied`, `onHealCard`, `onReshuffle`,
-  `onMemberDamaged`, `onRest`, `onMemberDied`, `onTurnStart`) take an action list.
+  `onMemberDamaged`, `onMemberSurvived`, `onRest`, `onMemberDied`, `onTurnStart`,
+  `onAfterAutoAttack`) take an action list. `onMemberDamaged` fires BEFORE the death veto,
+  `onMemberSurvived` after it and only for a survivor — do not collapse them.
+- **Run-layer hooks** (`modifyShopPrice`, `modifyRecoveryPct`, `modifyFightGold`,
+  `modifyRewardSize`) are read by `Run`, which has no `Game`. Their amounts must be static
+  (a number or arithmetic over `{tune}`) and they may not take a `when`; the validator
+  enforces both.
 
-Hooks compile into a per-`Game` index once, so an unhooked read is a `Map` miss.
+Hooks compile into a per-`Game` index once, so an unhooked read is a `Map` miss. Hero
+passives ride the same bus, tagged with the hero's **slot**, so a passive fires only for
+its own hero — that is what replaced the old `m.id === '…'` guards. A passive reacting to
+something that happened to someone else reaches its own hero via the `$owner` selector.
+
+**Adding an event hook is a TWO-part change**: the `_hookEvent(...)` call at the seam AND
+the name in `EVENT_HOOKS`. A declared name with no seam validates cleanly and then does
+nothing — `test/content/hook-sites.test.ts` fails the build if you do half of it. Payload
+vars go in `HOOK_CTX_VARS`, and a hook reading a var its seam does not provide is a startup
+error.
 
 ### What is still code
 
-Eight relics still have inline behaviour, and **all 11 hero passives** do. Their
-metadata is JSON; their effects are not. Tracked in #103.
+`stuntDouble` (the Showstopper's dive: a speculative `_wardedDamage` preview that swaps the
+hit's recipient mid-loop) and the three `m.ability`-keyed damage bands in `memberDamage`.
+Both are declared in `members.json` as `passiveNative`, and a validator check refuses to
+start if a hero has `passiveFlavor` text with neither `hooks` nor a `passiveNative` behind
+it — so an unimplemented passive cannot hide.
 
 ### Validation
 

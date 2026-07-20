@@ -43,6 +43,13 @@ export const VALUE_HOOKS = [
   // 3-turn timer and delete it for good when that expired. Never overload a timed field to
   // express a permanent property.
   'ripostes',
+  /**
+   * The party-phase auto strike, AFTER memberDamage has produced the base. Deliberately a
+   * second seam rather than part of memberDamage: this one is consuming (Feral Bond spends
+   * its prime on the swing) and memberDamage feeds `attackTargets()`'s telegraph preview,
+   * where a side effect would make the preview disagree with the damage applied.
+   */
+  'modifyAutoStrike',
 ] as const;
 export type ValueHookName = (typeof VALUE_HOOKS)[number];
 
@@ -116,6 +123,26 @@ export interface ValueHook {
   answer?: boolean;
   /** A once-per-fight consumable flag on the Game, for vetoDeath-style saves. */
   consumes?: string;
+  /**
+   * The same idea on the MEMBER rather than the Game: gate on the flag being falsy, then
+   * set it true. Martyr's Icon is once per fight for the PARTY (`consumes: martyrUsed`);
+   * the Strongman's Last Stand is once per fight for HIM, and a per-Game flag would let
+   * one hero's save spend everybody's.
+   */
+  consumesMember?: string;
+  /**
+   * The opposite polarity: a member flag that GATES the hook while set and is cleared by
+   * using it. Feral Bond is primed by the Boar's death and spent by the next swing.
+   * Separate from `consumesMember` because "require unset, then set" and "require set,
+   * then unset" are genuinely different, and one field doing both would read as a puzzle.
+   */
+  clearsMember?: string;
+  /**
+   * Actions to run when a CONSUMING hook is actually used — how a veto or a spent prime
+   * narrates itself. Only the consuming dispatchers honour it; a plain value hook stays a
+   * pure read, because `memberDamage` feeds the telegraph preview and must not act.
+   */
+  onApply?: Action[];
 }
 
 export interface HookBlock {
@@ -129,6 +156,9 @@ export const ValueHookSchema: z.ZodType<ValueHook> = z.strictObject({
   add: AmountSchema.optional(),
   answer: z.boolean().optional(),
   consumes: z.string().optional(),
+  consumesMember: z.string().optional(),
+  clearsMember: z.string().optional(),
+  onApply: ActionListSchema.optional(),
 });
 
 /**

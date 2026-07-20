@@ -34,6 +34,17 @@ export interface MemberJson {
    * (`stuntDouble`) or the hero has none.
    */
   hooks?: HookBlock;
+  /**
+   * A passive that is DELIBERATELY still engine code, named so the gap is declared rather
+   * than merely present. `stuntDouble` runs a speculative `_wardedDamage` preview and then
+   * swaps the hit's recipient mid-loop — control flow the action vocabulary cannot express,
+   * and inventing a form for a single hero would be worse than the honest exception.
+   *
+   * The point of naming it: the coverage check can then tell "intentionally native" apart
+   * from "somebody wrote flavour text and forgot the behaviour", which look identical from
+   * the outside.
+   */
+  passiveNative?: string;
 }
 
 export const RELIC_JSON = Object.freeze(relicJson as unknown as Record<string, RelicJson>);
@@ -162,6 +173,13 @@ registerCheck({
       }
       // A passive gets the same treatment a relic's hooks get — same shape, same checks.
       if (m.hooks) validateHookBlock(m.hooks, 'members.json', id, errs);
+      // Flavour text promises the player a passive. If neither hooks nor a declared native
+      // backs it, the promise is empty — and that is exactly the failure mode this whole
+      // issue exists to kill, just one level up from the hook bus.
+      if (m.passiveFlavor && !m.hooks && !m.passiveNative) {
+        errs.add({ category: 'coverage', file: 'members.json', path: `${id}.passiveFlavor`,
+          message: `${JSON.stringify(m.passiveFlavor.name)} is described but has no "hooks" and no "passiveNative" — nothing implements it` });
+      }
     }
   },
 });

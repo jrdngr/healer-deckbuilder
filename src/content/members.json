@@ -77,6 +77,19 @@
     "passiveFlavor": {
       "name": "Dark Bargain",
       "desc": "Each time a party member dies, a living Warlock permanently gains +1 damage and +1 ability power for the rest of the fight."
+    },
+    "hooks": {
+      "onMemberDied": [
+        {
+          "op": "if",
+          "when": { "alive": "$owner" },
+          "then": [
+            { "op": "addStat", "on": "$owner", "stat": "damage", "amount": { "tune": "DARK_BARGAIN_DMG" } },
+            { "op": "addStat", "on": "$owner", "stat": "abilityPower", "amount": { "tune": "DARK_BARGAIN_POWER" } },
+            { "op": "log", "kind": "status", "text": "{$owner.name} feeds on {self.name}'s death — Dark Bargain (+{DARK_BARGAIN_DMG} damage, +{DARK_BARGAIN_POWER} power)." }
+          ]
+        }
+      ]
     }
   },
   "skald": {
@@ -111,7 +124,8 @@
     "passiveFlavor": {
       "name": "Rage",
       "desc": "Hits harder the lower his HP: +2 damage in his first rage band, another +2 in the second (net +2/+4). The thresholds rise with the enemy's attack."
-    }
+    },
+    "passiveNative": "abilityDamageBands"
   },
   "beastWarden": {
     "id": "beastWarden",
@@ -123,6 +137,15 @@
     "passiveFlavor": {
       "name": "Feral Bond",
       "desc": "Her first strike after her Boar falls tears for ×3 damage."
+    },
+    "hooks": {
+      "modifyAutoStrike": {
+        "mul": { "tune": "FERAL_BOND_MULT" },
+        "clearsMember": "feralPrimed",
+        "onApply": [
+          { "op": "log", "kind": "status", "text": "{self.name} avenges her Boar — her strike tears for {value}!" }
+        ]
+      }
     }
   },
   "sentinel": {
@@ -135,7 +158,8 @@
     "passiveFlavor": {
       "name": "Stunt Double",
       "desc": "She dives in front of any blow that would be lethal to a teammate, taking the hit — her own wards and HP — in their place."
-    }
+    },
+    "passiveNative": "stuntDouble"
   },
   "duelist": {
     "id": "duelist",
@@ -162,6 +186,15 @@
     "passiveFlavor": {
       "name": "Last Stand",
       "desc": "Once per fight, a killing blow — a hit or a Blood cost — leaves him at 1 HP instead of dropping him."
+    },
+    "hooks": {
+      "vetoDeath": {
+        "answer": true,
+        "consumesMember": "lastStandUsed",
+        "onApply": [
+          { "op": "log", "kind": "status", "text": "{self.name} makes his Last Stand — he clings to life at 1 HP!" }
+        ]
+      }
     }
   }
 }

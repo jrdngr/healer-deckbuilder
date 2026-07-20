@@ -29,11 +29,15 @@ const SOURCES = ['src/engine/core.ts', 'src/engine/effects.ts', 'src/run.ts'];
 
 const source = SOURCES.map((f) => `// ==== ${f}\n${readFileSync(f, 'utf8')}`).join('\n');
 
-// A seam is any `_hookEvent('name'` / `_hookValue('name'` / `_hookAnswer('name'` /
-// `_hookConsume('name'` / `_runHook('name'` call with a literal first argument. Literal
-// names are required precisely so this scan can see them; a computed hook name would be
-// invisible here and is not worth the flexibility.
-const CALL = /_(?:hookEvent|hookValue|hookAnswer|hookConsume|runHook)\(\s*'([A-Za-z]+)'/g;
+// A seam is any `_hook*('name'` call with a literal first argument — `_hookEvent`,
+// `_hookValue`, `_hookAnswer`, `_hookConsume`, `_hookValueConsuming`, and whatever
+// dispatcher comes next. Matching the PREFIX rather than an enumerated list is deliberate:
+// an enumerated list silently stops seeing new dispatchers, which is how this check first
+// failed to notice `modifyAutoStrike`.
+//
+// Literal names are required precisely so this scan can see them; a computed hook name
+// would be invisible here and is not worth the flexibility.
+const CALL = /_hook[A-Za-z]*\(\s*'([A-Za-z]+)'/g;
 const fired = new Set<string>();
 for (const m of source.matchAll(CALL)) fired.add(m[1]);
 

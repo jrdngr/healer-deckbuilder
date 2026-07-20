@@ -1,6 +1,6 @@
 # Issue 103 — Relic hook bus, run-layer hooks, `relics.json`, and hero passives
 
-- **Status:** 🔨 Partially done (2026-07-20 — metadata + the hook bus with 11 relics migrated; 8 relics and all 11 hero passives remain)
+- **Status:** ✅ Complete (2026-07-20 — all 21 relics and 10 of 11 hero passives are data; `stuntDouble` and the ability-keyed damage bands stay native BY DECLARATION, and a coverage check now enforces that every described passive is backed by hooks or a named native)
 - **Phase:** content-migration (phase 3 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — in particular **A7**, all 21 relics with not-owned control cases, and
@@ -399,3 +399,87 @@ None of these exist yet; each is needed by at least one item above:
 - Relic and hero **metadata**, which already moved (`relics.json`, `members.json`).
 - Card and ability effects, done in #101/#102.
 - The two cosmetic inconsistencies in #107.
+
+---
+
+# Resolution (2026-07-20)
+
+Landed as five commits, each with an empty `sim/trace.ts 30` diff against its parent and a
+green suite. Final state: **zero `hasRelic` behaviour branches in `src/engine/`** (only the
+definition, which the `{hasRelic}` condition and the run layer still use), **zero
+`hasRelic` behaviour branches in `src/run.ts`** (only ownership queries, which are the
+method's purpose), and **one `m.id === '…'` passive branch left**, `stuntDouble`, declared
+as such.
+
+1. **Hook seams + the never-fired trap.** Seven of the eight event hooks had NO call site.
+   Added them, plus `test/content/hook-sites.test.ts`, which scans the real sources and
+   asserts both directions — every declared name is fired, every fired name is declared.
+   Source-scanned rather than a hand-written `FIRED_HOOKS` constant, because a hand-written
+   list is one more thing that drifts from the seams it describes.
+2. **The five remaining engine relics**, plus the drum log-variant decided as a boolean
+   `narratesDoubleStrike` hook (a string-returning `logVariant` kind used once does not earn
+   a third hook category).
+3. **The run-layer bus** — four hooks, no compiled index (justified in `hooks.ts`), and
+   static-amount enforcement so a run hook cannot silently read 0 from combat state.
+4. **Seven passives** via `ownerSlot`, which is the mechanism the whole passive half rests
+   on: a member-owned hook fires only for its own hero, which is exactly what
+   `m.id === '…'` did by hand.
+5. **The last three passives** (Last Stand, Dark Bargain, Feral Bond) plus
+   `test/content/hook-bus.test.ts` for the machinery itself.
+
+## Where this diverged from the plan, and why
+
+- **`onMemberDamaged` became TWO seams.** `onMemberDamaged` fires before the death veto
+  (where damage banking belongs — a lethal hit banks and `_killMember` then zeroes it,
+  netting 0) and `onMemberSurvived` after it, for a member still standing (Ossuary Bell's
+  actual contract). The issue described one hook; one hook would have left a Martyr-saved
+  Tank holding a Grudge bank he does not hold today.
+- **The three `m.ability`-keyed damage bands stayed code.** They key off the ABILITY, not
+  the id, so they were never in scope for the "zero `m.id ===`" criterion — and A8 pins that
+  a hero who merely learns the ability does not inherit the passive, which is the whole
+  point of the distinction. Declared via `passiveNative: "abilityDamageBands"`.
+- **`consumes` grew two siblings rather than being generalised.** `consumesMember`
+  (require unset, then set — Last Stand) and `clearsMember` (require set, then unset —
+  Feral Bond) are opposite polarities; one field doing both would read as a puzzle.
+- **Value hooks gained `onApply`**, so a consuming veto narrates its own save. That is what
+  let `_killMember` lose both its relic branch and its passive branch instead of trading one
+  for the other.
+
+## Two bugs this found, both silent
+
+- **venomGland's rule was stated twice** — once as the `modifyPoisonTurns` hook and once as
+  an inline `{if hasRelic}` in the poison ability. They did NOT double-count, because that
+  ability uses `mode: keepStronger`, which bypasses `_applyPoison` entirely; verified
+  empirically (5 turns bare, 6 owned, before and after) rather than reasoned about. Nothing
+  made them agree, though, and a `when` added to the hook later would have desynced them.
+  The keepStronger branch now applies the hook itself.
+- **`{hasStatus}` silently read false for five tags.** A tag and the field holding it do not
+  always share a name: `holdLine` lives in `holdLineTurns`, as do `guard`, `strike`, `mark`
+  and `boar`. `m[tag]` returned undefined for all five, coercing to "no status" — valid
+  content, valid tag, happy validator, gate that never fires. It bit immediately (the Tank's
+  Hold the Line double-banking read as single) and was caught only because #99 pins the
+  doubled NUMBER rather than asserting "it went up". No shipped content used any of the
+  five, so main was never wrong — but everything was in place for it to be.
+
+## What now guards this
+
+Four checks that did not exist before, each verified by negative control rather than
+assumed to work:
+
+- a declared hook name with no call site fails the suite by name;
+- a hook reading a `{var}` its seam does not provide is a startup error (this fired on the
+  first run of commit 2, with five errors);
+- a run-layer hook using a condition or a combat-state amount is a startup error;
+- a passive with flavour text but no hooks and no declared native is a startup error (this
+  fired immediately on the Berserker's Rage).
+
+**Perf:** `npm run sim -- 200 1` at 0.57–0.58s against a 0.55–0.57s pre-change baseline on
+the same machine — ~2%, well inside the 15% gate. The compiled index does its job; the
+member hooks added to it cost nothing measurable.
+
+## Deliberately left
+
+- `stuntDouble` — a speculative `_wardedDamage` preview that swaps the hit's recipient
+  mid-loop. No action vocabulary expresses that, and inventing one for a single hero would
+  be worse than the declared exception.
+- The ability-keyed damage bands, above.

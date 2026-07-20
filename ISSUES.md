@@ -36,4 +36,5 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 103 | 🔨 Partial | [Relic hook bus and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | — | bus built, 11 relics migrated; 8 relics + 11 hero passives remain |
+
+_(no open issues)_

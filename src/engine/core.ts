@@ -23,7 +23,6 @@ import {
   RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, CHANNEL_MP,
   SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW,
   BERSERKER_BAND1_HP, BERSERKER_BAND2_HP, BERSERKER_BAND_BONUS, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION,
-  FERAL_BOND_MULT, DARK_BARGAIN_DMG, DARK_BARGAIN_POWER,
   DOOM_DAMAGE, BIG_TOP_DR,
   BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS,
   ENRAGE_TURN, ENRAGE_MULT, BOLT_BASE, BOLT_CHARGE_MULT,
@@ -74,7 +73,7 @@ import {
   compileHooks, EMPTY_HOOKS, RELIC_JSON, MEMBER_JSON, SUBJECT_SCOPED_HOOKS,
   evalCondition, evalAmount, runActions, NATIVES,
 } from '../content';
-import type { HookIndex } from '../content';
+import type { HookIndex, ValueHook } from '../content';
 import type { Rng } from '../rng';
 
 export type Phase = 'idle' | 'player' | 'over';
@@ -582,14 +581,59 @@ export class Game {
     for (const { hook, ownerSlot } of hooks) {
       if (hook.answer !== true) continue;
       if (!this._ownerMatches(ownerSlot, subject)) continue;
-      const flag = hook.consumes;
-      if (flag && (this as unknown as Record<string, boolean>)[flag]) continue;
-      const ctx = { self: subject, vars: {} };
+      const owner = ownerSlot === undefined ? undefined : this.members[ownerSlot];
+      if (!this._hookSpendable(hook, subject)) continue;
+      const ctx = { self: subject, owner, vars: {} };
       if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
-      if (flag) (this as unknown as Record<string, boolean>)[flag] = true;
+      this._hookSpend(hook, subject, ctx);
       return true;
     }
     return false;
+  }
+
+  /** Is this consuming hook's charge still available? */
+  _hookSpendable(hook: ValueHook, subject?: Member): boolean {
+    if (hook.consumes && (this as unknown as Record<string, boolean>)[hook.consumes]) return false;
+    const rec = subject as unknown as Record<string, boolean> | undefined;
+    // consumesMember requires the flag UNSET (it records "already used"); clearsMember
+    // requires it SET (it IS the charge). Opposite polarities, deliberately.
+    if (hook.consumesMember && rec?.[hook.consumesMember]) return false;
+    if (hook.clearsMember && !rec?.[hook.clearsMember]) return false;
+    return true;
+  }
+
+  /** Spend the charge and let the hook narrate itself. */
+  _hookSpend(hook: ValueHook, subject: Member | undefined, ctx: { self?: Member; owner?: Member; vars: Record<string, unknown> }): void {
+    if (hook.consumes) (this as unknown as Record<string, boolean>)[hook.consumes] = true;
+    const rec = subject as unknown as Record<string, boolean> | undefined;
+    if (hook.consumesMember && rec) rec[hook.consumesMember] = true;
+    if (hook.clearsMember && rec) rec[hook.clearsMember] = false;
+    if (hook.onApply) runActions(this, hook.onApply, ctx, NATIVES);
+  }
+
+  /**
+   * A CONSUMING value fold: the party-phase strike, where a hook may both change the
+   * number and spend a charge. Kept apart from `_hookValue`, which must stay a pure read
+   * because the telegraph preview calls it.
+   */
+  _hookValueConsuming(name: string, base: number, subject: Member): number {
+    const hooks = this._hooks.value.get(name);
+    if (!hooks) return base;
+    let out = base;
+    for (const { hook, ownerSlot } of hooks) {
+      if (!this._ownerMatches(ownerSlot, subject)) continue;
+      const owner = ownerSlot === undefined ? undefined : this.members[ownerSlot];
+      if (!this._hookSpendable(hook, subject)) continue;
+      const ctx = { self: subject, owner, vars: {} as Record<string, unknown> };
+      if (hook.when && !evalCondition(this, hook.when, ctx)) continue;
+      if (hook.set !== undefined) out = evalAmount(this, hook.set, ctx);
+      if (hook.mul !== undefined) out *= evalAmount(this, hook.mul, ctx);
+      if (hook.add !== undefined) out += evalAmount(this, hook.add, ctx);
+      // The post-change number, so a hook can narrate what it actually produced.
+      ctx.vars.value = out;
+      this._hookSpend(hook, subject, ctx);
+    }
+    return out;
   }
 
   // Whether a player-cast channel (#64) is currently running (a card is channeling
@@ -1081,22 +1125,17 @@ export class Game {
     this._checkWipe();
   }
 
-  // Kill a member — unless the Martyr's Icon (#22) spends its once-per-fight
-  // save, in which case they survive at 1 HP with every status stripped (the
-  // wipe check sees a living member either way). Returns true if they died.
+  // Kill a member — unless a vetoDeath hook spends a once-per-fight save, in which case
+  // they survive at 1 HP with every status stripped (the wipe check sees a living member
+  // either way). Returns true if they died.
   _killMember(m: Member): boolean {
-    // #103: the relic half of the death veto comes from the hook bus and SPENDS its
-    // once-per-fight flag as it answers. Ordering is unchanged and load-bearing: the
-    // Martyr's Icon is consulted FIRST, so when both could save, only the relic is
-    // spent and the Strongman keeps his Last Stand.
-    const martyr = this._hookConsume('vetoDeath', m);
-    // Last Stand (Strongman passive): once per fight a killing blow — a hit OR a Blood
-    // cost — leaves him at 1 HP instead. Yields to the Martyr's Icon (either save is
-    // enough; only one is spent). Like Martyr, it strips his statuses and clears the scar.
-    const lastStand = !martyr && m.id === 'flagellant' && !m.lastStandUsed;
-    const saved = martyr || lastStand;
-    if (martyr) this.martyrUsed = true;
-    if (lastStand) m.lastStandUsed = true;
+    // Both saves — the Martyr's Icon (party-wide, once per fight) and the Strongman's Last
+    // Stand (his own, once per fight) — are vetoDeath hooks now, and _hookConsume takes the
+    // FIRST one whose charge is still available. Ordering is load-bearing and comes from
+    // the constructor compiling relics before members: when both could save, only the relic
+    // is spent and the Strongman keeps his Last Stand. Each hook narrates its own save via
+    // onApply, which is why no branch here names either of them.
+    const saved = this._hookConsume('vetoDeath', m);
     if (saved) {
       m.hp = 1;
     } else {
@@ -1124,34 +1163,14 @@ export class Game {
     m.boarTurns = 0;
     m.bankedDamage = 0;    // Grudge bank forfeited (Tank)
     m.feralPrimed = false; // any pending Feral Bond strike is lost (Beast Warden)
-    if (saved) {
-      if (martyr) {
-        this._log(`The Guardian Feather glows — ${m.name} clings to life at 1 HP!`, 'status');
-        this._emit({ kind: 'martyrSave', slot: m.slot });
-      } else {
-        this._log(`${m.name} makes his Last Stand — he clings to life at 1 HP!`, 'status');
-      }
-      return false;
-    }
+    // The save already narrated itself when the veto was spent (ValueHook.onApply), so
+    // there is nothing to print here.
+    if (saved) return false;
     this._log(`${m.name} has fallen!`, 'death');
-    // Dark Bargain (Warlock passive): a living Warlock feeds on a party death — a permanent
-    // +damage/+ability power for the rest of the fight (a Warlock dying alone earns nothing).
-    this._darkBargain(m);
     // #103: the true-death seam — reached only when no veto saved them, so a hook here
-    // never fires for a Martyr/Last Stand survival.
+    // never fires for a Martyr/Last Stand survival. Dark Bargain (Warlock) rides this.
     this._hookEvent('onMemberDied', { self: m, vars: {} });
     return true;
-  }
-
-  // Dark Bargain (Warlock passive): each time a party member truly dies, a living Warlock
-  // grows permanently stronger for the rest of the fight. `dead` is the member who just
-  // fell — if that is the Warlock himself, there is no living Warlock left to profit.
-  _darkBargain(dead: Member): void {
-    const w = this.members.find((x) => x.alive && x.id === 'warlock');
-    if (!w || w === dead) return;
-    w.damage += DARK_BARGAIN_DMG;
-    w.abilityPower += DARK_BARGAIN_POWER;
-    this._log(`${w.name} feeds on ${dead.name}'s death — Dark Bargain (+${DARK_BARGAIN_DMG} damage, +${DARK_BARGAIN_POWER} power).`, 'status');
   }
 
   // Returns true on the blow that actually finishes the enemy, so the caller can
@@ -2548,13 +2567,11 @@ export class Game {
           ? `The War Drum beats — ${m.name}'s strike doubles!`
           : `${m.name}'s strike lands doubled!`, 'status');
       }
-      // Feral Bond (Beast Warden passive): her first strike after the Boar falls rips for
-      // FERAL_BOND_MULT× — consumed by this swing.
-      if (m.id === 'beastWarden' && m.feralPrimed) {
-        dmg *= FERAL_BOND_MULT;
-        m.feralPrimed = false;
-        this._log(`${m.name} avenges her Boar — her strike tears for ${dmg}!`, 'status');
-      }
+      // #103: strike modifiers that may SPEND a charge (the Beast Warden's Feral Bond
+      // rips for a multiple of her auto and burns its prime doing it). Separate from
+      // memberDamage on purpose — that one feeds the telegraph preview and must stay a
+      // pure read, so a consuming modifier cannot live there.
+      dmg = this._hookValueConsuming('modifyAutoStrike', dmg, m);
       const killed = this._damageEnemy(dmg, `${m.name}`);
       this._emit({ kind: 'partyAttack', slot: m.slot, memberId: m.id, amount: this.vulnerableAmount(dmg), enemyHp: this.enemy.hp });
       // #103: the post-auto seam. The Tank's Grudge zeroes its bank here — the third and

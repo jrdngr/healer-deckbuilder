@@ -109,7 +109,11 @@
     "hooks": {
       "vetoDeath": {
         "answer": true,
-        "consumes": "martyrUsed"
+        "consumes": "martyrUsed",
+        "onApply": [
+          { "op": "log", "kind": "status", "text": "The Guardian Feather glows — {self.name} clings to life at 1 HP!" },
+          { "op": "emit", "kind": "martyrSave", "slot": "$self" }
+        ]
       }
     }
   },
