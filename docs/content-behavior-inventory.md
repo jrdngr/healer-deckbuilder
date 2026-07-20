@@ -7,7 +7,14 @@ Two jobs in one document:
 2. **The DSL op-vocabulary audit** for #100 — for each effect arm, whether it can be
    expressed as data or needs a `native`.
 
-Derived by reading all 66 effect arms in `src/engine/effects.ts` and `src/engine/core.ts`.
+Derived by reading all 67 effect arms in `src/engine/effects.ts` and `src/engine/core.ts`
+(32 card + 30 ability + 5 cast).
+
+> **Count correction.** The migration plan and an earlier draft of this document said
+> "31 card arms / 66 total". The card switch (`effects.ts:86-460`) has **33 `case`
+> labels with exactly one fall-through** — `lowHeal` at `:87` into `:88` `highHeal` —
+> so it is **32 arms**. The table below always had 32 rows; only the prose was wrong.
+> `#101`'s batch sums depend on this, so it is stated here rather than left implicit.
 Every arm below was read; none was inferred.
 
 ---
@@ -77,7 +84,7 @@ sentence-level branching, this becomes the third native.
 
 ---
 
-## Cards — 31 arms (`effects.ts:86`)
+## Cards — 32 arms (`effects.ts:86`)
 
 `E` = has an edge case that must be asserted. Verdict `data` = expressible; `op` = needs
 a named code-backed op; `native` = escape hatch.

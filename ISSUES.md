@@ -37,3 +37,10 @@ _(empty)_
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
 | 99 | 🔨 In progress | [Characterization test suite for all game content](./issues/99-content-characterization-suite.md) | testing | — | maintainer directive 2026-07-20 (regression gate for #100–#106) |
+| 100 | 📋 Planned | [Content DSL foundations (zod, TUNING, interpolator, validator, interpreter, trace oracle)](./issues/100-content-dsl-foundations.md) | content-migration | #99 | migration plan 2026-07-20, phase 0 |
+| 101 | 📋 Planned | [Cards to JSON (cards.json + dual dispatch, delete the _applyCard switch)](./issues/101-cards-to-json.md) | content-migration | #99, #100 | migration plan 2026-07-20, phase 1 |
+| 102 | 📋 Planned | [Abilities to JSON (abilities.json + dual dispatch, delete the _fireAbility switch)](./issues/102-abilities-to-json.md) | content-migration | #99, #101 | migration plan 2026-07-20, phase 2 |
+| 103 | 📋 Planned | [Relic hook bus, run-layer hooks, relics.json, and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | #99, #102 | migration plan 2026-07-20, phase 3 (riskiest commit) |
+| 104 | 📋 Planned | [Enemies and the remaining dispatch surfaces (enemies.json, casts.json, channels, delayed effects)](./issues/104-enemies-and-remaining-dispatch.md) | content-migration | #99, #103 | migration plan 2026-07-20, phase 4 |
+| 105 | 📋 Planned | [Run-layer content to JSON (outcome ops + events.json, upgrades.json, modifiers.json)](./issues/105-run-layer-content-to-json.md) | content-migration | #99, #104 | migration plan 2026-07-20, phase 5 |
+| 106 | 📋 Planned | [String-id cutover (coverage checks + fallbacks, save v19→20, CLAUDE.md authoring guide)](./issues/106-string-ids-cutover.md) | content-migration | #99, #105 | migration plan 2026-07-20, phase 6 |

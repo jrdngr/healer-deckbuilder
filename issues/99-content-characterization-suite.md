@@ -107,7 +107,8 @@ against.
 ## Implementation notes (anchors)
 
 - **The six dispatch surfaces** the suite must pin, because #100–#106 replace all of them:
-  `effects.ts:86` (`switch (card.id)`, 31 arms), `effects.ts:477` (`switch (ability)`,
+  `effects.ts:86` (`switch (card.id)`, **32 arms** — 33 `case` labels with one
+  fall-through, `lowHeal`→`highHeal`), `effects.ts:477` (`switch (ability)`,
   30 arms), `core.ts:1716` (`switch (cast)`, 5), `core.ts:1182-1200` (channel ticks, 2),
   `core.ts:1943-1950` (delayed start effects), `core.ts:639-656` (cast preview text).
 - **`game.events` is an animation feed for the most recent action** — every public entry
