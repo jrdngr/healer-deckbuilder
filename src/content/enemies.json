@@ -1,0 +1,734 @@
+{
+  "defs": {
+    "spammer": {
+      "id": "spammer",
+      "name": "Basher",
+      "boss": false,
+      "baseWeights": {
+        "single": 78,
+        "two": 14,
+        "aoe": 4,
+        "hidden": 4,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 58,
+        "two": 24,
+        "aoe": 14,
+        "hidden": 4,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        {
+          "type": "single",
+          "name": "Hunt",
+          "targetLowest": true
+        },
+        {
+          "type": "single",
+          "name": "Hunt",
+          "targetLowest": true
+        },
+        "two"
+      ]
+    },
+    "swarm": {
+      "id": "swarm",
+      "name": "Rabble",
+      "boss": false,
+      "baseWeights": {
+        "single": 52,
+        "two": 26,
+        "aoe": 17,
+        "hidden": 5,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 35,
+        "two": 33,
+        "aoe": 27,
+        "hidden": 5,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      }
+    },
+    "stalker": {
+      "id": "stalker",
+      "name": "Skulker",
+      "boss": false,
+      "baseWeights": {
+        "single": 52,
+        "two": 10,
+        "aoe": 8,
+        "hidden": 30,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 35,
+        "two": 18,
+        "aoe": 17,
+        "hidden": 30,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      }
+    },
+    "cleaver": {
+      "id": "cleaver",
+      "name": "Clobberer",
+      "boss": false,
+      "baseWeights": {
+        "single": 58,
+        "two": 12,
+        "aoe": 7,
+        "hidden": 5,
+        "heavy": 18,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 42,
+        "two": 18,
+        "aoe": 12,
+        "hidden": 5,
+        "heavy": 23,
+        "sweep": 0,
+        "cast": 0
+      }
+    },
+    "marker": {
+      "id": "marker",
+      "name": "Doomling",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 45,
+        "two": 28,
+        "aoe": 17,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        {
+          "type": "cast",
+          "name": "Whammy",
+          "cast": "curse"
+        },
+        {
+          "type": "heavy",
+          "name": "Kapow",
+          "damage": 5,
+          "targetsMarked": true
+        },
+        "two"
+      ]
+    },
+    "ironmaw": {
+      "id": "ironmaw",
+      "name": "Ironchomp",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "two",
+        "single"
+      ],
+      "channel": {
+        "slot": 2,
+        "everyCycles": 2,
+        "turns": 2,
+        "damage": 9,
+        "type": "single",
+        "name": "Jawbreaker"
+      }
+    },
+    "needler": {
+      "id": "needler",
+      "name": "Needler",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        {
+          "type": "single",
+          "name": "Needle Shot",
+          "damage": 4,
+          "ignoreTaunt": true,
+          "ignoreDefense": true,
+          "targetLowest": true
+        },
+        "two",
+        "single"
+      ]
+    },
+    "leech": {
+      "id": "leech",
+      "name": "Leech",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "two",
+        "single",
+        "single",
+        {
+          "type": "cast",
+          "name": "Snack Time",
+          "cast": "consume"
+        },
+        "two"
+      ]
+    },
+    "venomancer": {
+      "id": "venomancer",
+      "name": "Gloopy",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "two",
+        {
+          "type": "cast",
+          "name": "Ick",
+          "cast": "poison",
+          "castAmount": 2,
+          "castTurns": 3
+        },
+        "single",
+        "two"
+      ]
+    },
+    "juggernaut": {
+      "id": "juggernaut",
+      "name": "Steamroller",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "single",
+        "two"
+      ],
+      "channel": {
+        "slot": 2,
+        "everyCycles": 2,
+        "turns": 2,
+        "damage": 11,
+        "type": "single",
+        "name": "Flatten"
+      }
+    },
+    "lancer": {
+      "id": "lancer",
+      "name": "Pokey",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        {
+          "type": "single",
+          "name": "Skewer",
+          "damage": 5,
+          "ignoreTaunt": true,
+          "ignoreDefense": true,
+          "targetLowest": true
+        },
+        "single",
+        "two"
+      ]
+    },
+    "devourling": {
+      "id": "devourling",
+      "name": "Gobblet",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "two",
+        "single",
+        {
+          "type": "cast",
+          "name": "Snack Time",
+          "cast": "consume"
+        },
+        "two",
+        "single"
+      ]
+    },
+    "gatewarden": {
+      "id": "gatewarden",
+      "name": "Bouncer",
+      "boss": true,
+      "baseWeights": {
+        "single": 20,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 0,
+        "heavy": 30,
+        "sweep": 20,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 10,
+        "two": 20,
+        "aoe": 15,
+        "hidden": 0,
+        "heavy": 35,
+        "sweep": 10,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "two",
+        "heavy",
+        "sweep"
+      ],
+      "channel": {
+        "slot": 2,
+        "everyCycles": 2,
+        "turns": 2,
+        "damage": 12,
+        "type": "heavy",
+        "name": "Haymaker"
+      }
+    },
+    "hexweaver": {
+      "id": "hexweaver",
+      "name": "Jinxweaver",
+      "boss": true,
+      "baseWeights": {
+        "single": 20,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 0,
+        "heavy": 30,
+        "sweep": 20,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 10,
+        "two": 20,
+        "aoe": 15,
+        "hidden": 0,
+        "heavy": 35,
+        "sweep": 10,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        {
+          "type": "single",
+          "name": "Zinger",
+          "damage": 5,
+          "ignoreTaunt": true,
+          "ignoreDefense": true,
+          "targetLowest": true
+        },
+        {
+          "type": "cast",
+          "name": "Jinx",
+          "cast": "wound"
+        },
+        {
+          "type": "cast",
+          "name": "Doom",
+          "cast": "curse"
+        },
+        {
+          "type": "heavy",
+          "name": "Reckoning",
+          "damage": 8,
+          "targetsMarked": true
+        },
+        {
+          "type": "cast",
+          "name": "Slurp",
+          "cast": "siphon"
+        }
+      ]
+    },
+    "devourer": {
+      "id": "devourer",
+      "name": "Gobbler",
+      "boss": true,
+      "baseWeights": {
+        "single": 20,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 0,
+        "heavy": 30,
+        "sweep": 20,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 10,
+        "two": 20,
+        "aoe": 15,
+        "hidden": 0,
+        "heavy": 35,
+        "sweep": 10,
+        "cast": 0
+      },
+      "rotation": [
+        "single",
+        "heavy",
+        "sweep",
+        {
+          "type": "cast",
+          "name": "Gulp",
+          "cast": "consume"
+        },
+        "two",
+        {
+          "type": "cast",
+          "name": "Sludge",
+          "cast": "poison",
+          "castAmount": 3,
+          "castTurns": 3
+        }
+      ],
+      "phase": {
+        "hpFraction": 0.5,
+        "beat": "The Gobbler unhinges its jaw and TRANSFORMS!",
+        "rotation": [
+          "sweep",
+          "heavy",
+          "two"
+        ],
+        "channel": {
+          "slot": 0,
+          "everyCycles": 1,
+          "turns": 2,
+          "damage": 7,
+          "type": "sweep",
+          "name": "Big Chomp"
+        },
+        "enrageTurn": 11
+      }
+    },
+    "enemy": {
+      "id": "enemy",
+      "name": "Enemy",
+      "boss": false,
+      "baseWeights": {
+        "single": 60,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 30,
+        "two": 35,
+        "aoe": 25,
+        "hidden": 10,
+        "heavy": 0,
+        "sweep": 0,
+        "cast": 0
+      }
+    },
+    "boss": {
+      "id": "boss",
+      "name": "Boss",
+      "boss": true,
+      "baseWeights": {
+        "single": 20,
+        "two": 20,
+        "aoe": 10,
+        "hidden": 0,
+        "heavy": 30,
+        "sweep": 20,
+        "cast": 0
+      },
+      "enragedWeights": {
+        "single": 10,
+        "two": 20,
+        "aoe": 15,
+        "hidden": 0,
+        "heavy": 35,
+        "sweep": 10,
+        "cast": 0
+      }
+    }
+  },
+  "normals": [
+    "spammer",
+    "swarm",
+    "stalker",
+    "cleaver",
+    "marker",
+    "ironmaw",
+    "needler",
+    "leech",
+    "venomancer",
+    "juggernaut",
+    "lancer",
+    "devourling"
+  ],
+  "actBosses": [
+    "gatewarden",
+    "hexweaver",
+    "devourer"
+  ],
+  "fallback": {
+    "normal": "enemy",
+    "boss": "boss"
+  },
+  "encounters": [
+    [
+      [
+        "spammer",
+        55
+      ],
+      [
+        "swarm",
+        25
+      ],
+      [
+        "marker",
+        20
+      ]
+    ],
+    [
+      [
+        "spammer",
+        35
+      ],
+      [
+        "swarm",
+        25
+      ],
+      [
+        "stalker",
+        20
+      ],
+      [
+        "marker",
+        20
+      ]
+    ],
+    [],
+    [
+      [
+        "ironmaw",
+        25
+      ],
+      [
+        "needler",
+        25
+      ],
+      [
+        "leech",
+        20
+      ],
+      [
+        "venomancer",
+        20
+      ],
+      [
+        "swarm",
+        10
+      ]
+    ],
+    [
+      [
+        "ironmaw",
+        22
+      ],
+      [
+        "needler",
+        22
+      ],
+      [
+        "leech",
+        22
+      ],
+      [
+        "venomancer",
+        22
+      ],
+      [
+        "cleaver",
+        12
+      ]
+    ],
+    [],
+    [
+      [
+        "juggernaut",
+        30
+      ],
+      [
+        "lancer",
+        30
+      ],
+      [
+        "devourling",
+        20
+      ],
+      [
+        "cleaver",
+        20
+      ]
+    ],
+    [
+      [
+        "juggernaut",
+        25
+      ],
+      [
+        "lancer",
+        25
+      ],
+      [
+        "devourling",
+        25
+      ],
+      [
+        "cleaver",
+        25
+      ]
+    ],
+    []
+  ]
+}

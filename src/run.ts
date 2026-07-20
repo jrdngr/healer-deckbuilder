@@ -990,7 +990,10 @@ export class Run {
 
   // A roster member's ability cards not yet learned (their pool minus `learned`).
   _unlearnedAbilities(p: PartyMemberConfig): AbilityId[] {
-    const pool = (p.member && LEARNED_CARDS_BY_MEMBER[p.member]) ?? [];
+    // Explicit undefined check rather than a truthiness one: with MemberId a plain
+    // string (#106), `p.member &&` narrows to `"" | AbilityId[]` because the empty
+    // string is falsy but still a string.
+    const pool = (p.member !== undefined ? LEARNED_CARDS_BY_MEMBER[p.member] : undefined) ?? [];
     const known = new Set(p.learned ?? []);
     return pool.filter((a) => !known.has(a));
   }

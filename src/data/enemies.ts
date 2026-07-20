@@ -1,4 +1,18 @@
 import type { AttackType, Slot, CastKind } from './tuning';
+import ENEMY_JSON from '../content/enemies.json';
+
+// #104: enemy definitions are read from enemies.json. They were already pure data —
+// weights, a rotation of steps, an optional phase/channel — so this is a move, not a
+// redesign. Declared FIRST because the named exports below reference it; putting it
+// lower is a temporal-dead-zone crash at import (which is how the first attempt
+// failed, and what tsc catches statically here).
+//
+// Key ORDER inside the weight tables survives the JSON round-trip, which is what keeps
+// weightedPick's draw order — and therefore every seed — identical. The trace differ is
+// the proof, not the argument.
+export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
+  Object.freeze(ENEMY_JSON.defs as unknown as Record<string, EnemyDef>);
+
 
 export const ENEMY_MAX_HP = 100;
 
@@ -109,14 +123,8 @@ export interface PhaseDef {
 // The two stock behaviors that reproduce the pre-refactor enemies exactly. They
 // reference the existing TYPE_WEIGHTS objects so Object.entries order — and thus
 // every weightedPick draw — is byte-for-byte unchanged (the #07 bit-identical gate).
-export const DEFAULT_ENEMY_DEF: EnemyDef = {
-  id: 'enemy', name: 'Enemy', boss: false,
-  baseWeights: TYPE_WEIGHTS.normal, enragedWeights: TYPE_WEIGHTS.enraged,
-};
-export const BOSS_ENEMY_DEF: EnemyDef = {
-  id: 'boss', name: 'Boss', boss: true,
-  baseWeights: TYPE_WEIGHTS.boss, enragedWeights: TYPE_WEIGHTS.bossEnraged,
-};
+export const DEFAULT_ENEMY_DEF: EnemyDef = ENEMY_DEF_BY_ID[ENEMY_JSON.fallback.normal];
+export const BOSS_ENEMY_DEF: EnemyDef = ENEMY_DEF_BY_ID[ENEMY_JSON.fallback.boss];
 
 // Attack-weight literal helper — keeps the key order consistent across defs. The
 // scripted-only 'cast' type is always weight 0 (never weighted-picked).
@@ -144,34 +152,17 @@ const bossDef = (id: string, name: string, rest: Partial<EnemyDef>): EnemyDef =>
 // finished off unless the party heals it up or Taunts the hunt away (targetLowest is
 // still funnelled by Taunt, so the tank can pull the execution onto itself). The closing
 // 'two' keeps the per-turn threat near the ~4.5 party-wide budget (identity, not a spike).
-export const ENEMY_SPAMMER: EnemyDef = { // Executioner: focus-fires the weakest hero
-  id: 'spammer', name: 'Basher', boss: false,
-  baseWeights: aw(78, 14, 4, 4, 0, 0), enragedWeights: aw(58, 24, 14, 4, 0, 0),
-  rotation: [
-    { type: 'single', name: 'Hunt', targetLowest: true },
-    { type: 'single', name: 'Hunt', targetLowest: true },
-    'two',
-  ],
-};
+export const ENEMY_SPAMMER: EnemyDef = ENEMY_DEF_BY_ID['spammer'];
 // SIGNATURE: AoE-lite. A weight shape that leans on multi-target blows (two/aoe) — the
 // party takes spread chip damage, so the answer is party-wide topping-up, not saving one.
-export const ENEMY_SWARM: EnemyDef = { // AoE-lite: leans on multi-target blows
-  id: 'swarm', name: 'Rabble', boss: false,
-  baseWeights: aw(52, 26, 17, 5, 0, 0), enragedWeights: aw(35, 33, 27, 5, 0, 0),
-};
+export const ENEMY_SWARM: EnemyDef = ENEMY_DEF_BY_ID['swarm'];
 // SIGNATURE: Ambush. A weight shape heavy on 'hidden' — its concealed strike (unknown
 // target, magnitude revealed) is the read: keep a Shield or heal buffer ready for anyone.
-export const ENEMY_STALKER: EnemyDef = { // Ambush: leans on concealed (hidden) blows
-  id: 'stalker', name: 'Skulker', boss: false,
-  baseWeights: aw(52, 10, 8, 30, 0, 0), enragedWeights: aw(35, 18, 17, 30, 0, 0),
-};
+export const ENEMY_STALKER: EnemyDef = ENEMY_DEF_BY_ID['stalker'];
 // SIGNATURE: Cleave. A weight shape carrying real 'heavy' weight — an occasional big
 // single blow you must mitigate (Defense/Shield) or heal through, unlike the other
 // act-1 normals' chip damage.
-export const ENEMY_CLEAVER: EnemyDef = { // Cleave: occasional heavy single hit
-  id: 'cleaver', name: 'Clobberer', boss: false,
-  baseWeights: aw(58, 12, 7, 5, 18, 0), enragedWeights: aw(42, 18, 12, 5, 23, 0),
-};
+export const ENEMY_CLEAVER: EnemyDef = ENEMY_DEF_BY_ID['cleaver'];
 // SIGNATURE: Mark (#87). The act-1 teacher for the Jinxweaver's clear-or-die read: a
 // Whammy Marks the whole party (no damage), then the very next step Kapow strikes only
 // the still-Marked heroes. Answer it by clearing the Mark (Cleanse) OR by mitigation
@@ -179,16 +170,7 @@ export const ENEMY_CLEAVER: EnemyDef = { // Cleave: occasional heavy single hit
 // read without one-shotting. Mark and Kapow sit on ADJACENT slots so exactly one player
 // turn falls between them (MARK_TURNS survives the single decay).
 export const DOOMLING_PAYOFF_DMG = 5; // Kapow per-target damage (before attackBonus/enrage)
-export const ENEMY_MARKER: EnemyDef = { // Mark: telegraphed clear-or-die on the party
-  id: 'marker', name: 'Doomling', boss: false,
-  baseWeights: aw(60, 20, 10, 10, 0, 0), enragedWeights: aw(45, 28, 17, 10, 0, 0),
-  rotation: [
-    'single',
-    { type: 'cast', name: 'Whammy', cast: 'curse' },
-    { type: 'heavy', name: 'Kapow', damage: DOOMLING_PAYOFF_DMG, targetsMarked: true },
-    'two',
-  ],
-};
+export const ENEMY_MARKER: EnemyDef = ENEMY_DEF_BY_ID['marker'];
 
 // Boss 1 — Bouncer (issue 12). SIGNATURE: the clean teaching boss — a fixed,
 // learnable rotation + a periodic Haymaker channel that teaches telegraph-reading. Every 2nd cycle its heavy becomes Haymaker — a 2-turn
@@ -197,10 +179,7 @@ export const ENEMY_MARKER: EnemyDef = { // Mark: telegraphed clear-or-die on the
 // Taunt upkeep + topping the tank up survives it, while the ranger (11) and
 // mage (9) still die to it — at the original 20 it exceeded every max HP and
 // killed a member in 82% of good-play sims, teaching sacrifice instead.
-export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Bouncer', {
-  rotation: ['single', 'two', 'heavy', 'sweep'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 12, type: 'heavy', name: 'Haymaker' },
-});
+export const GATEWARDEN_DEF: EnemyDef = ENEMY_DEF_BY_ID['gatewarden'];
 
 // Boss 2 — Jinxweaver (issue 13). SIGNATURE: the telegraphed debuff-punisher. It breaks the
 // permanent-taunt/turtle solve with three tools, all fully telegraphed:
@@ -219,16 +198,7 @@ export const GATEWARDEN_DEF: EnemyDef = bossDef('gatewarden', 'Bouncer', {
 // and the Payoff takes over the sweep's party-wide-threat role, keeping the fight in budget.
 export const HEXWEAVER_PIERCER_DMG = 5; // Zinger per-hit damage (before attackBonus)
 export const HEXWEAVER_PAYOFF_DMG = 8;  // Reckoning per-target damage on the still-Marked (before attackBonus/enrage)
-export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Jinxweaver', {
-  rotation: [
-    'single',
-    pierceStep('Zinger', HEXWEAVER_PIERCER_DMG),
-    { type: 'cast', name: 'Jinx', cast: 'wound' },
-    { type: 'cast', name: 'Doom', cast: 'curse' },
-    { type: 'heavy', name: 'Reckoning', damage: HEXWEAVER_PAYOFF_DMG, targetsMarked: true },
-    { type: 'cast', name: 'Slurp', cast: 'siphon' },
-  ],
-});
+export const HEXWEAVER_DEF: EnemyDef = ENEMY_DEF_BY_ID['hexweaver'];
 
 // Boss 3 — Gobbler (issue 14). SIGNATURE: the two-phase "race or die" boss. Turns the invisible enrage race
 // into an explicit, fair one via a phase system:
@@ -247,29 +217,10 @@ export const HEXWEAVER_DEF: EnemyDef = bossDef('hexweaver', 'Jinxweaver', {
 export const DEVOURER_MAW_DMG = 7;    // Big Chomp per-target sweep damage (before enrage/attackBonus)
 export const DEVOURER_SLUDGE_DMG = 3; // Sludge per-turn hero-poison strength
 export const DEVOURER_SLUDGE_TURNS = 3; // Sludge hero-poison duration
-export const DEVOURER_DEF: EnemyDef = bossDef('devourer', 'Gobbler', {
-  rotation: [
-    'single',
-    'heavy',
-    'sweep',
-    { type: 'cast', name: 'Gulp', cast: 'consume' },
-    'two',
-    { type: 'cast', name: 'Sludge', cast: 'poison', castAmount: DEVOURER_SLUDGE_DMG, castTurns: DEVOURER_SLUDGE_TURNS },
-  ],
-  phase: {
-    hpFraction: 0.5,
-    beat: 'The Gobbler unhinges its jaw and TRANSFORMS!',
-    // Slot 0 is always Big Chomp (the channel fires every cycle at slot 0); the 'sweep'
-    // literal there is a placeholder the channel overrides. Big Chomp resolves every 4
-    // enemy turns (2-turn wind-up + heavy + two).
-    rotation: ['sweep', 'heavy', 'two'],
-    channel: { slot: 0, everyCycles: 1, turns: 2, damage: DEVOURER_MAW_DMG, type: 'sweep', name: 'Big Chomp' },
-    enrageTurn: 11,
-  },
-});
+export const DEVOURER_DEF: EnemyDef = ENEMY_DEF_BY_ID['devourer'];
 
 // Act boss per act (0-based): Bouncer (#12), Jinxweaver (#13), Gobbler (#14).
-export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF];
+export const ACT_BOSS_DEFS: EnemyDef[] = ENEMY_JSON.actBosses.map((id) => ENEMY_DEF_BY_ID[id]);
 
 // ---------------------------------------------------------------------------
 // Act 2/3 named normals (issue 20): boss tech at small scale, so the later map
@@ -282,27 +233,20 @@ export const ACT_BOSS_DEFS: EnemyDef[] = [GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURE
 
 // Act 2 — Ironchomp. SIGNATURE: Channeler — a learnable 3-step cycle whose 3rd step becomes
 // Jawbreaker every 2nd cycle — a 2-turn single-target channel at 9.
-export const IRONMAW_DEF: EnemyDef = normalDef('ironmaw', 'Ironchomp', {
-  rotation: ['single', 'two', 'single'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 9, type: 'single', name: 'Jawbreaker' },
-});
+export const IRONMAW_DEF: EnemyDef = ENEMY_DEF_BY_ID['ironmaw'];
 
 // Act 2 — Needler. SIGNATURE: Piercer — one step per cycle is Needle Shot — a mini
 // Zinger (ignores Taunt AND Defense, aims at the lowest-HP member) at 4.
 // Pierce-at-lowest is worth far more than its number (it bypasses the whole
 // taunt/Defense answer), so it appears once per 4-step cycle.
 export const NEEDLER_PIERCE_DMG = 4;
-export const NEEDLER_DEF: EnemyDef = normalDef('needler', 'Needler', {
-  rotation: ['single', pierceStep('Needle Shot', NEEDLER_PIERCE_DMG), 'two', 'single'],
-});
+export const NEEDLER_DEF: EnemyDef = ENEMY_DEF_BY_ID['needler'];
 
 // Act 2 — Leech. SIGNATURE: Self-healer — a mini Gulp ('Snack Time') every 6th turn cleanses
 // its own Poison and self-heals the remaining ticks — poison timing matters on
 // normals now, not just on the Gobbler. Its plain cycle runs light because the
 // Snack Time value is real threat too.
-export const LEECH_DEF: EnemyDef = normalDef('leech', 'Leech', {
-  rotation: ['single', 'two', 'single', 'single', { type: 'cast', name: 'Snack Time', cast: 'consume' }, 'two'],
-});
+export const LEECH_DEF: EnemyDef = ENEMY_DEF_BY_ID['leech'];
 
 // Act 2 — Gloopy. SIGNATURE: Poisoner (#87) — the act-2 teacher for the Gobbler's Sludge.
 // Its Ick cast lays a small, STACKING Hero Poison (raw ticks past mitigation) on the whole
@@ -310,57 +254,30 @@ export const LEECH_DEF: EnemyDef = normalDef('leech', 'Leech', {
 // weaponises it. The plain cycle runs light; the DoT ramp is the threat.
 export const GLOOPY_POISON_DMG = 2;   // Ick per-turn hero-poison strength
 export const GLOOPY_POISON_TURNS = 3; // Ick hero-poison duration
-export const VENOMANCER_DEF: EnemyDef = normalDef('venomancer', 'Gloopy', {
-  rotation: [
-    'single', 'two',
-    { type: 'cast', name: 'Ick', cast: 'poison', castAmount: GLOOPY_POISON_DMG, castTurns: GLOOPY_POISON_TURNS },
-    'single', 'two',
-  ],
-});
+export const VENOMANCER_DEF: EnemyDef = ENEMY_DEF_BY_ID['venomancer'];
 
 // Act 3 — Steamroller. SIGNATURE: Channeler (heavier) — Flatten is an 11-damage 2-turn
 // channel every 2nd cycle, over a single-heavy base cycle (the channel is the
 // threat; the cycle stays on budget).
-export const JUGGERNAUT_DEF: EnemyDef = normalDef('juggernaut', 'Steamroller', {
-  rotation: ['single', 'single', 'two'],
-  channel: { slot: 2, everyCycles: 2, turns: 2, damage: 11, type: 'single', name: 'Flatten' },
-});
+export const JUGGERNAUT_DEF: EnemyDef = ENEMY_DEF_BY_ID['juggernaut'];
 
 // Act 3 — Pokey. SIGNATURE: Piercer (heavier) — Skewer pierces at 5, once per 4-step cycle.
 export const LANCER_PIERCE_DMG = 5;
-export const LANCER_DEF: EnemyDef = normalDef('lancer', 'Pokey', {
-  rotation: ['single', pierceStep('Skewer', LANCER_PIERCE_DMG), 'single', 'two'],
-});
+export const LANCER_DEF: EnemyDef = ENEMY_DEF_BY_ID['lancer'];
 
 // Act 3 — Gobblet. SIGNATURE: Self-healer (hungrier) — Snack Time every 6th turn over a
 // light cycle (long 150-HP fights sit near the enrage cliff, so every eaten
 // poison tick is expensive — the Snack Time itself is the difficulty).
-export const DEVOURLING_DEF: EnemyDef = normalDef('devourling', 'Gobblet', {
-  rotation: ['single', 'two', 'single', { type: 'cast', name: 'Snack Time', cast: 'consume' }, 'two', 'single'],
-});
+export const DEVOURLING_DEF: EnemyDef = ENEMY_DEF_BY_ID['devourling'];
 
-export const NORMAL_ENEMY_DEFS: EnemyDef[] = [
-  ENEMY_SPAMMER, ENEMY_SWARM, ENEMY_STALKER, ENEMY_CLEAVER, ENEMY_MARKER,
-  IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, VENOMANCER_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF,
-];
-export const ENEMY_DEF_BY_ID: Record<string, EnemyDef> =
-  Object.fromEntries(NORMAL_ENEMY_DEFS.map((d) => [d.id, d]));
+export const NORMAL_ENEMY_DEFS: EnemyDef[] = ENEMY_JSON.normals.map((id) => ENEMY_DEF_BY_ID[id]);
 
 // Encounter table: weighted normal picks per fight index. Act-boss slots (2, 5,
 // 8) are empty — those fights always use the act boss. Act 1 keeps the original
 // four; acts 2/3 lead with their own named rosters (#20) — the boss-tech
 // normals — with an act-1 body as occasional filler for texture.
-export const ENCOUNTER_TABLE: Array<Array<[string, number]>> = [
-  [['spammer', 55], ['swarm', 25], ['marker', 20]],                       // fight 0 (A1)
-  [['spammer', 35], ['swarm', 25], ['stalker', 20], ['marker', 20]],      // fight 1 (A1)
-  [],                                                                      // fight 2 (A1 boss)
-  [['ironmaw', 25], ['needler', 25], ['leech', 20], ['venomancer', 20], ['swarm', 10]],   // fight 3 (A2)
-  [['ironmaw', 22], ['needler', 22], ['leech', 22], ['venomancer', 22], ['cleaver', 12]], // fight 4 (A2)
-  [],                                                                      // fight 5 (A2 boss)
-  [['juggernaut', 30], ['lancer', 30], ['devourling', 20], ['cleaver', 20]], // fight 6 (A3)
-  [['juggernaut', 25], ['lancer', 25], ['devourling', 25], ['cleaver', 25]], // fight 7 (A3)
-  [],                                                                      // fight 8 (A3 boss)
-];
+export const ENCOUNTER_TABLE: Array<Array<[string, number]>> =
+  ENEMY_JSON.encounters as Array<Array<[string, number]>>;
 
 // There is a single, tuned mode (2026-07): the roster campaign is the one and only
 // way to play. No difficulty presets, no quick-play — the per-act curve below IS the

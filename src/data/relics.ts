@@ -11,37 +11,10 @@ import { BEACON_DRAW, BRACE_AMOUNT, FOCUS_STONE_MP, LONE_WOLF_DMG, SMALL_PARTY_M
 // the engine. All relic code is INERT when the run owns none (regression gate).
 // ---------------------------------------------------------------------------
 
-export type RelicId =
-  | 'lantern'        // hidden attacks reveal their target
-  | 'hagglersCharm'  // shop prices -10%
-  | 'fieldTriage'    // heals on members below 50% max HP heal +2
-  | 'warDrum'        // after an Ability cast, that member's next auto doubles
-  | 'prayerBeads'    // +3 MP on each draw-pile reshuffle
-  | 'vanguardsBanner'// members at full HP deal +1 on their auto
-  // --- phase B (#22): rule-changers ------------------------------------------
-  | 'martyrsIcon'    // once/fight, a member death becomes survival at 1 HP
-  // --- phase B (#22): curses (bought only, never in spoils, never forced) ---
-  | 'pactOfSilence'  // you can no longer Rest; +1 passive MP each turn
-  | 'rustyCrown'     // all enemies +1 attack; fight wins pay +40g
-  // --- small-party relics (#42): reward fielding fewer bodies ----------------
-  | 'loneWolf'       // while fielding <=2, fielded members deal +2 damage
-  | 'focusStone'     // while fielding <=2, +2 max MP (fewer bodies to heal)
-  | 'warband'        // fielded members gain +3 max HP per empty deploy seat
-  // --- card-type synergy relics (#63): read card type on play ----------------
-  | 'reliquaryOfLight' // Holy cards heal +1
-  // --- Regen conversions relics (#66): pay out when Regen ends / HP drops -----
-  | 'ossuaryBell'      // a member dropping below 25% max HP gains Regen 2 (every crossing)
-  // --- Status-window management relics (#67): amplify / cash in the windows ---
-  | 'venomGland'       // Poison you apply lasts +1 turn
-  // --- Holy overheal & board-state relics (#69): pay off a topped-off party -------
-  | 'beaconOfSecondSun'// whenever a card heals a member to full, draw 1 (no per-fight cap)
-  | 'twinCenser'       // single-target heal cards also heal the most wounded other member 1
-  // --- Channel archetype rescue relic (#70): a channel keep-alive ----------------
-  | 'chantersIdol'     // the first card you play each turn doesn't break your channel
-  // --- Meta-layer / run-economy relics (#71): touch Rest, recovery, rewards ------
-  | 'pilgrimsFlask'    // every Rest also heals your most wounded member 2
-  | 'surgeonsThread'   // between-fight recovery 40% -> 50% of max HP
-  | 'beggarsBowl';     // curse: card rewards offer 2 instead of 3; +20g per won fight
+// #106: ids are plain strings — relics.json is the source of truth. The
+// exhaustiveness the union gave Record<> maps is replaced by the content
+// validator and test/content/coverage.test.ts.
+export type RelicId = string;
 
 export interface RelicDef {
   id: RelicId;

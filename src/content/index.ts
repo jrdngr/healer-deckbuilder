@@ -48,7 +48,7 @@ export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/te
 export { NATIVES, NATIVE_NAMES } from './natives';
 export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
 export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';
-export { RELIC_JSON, MEMBER_JSON, RELIC_JSON_IDS, MEMBER_JSON_IDS } from './entities';
+export { RELIC_JSON, MEMBER_JSON, ENEMY_JSON, RELIC_JSON_IDS, MEMBER_JSON_IDS, ENEMY_JSON_IDS } from './entities';
 export type { RelicJson, MemberJson } from './entities';
 export type { AbilityJson } from './abilities';
 export type { CardJson } from './cards';

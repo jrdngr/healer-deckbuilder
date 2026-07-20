@@ -20,10 +20,10 @@ export type CardTarget = 'single' | 'dead' | 'all' | 'none';
 export type CardType = 'holy' | 'nature' | 'shadow' | 'blood' | 'arcane' | 'iron';
 // The classic demo trio plus the post-demo roster (#27-#29). Any member can occupy
 // any slot in a drafted party; the engine reads identity from MEMBER_POOL, not slot.
-export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berserker' | 'beastWarden' | 'sentinel' | 'duelist' | 'flagellant';
-// 'hex' (Warlock, #39) curses the enemy with Vulnerability — the party deals more
-// damage to it, and the bonus is LARGER the fewer members are fielded (a small-party
-// controller); 'crescendo' (Skald) draws cards and feeds his cards-played strike;
+// #106: ids are plain strings — members.json is the source of truth. The
+// exhaustiveness the union gave Record<> maps is replaced by the content
+// validator and test/content/coverage.test.ts.
+export type MemberId = string;
 // 'rampage' (Berserker) doubles his current strike at an HP cost; 'callBoar' (Beast
 // Warden) summons a pet that soaks whole hits; 'stun' (Sentinel, #61) cancels the
 // enemy's standing telegraph — the move is consumed (rotation advances, channel
@@ -34,24 +34,10 @@ export type MemberId = 'ranger' | 'tank' | 'mage' | 'warlock' | 'skald' | 'berse
 // the one-shot Riposte card. It is a target 'single' ability card — the stance can be
 // placed on any member, self included. Each fires via that member's own ability card
 // (#44), inserted into the deck when they are deployed.
-export type AbilityId = 'poison' | 'taunt' | 'bolt' | 'hex' | 'crescendo' | 'rampage' | 'callBoar' | 'stun' | 'enGarde' | 'penance'
-  // Learned ability cards (Training Dojo, 2026-07): two extra per hero, acquired at the
-  // Dojo node and fired like a signature ability card (bound member, _fireAbility case).
-  | 'twinShot' | 'concVenom'        // Ranger
-  | 'shieldWall' | 'holdLine'       // Tank
-  | 'arcaneSurge' | 'drainLife'     // Mage
-  | 'doom' | 'sacrifice'            // Warlock
-  | 'finale' | 'duet'               // Busker
-  | 'bloodbath' | 'whirlwind'       // Berserker
-  | 'sicEm' | 'mendBeast'           // Beast Warden
-  | 'standingOvation' | 'bigTop'    // Showstopper
-  | 'lunge' | 'flurry'              // Duelist
-  | 'strongest' | 'deadlift';       // Strongman
-// #106: card ids are plain strings — cards.json is the source of truth, so a new card
-// is authored there with no TypeScript edit. The exhaustiveness the union used to give
-// `Record<CardId, …>` maps is replaced by startup coverage checks in the content
-// validator (family/buyValue/type/rarity) and by test/content/coverage.test.ts for the
-// presentation and sim-policy tables the engine must not import.
+// #106: ids are plain strings — abilities.json is the source of truth. The
+// exhaustiveness the union gave Record<> maps is replaced by the content
+// validator and test/content/coverage.test.ts.
+export type AbilityId = string;
 export type CardId = string;
 
 // The scripted effect a 'cast' telegraph resolves into. 'wound' halves the party's
