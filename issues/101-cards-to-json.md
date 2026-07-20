@@ -1,6 +1,6 @@
 # Issue 101 — Cards to JSON (`cards.json` + dual dispatch, five batches, delete the `_applyCard` switch)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — 7 commits; all 32 card arms are data, the switch is deleted, zero natives needed)
 - **Phase:** content-migration (phase 1 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — every batch below is proven by re-running it unchanged), then **#100**
@@ -74,50 +74,50 @@ is the first thing that has ever pinned this arm's behavior.
 
 ## Acceptance criteria
 
-- [ ] **Scaffold commit** — `src/content/cards.json` holds all 65 cards' **metadata only**
+- [x] **Scaffold commit** — `src/content/cards.json` holds all 65 cards' **metadata only**
       (id, name, cost, target, type, rarity, desc template, `heal`/`regen`/`refresh`/
       `selfDamage`/`draw`/… fields, **plus `family` and `buyValue`**) and **zero `actions`
       arrays. `_applyCard`'s switch is untouched.** `src/content/index.ts` re-exports `CARDS`
       etc. with byte-identical shape; the validator goes live for cards.
-- [ ] `src/components/Card.tsx` reads `family` from the card def; `CARD_FAMILY` deleted.
-- [ ] `sim/policy.ts` reads `buyValue` from the card def; `CARD_BUY_VALUE` deleted.
-- [ ] Card-specific validator checks live: every card `ability` exists; `ABILITY_CARD` is a
+- [x] `src/components/Card.tsx` reads `family` from the card def; `CARD_FAMILY` deleted.
+- [x] `sim/policy.ts` reads `buyValue` from the card def; `CARD_BUY_VALUE` deleted.
+- [x] Card-specific validator checks live: every card `ability` exists; `ABILITY_CARD` is a
       **bijection**; every `{tune: K}` resolves; every `{card: F}` names a real declared field
       (or carries an `else`); every desc placeholder resolves; every `emit.kind` and payload
       matches a `GameEvent` variant (`core.ts:212`…); every `{var}` is bound by a prior
       `let`/`letStr`/`bind` **in scope** (a scope walk — this catches the typos that are
       otherwise just `undefined` at runtime); every card is reachable (in `DECK_LIST`, a shop
       pool, or `ABILITY_CARD`).
-- [ ] **Five migration batches summing to exactly 32 arms**, each its own commit, each
+- [x] **Five migration batches summing to exactly 32 arms**, each its own commit, each
       leaving `npm test` green and `npm run typecheck` clean:
-  - [ ] **Batch 1 — plain heals and wards (7 arms):** `lowHeal`+`highHeal` (one shared body,
+  - [x] **Batch 1 — plain heals and wards (7 arms):** `lowHeal`+`highHeal` (one shared body,
         migrate together), `aoeHeal`, `regen`, `bloom`, `lifebloom`, `barrier`, `shield`.
         Proves `heal` with **separate `direct` and `splash` flags** — only `lowHeal`/
         `highHeal` call `_healCardSplash` (`effects.ts:94`).
-  - [ ] **Batch 2 — holy, delayed and party-wide (6 arms):** `sunriseVigil`, `consecration`,
+  - [x] **Batch 2 — holy, delayed and party-wide (6 arms):** `sunriseVigil`, `consecration`,
         `battleHymn`, `inspiration`, `arcaneLens`, `fontOfMana`. Proves `queueDelayed`
         (`effects.ts:106-113`) and `collect` (`consecration`'s `atFullSlots`,
         `effects.ts:122-131`, which emits **one** `hymn` event carrying the whole list).
-  - [ ] **Batch 3 — the Blood archetype (7 arms):** `bloodTithe`, `martyrsGift`,
+  - [x] **Batch 3 — the Blood archetype (7 arms):** `bloodTithe`, `martyrsGift`,
         `crimsonPact`, `scarletWard`, `transfusion`, `bloodBanner`, `hemorrhage`. Proves
         `bloodPay` and `{bloodCost: true}`; settles the `bloodBanner` decision above;
         `hemorrhage` (`effects.ts:320-325`) is expected to land as a `native`.
-  - [ ] **Batch 4 — martial stances and buffs (7 arms):** `phalanx`, `provoke`, `feint`,
+  - [x] **Batch 4 — martial stances and buffs (7 arms):** `phalanx`, `provoke`, `feint`,
         `guard`, `sharpen`, `doubleStrike`, `riposte`. Proves `status`, `addStat` and
         `partyBuff`.
-  - [ ] **Batch 5 — the remainder (5 arms):** `dreadWhisper`, `sporeburst`, `empower`,
+  - [x] **Batch 5 — the remainder (5 arms):** `dreadWhisper`, `sporeburst`, `empower`,
         `resurrect`, `cleanse`. Proves `telegraph` (`dreadWhisper` edits the standing
         telegraph in place so `attackTargets()` previews it immediately), the
         `consume`-with-`deferEndHook` ordering for `sporeburst`, and the `revive`/`purge` ops.
-- [ ] **Delete-the-switch commit** — `effects.ts:86-460` is gone, `_applyCard` is the
+- [x] **Delete-the-switch commit** — `effects.ts:86-460` is gone, `_applyCard` is the
       interpreter shell plus the `_resolvePlayedCard` contract around it, and
       `CONTENT_ACTIONS` covers all 32 arms. The dual-dispatch fallback is removed with it.
-- [ ] Every batch commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()`
+- [x] Every batch commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()`
       log diff against its parent commit (per #100's documented procedure, including the
       large-event-count assertion).
-- [ ] `npm run sim` wall time recorded at the end of this phase, compared against #100's
+- [x] `npm run sim` wall time recorded at the end of this phase, compared against #100's
       phase-0 baseline.
-- [ ] `npm test` green and `npm run typecheck` clean at **every** commit, not just the last.
+- [x] `npm test` green and `npm run typecheck` clean at **every** commit, not just the last.
 
 ## Implementation notes (anchors)
 
@@ -169,3 +169,54 @@ is the first thing that has ever pinned this arm's behavior.
 - Any behavior change, with the single scoped exception of the `bloodBanner` decision above,
   which must be explicitly trace-checked if option 1 is chosen.
 - Rebalancing. Tuning values move by reference (`{tune: "K"}`), never by value.
+
+## Resolution (2026-07-20)
+
+Seven commits: scaffold, five batches, delete-the-switch. `effects.ts` drops **794 → 396
+lines**. Every batch shipped an empty `sim/trace.ts` diff over 30 seeds and all 238 of
+#99's card characterization cases green.
+
+### Zero natives
+
+The plan budgeted **10–14** natives across cards and abilities and named `hemorrhage` as
+an expected one. **No card arm needed an escape hatch.** `hemorrhage` is
+`consumeEnemyStatus` + `damage{nuke}`; `resurrect` and `cleanse` are the code-backed
+`revive`/`purge` ops whose field lists live in the engine so they cannot drift from the
+interpreter. A2's finding holds: the native count is a function of the op vocabulary,
+not of the arms.
+
+### Vocabulary added while migrating (each general, none card-specific)
+
+- **`{gameStat}`** — read an engine-level field, the counterpart to `{stat, of}` for
+  members. `battleHymn` and `fontOfMana` log values they just wrote.
+- **emit payloads pass bound values through with their own type** — `slots` carries a
+  collected array, and routing it through `evalAmount` flattened it to `0`.
+- **Templates may address a selector** (`{$mostWoundedOther.name}`), resolved lazily —
+  the only way to name a member the action list never bound. `transfusion` logs its
+  recipient this way.
+- **`intent`** template ambient for the standing telegraph's readable name.
+
+### Two bugs the tests caught, both invisible in the migrated content
+
+1. Adding the `intent` ambient **shadowed user bindings** of the same name — the scope
+   was built ambients-last. No migrated arm binds `intent`, so only the synthetic
+   interpreter suite exposed it. Bindings now win.
+2. The JSON generator mis-parsed exactly one card — `hex` uses a double-quoted desc
+   where the rest use backticks or single quotes — caught by the agreement test before
+   a single arm had moved.
+
+### Decisions settled
+
+- **`bloodBanner`** uses `{sanguineSurcharge}`, not an invented `selfDamage` field.
+  It pays `BLOOD_BANNER_HP + surcharge` without declaring a cost, and giving it one
+  would change what `canPlay` gates on — a behavior change dressed as a schema fix.
+- **`family` and `buyValue` moved into the JSON** (from `components/Card.tsx` and
+  `sim/policy.ts`), which is what makes #106's acceptance criterion reachable at all.
+- **Descs stay live templates.** 30 of 65 keep `{TUNING_KEY}` references resolved at
+  load, so a renamed constant is still caught — and now a *wrong* one is too, which the
+  TS template literals never caught.
+
+### Still open for #106
+
+Card ids are still the `CardId` TS union, so adding a genuinely new card to `cards.json`
+without touching TypeScript is not yet possible. That is the string-id cutover.
