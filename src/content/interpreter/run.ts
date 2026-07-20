@@ -269,8 +269,18 @@ export function evalCondition(game: Game, cond: Condition, ctx: ActionCtx, subje
  */
 function render(game: Game, tpl: string, ctx: ActionCtx): string {
   const target = ctx.target != null ? game.members[ctx.target] : undefined;
+  // Ambients FIRST, explicit bindings LAST: a let/bind must win over an ambient of
+  // the same name, or naming a binding `intent` or `target` would silently read the
+  // ambient instead. (Caught by the interpreter suite when `intent` was added.)
   const vars: Record<string, unknown> = {
-    ...ctx.vars, self: ctx.self, target, enemy: game.enemy, card: ctx.card,
+    self: ctx.self,
+    target,
+    enemy: game.enemy,
+    card: ctx.card,
+    // The standing telegraph's readable name, with the same 'attack' fallback the
+    // arms used. Several logs name what they are steering or cancelling.
+    intent: game.telegraphIntent() ?? 'attack',
+    ...ctx.vars,
   };
   const refs = templateRefs(tpl);
   for (const path of [...refs.paths, ...refs.conditions]) {

@@ -32,7 +32,8 @@ export interface ActionValidationContext {
   ambientTemplatePaths?: readonly string[];
 }
 
-const AMBIENT = ['card', 'self', 'target', 'enemy', 'holder', 'partner', 'ally', 'lifted', 'member'];
+const AMBIENT = ['card', 'self', 'target', 'enemy', 'intent',
+  'holder', 'partner', 'ally', 'lifted', 'member'];
 
 function validateSelector(
   sel: Selector, path: string, ctx: ActionValidationContext, errs: ErrorCollector,

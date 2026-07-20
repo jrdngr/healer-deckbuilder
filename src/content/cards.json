@@ -1055,7 +1055,33 @@
     "noDefense": true,
     "noTaunt": true,
     "desc": "Defense 2 for 2 enemy turns. Cannot target a defended or taunting member.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "defense",
+        "amount": {
+          "tune": "PHALANX_DEFENSE"
+        },
+        "turns": {
+          "tune": "PHALANX_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Turtle Up: {target.name} gains Defense {PHALANX_DEFENSE} for {PHALANX_TURNS} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "defenseApplied",
+        "slot": "$target",
+        "amount": {
+          "tune": "PHALANX_DEFENSE"
+        }
+      }
+    ]
   },
   "provoke": {
     "id": "provoke",
@@ -1067,7 +1093,30 @@
     "family": "ward",
     "buyValue": 2,
     "desc": "Applies Taunt to the target for 2 enemy turns.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "taunt",
+        "turns": {
+          "tune": "TAUNT_LITE_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{target.name} Provokes — the enemy turns to them for {TAUNT_LITE_TURNS} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "taunt",
+        "slot": "$target",
+        "turns": {
+          "tune": "TAUNT_LITE_TURNS"
+        }
+      }
+    ]
   },
   "feint": {
     "id": "feint",
@@ -1079,7 +1128,41 @@
     "family": "ward",
     "buyValue": 1,
     "desc": "Redirect every hit of the standing telegraph onto the target member.",
-    "actions": []
+    "actions": [
+      {
+        "op": "if",
+        "when": {
+          "telegraph": "redirectable"
+        },
+        "then": [
+          {
+            "op": "telegraph",
+            "mode": "retargetTo",
+            "to": "$target"
+          },
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "{target.name} Feints — the {intent} is drawn fully onto them."
+          },
+          {
+            "op": "emit",
+            "kind": "taunt",
+            "slot": "$target",
+            "turns": {
+              "tune": "TAUNT_LITE_TURNS"
+            }
+          }
+        ],
+        "else": [
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "{target.name} Feints, but there is no attack to steer."
+          }
+        ]
+      }
+    ]
   },
   "sporeburst": {
     "id": "sporeburst",
@@ -1559,7 +1642,33 @@
     "family": "ward",
     "buyValue": 1,
     "desc": "A hero takes {GUARD_DR} less damage per hit for {GUARD_TURNS} enemy turns. Stacks with Defense, not with itself.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "guard",
+        "amount": {
+          "tune": "GUARD_DR"
+        },
+        "turns": {
+          "tune": "GUARD_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Guard on {target.name}: -{GUARD_DR} damage per hit for {GUARD_TURNS} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "defenseApplied",
+        "slot": "$target",
+        "amount": {
+          "tune": "GUARD_DR"
+        }
+      }
+    ]
   },
   "sharpen": {
     "id": "sharpen",
@@ -1571,7 +1680,41 @@
     "family": "power",
     "buyValue": 1,
     "desc": "A hero's attacks deal +{SHARPEN_BONUS} for {SHARPEN_TURNS} enemy turns.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "strike",
+        "amount": {
+          "tune": "SHARPEN_BONUS"
+        },
+        "turns": {
+          "tune": "SHARPEN_TURNS"
+        },
+        "mode": "keepStrongerIfActive"
+      },
+      {
+        "op": "collect",
+        "bind": "slots",
+        "over": "$target",
+        "pick": "slot"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Sharpen on {target.name}: +{SHARPEN_BONUS} damage for {SHARPEN_TURNS} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "hymn",
+        "bonus": {
+          "tune": "SHARPEN_BONUS"
+        },
+        "slots": {
+          "var": "slots"
+        }
+      }
+    ]
   },
   "doubleStrike": {
     "id": "doubleStrike",
@@ -1583,7 +1726,19 @@
     "family": "power",
     "buyValue": 1,
     "desc": "A hero's next basic attack lands doubled, then is spent.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "drumPrimed",
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{target.name} readies a Double Strike — their next attack lands doubled."
+      }
+    ]
   },
   "empower": {
     "id": "empower",
@@ -1607,6 +1762,24 @@
     "family": "power",
     "buyValue": 1,
     "desc": "The next attack that hits a hero, they counterattack for their damage.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "riposte",
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{target.name} sets a Riposte — the next hit will be answered in kind."
+      },
+      {
+        "op": "emit",
+        "kind": "enGarde",
+        "slot": "$target",
+        "turns": 1
+      }
+    ]
   }
 }
