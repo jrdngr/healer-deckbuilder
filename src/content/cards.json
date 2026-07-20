@@ -646,7 +646,27 @@
     "family": "heal",
     "buyValue": 2,
     "desc": "Revive a dead member to 50% max HP.",
-    "actions": []
+    "actions": [
+      {
+        "op": "revive",
+        "on": "$target",
+        "hpFraction": 0.5
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{target.name} is resurrected to {target.hp} HP."
+      },
+      {
+        "op": "emit",
+        "kind": "resurrect",
+        "slot": "$target",
+        "hp": {
+          "stat": "hp",
+          "of": "$target"
+        }
+      }
+    ]
   },
   "cleanse": {
     "id": "cleanse",
@@ -658,7 +678,23 @@
     "family": "heal",
     "buyValue": 5,
     "desc": "Remove all negative status effects from the party.",
-    "actions": []
+    "actions": [
+      {
+        "op": "purge",
+        "scope": "party",
+        "bind": "had"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{had ? Cleanse purges the party — all afflictions lifted. : Cleanse finds nothing to purge.}"
+      },
+      {
+        "op": "emit",
+        "kind": "cleanse",
+        "slot": 1
+      }
+    ]
   },
   "bloom": {
     "id": "bloom",
@@ -1175,7 +1211,47 @@
     "buyValue": 1,
     "needsRegen": true,
     "desc": "Consume the target's Regen; Poison the enemy {SPOREBURST_POISON}/turn for as many turns as ticks consumed.",
-    "actions": []
+    "actions": [
+      {
+        "op": "consume",
+        "on": "$target",
+        "tag": "regen",
+        "bind": "ticks",
+        "deferEndHook": true
+      },
+      {
+        "op": "enemyStatus",
+        "tag": "poison",
+        "amount": {
+          "tune": "SPOREBURST_POISON"
+        },
+        "turns": {
+          "var": "ticks"
+        },
+        "mode": "add"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Sporeburst consumes {target.name}'s Regen — the enemy is poisoned {SPOREBURST_POISON}/turn for {ticks} turn{ticks|s}. ({enemy.poison}/turn for {enemy.poisonTurns})"
+      },
+      {
+        "op": "emit",
+        "kind": "poisonApplied",
+        "slot": "$target",
+        "amount": {
+          "tune": "SPOREBURST_POISON"
+        },
+        "poison": {
+          "enemyStat": "poison"
+        }
+      },
+      {
+        "op": "regenEnded",
+        "on": "$target",
+        "consumed": true
+      }
+    ]
   },
   "hemorrhage": {
     "id": "hemorrhage",
@@ -1214,7 +1290,70 @@
     "family": "ward",
     "buyValue": 1,
     "desc": "The standing telegraph deals {DREAD_WHISPER_REDUCTION} less per target (min 0).",
-    "actions": []
+    "actions": [
+      {
+        "op": "if",
+        "when": {
+          "telegraph": "damaging"
+        },
+        "then": [
+          {
+            "op": "let",
+            "bind": "before",
+            "value": {
+              "telegraphStat": "damage"
+            }
+          },
+          {
+            "op": "telegraph",
+            "mode": "reduceDamage",
+            "amount": {
+              "tune": "DREAD_WHISPER_REDUCTION"
+            },
+            "floor": 0
+          },
+          {
+            "op": "let",
+            "bind": "after",
+            "value": {
+              "telegraphStat": "damage"
+            }
+          },
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "Trash Talk saps the {intent}: {before} → {after} per target."
+          },
+          {
+            "op": "emit",
+            "kind": "graveChill",
+            "slot": 1,
+            "amount": {
+              "sum": [
+                {
+                  "var": "before"
+                },
+                {
+                  "mul": [
+                    -1,
+                    {
+                      "var": "after"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "else": [
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "Trash Talk echoes at the telegraph, but there is nothing to sap."
+          }
+        ]
+      }
+    ]
   },
   "crimsonPact": {
     "id": "crimsonPact",
@@ -1750,7 +1889,38 @@
     "family": "power",
     "buyValue": 1,
     "desc": "A hero's next ability fires at +{EMPOWER_BONUS} ability power, then is spent.",
-    "actions": []
+    "actions": [
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "empower",
+        "amount": {
+          "tune": "EMPOWER_BONUS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "collect",
+        "bind": "slots",
+        "over": "$target",
+        "pick": "slot"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Empower on {target.name}: their next ability fires at +{EMPOWER_BONUS} power."
+      },
+      {
+        "op": "emit",
+        "kind": "hymn",
+        "bonus": {
+          "tune": "EMPOWER_BONUS"
+        },
+        "slots": {
+          "var": "slots"
+        }
+      }
+    ]
   },
   "riposte": {
     "id": "riposte",
