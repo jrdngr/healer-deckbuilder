@@ -36,7 +36,6 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 99 | 🔨 In progress | [Characterization test suite for all game content](./issues/99-content-characterization-suite.md) | testing | — | maintainer directive 2026-07-20 (regression gate for #100–#106) |
 | 100 | 📋 Planned | [Content DSL foundations (zod, TUNING, interpolator, validator, interpreter, trace oracle)](./issues/100-content-dsl-foundations.md) | content-migration | #99 | migration plan 2026-07-20, phase 0 |
 | 101 | 📋 Planned | [Cards to JSON (cards.json + dual dispatch, delete the _applyCard switch)](./issues/101-cards-to-json.md) | content-migration | #99, #100 | migration plan 2026-07-20, phase 1 |
 | 102 | 📋 Planned | [Abilities to JSON (abilities.json + dual dispatch, delete the _fireAbility switch)](./issues/102-abilities-to-json.md) | content-migration | #99, #101 | migration plan 2026-07-20, phase 2 |
@@ -44,3 +43,4 @@ _(empty)_
 | 104 | 📋 Planned | [Enemies and the remaining dispatch surfaces (enemies.json, casts.json, channels, delayed effects)](./issues/104-enemies-and-remaining-dispatch.md) | content-migration | #99, #103 | migration plan 2026-07-20, phase 4 |
 | 105 | 📋 Planned | [Run-layer content to JSON (outcome ops + events.json, upgrades.json, modifiers.json)](./issues/105-run-layer-content-to-json.md) | content-migration | #99, #104 | migration plan 2026-07-20, phase 5 |
 | 106 | 📋 Planned | [String-id cutover (coverage checks + fallbacks, save v19→20, CLAUDE.md authoring guide)](./issues/106-string-ids-cutover.md) | content-migration | #99, #105 | migration plan 2026-07-20, phase 6 |
+| 107 | 📋 Planned | [Two inconsistencies surfaced by the characterization pass](./issues/107-characterization-findings.md) | cleanup | — | findings from #99 (taunt log text, gold-return convention) |

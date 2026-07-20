@@ -1,6 +1,6 @@
 # Issue 99 — Characterization test suite for all game content (the gate for the JSON content migration)
 
-- **Status:** 🔨 In progress (2026-07-20)
+- **Status:** ✅ Complete (2026-07-20 — 1,655 characterization cases across 9 files; every content item at state + exact log + events + edge depth)
 - **Phase:** testing (gates the content-as-JSON migration, #100–#106)
 - **Depends:** —
 - **Addresses:** maintainer directive 2026-07-20 — "I want to make sure we catch any regressions that this causes. Every item being moved into JSON should have tests that assert all of its behaviors. Development of this feature can begin once all of the test cases are written and passing."
@@ -80,29 +80,30 @@ against.
       `expectLog(name, cap, text, kind?)` (exact), `expectLogSeq`. Self-tested in
       `test/harness.test.ts` **both ways** — each helper passes when it should and
       genuinely fails when it should.
-- [ ] **A2** — a per-item behavior inventory for all 147 items committed to the repo,
+- [x] **A2** — a per-item behavior inventory for all 147 items committed to the repo,
       recording for each arm whether it fits the #100 op vocabulary or needs a `native`,
       with a total native count. (This doubles as the DSL audit — see Notes.)
-- [ ] **A3** — the 10 zero-coverage cards, at depth.
-- [ ] **A4** — the remaining 22 card arms brought to depth, including upgrade
+- [x] **A3** — the 10 zero-coverage cards, at depth.
+- [x] **A4** — the remaining 22 card arms brought to depth, including upgrade
       (Potent/Lingering/Efficient) interaction reaching the *effect body*, not just
       `resolveCard`.
-- [ ] **A5** — all 30 ability arms, rewired through `playCard`.
-- [ ] **A6** — 5 enemy cast kinds, `mendingStream`/`sap` channel ticks, and
+- [x] **A5** — all 30 ability arms, rewired through `playCard`.
+- [x] **A6** — 5 enemy cast kinds, `mendingStream`/`sap` channel ticks, and
       `delayedStartEffects` (pin the `effects.ts:106-113` ordering contract: fires at
       start of next player phase, after the Regen tick, before the draw, stacking per cast).
-- [ ] **A7** — all 21 relics, each with a not-owned control case; the 9 probe-only relics
+- [x] **A7** — all 21 relics, each with a not-owned control case; the 9 probe-only relics
       promoted out of `sim/exercise.ts` booleans into real tests with expected/got.
-- [ ] **A8** — all 11 hero passives, including the Tank Grudge *banking* site at
+- [x] **A8** — all 11 hero passives, including the Tank Grudge *banking* site at
       `core.ts:1877` with `HOLD_LINE_BANK_MULT`.
-- [ ] **A9** — 12 enemy defs: rotation ordering, phase transitions, telegraph generation.
-- [ ] **A10** — 8 events and 12 choice kinds; `gambleGold`'s weighted outcomes
+- [x] **A9** — 12 enemy defs: rotation ordering, phase transitions, telegraph generation.
+- [x] **A10** — 8 events and 12 choice kinds; `gambleGold`'s weighted outcomes
       (`src/run.ts:1380-1388`) seeded across all four payout branches.
-- [ ] **A11** — 3 MODIFIERS reaching the effect body; 5 PARTY_UPGRADES + 4
+- [x] **A11** — 3 MODIFIERS reaching the effect body; 5 PARTY_UPGRADES + 4
       HEALER_UPGRADES per-id (today a generic "some stat changed" check at
       `run.test.ts:885`).
-- [ ] `npm test` green, `npm run typecheck` clean.
-- [ ] Follow-up issues filed for every "this looks wrong" found while characterizing.
+- [x] `npm test` green, `npm run typecheck` clean.
+- [x] Follow-up issues filed for every "this looks wrong" found while characterizing
+      (**#107** — two inconsistencies; no genuine bugs were found).
 
 ## Implementation notes (anchors)
 
@@ -143,3 +144,62 @@ is meaningless.
 - Rewriting existing passing tests that already assert state, unless they reach into
   underscore methods (A5's 19 ability tests) or their item needs log/event depth added.
 - Visual/UI confirmation — maintainer-verified manually per `CLAUDE.md`.
+
+## Resolution (2026-07-20)
+
+**1,655 characterization cases across 9 files** under `test/content/`, plus 41 in
+`test/harness.test.ts`. Full suite green at 5,242 assertions; `npm run typecheck` clean.
+
+| File | Cases | Covers |
+|---|---|---|
+| `test/harness.test.ts` | 41 | the assertion helpers themselves, both ways |
+| `content/cards.test.ts` | 238 | all 32 card arms |
+| `content/abilities.test.ts` | 161 | all 30 ability arms, through `playCard` |
+| `content/casts-channels.test.ts` | 75 | 5 casts, 2 channels, the preview switch |
+| `content/relics.test.ts` | 157 | 21 relics, each with a not-owned control |
+| `content/passives.test.ts` | 58 | 11 hero passives + 3 ability-keyed bands |
+| `content/enemies.test.ts` | 233 | 15 enemy defs, rotations, phases, the preview invariant |
+| `content/events.test.ts` | 409 | 8 events, all 12 choice kinds |
+| `content/upgrades.test.ts` | 283 | 3 modifiers reaching the effect body, 9 stat upgrades |
+
+**No genuine bugs were found.** Every surprise turned out to be deliberate engine
+design, and each is now pinned. The two inconsistencies worth a decision are filed as
+**#107** (the `taunt` log prints the base Defense constant rather than the scaled value
+it applies; `cursedChest` and `gambleGold` disagree on whether their `gold` field is a
+payout or a total).
+
+### The A2 audit changed #100's shape
+
+Reading all 67 arms established that **the `native` count is a function of the op
+vocabulary, not of the arms**: ~14 with the plan's original 22 ops, ~5 once
+`letStr`/`collect`/`strike`/template-conditionals are added, and **2** once six derived
+amount forms (`abilityPower`, `auto`, `vulnerable`, `sanguineSurcharge`,
+`holyHealBonus`, `missingHp`) exist. Only `hex` and `taunt` are true natives.
+`bolt` and `hemorrhage` — both budgeted as natives — are not. See
+`docs/content-behavior-inventory.md`.
+
+### Count correction
+
+The `_applyCard` switch has **32 arms, not 31** (33 `case` labels, one fall-through).
+The total effect surface is 67, not 66. #101's five batches sum to exactly 32.
+
+### Engine contracts pinned that nothing asserted before
+
+- `delayedStartEffects` fire in `beginPlayerTurn()`, not `skipTurn`/`endTurn` — those
+  park the engine at phase `'idle'`.
+- Channels only tick when `cardsPlayedThisPhase === 0`, so the cast turn never ticks and
+  `chantersIdol`'s exemption can only apply on a later turn.
+- Both poison tracks tick at enemy-phase **start**, before any cast resolves.
+- `ossuaryBell` hooks `_resolveAttack`, so it fires on a hit but not on a poison tick
+  crossing the same threshold.
+- `venomGland` extends poison at **two** separate sites (`effects.ts:486` and
+  `core.ts:1343`).
+- The three `m.ability`-keyed damage bands do **not** transfer to a hero who merely
+  *learns* that ability.
+
+### Two traps worth remembering for anyone extending this suite
+
+- Assigning `hp = 0` never runs the death pipeline, so a relic/passive death-veto test
+  written that way passes **vacuously**. Deaths must come from a real lethal source.
+- `start()` runs `_openingStrike()`, so the party is not at full HP and the Tank may
+  already have banked Grudge before a test begins.
