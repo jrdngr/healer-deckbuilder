@@ -9,7 +9,7 @@
 // content, so content must not import the engine back.
 import type { Game, Member } from '../../engine';
 import type { Action, Amount, Condition, Selector, StatusTag, WriteMode } from '../schema/dsl';
-import { renderTemplate } from './template';
+import { renderTemplate, templateRefs } from './template';
 import { TUNING } from '../../data/tuning-table';
 
 /** What an action list is running against. */
@@ -259,11 +259,28 @@ export function evalCondition(game: Game, cond: Condition, ctx: ActionCtx, subje
 // Ops
 // ---------------------------------------------------------------------------
 
-/** Render a log/emit template against the live scope. */
+/**
+ * Render a log/emit template against the live scope.
+ *
+ * A template may name a SELECTOR directly — `{$mostWoundedOther.name}` — which is the
+ * only way to talk about a member the action list never bound. Those are resolved
+ * lazily: only the selectors this particular template mentions are evaluated, so a log
+ * line costs nothing for the selectors it does not use.
+ */
 function render(game: Game, tpl: string, ctx: ActionCtx): string {
   const target = ctx.target != null ? game.members[ctx.target] : undefined;
+  const vars: Record<string, unknown> = {
+    ...ctx.vars, self: ctx.self, target, enemy: game.enemy, card: ctx.card,
+  };
+  const refs = templateRefs(tpl);
+  for (const path of [...refs.paths, ...refs.conditions]) {
+    const head = path.split('.')[0];
+    if (head.startsWith('$') && !(head in vars)) {
+      vars[head] = resolveOne(game, head as Selector, ctx);
+    }
+  }
   return renderTemplate(tpl, {
-    vars: { ...ctx.vars, self: ctx.self, target, enemy: game.enemy, card: ctx.card },
+    vars,
     fields: ctx.card as unknown as Record<string, unknown> | undefined,
     tuning: TUNING,
   }).text;

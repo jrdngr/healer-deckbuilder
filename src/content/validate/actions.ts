@@ -159,6 +159,14 @@ function validateTemplate(
   ]);
   for (const p of [...refs.paths, ...refs.conditions]) {
     const head = p.split('.')[0];
+    // A template may address a selector directly ({$mostWoundedOther.name}) — the only
+    // way to name a member the action list never bound.
+    if (head.startsWith('$')) {
+      if (!(SELECTOR_NAMES as readonly string[]).includes(head)) {
+        errs.unknown('template', ctx.file, path, 'selector', head, SELECTOR_NAMES);
+      }
+      continue;
+    }
     if (!known.has(head)) {
       errs.add({
         category: 'template', file: ctx.file, path,

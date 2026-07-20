@@ -948,7 +948,45 @@
     "selfDamage": 4,
     "engine": true,
     "desc": "A member with more than 4 HP pays 4 HP; restore 2 MP.",
-    "actions": []
+    "actions": [
+      {
+        "op": "bloodPay",
+        "from": "$target",
+        "amount": {
+          "bloodCost": true
+        },
+        "bind": "paid"
+      },
+      {
+        "op": "mp",
+        "delta": {
+          "tune": "BLOOD_TITHE_MP"
+        },
+        "bind": "gained"
+      },
+      {
+        "op": "let",
+        "bind": "mpNow",
+        "value": {
+          "gameStat": "mp"
+        }
+      },
+      {
+        "op": "log",
+        "kind": "mp",
+        "text": "Elbow Grease: {target.name} pays {paid} HP; {gained} MP restored. (MP {mpNow})"
+      },
+      {
+        "op": "emit",
+        "kind": "refreshTick",
+        "amount": {
+          "var": "gained"
+        },
+        "mp": {
+          "var": "mpNow"
+        }
+      }
+    ]
   },
   "martyrsGift": {
     "id": "martyrsGift",
@@ -962,7 +1000,48 @@
     "heal": 4,
     "selfDamage": 3,
     "desc": "A member with more than 3 HP pays 3 HP; every other living member heals 4.",
-    "actions": []
+    "actions": [
+      {
+        "op": "bloodPay",
+        "from": "$target",
+        "amount": {
+          "bloodCost": true
+        },
+        "bind": "paid"
+      },
+      {
+        "op": "forEach",
+        "over": "$allLivingOther",
+        "do": [
+          {
+            "op": "heal",
+            "to": "$target",
+            "amount": {
+              "card": "heal"
+            },
+            "direct": true,
+            "bind": "healed"
+          },
+          {
+            "op": "emit",
+            "kind": "heal",
+            "slot": "$target",
+            "amount": {
+              "var": "healed"
+            },
+            "hp": {
+              "stat": "hp",
+              "of": "$target"
+            }
+          }
+        ]
+      },
+      {
+        "op": "log",
+        "kind": "heal",
+        "text": "Helping Hand: {$target.name} pays {paid} HP; the others heal up to {heal}."
+      }
+    ]
   },
   "phalanx": {
     "id": "phalanx",
@@ -1026,7 +1105,21 @@
     "buyValue": 1,
     "needsPoison": true,
     "desc": "Consume the enemy's Poison and deal its whole remaining damage at once.",
-    "actions": []
+    "actions": [
+      {
+        "op": "consumeEnemyStatus",
+        "tag": "poison",
+        "bind": "total"
+      },
+      {
+        "op": "damage",
+        "amount": {
+          "var": "total"
+        },
+        "source": "Goo Burst",
+        "nuke": true
+      }
+    ]
   },
   "dreadWhisper": {
     "id": "dreadWhisper",
@@ -1053,7 +1146,38 @@
     "selfDamage": 4,
     "engine": true,
     "desc": "A member with more than {CRIMSON_PACT_HP} HP pays {CRIMSON_PACT_HP} HP; draw {CRIMSON_PACT_DRAW}.",
-    "actions": []
+    "actions": [
+      {
+        "op": "bloodPay",
+        "from": "$target",
+        "amount": {
+          "bloodCost": true
+        },
+        "bind": "paid"
+      },
+      {
+        "op": "draw",
+        "count": {
+          "card": "draw",
+          "else": {
+            "tune": "CRIMSON_PACT_DRAW"
+          }
+        },
+        "bind": "drawn"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Paper Cuts: {target.name} pays {paid} HP; drew {drawn} card{drawn|s}."
+      },
+      {
+        "op": "emit",
+        "kind": "draw",
+        "count": {
+          "var": "drawn"
+        }
+      }
+    ]
   },
   "scarletWard": {
     "id": "scarletWard",
@@ -1066,7 +1190,35 @@
     "buyValue": 1,
     "selfDamage": 3,
     "desc": "A member with more than {SCARLET_WARD_HP} HP pays {SCARLET_WARD_HP} HP; gain a Shield.",
-    "actions": []
+    "actions": [
+      {
+        "op": "bloodPay",
+        "from": "$target",
+        "amount": {
+          "bloodCost": true
+        },
+        "bind": "paid"
+      },
+      {
+        "op": "status",
+        "on": "$target",
+        "tag": "shield",
+        "turns": {
+          "tune": "SHIELD_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Thick Skin: {target.name} pays {paid} HP for a Shield (fades in {SHIELD_TURNS} enemy turns)."
+      },
+      {
+        "op": "emit",
+        "kind": "shieldApplied",
+        "slot": "$target"
+      }
+    ]
   },
   "transfusion": {
     "id": "transfusion",
@@ -1080,7 +1232,60 @@
     "heal": 5,
     "selfDamage": 4,
     "desc": "A member with more than {TRANSFUSION_HP} HP pays {TRANSFUSION_HP} HP; the most wounded other member heals {TRANSFUSION_HEAL}.",
-    "actions": []
+    "actions": [
+      {
+        "op": "bloodPay",
+        "from": "$target",
+        "amount": {
+          "bloodCost": true
+        },
+        "bind": "paid"
+      },
+      {
+        "op": "if",
+        "when": {
+          "exists": "$mostWoundedOther"
+        },
+        "then": [
+          {
+            "op": "heal",
+            "to": "$mostWoundedOther",
+            "amount": {
+              "card": "heal",
+              "else": {
+                "tune": "TRANSFUSION_HEAL"
+              }
+            },
+            "direct": true,
+            "bind": "healed"
+          },
+          {
+            "op": "log",
+            "kind": "heal",
+            "text": "Blood Drive: {$target.name} pays {paid} HP; {$mostWoundedOther.name} heals {healed}."
+          },
+          {
+            "op": "emit",
+            "kind": "heal",
+            "slot": "$mostWoundedOther",
+            "amount": {
+              "var": "healed"
+            },
+            "hp": {
+              "stat": "hp",
+              "of": "$mostWoundedOther"
+            }
+          }
+        ],
+        "else": [
+          {
+            "op": "log",
+            "kind": "status",
+            "text": "Blood Drive: {$target.name} pays {paid} HP, but no other member remains to receive it."
+          }
+        ]
+      }
+    ]
   },
   "bloodBanner": {
     "id": "bloodBanner",
@@ -1092,7 +1297,64 @@
     "family": "power",
     "buyValue": 1,
     "desc": "Every living member pays {BLOOD_BANNER_HP} HP (clamps to 1); the party's autos deal +{BLOOD_BANNER_BONUS} for {BLOOD_BANNER_TURNS} enemy turns.",
-    "actions": []
+    "actions": [
+      {
+        "op": "let",
+        "bind": "cost",
+        "value": {
+          "sum": [
+            {
+              "tune": "BLOOD_BANNER_HP"
+            },
+            {
+              "sanguineSurcharge": true
+            }
+          ]
+        }
+      },
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "bloodPay",
+            "from": "$target",
+            "amount": {
+              "var": "cost"
+            }
+          }
+        ]
+      },
+      {
+        "op": "partyBuff",
+        "field": "bloodBannerTurns",
+        "turns": {
+          "tune": "BLOOD_BANNER_TURNS"
+        },
+        "mode": "set"
+      },
+      {
+        "op": "collect",
+        "bind": "slots",
+        "over": "$allLiving",
+        "pick": "slot"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Pep Rally: the party digs deep — autos deal +{BLOOD_BANNER_BONUS} for {BLOOD_BANNER_TURNS} enemy turns."
+      },
+      {
+        "op": "emit",
+        "kind": "hymn",
+        "bonus": {
+          "tune": "BLOOD_BANNER_BONUS"
+        },
+        "slots": {
+          "var": "slots"
+        }
+      }
+    ]
   },
   "sunriseVigil": {
     "id": "sunriseVigil",
