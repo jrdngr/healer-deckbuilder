@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsx test/harness.test.ts && tsx test/engine.test.ts && tsx test/engine.archetypes.test.ts && tsx test/animations.test.ts && tsx test/goldFx.test.ts && tsx test/run.test.ts && tsx test/useGame.test.tsx && tsx test/components.test.tsx && tsx test/tooltip.test.ts && tsx test/keywords.test.ts && tsx test/deploy.test.ts && tsx test/sim.test.ts && tsx test/coverage.test.ts && tsx test/characterArt.test.ts",
+    "test": "tsx test/harness.test.ts && tsx test/engine.test.ts && tsx test/engine.archetypes.test.ts && tsx test/animations.test.ts && tsx test/goldFx.test.ts && tsx test/run.test.ts && tsx test/useGame.test.tsx && tsx test/components.test.tsx && tsx test/tooltip.test.ts && tsx test/keywords.test.ts && tsx test/deploy.test.ts && tsx test/sim.test.ts && tsx test/coverage.test.ts && tsx test/characterArt.test.ts && tsx test/content/cards.test.ts",
     "sim": "tsx sim/run-sim.ts",
     "coverage": "tsx sim/exercise.ts",
     "typecheck": "tsc --noEmit"
