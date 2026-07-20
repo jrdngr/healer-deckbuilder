@@ -30,6 +30,82 @@ DOM-free TypeScript module that the UI and the tests both consume.
 - For UI work, make the change, ensure tests still pass, and leave visual confirmation to
   the maintainer rather than driving a browser yourself.
 
+## Authoring content — `src/content/*.json`
+
+**All game content is JSON.** Cards, abilities, relics, heroes, enemies, events,
+upgrades and card modifiers live in `src/content/`, are validated at startup, and need
+no TypeScript to change or extend. Adding a card that composes existing effects is a
+JSON edit and nothing else.
+
+### Adding a card
+
+Add an entry to `src/content/cards.json`:
+
+```json
+"quickWard": {
+  "id": "quickWard", "name": "Quick Ward", "cost": 2, "target": "single",
+  "type": "holy", "rarity": "common", "family": "ward", "buyValue": 3,
+  "heal": 3,
+  "desc": "Heal a member for {heal} and shield them for {SHIELD_TURNS} enemy turns.",
+  "actions": [
+    { "op": "heal", "to": "$target", "amount": { "card": "heal" }, "direct": true, "bind": "healed" },
+    { "op": "status", "on": "$target", "tag": "shield", "turns": { "tune": "SHIELD_TURNS" }, "mode": "set" },
+    { "op": "log", "kind": "heal", "text": "Quick Ward: {target.name} heals {healed} and raises a Shield." },
+    { "op": "emit", "kind": "heal", "slot": "$target", "amount": { "var": "healed" }, "hp": { "stat": "hp", "of": "$target" } },
+    { "op": "emit", "kind": "shieldApplied", "slot": "$target" }
+  ]
+}
+```
+
+The card is playable immediately. Note it will move the sim baseline — new content
+dilutes the shop pool, and `test/sim.test.ts` pins per-fight winrates on purpose.
+
+### The vocabulary
+
+- **Ops** (`op`) — `heal` `damage` `strike` `bloodPay` `drain` `status` `clearStatus`
+  `consume` `enemyStatus` `consumeEnemyStatus` `partyBuff` `draw` `mp` `primeRefresh`
+  `revive` `purge` `telegraph` `addStat` `queueDelayed` `regenEnded` `healCardSplash`
+  `let` `letStr` `letBool` `collect` `forEach` `if` `log` `emit` `native`.
+- **Amounts** — a number, `{tune}` (any balance constant by name), `{card}` (a field on
+  the RESOLVED card, so upgrades are folded in), `{var}`, `{stat, of}`, `{auto}`,
+  `{abilityPower}`, `{missingHp}`, `{enemyStat}`, `{gameStat}`, `{telegraphStat}`,
+  `{vulnerable}`, `{bloodCost}`, `{sanguineSurcharge}`, `{holyHealBonus}`,
+  `{sum|mul|max|min}`, `{floor}`, `{clampMin, atLeast}`, `{if, then, else}`.
+- **Selectors** — `$target` `$self` `$targetOrSelf` `$allLiving` `$allLivingOther`
+  `$mostWoundedOther` `$mostWounded` `$lowestHp` `$enemy`, plus `{sel, where}`.
+- **Templates** — `{path}`, `{path|s}` (plural), `{path|pct}`, `{cond ? a : b}`, and
+  `{$selector.field}`. Descs and log text share one grammar.
+
+`src/content/schema/dsl.ts` is the authoritative list; the validator's error messages
+name the nearest valid identifier when you typo one.
+
+### Rules worth knowing
+
+- **Use `{tune}`, not a literal**, for anything that is a balance number. `tuning.ts`
+  stays TypeScript because its comments carry sim-anchored rationale, but every numeric
+  constant in it (and in `relics.ts`/`run.ts`) is addressable by name.
+- **`{card: "heal"}` reads the RESOLVED card**, with Potent/Lingering/Efficient already
+  applied. Inlining the constant instead silently deletes card upgrades.
+- **Bindings are lexical.** `{var}` only sees names bound earlier in the same list or an
+  enclosing one; a binding made inside an `if` branch does not leak out.
+- **Every `bind` reports what happened**, not what was asked for — `heal` binds the
+  clamped amount, `draw` binds what was actually drawn.
+- **Status effects stay engine code**, referenced by `tag`. Adding a genuinely new
+  status means adding a writer to `STATUS_WRITERS` in `src/content/interpreter/run.ts`.
+
+### What is still code
+
+Relic behaviour and hero passives are still inline engine checks (the `hasRelic` sites
+and the `m.id ===` branches). Their metadata is JSON; their effects are not. That is
+the remaining gap — tracked in #103.
+
+### Validation
+
+Importing `src/constants` validates all content and refuses to start on any error,
+reporting **every** problem at once with file → JSON path → cause and a nearest-match
+suggestion. That covers the app, all test suites and every sim script, since they all
+reach `constants`.
+
 ## Do not touch the design doc
 
 - `docs/healer-deckbuilder-spec.md` is a **historical artifact**. Do not reference it as a
@@ -51,7 +127,15 @@ DOM-free TypeScript module that the UI and the tests both consume.
     `effects.ts` attaches the big card/ability effect methods (`_applyCard`,
     `_fireAbility`) to the prototype (every Game member is public); `index.ts` is the
     barrel — import the engine as `./engine`, never a sub-file.
-  - `src/constants.ts` — all tunable numbers and shared types; change balance values here.
+  - `src/content/` — **all game content as JSON** plus the DSL that interprets it:
+    `*.json` (cards, abilities, relics, members, enemies, events, upgrades, modifiers),
+    `schema/` (the op vocabulary + zod), `interpreter/` (the action runner and template
+    engine), `validate/` (the startup checks and error reporter). See the authoring
+    guide above.
+  - `src/constants.ts` — the barrel. Re-exports `src/data/*` and, LAST, `src/content` —
+    that final line is what makes importing constants validate all content.
+  - `src/data/tuning.ts` — balance numbers, still TypeScript so their sim-anchored
+    rationale comments survive; addressable from JSON as `{"tune": "NAME"}`.
   - `src/rng.ts` — seedable PRNG + shuffle/weighted-pick (keeps games deterministic by seed).
   - `src/useGame.ts` — React hook binding the engine to the UI.
   - `src/App.tsx`, `src/main.tsx` — app entry and the screen-routing seam.
