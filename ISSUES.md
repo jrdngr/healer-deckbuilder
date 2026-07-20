@@ -36,3 +36,4 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
+| 99 | 🔨 In progress | [Characterization test suite for all game content](./issues/99-content-characterization-suite.md) | testing | — | maintainer directive 2026-07-20 (regression gate for #100–#106) |
