@@ -31,7 +31,7 @@ const run = (g: Game, actions: Action[], over: Partial<ActionCtx> = {}, natives 
 // --- amounts ---------------------------------------------------------------
 {
   const g = fresh();
-  const ctx = ctxFor({ vars: { n: 7 }, card: { id: 'x', name: 'X', heal: 4 } });
+  const ctx = ctxFor({ vars: { n: 7 }, card: { id: 'x', name: 'X', heal: 4 } as never });
   eq('a literal number', evalAmount(g, 5, ctx), 5);
   eq('a tuning key', evalAmount(g, { tune: 'POISON_BASE' }, ctx), TUNING.POISON_BASE);
   eq('an unknown tuning key is 0, not NaN', evalAmount(g, { tune: 'NOPE' }, ctx), 0);

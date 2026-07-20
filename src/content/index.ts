@@ -16,13 +16,11 @@ import { validateOrExit } from './validate/driver';
 import type { ContentBundle } from './validate/driver';
 
 // --- the bundle ------------------------------------------------------------
-// import cardsJson from './cards.json';        // #101
-// import abilitiesJson from './abilities.json'; // #102
-// …
+// Each loader module registers its own checks at import time, so this list is the
+// whole wiring a new content file needs.
+import './cards'; // #101 — registers the cards.json checks
 
-const BUNDLE: ContentBundle = {
-  // cards: cardsJson,
-};
+const BUNDLE: ContentBundle = {};
 
 // --- validate, then hand the content out ------------------------------------
 // This runs at import time, before any game code can read a definition.
@@ -33,6 +31,8 @@ export { runActions, evalAmount, evalCondition, resolveSelector, STATUS_WRITERS 
 export type { ActionCtx, NativeFn } from './interpreter/run';
 export { renderTemplate, templateRefs, TEMPLATE_FILTERS } from './interpreter/template';
 export { NATIVES, NATIVE_NAMES } from './natives';
+export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
+export type { CardJson } from './cards';
 export { validateContent, registerCheck, registeredChecks } from './validate/driver';
 export type { ContentBundle, ContentCheck, ValidationResult } from './validate/driver';
 export { ErrorCollector, formatReport, failStartup, editDistance, nearest, suggest } from './validate/report';

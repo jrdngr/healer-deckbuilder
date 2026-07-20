@@ -57,6 +57,9 @@ import type {
   TauntRetargetMode, EnemyDef, RotationStep, RotationEntry, CastKind, RelicId, CardType,
 } from '../constants';
 import { makeRng, shuffle, weightedPick } from '../rng';
+// Content dispatch (#101). The engine imports content; content imports only TYPES back
+// from the engine, so this direction is the acyclic one.
+import { CARD_ACTIONS, NATIVES, runActions } from '../content';
 
 declare module './core' {
   interface Game {
@@ -81,6 +84,16 @@ Game.prototype._applyCard = function (card, target) {
     // playCard; _startChannel additionally replaces a still-running one.
     if (CARDS[card.id].channel != null) {
       this._startChannel(card, target);
+      return;
+    }
+    // Dual dispatch (#101): a card whose effect has been migrated to cards.json runs
+    // through the content interpreter; everything else falls through to the switch
+    // below. Each migration batch is therefore independently revertible, and #99's
+    // suite proves each one behaviour-identical. The switch shrinks to nothing and is
+    // deleted once the last arm moves.
+    const contentActions = CARD_ACTIONS[card.id];
+    if (contentActions) {
+      runActions(this, contentActions, { card, target, vars: {} }, NATIVES);
       return;
     }
     switch (card.id) {

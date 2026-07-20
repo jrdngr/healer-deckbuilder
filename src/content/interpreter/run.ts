@@ -14,8 +14,13 @@ import { TUNING } from '../../data/tuning-table';
 
 /** What an action list is running against. */
 export interface ActionCtx {
-  /** The resolved card, when a card is being played (upgrades already folded in). */
-  card?: Record<string, unknown> & { id: string; name: string };
+  /**
+   * The resolved card, when a card is being played (upgrades already folded in).
+   * Structurally minimal on purpose: ResolvedCard is a plain interface with no index
+   * signature, so requiring Record<string, unknown> here would reject it. Field reads
+   * cast at the point of use.
+   */
+  card?: { id: string; name: string };
   /** The acting member — an ability's caster. */
   self?: Member;
   /** The picked slot for a `target: 'single'` play. */
@@ -148,7 +153,7 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
 
   if ('tune' in a) return TUNING[a.tune as string] ?? 0;
   if ('card' in a) {
-    const v = ctx.card?.[a.card as string];
+    const v = (ctx.card as Record<string, unknown> | undefined)?.[a.card as string];
     if (typeof v === 'number') return v;
     return a.else !== undefined ? evalAmount(game, a.else as Amount, ctx) : 0;
   }
@@ -255,7 +260,7 @@ function render(game: Game, tpl: string, ctx: ActionCtx): string {
   const target = ctx.target != null ? game.members[ctx.target] : undefined;
   return renderTemplate(tpl, {
     vars: { ...ctx.vars, self: ctx.self, target, enemy: game.enemy, card: ctx.card },
-    fields: ctx.card as Record<string, unknown> | undefined,
+    fields: ctx.card as unknown as Record<string, unknown> | undefined,
     tuning: TUNING,
   }).text;
 }
