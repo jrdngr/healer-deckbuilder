@@ -73,7 +73,9 @@ export const NATIVES: Record<string, NativeFn> = {
       game._retargetTelegraphTo(m.slot);
       game._log(`${m.name} wrenches the incoming attack onto itself (-${TAUNT_RETARGET_SURCHARGE} MP).`, 'status');
     }
-    game._log(`${m.name} Taunts and braces (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} enemy turns.`, 'status');
+    // Print the APPLIED strength, not the base constant (#107): an ability-power
+    // upgrade has to be visible in the log exactly when it is doing its job.
+    game._log(`${m.name} Taunts and braces (Defense ${strength}) for ${TAUNT_TURNS} enemy turns.`, 'status');
     game._emit({ kind: 'taunt', slot: m.slot, turns: TAUNT_TURNS });
   },
 };

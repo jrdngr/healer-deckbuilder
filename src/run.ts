@@ -1461,14 +1461,16 @@ export class Run {
 
   // Cursed Chest: the gold is guaranteed; the price is a card of the CHEST's
   // choosing (seeded-uniform over the deck). Returns what was taken.
-  cursedChest(): { gold: number; removed: DeckCard | null } {
+  // Follows the run-layer gold convention (#107), shared with gambleGold:
+  // `delta` is the change, `gold` is the RESULTING total.
+  cursedChest(): { delta: number; gold: number; removed: DeckCard | null } {
     this.gold += CURSED_CHEST_GOLD;
     let removed: DeckCard | null = null;
     if (this.deck.length > 0) {
       removed = this.deck[Math.floor(this.rng() * this.deck.length)];
       this.removeCard(removed.uid);
     }
-    return { gold: CURSED_CHEST_GOLD, removed };
+    return { delta: CURSED_CHEST_GOLD, gold: this.gold, removed };
   }
 
   // Wandering Mercenary: pay the fee; a seeded-random member gets +1 damage.

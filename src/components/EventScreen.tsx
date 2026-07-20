@@ -83,10 +83,10 @@ export function EventScreen({ run, act, onDone }: EventScreenProps) {
         setStage({ kind: 'shrineParty' });
         break;
       case 'cursedChest': {
-        const { gold, removed } = act((r) => r.cursedChest());
+        const { delta, removed } = act((r) => r.cursedChest());
         finish(removed
-          ? `You pocket ${gold} gold — and the chest swallows your ${CARDS[removed.id].name}.`
-          : `You pocket ${gold} gold. The chest finds nothing else to take.`);
+          ? `You pocket ${delta} gold — and the chest swallows your ${CARDS[removed.id].name}.`
+          : `You pocket ${delta} gold. The chest finds nothing else to take.`);
         break;
       }
       case 'mercenary': {

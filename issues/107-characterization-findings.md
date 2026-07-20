@@ -1,6 +1,8 @@
 # Issue 107 — Two inconsistencies surfaced by the characterization pass (log text and gold-return convention)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — Taunt logs the scaled Defense; `cursedChest` adopts
+  gambleGold's `{delta, gold}` convention, and the one UI caller that read `gold` as the
+  payout was fixed with it)
 - **Phase:** cleanup
 - **Depends:** — (independent of #103; both items are text/API shape only)
 - **Addresses:** findings recorded while writing #99's characterization suite
@@ -68,12 +70,33 @@ smaller.
 
 ## Acceptance criteria
 
-- [ ] `NATIVES.tauntApply` logs the applied Defense strength, or carries a comment
+- [x] `NATIVES.tauntApply` logs the applied Defense strength, or carries a comment
       stating the base constant is intentional; the #99 ability test updated to match.
-- [ ] `cursedChest` and `gambleGold` share one convention for `gold`, with the #99 event
+- [x] `cursedChest` and `gambleGold` share one convention for `gold`, with the #99 event
       test and every caller updated.
-- [ ] `npm test` green, `npm run typecheck` clean, `tsx sim/trace.ts 30` diff empty
+- [x] `npm test` green, `npm run typecheck` clean, `tsx sim/trace.ts 30` diff empty
       except for the intended Taunt log line.
+
+## Resolution (2026-07-20)
+
+Both items landed as proposed, with two notes.
+
+**Taunt** — `src/content/natives.ts` interpolates `strength` instead of `DEFENSE_AMOUNT`,
+with a comment naming this issue. `test/content/abilities.test.ts` flipped in the same
+commit: *"the taunt log prints the SCALED Defense"*, asserting `DEFENSE_AMOUNT + 3`.
+
+**`cursedChest`** — now returns `{ delta, gold, removed }`: `delta` is the payout,
+`gold` the resulting total, matching `gambleGold`. The write-up said "no caller is
+currently wrong", and that was true of the *old* convention — but the convention change
+made one wrong, and it was the player-facing one: `EventScreen.tsx:86` destructured
+`gold` and printed it as *"You pocket N gold"*. Under the new shape that would have
+printed the run's whole purse. Fixed to read `delta`. The sim never calls `cursedChest`,
+so no sim/policy change was needed.
+
+`tsx sim/trace.ts 30` was diffed against a reverted working copy: **byte-identical**.
+Neither change is reachable from the sim — the seed-30 trace fires no Taunt, and the
+policy layer doesn't open the chest — so this pass proves no collateral drift rather
+than confirming the intended Taunt line. The Taunt line is covered by the ability test.
 
 ## Out of scope
 

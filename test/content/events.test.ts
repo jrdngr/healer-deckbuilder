@@ -170,11 +170,11 @@ const rich = (seed = 5, gold = 500): Run => {
 {
   const r = rich(2);
   const gold0 = r.gold, size0 = r.deck.length;
-  const { gold, removed } = r.cursedChest();
-  // NOTE an API inconsistency worth preserving deliberately or fixing deliberately,
-  // but not drifting: cursedChest's `gold` is the PAYOUT, whereas gambleGold's `gold`
-  // is the RESULTING TOTAL. #105 should pick one convention for its outcome ops.
-  eq('the chest reports its payout, not the new total', gold, CURSED_CHEST_GOLD);
+  const { delta, gold, removed } = r.cursedChest();
+  // One run-layer gold convention, shared with gambleGold (#107): `delta` is the
+  // change, `gold` is the resulting total.
+  eq('the chest reports its payout as delta', delta, CURSED_CHEST_GOLD);
+  eq('the chest reports the resulting total as gold', gold, gold0 + CURSED_CHEST_GOLD);
   eq('the chest gold is reflected on the run', r.gold, gold0 + CURSED_CHEST_GOLD);
   check('the chest takes a card', removed != null);
   eq('the deck shrinks by one', r.deck.length, size0 - 1);

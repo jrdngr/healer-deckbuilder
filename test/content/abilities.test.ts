@@ -132,16 +132,15 @@ const setCharge = (g: Game, n: number) => { g.members[SLOT.RIGHT].charge = n; };
     'status');
   expectEvent('taunt emits its event', cap, 'taunt', { slot: SLOT.CENTER, turns: TAUNT_TURNS });
 }
-{ // abilityPower scales the bundled Defense — but the LOG still prints the base
-  // constant (effects.ts:510 interpolates DEFENSE_AMOUNT, not `strength`). Pinning
-  // the discrepancy so #102 reproduces it rather than "fixing" it silently.
+{ // abilityPower scales the bundled Defense, and the LOG follows it (#107 fixed the
+  // old discrepancy where the log interpolated the base DEFENSE_AMOUNT constant).
   const g = abilityGame(TRIO);
   const tank = g.members[SLOT.CENTER];
   tank.abilityPower = 3;
   const cap = fire(g, 'taunt');
   eq('abilityPower scales the bundled Defense', tank.defenseAmount, DEFENSE_AMOUNT + 3);
-  expectLog('the taunt log prints the BASE Defense, not the scaled one', cap,
-    `${tank.name} Taunts and braces (Defense ${DEFENSE_AMOUNT}) for ${TAUNT_TURNS} enemy turns.`,
+  expectLog('the taunt log prints the SCALED Defense', cap,
+    `${tank.name} Taunts and braces (Defense ${DEFENSE_AMOUNT + 3}) for ${TAUNT_TURNS} enemy turns.`,
     'status');
 }
 { // a stronger standing Defense (Phalanx) is kept
