@@ -175,7 +175,7 @@ const line = (text: string, kind = 'info'): LogEntry => ({ text, kind, turn: 0 }
   g.members[SLOT.CENTER].hp = 1;
   const cap = capture(g, () => {
     g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
-    g.skipTurn();
+    g.endTurn(); // not skipTurn: one played card now forbids Rest, so it would no-op
   });
   check('capture across two actions keeps only the last action\'s events',
     !cap.events.some((e) => e.kind === 'heal'));

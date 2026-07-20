@@ -40,7 +40,7 @@ import {
   DRAIN_DMG, DRAIN_MP_MIN, DRAIN_MP_MAX, REFRESH_CHANNEL_MP, MENDING_STREAM_HEAL,
   SAP_VULN_PER_TICK, SAP_VULN_CAP, SAP_VULN_TURNS,
   DEFAULT_TAUNT_RETARGET_MODE, TAUNT_RETARGET_SURCHARGE,
-  SKIP_REGEN_DECAYED, REFRESH_MP_CAP, RESERVE_UPKEEP_PER_TURN,
+  REFRESH_MP_CAP, RESERVE_UPKEEP_PER_TURN,
   CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN,
   LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG,
   PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS,
@@ -333,7 +333,7 @@ export class Game {
   turn: number;
   phase: Phase;
   status: Status;
-  cardsPlayedThisPhase: number; // cards played this player phase; drives decaying Rest (+5 at 0, +1 at 1)
+  cardsPlayedThisPhase: number; // cards played this player phase; gates Rest and passive MP (both need 0)
   // Per-type cards-played counters (#63): both feed the type-synergy relics and the
   // count-based cards from one source. `ThisTurn` resets each player phase (Iron Ward's
   // first-Iron discount, the Arcane count card's per-turn cost scaling); `ThisFight`
@@ -2087,13 +2087,13 @@ export class Game {
     }
     // Passive MP income (healer upgrade, plus the Pact of Silence's tithe)
     // lands at the start of the player phase — but only as a reward for a
-    // restrained previous turn (#53): gated on the same ≤1-cards signal the Rest
-    // gate uses, read here BEFORE cardsPlayedThisPhase is reset below. On the very
-    // first player phase the count is still its 0 init, so the opening turn grants.
-    // Channeling (#64) suppresses passive MP income too — the channel's own return
-    // is the only MP a channeling player gets.
+    // restrained previous turn (#53): gated on the same all-or-nothing signal the
+    // Rest gate uses, read here BEFORE cardsPlayedThisPhase is reset below. On the
+    // very first player phase the count is still its 0 init, so the opening turn
+    // grants. Channeling (#64) suppresses passive MP income too — the channel's own
+    // return is the only MP a channeling player gets.
     const passive = this.passiveMp + this._hookValue('modifyPassiveMp', 0);
-    if (passive > 0 && this.cardsPlayedThisPhase <= 1 && this.mp < this.maxMana && !this.channelActive()) {
+    if (passive > 0 && this.cardsPlayedThisPhase === 0 && this.mp < this.maxMana && !this.channelActive()) {
       const before = this.mp;
       this.mp = Math.min(this.maxMana, this.mp + passive);
       this._log(`Passive regen restores ${this.mp - before} MP. (MP ${this.mp})`, 'mp');
@@ -2427,19 +2427,21 @@ export class Game {
   // _applyCard and _fireAbility are defined in ./effects.ts (prototype
   // augmentation) to keep this core file navigable — see the declare-module there.
 
-  // Decaying Rest (flaw #5): you may still Rest after playing a single card, but
-  // it yields less. Resting is off the table once two or more cards are played.
+  // Rest is all-or-nothing: the ONLY way to recover MP without playing a card is to
+  // give up the whole turn. Playing even one card takes Rest off the table for the
+  // rest of the phase — there is no partial credit. (This replaced the old decaying
+  // Rest of flaw #5, which paid a consolation +1 after a single card.)
   canSkip(): boolean {
     if (this._hookAnswer('allowRest', false)) return false; // the Pact forbids Rest (#22)
-    return this.phase === 'player' && this.cardsPlayedThisPhase <= 1;
+    return this.phase === 'player' && this.cardsPlayedThisPhase === 0;
   }
 
-  // Raw MP a Rest would grant right now before the cap: full restRegen if no card
-  // was played, the decayed amount if exactly one was.
+  // Raw MP a Rest would grant right now before the cap: the full restRegen only for
+  // a completely uncommitted turn, otherwise nothing.
   restRegenNow(): number {
     // Channeling (#64) suppresses Rest MP too — holding a channel is not a Rest.
     if (this.channelActive()) return 0;
-    return this.cardsPlayedThisPhase === 0 ? this.restRegen : SKIP_REGEN_DECAYED;
+    return this.cardsPlayedThisPhase === 0 ? this.restRegen : 0;
   }
 
   // MP a rest would actually recover right now, accounting for the MP cap.

@@ -63,13 +63,14 @@ const play = (g: Game, id: string, target?: number) =>
   check('sunriseVigil heals nobody on cast', g.members.every((m) => m.hp === m.maxHP));
 }
 { // it fires at the START of the next player phase — which is beginPlayerTurn(), not
-  // skipTurn(): endTurn/skipTurn park the engine at phase 'idle' (core.ts:2372-2378).
+  // endTurn(): endTurn/skipTurn park the engine at phase 'idle' (core.ts:2372-2378).
+  // endTurn, not skipTurn: casting the card already forfeits Rest, so skipTurn no-ops.
   const g = fresh();
   for (const m of g.members) m.hp = 4;
   g.playCard(giveCard(g, 'sunriseVigil'));
-  const rest = capture(g, () => g.skipTurn());
-  eq('the delayed effect does NOT fire on skipTurn', g.delayedStartEffects.length, 1);
-  check('skipTurn produces no Special Delivery line',
+  const rest = capture(g, () => g.endTurn());
+  eq('the delayed effect does NOT fire on endTurn', g.delayedStartEffects.length, 1);
+  check('endTurn produces no Special Delivery line',
     !rest.log.some((l) => l.text.startsWith('Special Delivery arrives')));
 
   const cap = nextPlayerPhase(g);
@@ -97,7 +98,7 @@ const play = (g: Game, id: string, target?: number) =>
   for (const m of g.members) m.hp = 4;
   g.playCard(giveCard(g, 'sunriseVigil'));
   mage.alive = false; mage.hp = 0;
-  g.skipTurn();
+  g.endTurn(); // the cast already forfeits Rest
   nextPlayerPhase(g);
   eq('a dead member is not healed by the delayed effect', mage.hp, 0);
 }

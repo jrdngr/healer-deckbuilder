@@ -2,7 +2,7 @@
 import { Game } from '../src/engine';
 import type { GameEvent, Telegraph } from '../src/engine';
 import { channelEffectLine } from '../src/channelView';
-import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, SKIP_REGEN_DECAYED, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS, MODIFIER_IDS } from '../src/constants';
+import { DECK_LIST, CARDS, SLOT, MP_MAX, MEMBER_DEFS, POISON_BASE, POISON_TURNS, REFRESH_TURNS, BOLT_BASE, BOLT_CHARGE_MULT, SHIELD_TURNS, DEFENSE_TURNS, DEFENSE_AMOUNT, TAUNT_TURNS, TAUNT_RETARGET_SURCHARGE, ENRAGE_TURN, TYPE_WEIGHTS, SKIP_REGEN, REFRESH_MP_CAP, FONT_MP_CAP, CULTIVATE_STRENGTH, BLOOM_HEAL_PER_TURN, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS, BLOOD_TITHE_MP, GRIM_HARVEST_DMG, PHALANX_DEFENSE, PHALANX_TURNS, BRACE_AMOUNT, BRACE_TURNS, CARD_RARITY, CARD_POOL, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF, GATEWARDEN_DEF, HEXWEAVER_DEF, DEVOURER_DEF, IRONMAW_DEF, NEEDLER_DEF, LEECH_DEF, JUGGERNAUT_DEF, LANCER_DEF, DEVOURLING_DEF, NEEDLER_PIERCE_DMG, LANCER_PIERCE_DMG, DEVOURER_MAW_DMG, WOUND_TURNS, SIPHON_AMOUNT, HEXWEAVER_PIERCER_DMG, ATTACK_INTENT_NAMES, makeDeckCard, defaultBattleConfig, DEFAULT_HEALER, resolveCard, canApplyModifier, isEngineCard, MODIFIERS, MODIFIER_IDS } from '../src/constants';
 import { TITHE_CANDLE_MP, TITHE_CANDLE_FIGHT_CAP, FIELD_TRIAGE_BONUS, PRAYER_BEADS_MP, VANGUARD_BONUS, GROUNDING_ROD_REDUCTION, STORMGLASS_MIN_HIT, WARD_MAX, TAPER_MAX_COST, TAPER_DISCOUNT, DUSK_CHIME_MIN, PACT_PASSIVE_MP, CRACKED_HOURGLASS_ENRAGE, HOURGLASS_POWER_BONUS, RUSTY_CROWN_ATTACK } from '../src/constants';
 import { partyFromMembers, isEngineAbility, HEX_TURNS, HEX_VULN_BY_SIZE, RALLY_DMG_PER_SEAT, FOCUS_HEAL, FOCUS_SMALL_BONUS, SKALD_DMG_PER_CARD, SKALD_DMG_CAP, CRESCENDO_DRAW, RAMPAGE_SELF_DMG, GRAVE_CHILL_REDUCTION, BOAR_HP, BOAR_TURNS, BOAR_STRIKE_BONUS, TAUNT_LITE_TURNS, TAUNT_LITE_DEFENSE } from '../src/constants';
 import { abilityCardsForParty, isAbilityCard } from '../src/constants';
@@ -775,12 +775,12 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   g.start();
   const mpBefore = g.mp;
   check('can skip initially', g.canSkip());
-  // Decaying Rest (issue 05): still allowed after ONE card, blocked after two.
+  // All-or-nothing Rest: a single committed card takes Rest off the table.
   const g2 = new Game(10);
   g2.start();
   g2.members[SLOT.LEFT].hp = 1;
   g2.playCard(giveCard(g2, 'lowHeal'), SLOT.LEFT);
-  check('can still skip after one card', g2.canSkip());
+  check('cannot skip after one card', !g2.canSkip());
   g2.playCard(giveCard(g2, 'lowHeal'), SLOT.LEFT);
   check('cannot skip after two cards', !g2.canSkip());
   // restAmount reflects what a rest would actually recover, clamped to MP_MAX
@@ -797,9 +797,8 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   check('skip added at least +5 MP (minus any refresh noise)', g.mp >= mpBefore); // sanity
 }
 
-// --- decaying Rest: +5 at 0 cards, +1 at 1 card (issue 05) ------------------
+// --- all-or-nothing Rest: +5 at 0 cards, nothing once a card is played ------
 {
-  eq('decayed rest is worth 1 MP', SKIP_REGEN_DECAYED, 1);
   const g = new Game(21);
   g.start();
   g.mp = 0;
@@ -808,15 +807,20 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   eq('rested +5 MP with 0 cards played', g.mp, SKIP_REGEN);
 }
 {
+  // Negative control: one card kills the Rest outright — no partial credit, and
+  // skipTurn is refused rather than quietly granting 0.
   const g = new Game(22);
   g.start();
   g.mp = 5;
   g.members[SLOT.LEFT].hp = 1;
   g.playCard(giveCard(g, 'lowHeal'), SLOT.LEFT); // 1 card, costs 1 -> mp 4
-  eq('rest decays to SKIP_REGEN_DECAYED after one card', g.restRegenNow(), SKIP_REGEN_DECAYED);
+  eq('rest is worth nothing after one card', g.restRegenNow(), 0);
+  eq('restAmount is 0 after one card', g.restAmount(), 0);
+  check('cannot Rest after one card', !g.canSkip());
   const before = g.mp;
-  g.skipTurn();
-  eq('rested +1 MP after one card', g.mp, before + SKIP_REGEN_DECAYED);
+  const res = g.skipTurn();
+  check('skipTurn is refused after one card', res.ok === false);
+  eq('MP unchanged by the refused skip', g.mp, before);
 }
 
 // --- Font of Mana cannot exceed its per-cast MP cap (flaw #7) ---------------
@@ -1335,8 +1339,9 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
 }
 {
   // #53: passive MP is a reward for a RESTRAINED previous turn — it only lands when
-  // the turn that just ended played ≤1 card (the same cardsPlayedThisPhase signal the
-  // Rest gate uses), read at the start of the next phase before the counter resets.
+  // the turn that just ended played NO cards (the same cardsPlayedThisPhase signal the
+  // Rest gate uses, tightened alongside it), read at the start of the next phase
+  // before the counter resets.
   const mkGame = () => {
     const cfg = defaultBattleConfig();
     cfg.healer = { ...DEFAULT_HEALER, maxMana: 10, passiveMp: 3 };
@@ -1351,14 +1356,14 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
     g._startPlayerPhase();
     check('#53 passive grants after a 0-card turn', g.mp >= 3, `mp=${g.mp}`);
   }
-  // Exactly 1 card played → still granted.
+  // Exactly 1 card played → withheld, same as Rest.
   {
     const g = mkGame();
     g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
     eq('#53 one card is counted', g.cardsPlayedThisPhase, 1);
     g.mp = 0;
     g._startPlayerPhase();
-    check('#53 passive grants after a 1-card turn', g.mp >= 3, `mp=${g.mp}`);
+    eq('#53 passive is withheld after a 1-card turn', g.mp, 0);
   }
   // 2+ cards played → passive withheld entirely.
   {
@@ -1448,10 +1453,10 @@ function normalGame(seed: number, def: typeof ENEMY_MARKER): Game {
   const mpBefore = g.mp;
   g.playCard(idx, SLOT.CENTER);
   eq('playing the card spent 1 MP', g.mp, mpBefore - 1);
-  // The card counts as played: Rest still allowed but decayed, and a second card
-  // blocks Rest entirely.
+  // The card counts as played, so Rest is already gone.
   eq('one card counted', g.cardsPlayedThisPhase, 1);
-  eq('rest decays after that card', g.restRegenNow(), SKIP_REGEN_DECAYED);
+  eq('rest is worth nothing after that card', g.restRegenNow(), 0);
+  check('cannot Rest after one card', g.canSkip() === false);
   g.playCard(giveCard(g, 'lowHeal'), SLOT.CENTER);
   check('cannot Rest after two cards', g.canSkip() === false);
 }
