@@ -182,6 +182,10 @@ export function evalAmount(game: Game, amt: Amount, ctx: ActionCtx): number {
     const v = (game.enemy as unknown as Record<string, unknown>)[a.enemyStat as string];
     return typeof v === 'number' ? v : 0;
   }
+  if ('gameStat' in a) {
+    const v = (game as unknown as Record<string, unknown>)[a.gameStat as string];
+    return typeof v === 'number' ? v : 0;
+  }
   if ('telegraphStat' in a) {
     const t = game.telegraph as unknown as Record<string, unknown> | null;
     const v = t ? t[a.telegraphStat as string] : 0;
@@ -273,10 +277,12 @@ function emitPayload(game: Game, action: Record<string, unknown>, ctx: ActionCtx
     if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') payload[k] = v;
     else if (Array.isArray(v)) payload[k] = v;
     else if (v && typeof v === 'object') {
+      // A bound value passes through with its own type — `slots` carries a collected
+      // ARRAY, and running it through evalAmount would flatten it to 0.
+      if ('var' in (v as object)) payload[k] = ctx.vars[(v as { var: string }).var];
       // A selector resolves to its slot; anything else is an amount expression.
-      if ('sel' in (v as object) || typeof v === 'string') {
-        payload[k] = resolveOne(game, v as Selector, ctx)?.slot;
-      } else payload[k] = evalAmount(game, v as Amount, ctx);
+      else if ('sel' in (v as object)) payload[k] = resolveOne(game, v as Selector, ctx)?.slot;
+      else payload[k] = evalAmount(game, v as Amount, ctx);
     }
   }
   // Bare selector strings ('$target') arrive as strings; map the common slot keys.

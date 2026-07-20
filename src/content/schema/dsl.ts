@@ -40,6 +40,8 @@ export type Amount =
   | { missingHp: Selector }
   | { var: string }
   | { enemyStat: string }
+  /** An engine-level field: hymnBonus, refresh, bloodBannerTurns… */
+  | { gameStat: string }
   | { telegraphStat: string }
   /** vulnerableAmount() — post-Vulnerability scaling. */
   | { vulnerable: Amount }
@@ -61,7 +63,7 @@ export type Amount =
 /** The single key that decides which amount branch an object is. */
 export const AMOUNT_KEYS = [
   'tune', 'card', 'stat', 'auto', 'abilityPower', 'missingHp', 'var', 'enemyStat',
-  'telegraphStat', 'vulnerable', 'bloodCost', 'sanguineSurcharge', 'holyHealBonus',
+  'telegraphStat', 'gameStat', 'vulnerable', 'bloodCost', 'sanguineSurcharge', 'holyHealBonus',
   'sum', 'mul', 'max', 'min', 'floor', 'clampMin',
 ] as const;
 
@@ -185,6 +187,7 @@ export const AmountSchema: z.ZodType<Amount> = z.lazy(() => z.union([
   z.strictObject({ missingHp: SelectorSchema }),
   z.strictObject({ var: z.string() }),
   z.strictObject({ enemyStat: z.string() }),
+  z.strictObject({ gameStat: z.string() }),
   z.strictObject({ telegraphStat: z.string() }),
   z.strictObject({ vulnerable: AmountSchema }),
   z.strictObject({ bloodCost: z.literal(true) }),

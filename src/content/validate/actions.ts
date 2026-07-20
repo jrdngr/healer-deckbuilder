@@ -107,7 +107,7 @@ function validateAmount(
       } else list.forEach((x, i) => validateAmount(x, `${path}.${branch}[${i}]`, ctx, errs, bound));
       break;
     }
-    default: break; // enemyStat / telegraphStat / the three boolean forms
+    default: break; // enemyStat / gameStat / telegraphStat / the three boolean forms
   }
 }
 

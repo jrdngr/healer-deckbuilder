@@ -725,7 +725,49 @@
     "refreshCap": 9,
     "engine": true,
     "desc": "Restore 3 MP per turn for 3 enemy turns.",
-    "actions": []
+    "actions": [
+      {
+        "op": "primeRefresh",
+        "amount": {
+          "card": "refresh"
+        },
+        "turns": {
+          "card": "refreshTurns",
+          "else": {
+            "tune": "REFRESH_TURNS"
+          }
+        },
+        "cap": {
+          "card": "refreshCap"
+        }
+      },
+      {
+        "op": "let",
+        "bind": "per",
+        "value": {
+          "gameStat": "refresh"
+        }
+      },
+      {
+        "op": "let",
+        "bind": "turns",
+        "value": {
+          "gameStat": "refreshTurns"
+        }
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{card.name} primed ({per} MP/turn for {turns})."
+      },
+      {
+        "op": "emit",
+        "kind": "refreshPrimed",
+        "stack": {
+          "var": "per"
+        }
+      }
+    ]
   },
   "inspiration": {
     "id": "inspiration",
@@ -739,7 +781,27 @@
     "draw": 2,
     "engine": true,
     "desc": "Draw 2 cards.",
-    "actions": []
+    "actions": [
+      {
+        "op": "draw",
+        "count": {
+          "card": "draw"
+        },
+        "bind": "drawn"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "{card.name}: drew {drawn} card{drawn|s}."
+      },
+      {
+        "op": "emit",
+        "kind": "draw",
+        "count": {
+          "var": "drawn"
+        }
+      }
+    ]
   },
   "lifebloom": {
     "id": "lifebloom",
@@ -797,7 +859,44 @@
     "family": "power",
     "buyValue": 2,
     "desc": "Every living member's attack this turn deals +2.",
-    "actions": []
+    "actions": [
+      {
+        "op": "partyBuff",
+        "field": "hymnBonus",
+        "amount": {
+          "tune": "HYMN_BONUS"
+        },
+        "mode": "keepStronger"
+      },
+      {
+        "op": "let",
+        "bind": "bonus",
+        "value": {
+          "gameStat": "hymnBonus"
+        }
+      },
+      {
+        "op": "collect",
+        "bind": "slots",
+        "over": "$allLiving",
+        "pick": "slot"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Fight Song: every living member's attack deals +{bonus} this turn."
+      },
+      {
+        "op": "emit",
+        "kind": "hymn",
+        "bonus": {
+          "var": "bonus"
+        },
+        "slots": {
+          "var": "slots"
+        }
+      }
+    ]
   },
   "barrier": {
     "id": "barrier",
@@ -1005,7 +1104,17 @@
     "family": "heal",
     "buyValue": 1,
     "desc": "At the start of your next turn, heal every living member {SUNRISE_VIGIL_HEAL}.",
-    "actions": []
+    "actions": [
+      {
+        "op": "queueDelayed",
+        "kind": "sunriseVigil"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Special Delivery scheduled — every living member heals {SUNRISE_VIGIL_HEAL} at the start of your next turn."
+      }
+    ]
   },
   "consecration": {
     "id": "consecration",
@@ -1018,7 +1127,107 @@
     "buyValue": 1,
     "heal": 1,
     "desc": "Heal all {CONSECRATION_HEAL}; members at full HP afterward gain +{CONSECRATION_STRIKE_BONUS} auto for {CONSECRATION_STRIKE_TURNS} enemy turns.",
-    "actions": []
+    "actions": [
+      {
+        "op": "forEach",
+        "over": "$allLiving",
+        "do": [
+          {
+            "op": "heal",
+            "to": "$target",
+            "amount": {
+              "sum": [
+                {
+                  "card": "heal",
+                  "else": {
+                    "tune": "CONSECRATION_HEAL"
+                  }
+                },
+                {
+                  "holyHealBonus": true
+                }
+              ]
+            },
+            "direct": true,
+            "bind": "healed"
+          },
+          {
+            "op": "emit",
+            "kind": "heal",
+            "slot": "$target",
+            "amount": {
+              "var": "healed"
+            },
+            "hp": {
+              "stat": "hp",
+              "of": "$target"
+            }
+          }
+        ]
+      },
+      {
+        "op": "forEach",
+        "over": {
+          "sel": "$allLiving",
+          "where": {
+            "hpFull": "$self"
+          }
+        },
+        "do": [
+          {
+            "op": "status",
+            "on": "$target",
+            "tag": "strike",
+            "amount": {
+              "tune": "CONSECRATION_STRIKE_BONUS"
+            },
+            "turns": {
+              "tune": "CONSECRATION_STRIKE_TURNS"
+            },
+            "mode": "keepStrongerIfActive"
+          }
+        ]
+      },
+      {
+        "op": "collect",
+        "bind": "atFull",
+        "over": {
+          "sel": "$allLiving",
+          "where": {
+            "hpFull": "$self"
+          }
+        },
+        "pick": "slot"
+      },
+      {
+        "op": "log",
+        "kind": "heal",
+        "text": "Glow Up: the party heals {heal}; {atFull.length} at full HP strike +{CONSECRATION_STRIKE_BONUS} for {CONSECRATION_STRIKE_TURNS} enemy turns."
+      },
+      {
+        "op": "if",
+        "when": {
+          "exists": {
+            "sel": "$allLiving",
+            "where": {
+              "hpFull": "$self"
+            }
+          }
+        },
+        "then": [
+          {
+            "op": "emit",
+            "kind": "hymn",
+            "bonus": {
+              "tune": "CONSECRATION_STRIKE_BONUS"
+            },
+            "slots": {
+              "var": "atFull"
+            }
+          }
+        ]
+      }
+    ]
   },
   "arcaneLens": {
     "id": "arcaneLens",
@@ -1030,7 +1239,22 @@
     "family": "heal",
     "buyValue": 1,
     "desc": "Your next single-target heal this turn also hits the most wounded other member.",
-    "actions": []
+    "actions": [
+      {
+        "op": "partyBuff",
+        "field": "lensArmed",
+        "mode": "set"
+      },
+      {
+        "op": "log",
+        "kind": "status",
+        "text": "Arcane Lens: your next single-target heal also refracts to the most wounded ally."
+      },
+      {
+        "op": "emit",
+        "kind": "lensArmed"
+      }
+    ]
   },
   "mendingStream": {
     "id": "mendingStream",
