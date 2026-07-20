@@ -1,6 +1,6 @@
 # Issue 102 — Abilities to JSON (`abilities.json` + dual dispatch, four batches, delete the `_fireAbility` switch)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — all 30 arms are data; effects.ts 794 -> 79 lines across #101+#102; exactly 2 natives)
 - **Phase:** content-migration (phase 2 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — in particular **A5**, which rewires all 30 ability tests through
@@ -52,45 +52,45 @@ the migration of that arm is wrong.
 
 ## Acceptance criteria
 
-- [ ] **Scaffold commit** — `src/content/abilities.json` holds all 30 abilities' metadata
+- [x] **Scaffold commit** — `src/content/abilities.json` holds all 30 abilities' metadata
       (id, name, desc template, power/cost fields) with **zero `actions`**; `_fireAbility`'s
       switch untouched; validator extended to abilities. `ABILITY_CARD` bijection and
       `LEARNED_CARDS_BY_MEMBER` coverage assert against the JSON.
-- [ ] **Four migration batches summing to exactly 30 arms**, each its own commit, each
+- [x] **Four migration batches summing to exactly 30 arms**, each its own commit, each
       leaving `npm test` green and `npm run typecheck` clean:
-  - [ ] **Batch 1 — signature control (8):** `poison` (`effects.ts:478`), `taunt` (`:491`),
+  - [x] **Batch 1 — signature control (8):** `poison` (`effects.ts:478`), `taunt` (`:491`),
         `bolt` (`:514`), `hex` (`:527`), `crescendo` (`:542`), `rampage` (`:556`),
         `callBoar` (`:567`), `stun` (`:577`). This batch carries **four of the five confirmed
         natives** — `taunt`, `bolt`, `hex`, and `stun`'s `letStr` capture — so it is the batch
         that proves the `native` registry and the `NATIVES`-key-is-referenced check.
-  - [ ] **Batch 2 — stances and sustained pressure (7):** `enGarde` (`:595`), `penance`
+  - [x] **Batch 2 — stances and sustained pressure (7):** `enGarde` (`:595`), `penance`
         (`:609`), `twinShot` (`:637`), `concVenom` (`:644`), `shieldWall` (`:655`),
         `holdLine` (`:665`), `arcaneSurge` (`:674`). Proves `strike` (break-on-kill,
         `twinShot` at `:638-640`) and the template conditional (`enGarde` at `:603`).
-  - [ ] **Batch 3 — damage and curses (8):** `drainLife` (`:680`), `doom` (`:692`),
+  - [x] **Batch 3 — damage and curses (8):** `drainLife` (`:680`), `doom` (`:692`),
         `sacrifice` (`:699`), `finale` (`:708`), `duet` (`:713`), `bloodbath` (`:719`),
         `whirlwind` (`:725`), `sicEm` (`:733`). Proves the `$mostWounded` selector
         (`drainLife`'s reduce at `:687`) and conditional strike counts (`whirlwind`'s extra
         hit in the hottest rage band, `:727`).
-  - [ ] **Batch 4 — support and the remainder (7):** `mendBeast` (`:738`),
+  - [x] **Batch 4 — support and the remainder (7):** `mendBeast` (`:738`),
         `standingOvation` (`:746`), `bigTop` (`:752`), `lunge` (`:758`), `flurry` (`:765`),
         `strongest` (`:773`), `deadlift` (`:781`).
-- [ ] **Delete-the-switch commit** — `effects.ts:477`–`:790` is gone; `_fireAbility` is the
+- [x] **Delete-the-switch commit** — `effects.ts:477`–`:790` is gone; `_fireAbility` is the
       prologue, `runActions`, and the epilogue; the dual-dispatch fallback removed.
       `Game.prototype._fireAbility` keeps its exact signature
       (`(m, target = null, ability = m.ability)`).
-- [ ] The Empower borrow/restore is **provably still exactly-once**: an ability fired with
+- [x] The Empower borrow/restore is **provably still exactly-once**: an ability fired with
       `m.empowerBonus > 0` reads the boosted `abilityPower` and leaves `m.abilityPower`
       unchanged afterward (#99 A5 asserts this; it must not need a new test here).
-- [ ] `$mostWounded` reproduces `drainLife`'s tie-break bit-exactly — the reduce at
+- [x] `$mostWounded` reproduces `drainLife`'s tie-break bit-exactly — the reduce at
       `effects.ts:687` is **seeded with the caster**, so with nobody wounded the caster is
       healed. Not "the most wounded living member".
-- [ ] Every batch commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()`
+- [x] Every batch commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()`
       log diff against its parent (per #100's procedure, including the large-event-count
       assertion).
-- [ ] `npm run sim` wall time recorded at the end of this phase, compared against the phase-0
+- [x] `npm run sim` wall time recorded at the end of this phase, compared against the phase-0
       and phase-1 baselines.
-- [ ] `npm test` green and `npm run typecheck` clean at **every** commit.
+- [x] `npm test` green and `npm run typecheck` clean at **every** commit.
 
 ## Implementation notes (anchors)
 
@@ -139,3 +139,23 @@ the migration of that arm is wrong.
 - Rebalancing any ability. Tuning moves by reference (`{tune: "K"}`), never by value.
 - Changing which hero owns which ability, or the `giveAbility`/`LEARNED_CARDS_BY_MEMBER`
   model.
+
+## Resolution (2026-07-20)
+
+All 30 ability arms are data. `_fireAbility` is now the Empower/War Drum shell plus an
+interpreter call. **`effects.ts` is 79 lines**, down from 794 before #101.
+
+**The native count is final at two** — `hex` and `taunt` — against a plan budget of
+10–14. Of the 62 card + ability arms, 60 needed no escape hatch.
+
+**The trace differ earned its place.** The characterization suite passed with
+`rampage`'s damage source as the literal `"Rampage"`; the real arm logs
+`"Berserker (Rampage)"`. #99's suite asserts state and events, not the enemy-damage
+log's source string, so only the trace diff saw it. `damage.source`, `strike.label`
+and `letStr.value` are now templates.
+
+**Merged tuning table.** Relic and run magnitudes live outside `data/tuning.ts`, so
+`{"tune": "VENOM_GLAND_BONUS_TURNS"}` did not resolve. `src/content/tuning.ts` merges
+all three sources; it cannot live in `data/tuning-table` because the barrel exports that
+second (to keep it a leaf) before `data/relics` has initialised. Collisions are reported
+as validation errors, since one name meaning two numbers would make `{"tune"}` ambiguous.
