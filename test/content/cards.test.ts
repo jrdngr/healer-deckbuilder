@@ -17,6 +17,9 @@ import {
   TRANSFUSION_HP, TRANSFUSION_HEAL,
   BLOOD_BANNER_HP, BLOOD_BANNER_BONUS, BLOOD_BANNER_TURNS,
   SPOREBURST_POISON, TAUNT_LITE_TURNS,
+  REFRESH_TURNS, FONT_MP_CAP, LIFEBLOOM_BURST, HYMN_BONUS, BARRIER_TURNS,
+  BLOOD_TITHE_MP, DREAD_WHISPER_REDUCTION, PHALANX_DEFENSE, PHALANX_TURNS,
+  GUARD_DR, GUARD_TURNS, SHARPEN_BONUS, SHARPEN_TURNS, EMPOWER_BONUS,
 } from '../../src/constants';
 import { giveCard } from '../factories';
 import {
@@ -379,6 +382,500 @@ const play = (g: Game, id: string, target?: number) =>
   const burstIdx = cap.log.findIndex((l) => l.text.startsWith('Lifebloom bursts'));
   check('the Regen-end hook fires AFTER the poison is applied',
     poisonIdx >= 0 && burstIdx > poisonIdx, `poison@${poisonIdx} burst@${burstIdx}`);
+}
+
+// ===========================================================================
+// A4 — the remaining 22 card arms. These had shallow coverage (state only, or a
+// bare event-exists check); this brings them to the same depth as A3.
+// ===========================================================================
+
+// --- Quick Heal / Heal (lowHeal, highHeal share one body) ------------------
+for (const [id, name, amount] of [['lowHeal', 'Quick Heal', 2], ['highHeal', 'Heal', 4]] as const) {
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 5;
+  const cap = play(g, id, SLOT.CENTER);
+  eq(`${id} heals its amount`, tank.hp, 5 + amount);
+  expectLog(`${id} logs the heal with resulting HP`, cap,
+    `${name}: ${tank.name} heals ${amount}. (${tank.hp}/${tank.maxHP})`, 'heal');
+  expectEvent(`${id} emits heal`, cap, 'heal',
+    { slot: SLOT.CENTER, amount, hp: tank.hp });
+  expectEventCount(`${id} emits exactly one heal without a splash source`, cap, 'heal', 1);
+}
+{ // overheal clamps, and the LOGGED amount is the clamped one
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = tank.maxHP - 1;
+  const cap = play(g, 'highHeal', SLOT.CENTER);
+  eq('a heal cannot exceed maxHP', tank.hp, tank.maxHP);
+  expectLog('the log reports the clamped heal, not the nominal 4', cap,
+    `Heal: ${tank.name} heals 1. (${tank.maxHP}/${tank.maxHP})`, 'heal');
+  expectEvent('the heal event reports the clamped amount', cap, 'heal', { amount: 1 });
+}
+{ // a dead member is not a legal single target
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.alive = false; tank.hp = 0;
+  const cap = play(g, 'lowHeal', SLOT.CENTER);
+  eq('a heal is refused on a dead member', tank.hp, 0);
+  eq('a refused heal logs nothing', cap.log.length, 0);
+}
+
+// --- Group Heal (aoeHeal) --------------------------------------------------
+{
+  const g = fresh();
+  for (const m of g.members) m.hp = 3;
+  const cap = play(g, 'aoeHeal');
+  for (const m of g.members) eq(`aoeHeal heals ${m.name}`, m.hp, 5);
+  expectEventCount('aoeHeal emits one heal per living member', cap, 'heal', 3);
+  expectLog('aoeHeal logs a single summary line', cap,
+    'Group Heal: all living members heal up to 2.', 'heal');
+}
+{ // dead members are skipped entirely
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  mage.alive = false; mage.hp = 0;
+  for (const m of g.members) if (m.alive) m.hp = 3;
+  const cap = play(g, 'aoeHeal');
+  eq('aoeHeal does not raise the dead', mage.hp, 0);
+  expectEventCount('aoeHeal emits nothing for a dead member', cap, 'heal', 2);
+}
+
+// --- Regen -----------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  const cap = play(g, 'regen', SLOT.CENTER);
+  eq('regen sets the stack', tank.regen, 2);
+  expectLog('regen logs the new total', cap,
+    `Regen on ${tank.name} (Regen 2, decays each turn).`, 'status');
+  expectEvent('regen emits regenApplied with the stack', cap, 'regenApplied',
+    { slot: SLOT.CENTER, stack: 2 });
+}
+{ // ADDITIVE onto an existing Regen — magnitude is duration, so it goes deeper AND longer
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.regen = 3;
+  const cap = play(g, 'regen', SLOT.CENTER);
+  eq('regen adds to an existing stack', tank.regen, 5);
+  expectLog('regen logs the combined total', cap,
+    `Regen on ${tank.name} (Regen 5, decays each turn).`, 'status');
+}
+{ // it ticks at the start of the player phase, healing its value then decaying by 1
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 5; tank.regen = 3;
+  g.endTurn();
+  const cap = nextPlayerPhase(g);
+  eq('regen decays by one after ticking', tank.regen, 2);
+  expectLog('regen logs its tick', cap, `${tank.name} regenerates 3 (Regen 3).`, 'heal');
+  expectEvent('regen emits regenTick', cap, 'regenTick', { slot: SLOT.CENTER, amount: 3 });
+}
+
+// --- Shield ----------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  const cap = play(g, 'shield', SLOT.CENTER);
+  check('shield raises the flag', tank.shield);
+  eq('shield sets the fuse', tank.shieldTurns, SHIELD_TURNS);
+  expectLog('shield logs the fuse length', cap,
+    `Shield raised on ${tank.name} (fades in ${SHIELD_TURNS} enemy turns).`, 'status');
+  expectEvent('shield emits shieldApplied', cap, 'shieldApplied', { slot: SLOT.CENTER });
+}
+{ // re-raising refreshes the fuse rather than stacking a second Shield
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.shield = true; tank.shieldTurns = 1;
+  play(g, 'shield', SLOT.CENTER);
+  eq('re-raising refreshes the fuse', tank.shieldTurns, SHIELD_TURNS);
+  check('a Shield does not stack into a second flag', tank.shield === true);
+}
+
+// --- Resurrect -------------------------------------------------------------
+{
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  mage.alive = false; mage.hp = 0;
+  mage.regen = 4; mage.taunt = 2; mage.charge = 3; mage.strikeBonus = 2; mage.strikeTurns = 2;
+  mage.guardDR = 1; mage.guardTurns = 2; mage.riposte = true; mage.riposteTurns = 3;
+  const cap = play(g, 'resurrect', SLOT.RIGHT);
+  check('resurrect revives the member', mage.alive);
+  eq('resurrect returns them at half max HP', mage.hp, Math.ceil(mage.maxHP / 2));
+  expectLog('resurrect logs the revived HP', cap,
+    `${mage.name} is resurrected to ${mage.hp} HP.`, 'status');
+  expectEvent('resurrect emits with the resulting HP', cap, 'resurrect',
+    { slot: SLOT.RIGHT, hp: mage.hp });
+  // Every buff and stance is wiped on revive — the arm clears 18 fields.
+  eq('revive clears Regen', mage.regen, 0);
+  eq('revive clears Taunt', mage.taunt, 0);
+  eq('revive clears Charge', mage.charge, 0);
+  eq('revive clears the strike bonus', mage.strikeBonus, 0);
+  eq('revive clears Guard', mage.guardDR, 0);
+  check('revive clears the Riposte stance', !mage.riposte && mage.riposteTurns === 0);
+}
+{ // a living member is not a legal 'dead' target
+  const g = fresh();
+  const cap = play(g, 'resurrect', SLOT.RIGHT);
+  eq('resurrect is refused on a living member', cap.log.length, 0);
+}
+
+// --- Refresh (fontOfMana) --------------------------------------------------
+{
+  const g = fresh();
+  const cap = play(g, 'fontOfMana');
+  eq('fontOfMana primes the per-turn amount', g.refresh, 3);
+  eq('fontOfMana sets its duration', g.refreshTurns, REFRESH_TURNS);
+  eq('fontOfMana resets the per-cast total', g.refreshRestored, 0);
+  eq('fontOfMana sets the per-cast cap', g.refreshCap, FONT_MP_CAP);
+  expectLog('fontOfMana logs the priming', cap,
+    `Refresh primed (3 MP/turn for ${REFRESH_TURNS}).`, 'status');
+  expectEvent('fontOfMana emits refreshPrimed', cap, 'refreshPrimed', { stack: 3 });
+}
+{ // recasting keeps the stronger value and resets the per-cast total
+  const g = fresh();
+  g.refresh = 5; g.refreshRestored = 7;
+  play(g, 'fontOfMana');
+  eq('fontOfMana keeps the stronger per-turn value', g.refresh, 5);
+  eq('fontOfMana resets the restored total on recast', g.refreshRestored, 0);
+}
+
+// --- Bloom -----------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 5; tank.regen = 4;
+  const cap = play(g, 'bloom', SLOT.CENTER);
+  eq('bloom heals the full remaining Regen at once', tank.hp, 9);
+  eq('bloom consumes the Regen', tank.regen, 0);
+  expectLog('bloom logs the conversion', cap,
+    `Bloom consumes ${tank.name}'s Regen: heals 4. (${tank.hp}/${tank.maxHP})`, 'heal');
+  expectEvent('bloom emits heal', cap, 'heal', { slot: SLOT.CENTER, amount: 4, hp: tank.hp });
+}
+{ // consuming the Regen is an end path, so a pending Lifebloom burst pays out
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 5; tank.regen = 2; tank.bloomBurst = LIFEBLOOM_BURST;
+  play(g, 'bloom', SLOT.CENTER);
+  eq('bloom fires the pending burst on top of the consumed Regen',
+    tank.hp, 5 + 2 + LIFEBLOOM_BURST);
+  eq('bloom clears the pending burst', tank.bloomBurst, 0);
+}
+
+// --- Inspiration -----------------------------------------------------------
+{
+  const g = fresh();
+  const hand0 = g.hand.length;
+  const cap = play(g, 'inspiration');
+  eq('inspiration draws its cards', g.hand.length, hand0 + 2);
+  expectLog('inspiration logs the draw', cap, 'Inspiration: drew 2 cards.', 'status');
+  expectEvent('inspiration emits draw with the real count', cap, 'draw', { count: 2 });
+}
+{ // Exhausted piles: it draws fewer than asked and says so in the SINGULAR.
+  // Note it can never reach 0 — _resolvePlayedCard discards the played card before
+  // _applyCard runs, so the first _drawOne always has that one card to reshuffle.
+  const g = fresh();
+  g.drawPile = []; g.discardPile = [];
+  const hand0 = g.hand.length;
+  const cap = play(g, 'inspiration');
+  eq('inspiration draws only what is available', g.hand.length, hand0 + 1);
+  expectLog('inspiration pluralizes a single card correctly', cap,
+    'Inspiration: drew 1 card.', 'status');
+  expectEvent('inspiration emits the real, reduced count', cap, 'draw', { count: 1 });
+  eq('the reshuffle consumed the discard pile', g.discardPile.length, 0);
+}
+
+// --- Lifebloom -------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  const cap = play(g, 'lifebloom', SLOT.CENTER);
+  eq('lifebloom adds its Regen', tank.regen, 2);
+  eq('lifebloom arms the burst', tank.bloomBurst, LIFEBLOOM_BURST);
+  expectLog('lifebloom logs stack and burst', cap,
+    `Lifebloom on ${tank.name} (Regen 2, decays each turn; bursts ${LIFEBLOOM_BURST} when it ends).`,
+    'status');
+  expectEvent('lifebloom emits regenApplied', cap, 'regenApplied',
+    { slot: SLOT.CENTER, stack: 2 });
+}
+{ // re-arming keeps ONE pending burst, but the Regen still stacks
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.regen = 1; tank.bloomBurst = LIFEBLOOM_BURST;
+  play(g, 'lifebloom', SLOT.CENTER);
+  eq('lifebloom stacks its Regen additively', tank.regen, 3);
+  eq('lifebloom keeps a single pending burst', tank.bloomBurst, LIFEBLOOM_BURST);
+}
+
+// --- Fight Song (battleHymn) -----------------------------------------------
+{
+  const g = fresh();
+  const cap = play(g, 'battleHymn');
+  eq('battleHymn sets the party bonus', g.hymnBonus, HYMN_BONUS);
+  expectLog('battleHymn logs the bonus', cap,
+    `Fight Song: every living member's attack deals +${HYMN_BONUS} this turn.`, 'status');
+  expectEvent('battleHymn emits hymn over all living slots', cap, 'hymn',
+    { bonus: HYMN_BONUS, slots: [SLOT.LEFT, SLOT.CENTER, SLOT.RIGHT] });
+}
+{ // no stacking — re-singing keeps the stronger value
+  const g = fresh();
+  g.hymnBonus = 5;
+  play(g, 'battleHymn');
+  eq('battleHymn keeps the stronger standing bonus', g.hymnBonus, 5);
+}
+
+// --- Barrier ---------------------------------------------------------------
+{
+  const g = fresh();
+  const cap = play(g, 'barrier');
+  for (const m of g.members) {
+    check(`barrier shields ${m.name}`, m.shield);
+    eq(`barrier sets ${m.name}'s fuse`, m.shieldTurns, BARRIER_TURNS);
+  }
+  expectEventCount('barrier emits one shieldApplied per member', cap, 'shieldApplied', 3);
+  expectLog('barrier logs a single summary line', cap,
+    'Barrier: every living member gains a Shield (fades after the next enemy phase).', 'status');
+}
+{ // it never DOWNGRADES a longer-lived Shield already standing
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.shield = true; tank.shieldTurns = SHIELD_TURNS;
+  play(g, 'barrier');
+  eq('barrier keeps a longer standing fuse', tank.shieldTurns, SHIELD_TURNS);
+  eq('barrier still shields the others at its own fuse', g.members[SLOT.LEFT].shieldTurns, BARRIER_TURNS);
+}
+
+// --- Elbow Grease (bloodTithe) ---------------------------------------------
+{
+  const g = fresh();
+  g.mp = 0;
+  const tank = g.members[SLOT.CENTER];
+  const hp0 = tank.hp;
+  const cap = play(g, 'bloodTithe', SLOT.CENTER);
+  eq('bloodTithe charges its HP cost', tank.hp, hp0 - 4);
+  eq('bloodTithe restores MP', g.mp, BLOOD_TITHE_MP);
+  expectLog('bloodTithe logs the ACTUAL MP delta', cap,
+    `Elbow Grease: ${tank.name} pays 4 HP; ${BLOOD_TITHE_MP} MP restored. (MP ${BLOOD_TITHE_MP})`, 'mp');
+  expectEvent('bloodTithe emits refreshTick', cap, 'refreshTick',
+    { amount: BLOOD_TITHE_MP, mp: BLOOD_TITHE_MP });
+}
+{ // at full MP the payment still happens but the gain is zero — the log must say 0
+  const g = fresh();
+  g.mp = g.maxMana;
+  const tank = g.members[SLOT.CENTER];
+  const hp0 = tank.hp;
+  const cap = play(g, 'bloodTithe', SLOT.CENTER);
+  eq('bloodTithe still charges HP at full MP', tank.hp, hp0 - 4);
+  eq('bloodTithe cannot exceed max mana', g.mp, g.maxMana);
+  expectLog('bloodTithe logs a zero gain honestly', cap,
+    `Elbow Grease: ${tank.name} pays 4 HP; 0 MP restored. (MP ${g.maxMana})`, 'mp');
+}
+
+// --- Helping Hand (martyrsGift) --------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  const ranger = g.members[SLOT.LEFT], mage = g.members[SLOT.RIGHT];
+  ranger.hp = 4; mage.hp = 3;
+  const hp0 = tank.hp;
+  const cap = play(g, 'martyrsGift', SLOT.CENTER);
+  eq('martyrsGift charges the payer', tank.hp, hp0 - 3);
+  eq('martyrsGift heals the others', ranger.hp, 8);
+  eq('martyrsGift heals every other member', mage.hp, 7);
+  expectEventCount('martyrsGift emits one heal per OTHER member', cap, 'heal', 2);
+  expectLog('martyrsGift logs payer and recipients', cap,
+    `Helping Hand: ${tank.name} pays 3 HP; the others heal up to 4.`, 'heal');
+}
+{ // the payer never heals themselves, even when they are the most wounded
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.hp = 6;
+  play(g, 'martyrsGift', SLOT.CENTER);
+  eq('martyrsGift never heals the payer', tank.hp, 3);
+}
+
+// --- Trash Talk (dreadWhisper) ---------------------------------------------
+{
+  const g = fresh();
+  const t = g.telegraph;
+  if (t) {
+    t.cast = undefined; t.damage = 6;
+    const intent = g.telegraphIntent() ?? 'attack';
+    const cap = play(g, 'dreadWhisper');
+    eq('dreadWhisper shaves the telegraph damage', t.damage, 6 - DREAD_WHISPER_REDUCTION);
+    expectLog('dreadWhisper logs before and after', cap,
+      `Trash Talk saps the ${intent}: 6 → ${6 - DREAD_WHISPER_REDUCTION} per target.`, 'status');
+    expectEvent('dreadWhisper emits graveChill with the reduction', cap, 'graveChill',
+      { slot: SLOT.CENTER, amount: DREAD_WHISPER_REDUCTION });
+  }
+}
+{ // floors at 0 rather than going negative
+  const g = fresh();
+  const t = g.telegraph;
+  if (t) {
+    t.cast = undefined; t.damage = 1;
+    play(g, 'dreadWhisper');
+    eq('dreadWhisper floors the telegraph at 0', t.damage, 0);
+  }
+}
+{ // no-op branch: an already-zeroed telegraph has nothing to sap
+  const g = fresh();
+  const t = g.telegraph;
+  if (t) {
+    t.cast = undefined; t.damage = 0;
+    const cap = play(g, 'dreadWhisper');
+    expectLog('dreadWhisper logs the no-op', cap,
+      'Trash Talk echoes at the telegraph, but there is nothing to sap.', 'status');
+    expectNoEvent('dreadWhisper emits nothing on the no-op branch', cap, 'graveChill');
+  }
+}
+
+// --- Turtle Up (phalanx) ---------------------------------------------------
+{
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  const cap = play(g, 'phalanx', SLOT.RIGHT);
+  eq('phalanx sets the Defense timer', mage.defense, PHALANX_TURNS);
+  eq('phalanx sets the Defense strength', mage.defenseAmount, PHALANX_DEFENSE);
+  expectLog('phalanx logs strength and duration', cap,
+    `Turtle Up: ${mage.name} gains Defense ${PHALANX_DEFENSE} for ${PHALANX_TURNS} enemy turns.`,
+    'status');
+  expectEvent('phalanx emits defenseApplied', cap, 'defenseApplied',
+    { slot: SLOT.RIGHT, amount: PHALANX_DEFENSE });
+}
+{ // noDefense/noTaunt gating: refused on a member who already has Defense
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  mage.defense = 1; mage.defenseAmount = 1;
+  const cap = play(g, 'phalanx', SLOT.RIGHT);
+  eq('phalanx is refused on an already-defended member', mage.defenseAmount, 1);
+  eq('a refused phalanx logs nothing', cap.log.length, 0);
+}
+
+// --- Provoke ---------------------------------------------------------------
+{
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  const cap = play(g, 'provoke', SLOT.RIGHT);
+  eq('provoke sets Taunt', mage.taunt, TAUNT_LITE_TURNS);
+  eq('provoke bundles NO Defense', mage.defense, 0);
+  expectLog('provoke logs the redirect', cap,
+    `${mage.name} Provokes — the enemy turns to them for ${TAUNT_LITE_TURNS} enemy turns.`, 'status');
+  expectEvent('provoke emits taunt', cap, 'taunt', { slot: SLOT.RIGHT, turns: TAUNT_LITE_TURNS });
+}
+
+// --- Guard -----------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  const cap = play(g, 'guard', SLOT.CENTER);
+  eq('guard sets its DR', tank.guardDR, GUARD_DR);
+  eq('guard sets its timer', tank.guardTurns, GUARD_TURNS);
+  expectLog('guard logs DR and duration', cap,
+    `Guard on ${tank.name}: -${GUARD_DR} damage per hit for ${GUARD_TURNS} enemy turns.`, 'status');
+  expectEvent('guard emits defenseApplied with its DR', cap, 'defenseApplied',
+    { slot: SLOT.CENTER, amount: GUARD_DR });
+}
+{ // no self-stack: recasting refreshes the timer, it does not add a second point of DR
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  tank.guardDR = GUARD_DR; tank.guardTurns = 1;
+  play(g, 'guard', SLOT.CENTER);
+  eq('guard does not stack its DR', tank.guardDR, GUARD_DR);
+  eq('guard refreshes its timer', tank.guardTurns, GUARD_TURNS);
+}
+
+// --- Sharpen ---------------------------------------------------------------
+{
+  const g = fresh();
+  const ranger = g.members[SLOT.LEFT];
+  const cap = play(g, 'sharpen', SLOT.LEFT);
+  eq('sharpen sets the strike bonus', ranger.strikeBonus, SHARPEN_BONUS);
+  eq('sharpen sets its timer', ranger.strikeTurns, SHARPEN_TURNS);
+  expectLog('sharpen logs bonus and duration', cap,
+    `Sharpen on ${ranger.name}: +${SHARPEN_BONUS} damage for ${SHARPEN_TURNS} enemy turns.`, 'status');
+  expectEvent('sharpen emits hymn on one slot', cap, 'hymn',
+    { bonus: SHARPEN_BONUS, slots: [SLOT.LEFT] });
+}
+{ // shares strikeBonus with Embolden: keep the stronger, refresh the timer
+  const g = fresh();
+  const ranger = g.members[SLOT.LEFT];
+  ranger.strikeBonus = 5; ranger.strikeTurns = 1;
+  play(g, 'sharpen', SLOT.LEFT);
+  eq('sharpen keeps a stronger ACTIVE bonus', ranger.strikeBonus, 5);
+  eq('sharpen refreshes the timer', ranger.strikeTurns, SHARPEN_TURNS);
+}
+{ // an EXPIRED stronger bonus is discarded rather than revived
+  const g = fresh();
+  const ranger = g.members[SLOT.LEFT];
+  ranger.strikeBonus = 5; ranger.strikeTurns = 0;
+  play(g, 'sharpen', SLOT.LEFT);
+  eq('sharpen overwrites an expired bonus', ranger.strikeBonus, SHARPEN_BONUS);
+}
+
+// --- Encore (doubleStrike) -------------------------------------------------
+{
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  const cap = play(g, 'doubleStrike', SLOT.RIGHT);
+  check('doubleStrike primes the drum flag', mage.drumPrimed);
+  expectLog('doubleStrike logs the priming', cap,
+    `${mage.name} readies a Double Strike — their next attack lands doubled.`, 'status');
+  eq('doubleStrike emits nothing', cap.events.length, 0);
+}
+
+// --- Empower ---------------------------------------------------------------
+{
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  const cap = play(g, 'empower', SLOT.RIGHT);
+  eq('empower arms the one-shot bonus', mage.empowerBonus, EMPOWER_BONUS);
+  expectLog('empower logs the priming', cap,
+    `Empower on ${mage.name}: their next ability fires at +${EMPOWER_BONUS} power.`, 'status');
+  expectEvent('empower emits hymn on one slot', cap, 'hymn',
+    { bonus: EMPOWER_BONUS, slots: [SLOT.RIGHT] });
+}
+{ // refreshing keeps a single pending charge (no stack)
+  const g = fresh();
+  const mage = g.members[SLOT.RIGHT];
+  mage.empowerBonus = EMPOWER_BONUS;
+  play(g, 'empower', SLOT.RIGHT);
+  eq('empower does not stack its charge', mage.empowerBonus, EMPOWER_BONUS);
+}
+
+// --- Riposte ---------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER];
+  const cap = play(g, 'riposte', SLOT.CENTER);
+  check('riposte arms the counter flag', tank.riposte);
+  expectLog('riposte logs the arming', cap,
+    `${tank.name} sets a Riposte — the next hit will be answered in kind.`, 'status');
+  expectEvent('riposte emits enGarde for one turn', cap, 'enGarde',
+    { slot: SLOT.CENTER, turns: 1 });
+}
+
+// --- Cleanse ---------------------------------------------------------------
+{
+  const g = fresh();
+  const tank = g.members[SLOT.CENTER], mage = g.members[SLOT.RIGHT];
+  g.woundTurns = 3;
+  tank.poison = 2; tank.poisonTurns = 3;
+  mage.markTurns = 2;
+  const cap = play(g, 'cleanse');
+  eq('cleanse clears the party-wide Hex', g.woundTurns, 0);
+  eq('cleanse clears hero Poison magnitude', tank.poison, 0);
+  eq('cleanse clears hero Poison duration', tank.poisonTurns, 0);
+  eq('cleanse clears the Mark', mage.markTurns, 0);
+  expectLog('cleanse logs that it found something', cap,
+    'Cleanse purges the party — all afflictions lifted.', 'status');
+  expectEvent('cleanse emits its event', cap, 'cleanse', { slot: SLOT.CENTER });
+}
+{ // always playable, and the no-op branch has its own log but STILL emits
+  const g = fresh();
+  const cap = play(g, 'cleanse');
+  expectLog('cleanse logs the empty case', cap, 'Cleanse finds nothing to purge.', 'status');
+  expectEvent('cleanse emits even when it purges nothing', cap, 'cleanse', { slot: SLOT.CENTER });
 }
 
 finish('content/cards');
