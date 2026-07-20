@@ -1,6 +1,6 @@
 # Issue 105 — Run-layer content to JSON (outcome ops + `events.json`, `upgrades.json`, `modifiers.json`)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — events/upgrades/modifiers to JSON; the three `eligible` closures are now data predicates)
 - **Phase:** content-migration (phase 5 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — in particular **A10**, the 8 events and 12 choice kinds with
@@ -56,34 +56,34 @@ mechanical port. The 3 `MODIFIERS` (`src/data/run.ts:380`) are data too, except 
 
 ## Acceptance criteria
 
-- [ ] **Commit 1 — outcome ops.** The event-outcome vocabulary implemented and unit-tested
+- [x] **Commit 1 — outcome ops.** The event-outcome vocabulary implemented and unit-tested
       against hand-built outcome lists, wired to nothing. `{op: "weighted"}` draws through the
       existing seeded `weightedPick` (`src/rng.ts`) so runs stay deterministic by seed — it
       must consume the RNG in the **same order and the same number of draws** as the code it
       replaces, or every seeded run diverges.
-- [ ] **Commit 2 — `events.json`.** All 8 events with their choices and outcomes as data.
+- [x] **Commit 2 — `events.json`.** All 8 events with their choices and outcomes as data.
       `gambleGold`'s weights (50/25/25) and payouts (+75 / +25 / −25) live in the JSON, not in
       `src/run.ts`. `cursedChest`, `duplicateCard` and `bloodAltarSacrifice` are expressed as
       outcome ops or declared natives; `src/run.ts:1380-1388`, `:1461`, `:1484` and `:1499`
       shrink to thin shells or disappear.
-- [ ] `EventChoiceKind` stops being the extension point: adding an event with an existing
+- [x] `EventChoiceKind` stops being the extension point: adding an event with an existing
       outcome shape requires **no** union edit. (The union may survive as a UI hint for which
       picker to show — that is fine and should be stated as such in a comment.)
-- [ ] **Commit 3 — `upgrades.json` + `modifiers.json`.** `PARTY_UPGRADES` (5) and
+- [x] **Commit 3 — `upgrades.json` + `modifiers.json`.** `PARTY_UPGRADES` (5) and
       `HEALER_UPGRADES` (4) ported unchanged in shape; the 3 `MODIFIERS` ported with their
       `eligible` closures replaced by the field predicates above.
-- [ ] Validator, run-layer additions: every event choice outcome resolves; every referenced
+- [x] Validator, run-layer additions: every event choice outcome resolves; every referenced
       native outcome exists **and** every registered one is referenced; every upgrade `stat`
       names a real member/healer stat; every modifier's `eligible` predicate references real
       card fields (this is where a `{hasField: "regne"}` typo gets caught with a Levenshtein
       suggestion instead of silently making a modifier ineligible for every card).
-- [ ] **Eligibility parity is proven exhaustively, not sampled:** for each of the 3 modifiers,
+- [x] **Eligibility parity is proven exhaustively, not sampled:** for each of the 3 modifiers,
       the set of eligible cards computed from the JSON predicate equals the set computed by
       the old closure, over **all 65 cards**. Assert set equality; a spot-check is not enough,
       because an over-broad predicate only shows up on the one card it wrongly admits.
-- [ ] Each commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()` log diff
+- [x] Each commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()` log diff
       against its parent, per #100's procedure.
-- [ ] `npm test` green and `npm run typecheck` clean at **every** commit.
+- [x] `npm test` green and `npm run typecheck` clean at **every** commit.
 
 ## Implementation notes (anchors)
 

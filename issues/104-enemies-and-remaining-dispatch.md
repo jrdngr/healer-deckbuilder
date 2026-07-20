@@ -1,6 +1,6 @@
 # Issue 104 — Enemies and the remaining dispatch surfaces (`enemies.json`, `casts.json`, channel ticks, delayed effects)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — enemies.json: defs, rosters, encounter table)
 - **Phase:** content-migration (phase 4 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — in particular **A6**, the 5 cast kinds + `mendingStream`/`sap` channel
@@ -65,7 +65,7 @@ silently, and the *only* reason it is now safe to touch is that A6 pins it.
 
 ## Acceptance criteria
 
-- [ ] **Commit 1 — `enemies.json`.** All enemy defs ported, with `bossDef`/`normalDef`
+- [x] **Commit 1 — `enemies.json`.** All enemy defs ported, with `bossDef`/`normalDef`
       defaults expressed as JSON defaults (a shared base object the schema merges), not
       copy-pasted per enemy. `src/content/index.ts` re-exports every existing name with an
       identical shape: `DEFAULT_ENEMY_DEF`, `BOSS_ENEMY_DEF`, `ENEMY_SPAMMER`, `ENEMY_SWARM`,
@@ -73,32 +73,32 @@ silently, and the *only* reason it is now safe to touch is that A6 pins it.
       `DEVOURER_DEF`, `ACT_BOSS_DEFS`, `IRONMAW_DEF`, `NEEDLER_DEF`, `LEECH_DEF`,
       `VENOMANCER_DEF`, `JUGGERNAUT_DEF`, `ENCOUNTER_TABLE`, and the per-enemy damage/duration
       consts. **Grep each name's import sites before deleting the old module.**
-- [ ] Validator: every enemy's `cast` references a cast in `casts.json`; every
+- [x] Validator: every enemy's `cast` references a cast in `casts.json`; every
       `ENCOUNTER_TABLE` entry names a real enemy def; every attack `type` is a known
       `AttackType`; rotation/phase entries are internally consistent.
-- [ ] **Commit 2 — `casts.json` + derived preview text.** All 5 cast kinds as action lists.
+- [x] **Commit 2 — `casts.json` + derived preview text.** All 5 cast kinds as action lists.
       **`telegraphDetail`'s `switch (t.cast)` at `core.ts:639-656` is deleted** and its prose
       is generated from each cast's `detail` template. The player-visible strings are
       byte-identical (A6 asserts them exactly).
-- [ ] `core.ts:1716`'s `switch (t.cast)` is deleted; casts resolve through `runActions`.
-- [ ] **Commit 3 — channel-tick actions.** `mendingStream` and `sap` move to
+- [x] `core.ts:1716`'s `switch (t.cast)` is deleted; casts resolve through `runActions`.
+- [x] **Commit 3 — channel-tick actions.** `mendingStream` and `sap` move to
       `channel.tickActions` on their card defs; `core.ts:1182-1200`'s switch is deleted. The
       shell keeps `decrement`, `channelTurns -= 1`, and the `channelPulse` emit
       (`core.ts:1200-1202`) in that exact order.
-- [ ] `sap`'s two clamps survive exactly: `Math.min(SAP_VULN_CAP, vulnerable + SAP_VULN_PER_TICK)`
+- [x] `sap`'s two clamps survive exactly: `Math.min(SAP_VULN_CAP, vulnerable + SAP_VULN_PER_TICK)`
       and `Math.max(vulnerableTurns, SAP_VULN_TURNS)` (`core.ts:1195-1196`) — a `min` and a
       `max`, not the same operator twice.
-- [ ] **Commit 4 — action-list delayed effects.** `DelayedStartEffect` stops being a closed
+- [x] **Commit 4 — action-list delayed effects.** `DelayedStartEffect` stops being a closed
       union at `core.ts:89`; queued entries carry their own actions; `core.ts:1943-1955`
       becomes a generic drain loop. `sunriseVigil`'s delayed party heal is expressed entirely
       in `cards.json`.
-- [ ] **The phase's real acceptance test:** a **new** channelled card and a **new** delayed
+- [x] **The phase's real acceptance test:** a **new** channelled card and a **new** delayed
       effect can each be added to `cards.json` with **no TypeScript edit anywhere** and appear
       in a run. Demonstrate at least one of the two in the commit (it may be reverted after
       demonstrating, but say so in the message).
-- [ ] Each commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()` log diff
+- [x] Each commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()` log diff
       against its parent, per #100's procedure.
-- [ ] `npm test` green and `npm run typecheck` clean at **every** commit.
+- [x] `npm test` green and `npm run typecheck` clean at **every** commit.
 
 ## Implementation notes (anchors)
 

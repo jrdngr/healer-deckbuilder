@@ -1,6 +1,6 @@
 # Issue 103 — Relic hook bus, run-layer hooks, `relics.json`, and hero passives
 
-- **Status:** 📋 Planned
+- **Status:** 🔨 Partially done (2026-07-20 — relics.json and members.json landed with #106; the HOOK BUS is the remaining work)
 - **Phase:** content-migration (phase 3 of 6)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — in particular **A7**, all 21 relics with not-owned control cases, and
@@ -221,3 +221,36 @@ assert she still ripostes.
 - Rebalancing any relic or passive. Every value moves by reference, not by value.
 - Fixing anything #99 characterized as looking wrong — that is a separate, deliberate change
   against a green suite.
+
+## Progress (2026-07-20)
+
+**Metadata done, behaviour not.** `relics.json` and `members.json` landed alongside
+#106: names, rarities, icons, stats and descs (17 of 21 relic descs keep live tuning
+references) are content now, and `RELICS`/`MEMBER_POOL` read from them.
+
+**Still outstanding — the actual hook bus.** The 20 `hasRelic` sites and the 11
+`m.id ===` hero-passive sites are unchanged. Relic *behaviour* remains inline engine
+code.
+
+**Why it was deferred to last, deliberately.** This is the plan's own "riskiest commit":
+it rewires `memberDamage` (the hottest function in the sim, and a **pure read** because
+`attackTargets()` uses it for the telegraph preview — a side-effecting hook there
+corrupts previews, `core.ts:1445-1450`) and the `vetoDeath` death pipeline
+(`core.ts:990-1000`) at the same time. Every other phase was independent of it, so the
+sequencing in this file was convenience rather than necessity. Doing it against a fully
+migrated, fully tested codebase is strictly safer than doing it mid-migration.
+
+**What is already in place for it.** The `#99` A7 suite pins all 21 relics with
+owned/not-owned controls and A8 pins all 11 passives including their non-firing cases;
+`sim/trace.ts` gives a second net; and the interpreter, validator and native registry
+all exist. The remaining work is the hook vocabulary itself plus the compiled per-`Game`
+hook index that keeps `memberDamage` off a generic interpreter walk.
+
+**Carried forward — do not lose these:**
+- The Duelist's Riposte Master must stay a value hook. Giving her permanent
+  `riposteTurns` is NOT behaviour-preserving (see the ⚠️ section above).
+- Two easily-missed sites: `effects.ts:486` (the poison ability duplicates venomGland's
+  extension inline — now visible as a `{if, hasRelic}` amount in `abilities.json`) and
+  `core.ts:2441` (drum-doubling log text branches on `hasRelic`).
+- `core.ts:1877` Tank Grudge *banking* is a third, separate site from the read at `:540`
+  and the reset at `:2455`.

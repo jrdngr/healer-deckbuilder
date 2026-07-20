@@ -36,8 +36,5 @@ _(empty)_
 
 | # | Status | Issue | Phase | Depends | Addresses |
 |---|--------|-------|-------|---------|-----------|
-| 103 | 📋 Planned | [Relic hook bus, run-layer hooks, relics.json, and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | #99, #102 | migration plan 2026-07-20, phase 3 (riskiest commit) |
-| 104 | 📋 Planned | [Enemies and the remaining dispatch surfaces (enemies.json, casts.json, channels, delayed effects)](./issues/104-enemies-and-remaining-dispatch.md) | content-migration | #99, #103 | migration plan 2026-07-20, phase 4 |
-| 105 | 📋 Planned | [Run-layer content to JSON (outcome ops + events.json, upgrades.json, modifiers.json)](./issues/105-run-layer-content-to-json.md) | content-migration | #99, #104 | migration plan 2026-07-20, phase 5 |
-| 106 | 📋 Planned | [String-id cutover (coverage checks + fallbacks, save v19→20, CLAUDE.md authoring guide)](./issues/106-string-ids-cutover.md) | content-migration | #99, #105 | migration plan 2026-07-20, phase 6 |
+| 103 | 🔨 Partial | [Relic hook bus and hero passives](./issues/103-relic-hook-bus-and-passives.md) | content-migration | — | metadata landed; the hook bus is the remaining work |
 | 107 | 📋 Planned | [Two inconsistencies surfaced by the characterization pass](./issues/107-characterization-findings.md) | cleanup | — | findings from #99 (taunt log text, gold-return convention) |

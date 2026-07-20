@@ -1,6 +1,6 @@
 # Issue 106 — String-id cutover (coverage checks + read-site fallbacks, `RUN_SAVE_VERSION` 19→20, CLAUDE.md authoring guide)
 
-- **Status:** 📋 Planned
+- **Status:** ✅ Complete (2026-07-20 — string ids across cards/members/abilities/relics; coverage checks + read-site fallbacks; authoring guide)
 - **Phase:** content-migration (phase 6 of 6 — the payoff)
 - **Depends:** **#99** (the characterization suite is the regression gate for this and every
   issue in #100–#106 — after this cutover the compiler stops catching a whole class of
@@ -76,30 +76,30 @@ mismatched saves cleanly, so no migration code is needed.
 
 ## Acceptance criteria
 
-- [ ] **Commit 1 — the cutover (all of this in one commit):**
-  - [ ] `CardId`, `AbilityId`, `RelicId`, `MemberId`, `EnemyId`, `ModifierId` and the upgrade
+- [x] **Commit 1 — the cutover (all of this in one commit):**
+  - [x] `CardId`, `AbilityId`, `RelicId`, `MemberId`, `EnemyId`, `ModifierId` and the upgrade
         id types become `export type X = string`, kept **as names** so existing signatures
         compile unchanged.
-  - [ ] Coverage checks land in the startup validator for every content id set: every id in
+  - [x] Coverage checks land in the startup validator for every content id set: every id in
         each set is fully covered by the tables that must know about it, and every card is
         reachable (in `DECK_LIST`, a shop pool, or `ABILITY_CARD`).
-  - [ ] `registerCoverage(…)` calls added to `src/animations.ts`, `sim/exercise.ts`,
+  - [x] `registerCoverage(…)` calls added to `src/animations.ts`, `sim/exercise.ts`,
         `src/data/members.ts` and `src/characterArt.ts`, with
         `test/content-coverage.test.ts` asserting them. **Not** wired into the startup
         validator.
-  - [ ] **A `?? fallback` at every Class-2 read site** — `MEMBER_STRIKE[id] ?? genericStrike`,
+  - [x] **A `?? fallback` at every Class-2 read site** — `MEMBER_STRIKE[id] ?? genericStrike`,
         the character-art lookups, `MEMBER_PASSIVE_FLAVOR`, `RELIC_VALUE`. An unknown id must
         degrade visibly-but-safely, never throw.
-- [ ] **Commit 2 — save version.** `RUN_SAVE_VERSION` 19 → 20 (`src/run.ts:129`). No
+- [x] **Commit 2 — save version.** `RUN_SAVE_VERSION` 19 → 20 (`src/run.ts:129`). No
       migration code; old saves are discarded by the existing check at `src/run.ts:299`.
-- [ ] **Commit 3 — the authoring guide.** A new `CLAUDE.md` section documenting how to author
+- [x] **Commit 3 — the authoring guide.** A new `CLAUDE.md` section documenting how to author
       content in JSON: the file layout under `src/content/`, the amount/selector/condition/op
       vocabulary, how to reference `TUNING` keys, how desc templates resolve (`{NAME}`, `|s`,
       `|pct`, `{cond ? a : b}`), when a `native` is warranted and how to register one, and how
       to read the validator's error report. Also update `CLAUDE.md`'s **Layout** section:
       `src/engine/effects.ts` no longer holds "the big card/ability effect methods", and
       `src/content/` is now where content lives.
-- [ ] **The acceptance test — and it must be run for real, not asserted in prose:** add a
+- [x] **The acceptance test — and it must be run for real, not asserted in prose:** add a
       brand-new card to `cards.json`, composed only of existing ops and existing tuning keys,
       with **no TypeScript edit anywhere**, and see it appear in a run with `npm test` green.
       Document the result in the commit message.
@@ -107,10 +107,10 @@ mismatched saves cleanly, so no migration code is needed.
       > `buyValue` moved into the JSON in #101. A card needing a **new magnitude** still needs
       > a one-line `src/data/tuning.ts` edit — or can inline the number. That is the intended,
       > acknowledged boundary of the promise, not a gap to paper over.
-- [ ] Each commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()` log diff
+- [x] Each commit ships an empty `sim/trace.ts` diff **and** an empty `exerciseAll()` log diff
       against its parent, per #100's procedure.
-- [ ] `npm test` green and `npm run typecheck` clean at **every** commit.
-- [ ] Final `npm run sim` wall time recorded against the phase-0/1/2/3 baselines.
+- [x] `npm test` green and `npm run typecheck` clean at **every** commit.
+- [x] Final `npm run sim` wall time recorded against the phase-0/1/2/3 baselines.
 
 ## Implementation notes (anchors)
 
