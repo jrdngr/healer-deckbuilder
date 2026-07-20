@@ -12,22 +12,22 @@ interface ActionsProps {
 
 export function Actions({ game, animating, hasSelection, onSkip, onEndTurn, onCancel }: ActionsProps) {
   const over = game.status !== 'playing';
-  // Until the player commits a card this turn, ending the turn also rests for MP,
-  // so the primary button doubles as Rest and advertises the MP it will recover.
-  // At full MP (or the 2+-cards lockout) the rest yields 0 — advertising "+0 MP"
-  // reads as a zero benefit (#37), so the button is just "End Turn" then.
+  // Rest is all-or-nothing, and the button says which side of that line the turn is
+  // on: red "Rest" while no card has been committed, yellow "End Turn" the moment one
+  // is. The colour tracks cards-played, NOT whether MP would actually be gained — at
+  // full MP it still reads red and honestly advertises "+0 MP" (deliberately unlike
+  // #37's never-show-a-zero rule: here the number must always match reality).
   const resting = game.canSkip();
   const restAmount = game.restAmount();
-  const showRest = resting && restAmount > 0;
   return (
     <section className="buttons">
-      <Tooltip content={showRest ? 'Play no cards, rest to regain MP, then end your turn' : undefined}>
+      <Tooltip content={resting ? 'Play no cards, rest to regain MP, then end your turn' : undefined}>
         <button
-          className="primary"
+          className={`primary${resting ? ' danger' : ''}`}
           disabled={over || animating}
           onClick={resting ? onSkip : onEndTurn}
         >
-          {showRest ? `Rest & End Turn (+${restAmount} MP)` : 'End Turn'}
+          {resting ? `Rest (+${restAmount} MP)` : 'End Turn'}
         </button>
       </Tooltip>
       {hasSelection && <button onClick={onCancel}>Cancel targeting</button>}

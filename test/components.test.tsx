@@ -290,19 +290,35 @@ async function openTooltipText(el: HTMLElement): Promise<string> {
 
 // --- Actions button drops the "+0 MP" rest label at full MP (#37 item 4) --------
 {
+  const turnBtn = () => rootEl.querySelector('button.primary') as HTMLButtonElement;
+
+  // Rest is all-or-nothing now, so the button's red "Rest" state tracks cards-played,
+  // not whether MP would be gained: at full MP it still says Rest and honestly says +0.
   const full = new Game(9, defaultBattleConfig()).start(); // starts at full MP, 0 cards played
   const fullText = await render(
     <Actions game={full} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
   );
-  check('at full MP the rest button is plain "End Turn"',
-    fullText.includes('End Turn') && !fullText.includes('+0 MP') && !fullText.includes('Rest & End Turn'), fullText);
+  check('at full MP with no card played the button still offers Rest, advertising +0 MP',
+    fullText.includes('Rest (+0 MP)'), fullText);
+  check('the uncommitted-turn button is red', turnBtn().classList.contains('danger'), turnBtn().className);
 
   const spent = new Game(9, defaultBattleConfig()).start();
   spent.mp = 4; // below the cap → a rest now yields MP
   const spentText = await render(
     <Actions game={spent} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
   );
-  check('below the cap the button advertises the rest MP', spentText.includes(`Rest & End Turn (+${spent.restAmount()} MP)`), spentText);
+  check('below the cap the button advertises the rest MP', spentText.includes(`Rest (+${spent.restAmount()} MP)`), spentText);
+
+  // Once a card is committed, Rest is gone: yellow "End Turn", no danger class.
+  const played = new Game(9, defaultBattleConfig()).start();
+  played.mp = 4;
+  played.cardsPlayedThisPhase = 1; // the UI only reads canSkip()/restAmount(), which this gates
+  const playedText = await render(
+    <Actions game={played} animating={false} hasSelection={false} onSkip={() => {}} onEndTurn={() => {}} onCancel={() => {}} />,
+  );
+  check('after one card the button is plain "End Turn"',
+    playedText.includes('End Turn') && !playedText.includes('Rest'), playedText);
+  check('the committed-turn button is not red', !turnBtn().classList.contains('danger'), turnBtn().className);
 }
 
 // --- BattleScreen groups the MP bar and the turn button in one row (#80) --------
