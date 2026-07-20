@@ -1,4 +1,5 @@
 import type { CardId, CardType, CardTarget, CardChannelDef, AbilityId, MemberId, MemberDef } from './tuning';
+import { EVENTS_JSON, UPGRADES_JSON, MODIFIERS_JSON, evalEligible } from '../content/runlayer';
 import CARD_RARITY_JSON from '../content/cards.json';
 import { MP_MAX, HAND_SIZE, SKIP_REGEN, PASSIVE_MP_CAP, CARD_REMOVAL_PRICE, CASINO_SAFE_GOLD } from './tuning';
 import { ENEMY_MAX_HP, DEFAULT_ENEMY_DEF } from './enemies';
@@ -378,20 +379,14 @@ export interface ModifierDef {
   eligible: (cardId: CardId) => boolean; // which cards this modifier may be applied to
 }
 
-export const MODIFIERS: Record<ModifierId, ModifierDef> = {
-  lingering: {
-    id: 'lingering', name: 'Lingering', rarity: 'common',
-    desc: '+1 turn of duration.', eligible: cardHasDuration,
-  },
-  efficient: {
-    id: 'efficient', name: 'Efficient', rarity: 'uncommon',
-    desc: '-1 mana cost.', eligible: efficientEligible,
-  },
-  potent: {
-    id: 'potent', name: 'Potent', rarity: 'uncommon',
-    desc: '+1 to its healing / restore amount.', eligible: cardHasStrength,
-  },
-};
+// #105: the three `eligible` CLOSURES are now DATA predicates in modifiers.json —
+// the last executable code that lived in a content table. evalEligible interprets them.
+export const MODIFIERS: Record<ModifierId, ModifierDef> = Object.freeze(
+  Object.fromEntries(Object.entries(MODIFIERS_JSON).map(([id, m]) => [id, {
+    id: m.id as ModifierId, name: m.name, rarity: m.rarity as Rarity, desc: m.desc,
+    eligible: (cardId: CardId) => evalEligible(m.eligible, CARDS[cardId] as unknown as Record<string, unknown>),
+  }])),
+) as Record<ModifierId, ModifierDef>;
 
 export const MODIFIER_IDS: ModifierId[] = ['lingering', 'efficient', 'potent'];
 
@@ -586,14 +581,7 @@ export interface PartyUpgradeDef {
   desc: string;
   price?: number; // overrides the rarity price when an offer needs a bespoke cost
 }
-export const PARTY_UPGRADES: PartyUpgradeDef[] = [
-  { id: 'hp3', stat: 'maxHP', amount: 3, rarity: 'common', name: '+3 Max HP', desc: 'Raise a member’s max HP by 3.' },
-  { id: 'hp6', stat: 'maxHP', amount: 7, rarity: 'uncommon', name: '+7 Max HP', desc: 'Raise a member’s max HP by 7.' },
-  { id: 'dmg1', stat: 'damage', amount: 1, rarity: 'uncommon', name: '+1 Damage', desc: 'Raise a member’s attack damage by 1.' },
-  // +2 Damage is the strongest single lever; priced above its rarity (flaw #10).
-  { id: 'dmg2', stat: 'damage', amount: 2, rarity: 'rare', price: 85, name: '+2 Damage', desc: 'Raise a member’s attack damage by 2.' },
-  { id: 'abil1', stat: 'ability', amount: 1, rarity: 'uncommon', name: '+1 Ability', desc: 'Raise a member’s ability strength by 1.' },
-];
+export const PARTY_UPGRADES: PartyUpgradeDef[] = UPGRADES_JSON.party as unknown as PartyUpgradeDef[];
 
 // Healer (player) stat upgrades — each a +1 increment to a player resource.
 export type HealerStat = 'maxMana' | 'handSize' | 'restRegen' | 'passiveMp';
@@ -614,12 +602,7 @@ export interface HealerUpgradeDef {
 // second pick of it is absorbed by the cap — the other three keep stacking. rarity
 // no longer drives a price (the boon is free); it is retained only as a display tag.
 // Exact equalized magnitudes land against the sim/balance harness in a follow-up.
-export const HEALER_UPGRADES: HealerUpgradeDef[] = [
-  { id: 'mana', stat: 'maxMana', amount: 2, rarity: 'uncommon', name: '+2 Max Mana', desc: 'Raise max mana (and starting mana) by 2.' },
-  { id: 'rest', stat: 'restRegen', amount: 1, rarity: 'uncommon', name: '+1 Rest Regen', desc: 'Rest restores 1 more MP.' },
-  { id: 'passive', stat: 'passiveMp', amount: 1, rarity: 'rare', name: '+1 Passive MP', desc: `Gain 1 MP at the start of each of your turns (max +${PASSIVE_MP_CAP} per run).` },
-  { id: 'hand', stat: 'handSize', amount: 1, rarity: 'rare', name: '+1 Hand Size', desc: 'Draw 1 more card each turn.' },
-];
+export const HEALER_UPGRADES: HealerUpgradeDef[] = UPGRADES_JSON.healer as unknown as HealerUpgradeDef[];
 
 // Events: a scenario, plus choices the UI dispatches on by `kind`. The actual
 // random rolls / run mutations live in run.ts so they stay testable.
@@ -668,83 +651,7 @@ export const BLOOD_ALTAR_HP = 2;      // permanent max-HP price a member pays
 export const BLOOD_ALTAR_DAMAGE = 1;  // permanent damage the altar grants
 export const BLOOD_ALTAR_MIN_HP = 6;  // members at/below this max HP may not sacrifice
 
-export const EVENTS: EventDef[] = [
-  {
-    id: 'apothecary',
-    title: 'Traveling Apothecary',
-    text: 'A cart of curios blocks the path. "Add to your repertoire, or shed what burdens you — no charge today."',
-    choices: [
-      { label: 'Buy a remedy', kind: 'addCardOffer', detail: 'Choose 1 of 3 cards to add (free).' },
-      { label: 'Shed a burden', kind: 'removeCard', detail: `Remove a card from your deck (${CARD_REMOVAL_PRICE}g).` },
-      { label: 'Move on', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'casino',
-    title: 'Casino Cart',
-    text: 'A gambler flips a golden coin. "Care to test your luck, healer? No ante — but the coin bites."',
-    choices: [
-      { label: 'Flip the coin', kind: 'gambleGold', detail: '50% +75g · 25% +25g · 25% −25g.' },
-      { label: 'Walk away', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'shrine',
-    title: 'Forgotten Shrine',
-    text: 'An old shrine to a forgotten god of mending hums with latent power. It will grant one boon — but chooses its own gift.',
-    choices: [
-      { label: 'Bless a card', kind: 'shrineCard', detail: 'Pick a card; it gains a random upgrade.' },
-      { label: 'Bless a hero', kind: 'shrineParty', detail: 'Pick a member; they gain a random boost.' },
-      { label: 'Accept a burden', kind: 'shrineCurse', detail: `Gain a random curse — and ${CURSE_SHRINE_GOLD}g for bearing it.` },
-      { label: 'Leave', kind: 'leave' },
-    ],
-  },
-  // --- events expansion (#19): five more, each a real decision ---------------
-  {
-    id: 'cursedChest',
-    title: 'Cursed Chest',
-    text: 'A gilded chest sits in the roots of a dead tree, humming softly. Gold glints through the seam — but so does something hungrier.',
-    choices: [
-      { label: 'Pry it open', kind: 'cursedChest', detail: `+${CURSED_CHEST_GOLD}g — but a random card leaves your deck.` },
-      // (CURSED_CHEST_GOLD is 100 after the content-cut pass.)
-      { label: 'Leave it buried', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'mercenary',
-    title: 'Wandering Mercenary',
-    text: '"Your lot swing like farmhands," the sellsword laughs. "For coin, I\'ll drill one of them — my pick, not yours."',
-    choices: [
-      { label: 'Pay for drills', kind: 'mercenary', detail: `${MERCENARY_PRICE}g: a random member gains +${MERCENARY_DAMAGE} damage.` },
-      { label: 'Decline', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'duplicator',
-    title: 'The Duplicator',
-    text: 'A scribe with ink-stained fingers studies your deck. "Any page can be copied — gilding and all."',
-    choices: [
-      { label: 'Commission a copy', kind: 'duplicateCard', detail: `${DUPLICATE_PRICE}g: add a copy of a chosen card (upgrades included).` },
-      { label: 'Move on', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'fieldHospital',
-    title: 'Field Hospital',
-    text: 'A tent of clean linen and boiling water. "Bring me your wounded, healer — I\'ll not charge a coin for mending what the road has broken. One soul, mind you; I\'ve others to see."',
-    choices: [
-      { label: 'Tend a hero', kind: 'healInjury', detail: 'Heal one lasting injury on a chosen member (free).' },
-      { label: 'Move on', kind: 'leave' },
-    ],
-  },
-  {
-    id: 'bloodAltar',
-    title: 'The Grindstone',
-    text: 'An old grindstone hums in the clearing. Put a hero to it and they come away sharper — and a little worn down. The wheel only turns one way.',
-    choices: [
-      { label: 'Put a hero to the stone', kind: 'bloodAltar', detail: `Chosen member: −${BLOOD_ALTAR_HP} max HP, +${BLOOD_ALTAR_DAMAGE} damage (permanent).` },
-      { label: 'Leave it be', kind: 'leave' },
-    ],
-  },
-];
+// #105: events are read from events.json. Outcomes remain Run methods dispatched on
+// choice.kind; the validator checks every kind here is one the run layer implements.
+export const EVENTS: EventDef[] = EVENTS_JSON as unknown as EventDef[];
 

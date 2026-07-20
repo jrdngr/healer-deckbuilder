@@ -1,0 +1,53 @@
+{
+  "lingering": {
+    "id": "lingering",
+    "name": "Lingering",
+    "rarity": "common",
+    "desc": "+1 turn of duration.",
+    "eligible": {
+      "anyFieldPresent": [
+        "regen",
+        "refresh"
+      ]
+    }
+  },
+  "efficient": {
+    "id": "efficient",
+    "name": "Efficient",
+    "rarity": "uncommon",
+    "desc": "-1 mana cost.",
+    "eligible": {
+      "allOf": [
+        {
+          "fieldAbove": {
+            "field": "cost",
+            "than": 0
+          }
+        },
+        {
+          "fieldAbsent": "draw"
+        }
+      ]
+    }
+  },
+  "potent": {
+    "id": "potent",
+    "name": "Potent",
+    "rarity": "uncommon",
+    "desc": "+1 to its healing / restore amount.",
+    "eligible": {
+      "allOf": [
+        {
+          "fieldAbsent": "noPotent"
+        },
+        {
+          "anyFieldPresent": [
+            "heal",
+            "regen",
+            "refresh"
+          ]
+        }
+      ]
+    }
+  }
+}

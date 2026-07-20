@@ -1,0 +1,79 @@
+{
+  "party": [
+    {
+      "id": "hp3",
+      "stat": "maxHP",
+      "amount": 3,
+      "rarity": "common",
+      "name": "+3 Max HP",
+      "desc": "Raise a member’s max HP by 3."
+    },
+    {
+      "id": "hp6",
+      "stat": "maxHP",
+      "amount": 7,
+      "rarity": "uncommon",
+      "name": "+7 Max HP",
+      "desc": "Raise a member’s max HP by 7."
+    },
+    {
+      "id": "dmg1",
+      "stat": "damage",
+      "amount": 1,
+      "rarity": "uncommon",
+      "name": "+1 Damage",
+      "desc": "Raise a member’s attack damage by 1."
+    },
+    {
+      "id": "dmg2",
+      "stat": "damage",
+      "amount": 2,
+      "rarity": "rare",
+      "price": 85,
+      "name": "+2 Damage",
+      "desc": "Raise a member’s attack damage by 2."
+    },
+    {
+      "id": "abil1",
+      "stat": "ability",
+      "amount": 1,
+      "rarity": "uncommon",
+      "name": "+1 Ability",
+      "desc": "Raise a member’s ability strength by 1."
+    }
+  ],
+  "healer": [
+    {
+      "id": "mana",
+      "stat": "maxMana",
+      "amount": 2,
+      "rarity": "uncommon",
+      "name": "+2 Max Mana",
+      "desc": "Raise max mana (and starting mana) by 2."
+    },
+    {
+      "id": "rest",
+      "stat": "restRegen",
+      "amount": 1,
+      "rarity": "uncommon",
+      "name": "+1 Rest Regen",
+      "desc": "Rest restores 1 more MP."
+    },
+    {
+      "id": "passive",
+      "stat": "passiveMp",
+      "amount": 1,
+      "rarity": "rare",
+      "name": "+1 Passive MP",
+      "desc": "Gain 1 MP at the start of each of your turns (max +2 per run)."
+    },
+    {
+      "id": "hand",
+      "stat": "handSize",
+      "amount": 1,
+      "rarity": "rare",
+      "name": "+1 Hand Size",
+      "desc": "Draw 1 more card each turn."
+    }
+  ]
+}

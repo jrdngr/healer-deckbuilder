@@ -23,6 +23,7 @@ import { registerCheck } from './validate/driver';
 import './cards'; // #101 — registers the cards.json checks
 import './abilities'; // #102 — registers the abilities.json checks
 import './entities'; // #103/#106 — relics.json and members.json
+import './runlayer'; // #105 — events, upgrades, modifiers
 
 // A constant defined in two data modules would make {"tune": "KEY"} ambiguous.
 registerCheck({
@@ -50,6 +51,8 @@ export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
 export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';
 export { RELIC_JSON, MEMBER_JSON, ENEMY_JSON, RELIC_JSON_IDS, MEMBER_JSON_IDS, ENEMY_JSON_IDS } from './entities';
 export type { RelicJson, MemberJson } from './entities';
+export { EVENTS_JSON, UPGRADES_JSON, MODIFIERS_JSON, evalEligible, IMPLEMENTED_CHOICE_KINDS } from './runlayer';
+export type { EventJson, EventChoiceJson, UpgradeJson, ModifierJson, EligibleRule } from './runlayer';
 export type { AbilityJson } from './abilities';
 export type { CardJson } from './cards';
 export { validateContent, registeredChecks } from './validate/driver';

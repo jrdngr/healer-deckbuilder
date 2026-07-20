@@ -1,0 +1,145 @@
+[
+  {
+    "id": "apothecary",
+    "title": "Traveling Apothecary",
+    "text": "A cart of curios blocks the path. \"Add to your repertoire, or shed what burdens you — no charge today.\"",
+    "choices": [
+      {
+        "label": "Buy a remedy",
+        "kind": "addCardOffer",
+        "detail": "Choose 1 of 3 cards to add (free)."
+      },
+      {
+        "label": "Shed a burden",
+        "kind": "removeCard",
+        "detail": "Remove a card from your deck (20g)."
+      },
+      {
+        "label": "Move on",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "casino",
+    "title": "Casino Cart",
+    "text": "A gambler flips a golden coin. \"Care to test your luck, healer? No ante — but the coin bites.\"",
+    "choices": [
+      {
+        "label": "Flip the coin",
+        "kind": "gambleGold",
+        "detail": "50% +75g · 25% +25g · 25% −25g."
+      },
+      {
+        "label": "Walk away",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "shrine",
+    "title": "Forgotten Shrine",
+    "text": "An old shrine to a forgotten god of mending hums with latent power. It will grant one boon — but chooses its own gift.",
+    "choices": [
+      {
+        "label": "Bless a card",
+        "kind": "shrineCard",
+        "detail": "Pick a card; it gains a random upgrade."
+      },
+      {
+        "label": "Bless a hero",
+        "kind": "shrineParty",
+        "detail": "Pick a member; they gain a random boost."
+      },
+      {
+        "label": "Accept a burden",
+        "kind": "shrineCurse",
+        "detail": "Gain a random curse — and 50g for bearing it."
+      },
+      {
+        "label": "Leave",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "cursedChest",
+    "title": "Cursed Chest",
+    "text": "A gilded chest sits in the roots of a dead tree, humming softly. Gold glints through the seam — but so does something hungrier.",
+    "choices": [
+      {
+        "label": "Pry it open",
+        "kind": "cursedChest",
+        "detail": "+100g — but a random card leaves your deck."
+      },
+      {
+        "label": "Leave it buried",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "mercenary",
+    "title": "Wandering Mercenary",
+    "text": "\"Your lot swing like farmhands,\" the sellsword laughs. \"For coin, I'll drill one of them — my pick, not yours.\"",
+    "choices": [
+      {
+        "label": "Pay for drills",
+        "kind": "mercenary",
+        "detail": "45g: a random member gains +1 damage."
+      },
+      {
+        "label": "Decline",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "duplicator",
+    "title": "The Duplicator",
+    "text": "A scribe with ink-stained fingers studies your deck. \"Any page can be copied — gilding and all.\"",
+    "choices": [
+      {
+        "label": "Commission a copy",
+        "kind": "duplicateCard",
+        "detail": "30g: add a copy of a chosen card (upgrades included)."
+      },
+      {
+        "label": "Move on",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "fieldHospital",
+    "title": "Field Hospital",
+    "text": "A tent of clean linen and boiling water. \"Bring me your wounded, healer — I'll not charge a coin for mending what the road has broken. One soul, mind you; I've others to see.\"",
+    "choices": [
+      {
+        "label": "Tend a hero",
+        "kind": "healInjury",
+        "detail": "Heal one lasting injury on a chosen member (free)."
+      },
+      {
+        "label": "Move on",
+        "kind": "leave"
+      }
+    ]
+  },
+  {
+    "id": "bloodAltar",
+    "title": "The Grindstone",
+    "text": "An old grindstone hums in the clearing. Put a hero to it and they come away sharper — and a little worn down. The wheel only turns one way.",
+    "choices": [
+      {
+        "label": "Put a hero to the stone",
+        "kind": "bloodAltar",
+        "detail": "Chosen member: −2 max HP, +1 damage (permanent)."
+      },
+      {
+        "label": "Leave it be",
+        "kind": "leave"
+      }
+    ]
+  }
+]
