@@ -3,6 +3,8 @@ import type { CardId, CardType, CardDef, AbilityId, MemberId } from './tuning';
 // src/content — content imports data/run, which imports this module, so the other
 // direction would close a cycle. A raw JSON import has no imports of its own.
 import CARD_JSON_RAW from '../content/cards.json';
+import ABILITY_JSON from '../content/abilities.json';
+import MEMBER_JSON from '../content/members.json';
 import { renderTemplate } from '../content/interpreter/template';
 import { TUNING } from './tuning-table';
 import { MOD_EFFICIENT_COST, MOD_POTENT_STRENGTH, MOD_LINGERING_TURNS, REFRESH_MP_CAP, REFRESH_TURNS } from './tuning';
@@ -79,40 +81,22 @@ export const DECK_LIST: CardId[] = [
 ];
 
 // The bound ability card for each ability (#44). Each member contributes exactly
-// this card to the battle deck while deployed.
-export const ABILITY_CARD: Record<AbilityId, CardId> = {
-  poison: 'imbuePoison',
-  taunt: 'bolster',
-  bolt: 'unleash',
-  hex: 'hex',
-  crescendo: 'conduct',
-  rampage: 'incite',
-  callBoar: 'beckon',
-  stun: 'stagger',
-  enGarde: 'enGarde',
-  penance: 'penance',
-  // Learned ability cards (Training Dojo): card id == ability id.
-  twinShot: 'twinShot', concVenom: 'concVenom', shieldWall: 'shieldWall', holdLine: 'holdLine',
-  arcaneSurge: 'arcaneSurge', drainLife: 'drainLife', doom: 'doom', sacrifice: 'sacrifice',
-  finale: 'finale', duet: 'duet', bloodbath: 'bloodbath', whirlwind: 'whirlwind',
-  sicEm: 'sicEm', mendBeast: 'mendBeast', standingOvation: 'standingOvation', bigTop: 'bigTop',
-  lunge: 'lunge', flurry: 'flurry', strongest: 'strongest', deadlift: 'deadlift',
-};
+// this card to the battle deck while deployed. Read from each ability's `card` field
+// in abilities.json — for the learned (Training Dojo) abilities the card id happens to
+// equal the ability id, but that is a coincidence the data states rather than a rule
+// the code assumes.
+export const ABILITY_CARD: Record<AbilityId, CardId> = Object.freeze(
+  Object.fromEntries(Object.entries(ABILITY_JSON)
+    .map(([id, raw]) => [id, (raw as { card: CardId }).card])),
+) as Record<AbilityId, CardId>;
 
 // Which member (by id) owns each learned ability card — the Dojo offers a hero only
 // their own two. Signature ability cards are keyed off the member's `ability`, not here.
-export const LEARNED_CARDS_BY_MEMBER: Partial<Record<MemberId, AbilityId[]>> = {
-  ranger: ['twinShot', 'concVenom'],
-  tank: ['shieldWall', 'holdLine'],
-  mage: ['arcaneSurge', 'drainLife'],
-  warlock: ['doom', 'sacrifice'],
-  skald: ['finale', 'duet'],
-  berserker: ['bloodbath', 'whirlwind'],
-  beastWarden: ['sicEm', 'mendBeast'],
-  sentinel: ['standingOvation', 'bigTop'],
-  duelist: ['lunge', 'flurry'],
-  flagellant: ['strongest', 'deadlift'],
-};
+// Read from each hero's `learned` field in members.json.
+export const LEARNED_CARDS_BY_MEMBER: Partial<Record<MemberId, AbilityId[]>> = Object.freeze(
+  Object.fromEntries(Object.entries(MEMBER_JSON)
+    .map(([id, raw]) => [id, (raw as { learned?: AbilityId[] }).learned ?? []])),
+);
 
 // The set of per-member ability card ids — excluded from the shop pool
 // (they are inserted per-fight, never bought, upgraded, or removed from the run deck).

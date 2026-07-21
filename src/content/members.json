@@ -9,6 +9,7 @@
     "draftRating": 4,
     "conventionallyHealable": true,
     "conventionalStriker": true,
+    "learned": ["twinShot", "concVenom"],
     "passiveFlavor": {
       "name": "Toxicologist",
       "desc": "+2 auto damage while the enemy is poisoned."
@@ -30,6 +31,7 @@
     "draftRating": 2,
     "conventionallyHealable": true,
     "conventionalStriker": false,
+    "learned": ["shieldWall", "holdLine"],
     "passiveFlavor": {
       "name": "Grudge",
       "desc": "His next auto adds the damage he has soaked since his last strike, divided by 2."
@@ -66,6 +68,7 @@
     "draftRating": 5,
     "conventionallyHealable": true,
     "conventionalStriker": true,
+    "learned": ["arcaneSurge", "drainLife"],
     "passiveFlavor": {
       "name": "Arcane Battery",
       "desc": "Only the Mage banks Charge — +1 each turn (max 5); Lightning Bolt spends it for +3 damage per Charge."
@@ -86,6 +89,7 @@
     "draftRating": 4,
     "conventionallyHealable": false,
     "conventionalStriker": true,
+    "learned": ["doom", "sacrifice"],
     "passiveFlavor": {
       "name": "Dark Bargain",
       "desc": "Each time a party member dies, a living Warlock permanently gains +1 damage and +1 ability power for the rest of the fight."
@@ -114,6 +118,7 @@
     "draftRating": 3,
     "conventionallyHealable": true,
     "conventionalStriker": false,
+    "learned": ["finale", "duet"],
     "passiveFlavor": {
       "name": "Opening Act",
       "desc": "While fielded and alive, the Busker draws +1 card at the start of each turn."
@@ -139,6 +144,7 @@
     "draftRating": 2,
     "conventionallyHealable": false,
     "conventionalStriker": false,
+    "learned": ["bloodbath", "whirlwind"],
     "passiveFlavor": {
       "name": "Rage",
       "desc": "Hits harder the lower his HP: +2 damage in his first rage band, another +2 in the second (net +2/+4). The thresholds rise with the enemy's attack."
@@ -155,6 +161,7 @@
     "draftRating": 3,
     "conventionallyHealable": true,
     "conventionalStriker": false,
+    "learned": ["sicEm", "mendBeast"],
     "passiveFlavor": {
       "name": "Feral Bond",
       "desc": "Her first strike after her Boar falls tears for ×3 damage."
@@ -179,6 +186,7 @@
     "draftRating": 2,
     "conventionallyHealable": true,
     "conventionalStriker": false,
+    "learned": ["standingOvation", "bigTop"],
     "passiveFlavor": {
       "name": "Stunt Double",
       "desc": "She dives in front of any blow that would be lethal to a teammate, taking the hit — her own wards and HP — in their place."
@@ -195,6 +203,7 @@
     "draftRating": 3,
     "conventionallyHealable": true,
     "conventionalStriker": false,
+    "learned": ["lunge", "flurry"],
     "passiveFlavor": {
       "name": "Riposte Master",
       "desc": "She always counterattacks: every hit that strikes her (fully blocked hits included) is answered for her live auto damage — no card, no timer."
@@ -213,6 +222,7 @@
     "draftRating": 2,
     "conventionallyHealable": true,
     "conventionalStriker": false,
+    "learned": ["strongest", "deadlift"],
     "passiveFlavor": {
       "name": "Last Stand",
       "desc": "Once per fight, a killing blow — a hit or a Blood cost — leaves him at 1 HP instead of dropping him."

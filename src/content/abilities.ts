@@ -14,9 +14,16 @@ import { registerCheck } from './validate/driver';
 import { CONTENT_TUNING_KEYS } from './tuning';
 import { NATIVE_NAMES } from './natives';
 import { validateActions } from './validate/actions';
+import { suggest } from './validate/report';
 import type { ErrorCollector } from './validate/report';
+import { CARD_JSON_IDS } from './cards';
 
-export interface AbilityJson { id: string; actions: Action[] }
+export interface AbilityJson {
+  id: string;
+  /** The card a deployed member carrying this ability contributes to the deck (#44). */
+  card: string;
+  actions: Action[];
+}
 
 const RAW = rawAbilities as unknown as Record<string, AbilityJson>;
 
@@ -39,6 +46,17 @@ registerCheck({
       if (def.id !== id) {
         errs.add({ category: 'ref', file: 'abilities.json', path: id,
           message: `key ${JSON.stringify(id)} does not match its id field ${JSON.stringify(def.id)}` });
+      }
+      // The card the ability is bound to (#44). A deployed member contributes exactly
+      // this card, so an unknown one means the hero fights with a card that resolves to
+      // nothing — the dead-draw failure this check exists to prevent, one level up.
+      if (!def.card) {
+        errs.add({ category: 'ref', file: 'abilities.json', path: `${id}.card`,
+          message: 'card is required — the ability card a deployed member contributes' });
+      } else if (!CARD_JSON_IDS.includes(def.card)) {
+        errs.add({ category: 'ref', file: 'abilities.json', path: `${id}.card`,
+          message: `unknown card ${JSON.stringify(def.card)}`,
+          hint: suggest(def.card, CARD_JSON_IDS) });
       }
       const parsed = ActionListSchema.safeParse(def.actions ?? []);
       if (!parsed.success) {

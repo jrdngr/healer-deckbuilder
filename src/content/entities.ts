@@ -18,6 +18,8 @@ import type { HookBlock } from './hooks';
 import { validateActions } from './validate/actions';
 import { NATIVE_NAMES } from './natives';
 import type { Action } from './schema/dsl';
+import { suggest } from './validate/report';
+import { ABILITY_JSON_IDS } from './abilities';
 
 export interface RelicJson {
   id: string; name: string; rarity: string; icon: string; curse?: boolean; desc: string;
@@ -36,6 +38,8 @@ export interface MemberJson {
   draftRating: number;
   conventionallyHealable: boolean;
   conventionalStriker: boolean;
+  /** The two abilities the Training Dojo can teach this hero (#44 learned cards). */
+  learned?: string[];
   passiveFlavor?: { name: string; desc: string };
   /**
    * #103: the hero's passive as data. Compiled into the per-Game hook index tagged with
@@ -194,6 +198,15 @@ registerCheck({
         if (typeof m[flag] !== 'boolean') {
           errs.add({ category: 'ref', file: 'members.json', path: `${id}.${flag}`,
             message: `${flag} must be declared true or false` });
+        }
+      }
+      // The two abilities the Training Dojo can teach this hero. An unknown one is a
+      // Dojo offer that teaches nothing, so name it here rather than at the till.
+      for (const [i, ab] of (m.learned ?? []).entries()) {
+        if (!ABILITY_JSON_IDS.includes(ab)) {
+          errs.add({ category: 'ref', file: 'members.json', path: `${id}.learned[${i}]`,
+            message: `unknown ability ${JSON.stringify(ab)}`,
+            hint: suggest(ab, ABILITY_JSON_IDS) });
         }
       }
       // A passive gets the same treatment a relic's hooks get — same shape, same checks.

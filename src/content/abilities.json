@@ -1,6 +1,7 @@
 {
   "poison": {
     "id": "poison",
+    "card": "imbuePoison",
     "actions": [
       {
         "op": "let",
@@ -57,6 +58,7 @@
   },
   "taunt": {
     "id": "taunt",
+    "card": "bolster",
     "actions": [
       {
         "op": "native",
@@ -66,6 +68,7 @@
   },
   "bolt": {
     "id": "bolt",
+    "card": "unleash",
     "actions": [
       {
         "op": "let",
@@ -161,6 +164,7 @@
   },
   "hex": {
     "id": "hex",
+    "card": "hex",
     "actions": [
       {
         "op": "native",
@@ -170,6 +174,7 @@
   },
   "crescendo": {
     "id": "crescendo",
+    "card": "conduct",
     "actions": [
       {
         "op": "draw",
@@ -194,6 +199,7 @@
   },
   "rampage": {
     "id": "rampage",
+    "card": "incite",
     "actions": [
       {
         "op": "let",
@@ -258,6 +264,7 @@
   },
   "callBoar": {
     "id": "callBoar",
+    "card": "beckon",
     "actions": [
       {
         "op": "status",
@@ -300,6 +307,7 @@
   },
   "stun": {
     "id": "stun",
+    "card": "stagger",
     "actions": [
       {
         "op": "if",
@@ -342,6 +350,7 @@
   },
   "enGarde": {
     "id": "enGarde",
+    "card": "enGarde",
     "actions": [
       {
         "op": "status",
@@ -397,6 +406,7 @@
   },
   "penance": {
     "id": "penance",
+    "card": "penance",
     "actions": [
       {
         "op": "let",
@@ -473,6 +483,7 @@
   },
   "twinShot": {
     "id": "twinShot",
+    "card": "twinShot",
     "actions": [
       {
         "op": "strike",
@@ -489,6 +500,7 @@
   },
   "concVenom": {
     "id": "concVenom",
+    "card": "concVenom",
     "actions": [
       {
         "op": "if",
@@ -533,6 +545,7 @@
   },
   "shieldWall": {
     "id": "shieldWall",
+    "card": "shieldWall",
     "actions": [
       {
         "op": "forEach",
@@ -569,6 +582,7 @@
   },
   "holdLine": {
     "id": "holdLine",
+    "card": "holdLine",
     "actions": [
       {
         "op": "status",
@@ -608,6 +622,7 @@
   },
   "arcaneSurge": {
     "id": "arcaneSurge",
+    "card": "arcaneSurge",
     "actions": [
       {
         "op": "addStat",
@@ -629,6 +644,7 @@
   },
   "drainLife": {
     "id": "drainLife",
+    "card": "drainLife",
     "actions": [
       {
         "op": "let",
@@ -719,6 +735,7 @@
   },
   "doom": {
     "id": "doom",
+    "card": "doom",
     "actions": [
       {
         "op": "enemyStatus",
@@ -737,6 +754,7 @@
   },
   "sacrifice": {
     "id": "sacrifice",
+    "card": "sacrifice",
     "actions": [
       {
         "op": "bloodPay",
@@ -777,6 +795,7 @@
   },
   "finale": {
     "id": "finale",
+    "card": "finale",
     "actions": [
       {
         "op": "strike",
@@ -797,6 +816,7 @@
   },
   "duet": {
     "id": "duet",
+    "card": "duet",
     "actions": [
       {
         "op": "strike",
@@ -810,6 +830,7 @@
   },
   "bloodbath": {
     "id": "bloodbath",
+    "card": "bloodbath",
     "actions": [
       {
         "op": "strike",
@@ -837,6 +858,7 @@
   },
   "whirlwind": {
     "id": "whirlwind",
+    "card": "whirlwind",
     "actions": [
       {
         "op": "strike",
@@ -866,6 +888,7 @@
   },
   "sicEm": {
     "id": "sicEm",
+    "card": "sicEm",
     "actions": [
       {
         "op": "strike",
@@ -893,6 +916,7 @@
   },
   "mendBeast": {
     "id": "mendBeast",
+    "card": "mendBeast",
     "actions": [
       {
         "op": "addStat",
@@ -930,6 +954,7 @@
   },
   "standingOvation": {
     "id": "standingOvation",
+    "card": "standingOvation",
     "actions": [
       {
         "op": "forEach",
@@ -952,6 +977,7 @@
   },
   "bigTop": {
     "id": "bigTop",
+    "card": "bigTop",
     "actions": [
       {
         "op": "partyBuff",
@@ -970,6 +996,7 @@
   },
   "lunge": {
     "id": "lunge",
+    "card": "lunge",
     "actions": [
       {
         "op": "strike",
@@ -1007,6 +1034,7 @@
   },
   "flurry": {
     "id": "flurry",
+    "card": "flurry",
     "actions": [
       {
         "op": "let",
@@ -1045,6 +1073,7 @@
   },
   "strongest": {
     "id": "strongest",
+    "card": "strongest",
     "actions": [
       {
         "op": "drain",
@@ -1074,6 +1103,7 @@
   },
   "deadlift": {
     "id": "deadlift",
+    "card": "deadlift",
     "actions": [
       {
         "op": "status",
