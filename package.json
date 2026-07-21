@@ -13,6 +13,7 @@
     "validate": "tsx scripts/validate.ts",
     "schema": "tsx scripts/gen-content-schema.ts",
     "sim": "tsx sim/run-sim.ts",
+    "sim:repin": "tsx scripts/sim-repin.ts",
     "coverage": "tsx sim/exercise.ts",
     "trace": "tsx sim/trace.ts",
     "typecheck": "tsc --noEmit"
