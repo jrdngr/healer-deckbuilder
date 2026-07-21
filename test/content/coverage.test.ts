@@ -12,8 +12,9 @@
 //     creating exactly the import cycle this migration has spent its whole length
 //     avoiding. A test can import both sides freely.
 import { CARDS, RELIC_IDS, MEMBER_POOL, CARD_RARITY, CARD_TYPE, DRAFT_FALLBACK_PAIRS, draftOfferViable } from '../../src/constants';
-import { CARD_JSON, CARD_JSON_IDS, RELIC_JSON_IDS, MEMBER_JSON_IDS, ABILITY_JSON_IDS, CARD_FAMILY, CARD_FAMILIES } from '../../src/content';
+import { CARD_JSON, CARD_JSON_IDS, RELIC_JSON_IDS, MEMBER_JSON_IDS, ABILITY_JSON_IDS, CARD_FAMILY, CARD_FAMILIES, MEMBER_JSON } from '../../src/content';
 import { MEMBER_STRIKE } from '../../src/animations';
+import { HERO_ART_IDS } from '../../src/characterArt';
 import { check, eq, finish } from '../harness';
 
 const cardIds = Object.keys(CARDS).sort();
@@ -38,10 +39,27 @@ const cardIds = Object.keys(CARDS).sort();
 {
   const memberIds = Object.keys(MEMBER_POOL).sort();
   eq('members.json is the hero table', MEMBER_JSON_IDS.join(','), memberIds.join(','));
-  const missing = memberIds.filter((id) => MEMBER_STRIKE[id] === undefined);
-  eq('every hero has a strike animation', missing.join(','), '');
-  // The read sites carry a fallback so a gap degrades rather than crashing, but the
-  // gap itself is still a bug — this is what makes it loud.
+
+  // Presentation is the one place a JSON-authored hero still needs TypeScript: a strike
+  // animation in animations.ts and signature art in characterArt.ts. Both read sites
+  // carry a fallback, so a gap degrades rather than crashing — which is exactly why it
+  // needs to be loud here.
+  //
+  // But "loud" must not mean "blocked": requiring finished art before a hero can be
+  // played would put the whole roster back behind a TypeScript edit, which is the thing
+  // being fixed. So a hero may instead DECLARE `artPlaceholder: true` (plus a `color` to
+  // generate a blob from). That keeps the honest distinction the passiveNative check
+  // makes: intentionally-not-done is fine, accidentally-not-done is not — and either way
+  // it is written down.
+  const placeholder = (id: string) => MEMBER_JSON[id]?.artPlaceholder === true;
+  const noStrike = memberIds.filter((id) => MEMBER_STRIKE[id] === undefined && !placeholder(id));
+  eq('every hero has a strike animation (or declares artPlaceholder)', noStrike.join(','), '');
+  const noArt = memberIds.filter((id) => !HERO_ART_IDS.includes(id) && !placeholder(id));
+  eq('every hero has signature art (or declares artPlaceholder)', noArt.join(','), '');
+  // A declared placeholder still has to be renderable, or it is a promise of art that
+  // produces nothing at all.
+  const unrenderable = memberIds.filter((id) => placeholder(id) && !MEMBER_JSON[id]?.color);
+  eq('every artPlaceholder hero declares a color to generate from', unrenderable.join(','), '');
 }
 {
   eq('relics.json is the relic table', RELIC_JSON_IDS.join(','), [...RELIC_IDS].sort().join(','));

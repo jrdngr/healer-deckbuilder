@@ -8,6 +8,19 @@
 // (MemberId / EnemyDef.id) exactly — including `spammer` ("Brute") and the plain
 // `enemy` / `boss` fallback defs.
 
+// Raw JSON imports: a .json module has no imports of its own, so reading the roster's
+// declared placeholder colours here cannot close a module-init cycle.
+import memberJson from './content/members.json';
+import enemyJson from './content/enemies.json';
+
+const MEMBER_COLORS: Record<string, string | undefined> = Object.fromEntries(
+  Object.entries(memberJson as Record<string, { color?: string }>).map(([id, m]) => [id, m.color]),
+);
+const ENEMY_COLORS: Record<string, string | undefined> = Object.fromEntries(
+  Object.entries((enemyJson as { defs?: Record<string, { color?: string }> }).defs ?? {})
+    .map(([id, e]) => [id, e.color]),
+);
+
 const INK = '#3a2d28';
 const CREAM = '#fffdf6';
 
@@ -286,24 +299,54 @@ export interface CharacterArt {
   isEnemy: boolean;
 }
 
+/**
+ * Placeholder art from a declared `color`.
+ *
+ * `s2()` needs only `{id, c}` to build a complete blob — body, brows, eyes, mouth. The
+ * S2F signature-feature layers are a lookup that simply comes back empty for an unknown
+ * id. So a hero or enemy that declares a colour in its JSON gets real, correctly-shaped,
+ * on-model art immediately; what it lacks is only its signature features.
+ *
+ * That is what makes a new hero authorable without touching TypeScript: ship them with a
+ * colour, play them, and draw their features later. The declaration is required rather
+ * than inferred (see artPlaceholder in members.json) so a hero waiting on art is listed
+ * somewhere, not silently wearing the generic blob.
+ */
+function placeholder(id: string, color: string, isEnemy: boolean): CharacterArt {
+  return { layers: s2({ id, c: color, boss: false }, isEnemy), isEnemy };
+}
+
 // Resolve the art for a roster id. `isEnemy` disambiguates when known (member card
-// vs enemy panel); it also picks the correct table for the fallback. An unknown id
-// resolves to the plain `enemy` art so a future roster addition never crashes.
-export function resolveArt(id: string, isEnemy?: boolean): CharacterArt {
+// vs enemy panel); it also picks the correct table for the fallback. Signature art wins;
+// a declared placeholder colour is next; an unknown id resolves to the plain `enemy` art
+// so a future roster addition never crashes.
+export function resolveArt(id: string, isEnemy?: boolean, colorOverride?: string): CharacterArt {
+  // Default the colour from the content itself, so every call site gets placeholder art
+  // for free rather than each having to remember to pass it. The JSON is imported RAW
+  // (a .json module has no imports of its own), which keeps this file free of the
+  // module-init cycles that reaching through src/content would risk.
+  const color = colorOverride
+    ?? (MEMBER_COLORS as Record<string, string | undefined>)[id]
+    ?? (ENEMY_COLORS as Record<string, string | undefined>)[id];
   if (isEnemy === true) {
-    const e = ENEMY_BY_ID.get(id) ?? ENEMY_BY_ID.get('enemy')!;
-    return { layers: s2(e, true), isEnemy: true };
+    const e = ENEMY_BY_ID.get(id);
+    if (e) return { layers: s2(e, true), isEnemy: true };
+    if (color) return placeholder(id, color, true);
+    return { layers: s2(ENEMY_BY_ID.get('enemy')!, true), isEnemy: true };
   }
   if (isEnemy === false) {
     const e = HERO_BY_ID.get(id);
     if (e) return { layers: s2(e, false), isEnemy: false };
-    // A member id with no hero art: fall back to the plain enemy blob rather than crash.
+    if (color) return placeholder(id, color, false);
+    // A member id with no hero art and no colour: the plain enemy blob rather than crash.
     return { layers: s2(ENEMY_BY_ID.get('enemy')!, true), isEnemy: true };
   }
   const hero = HERO_BY_ID.get(id);
   if (hero) return { layers: s2(hero, false), isEnemy: false };
-  const enemy = ENEMY_BY_ID.get(id) ?? ENEMY_BY_ID.get('enemy')!;
-  return { layers: s2(enemy, true), isEnemy: true };
+  const enemy = ENEMY_BY_ID.get(id);
+  if (enemy) return { layers: s2(enemy, true), isEnemy: true };
+  if (color) return placeholder(id, color, false);
+  return { layers: s2(ENEMY_BY_ID.get('enemy')!, true), isEnemy: true };
 }
 
 // All ids that ship signature art — used by the coverage test.

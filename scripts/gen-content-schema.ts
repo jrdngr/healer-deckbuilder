@@ -210,6 +210,8 @@ const members = idMap('members.json — the hero roster', {
     },
     hooks: HOOKS_REF,
     passiveNative: { type: 'string', description: 'Declares a passive that is DELIBERATELY still engine code.' },
+    artPlaceholder: { type: 'boolean', description: 'Declares this hero ships without signature art or a strike animation yet. Requires color.' },
+    color: { type: 'string', description: 'Body colour for generated placeholder art, e.g. \"#9ed486\".' },
   },
 });
 

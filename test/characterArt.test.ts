@@ -3,6 +3,7 @@
 // all 15 enemy defs, incl. spammer=Basher and the plain enemy/boss fallbacks), so
 // a future roster addition that lacks art trips this test.
 import { resolveArt, HERO_ART_IDS, ENEMY_ART_IDS } from '../src/characterArt';
+import { MEMBER_JSON } from '../src/content';
 import {
   MEMBER_POOL,
   NORMAL_ENEMY_DEFS, DEFAULT_ENEMY_DEF, BOSS_ENEMY_DEF,
@@ -20,9 +21,17 @@ const enemyDefs = [
 // Every layer list always carries at least the ground shadow + body (2 base layers).
 const MIN_LAYERS = 3;
 
+// A hero may ship before its signature art, provided it SAYS so and gives a colour to
+// generate a blob from (see the artPlaceholder note in test/content/coverage.test.ts).
+// Such a hero must still render as a proper hero — the placeholder is missing features,
+// not missing art — so everything below applies to it unchanged; only the
+// "has a signature art entry" assertion is waived.
+const artColor = (id: string) => MEMBER_JSON[id]?.color;
+const isPlaceholder = (id: string) => MEMBER_JSON[id]?.artPlaceholder === true;
+
 // --- Heroes: every member id resolves to hero art -----------------------------
 for (const id of memberIds) {
-  const art = resolveArt(id, false);
+  const art = resolveArt(id, false, artColor(id));
   check(`hero '${id}' resolves to non-empty art`, art.layers.length >= MIN_LAYERS, String(art.layers.length));
   check(`hero '${id}' is marked isEnemy:false`, art.isEnemy === false);
   // Hero body uses the softer (friendlier) blob radius.
@@ -30,8 +39,9 @@ for (const id of memberIds) {
     art.layers.some((l) => l.includes('42% 42% 36% 36%')));
 }
 check('all 10 heroes have signature art ids', HERO_ART_IDS.length === 10, String(HERO_ART_IDS.length));
-check('every member id has matching hero art', memberIds.every((id) => HERO_ART_IDS.includes(id)),
-  memberIds.filter((id) => !HERO_ART_IDS.includes(id)).join(', '));
+const awaitingArt = memberIds.filter((id) => !HERO_ART_IDS.includes(id) && !isPlaceholder(id));
+check('every member id has matching hero art (or declares artPlaceholder)',
+  awaitingArt.length === 0, awaitingArt.join(', '));
 
 // --- Enemies: every enemy def resolves to enemy art ---------------------------
 for (const def of enemyDefs) {

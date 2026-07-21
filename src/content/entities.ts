@@ -40,6 +40,15 @@ export interface MemberJson {
   conventionalStriker: boolean;
   /** The two abilities the Training Dojo can teach this hero (#44 learned cards). */
   learned?: string[];
+  /**
+   * Declares that this hero is shipping WITHOUT signature art or a strike animation, so
+   * the coverage check passes them deliberately rather than by omission. Requires
+   * `color`, which resolveArt uses to generate a real (if featureless) blob. Same spirit
+   * as passiveNative: intentionally-not-done is fine, silently-not-done is not.
+   */
+  artPlaceholder?: boolean;
+  /** Body colour for generated placeholder art, e.g. "#9ed486". */
+  color?: string;
   passiveFlavor?: { name: string; desc: string };
   /**
    * #103: the hero's passive as data. Compiled into the per-Game hook index tagged with
