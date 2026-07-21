@@ -12,7 +12,7 @@
 //     creating exactly the import cycle this migration has spent its whole length
 //     avoiding. A test can import both sides freely.
 import { CARDS, RELIC_IDS, MEMBER_POOL, CARD_RARITY, CARD_TYPE } from '../../src/constants';
-import { CARD_JSON, CARD_JSON_IDS, RELIC_JSON_IDS, MEMBER_JSON_IDS, ABILITY_JSON_IDS } from '../../src/content';
+import { CARD_JSON, CARD_JSON_IDS, RELIC_JSON_IDS, MEMBER_JSON_IDS, ABILITY_JSON_IDS, CARD_FAMILY, CARD_FAMILIES } from '../../src/content';
 import { MEMBER_STRIKE } from '../../src/animations';
 import { check, eq, finish } from '../harness';
 
@@ -26,6 +26,12 @@ const cardIds = Object.keys(CARDS).sort();
   eq('every card declares a rarity', missing((id) => CARD_RARITY[id]).join(','), '');
   eq('every card declares a family', missing((id) => CARD_JSON[id].family).join(','), '');
   eq('every card declares a buy value', missing((id) => CARD_JSON[id].buyValue).join(','), '');
+  // Card.tsx renders `family-${CARD_FAMILY[id]}`, matched by four .card.family-* rules
+  // in styles.css. This used to be a second hand-maintained table in the component, so
+  // a card missing from it rendered `family-undefined` — untinted, and silent. The map
+  // is derived from the JSON now; this pins that every card lands on a real CSS rule.
+  const badFamily = cardIds.filter((id) => !(CARD_FAMILIES as readonly string[]).includes(CARD_FAMILY[id]));
+  eq('every card tints to a known family', badFamily.join(','), '');
 }
 
 // --- presentation coverage (this file is the only place it can live) -------

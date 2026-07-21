@@ -54,7 +54,8 @@ export {
 export type { RunHookName } from './hooks';
 export { evalStaticAmount, isStaticAmount, STATIC_AMOUNT_KEYS } from './interpreter/run';
 export type { HookIndex, HookBlock, ValueHook, ValueHookName, EventHookName, CompiledValueHook, CompiledEventHook } from './hooks';
-export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS } from './cards';
+export { CARD_ACTIONS, CARD_DESCS, CARD_JSON, CARD_JSON_IDS, CARD_FAMILY, CARD_FAMILIES } from './cards';
+export type { CardFamily } from './cards';
 export { ABILITY_ACTIONS, ABILITY_JSON_IDS } from './abilities';
 export { RELIC_JSON, MEMBER_JSON, ENEMY_JSON, RELIC_JSON_IDS, MEMBER_JSON_IDS, ENEMY_JSON_IDS } from './entities';
 export type { RelicJson, MemberJson } from './entities';

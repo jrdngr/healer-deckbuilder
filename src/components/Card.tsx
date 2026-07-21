@@ -1,51 +1,10 @@
 import { useRef } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import { MODIFIERS } from '../constants';
-import type { CardId, ResolvedCard } from '../constants';
+import { MODIFIERS, CARD_FAMILY } from '../constants';
+import type { ResolvedCard } from '../constants';
 import { Icon } from './Icon';
 import { Tooltip } from './Tooltip';
 import { KeywordText } from './KeywordText';
-
-// Visual family of each card, for the edge tint: heals green, protective wards
-// gold, mana economy blue, aggressive power plays red-purple. Presentation only.
-const CARD_FAMILY: Record<CardId, 'heal' | 'ward' | 'mana' | 'power'> = {
-  lowHeal: 'heal', highHeal: 'heal', aoeHeal: 'heal',
-  regen: 'heal', shield: 'ward', resurrect: 'heal', cleanse: 'heal',
-  bloom: 'heal', fontOfMana: 'mana', inspiration: 'mana',
-  lifebloom: 'heal', battleHymn: 'power', barrier: 'ward',
-  bloodTithe: 'mana', martyrsGift: 'heal',
-  phalanx: 'ward', provoke: 'ward',
-  // Iron mitigation web (#65): Feint steers the telegraph (ward).
-  feint: 'ward',
-  // Regen conversions (#66): Sporeburst spends Regen into enemy Poison (power).
-  sporeburst: 'power',
-  // Status-window management (#67): Hemorrhage cashes out into damage (power),
-  // Dread Whisper shaves the telegraph (ward).
-  hemorrhage: 'power', dreadWhisper: 'ward',
-  // Blood + cycling (#68): Crimson Pact is draw economy (mana), Scarlet Ward a shield
-  // (ward), Transfusion a redistribution heal (heal), Blood Banner offense (power).
-  crimsonPact: 'mana', scarletWard: 'ward', transfusion: 'heal', bloodBanner: 'power',
-  // Holy board-state payoffs (#69): the heals are green.
-  sunriseVigil: 'heal', consecration: 'heal',
-  // Arcane support (#70): Arcane Lens turns a single-target heal into a splash heal (heal).
-  arcaneLens: 'heal',
-  // Channeled cards (#64): Sap is aggressive, Mending Stream a heal.
-  sap: 'power', mendingStream: 'heal',
-  // Hero buff card batch (#62): defensive buffs gold, offensive buffs red-purple.
-  guard: 'ward', sharpen: 'power', doubleStrike: 'power',
-  empower: 'power', riposte: 'power',
-  // Per-member ability cards (#44): the healer enabling an aggressive move — power.
-  imbuePoison: 'power', bolster: 'ward', unleash: 'power', hex: 'power',
-  conduct: 'mana', incite: 'power', beckon: 'ward', stagger: 'ward',
-  enGarde: 'ward', // Duelist's Iron Provoke + counter-stance (#74)
-  penance: 'power', // Flagellant pays HP for a party-wide +auto (#75)
-  // Learned ability cards (Training Dojo): tint by what they do.
-  twinShot: 'power', concVenom: 'power', shieldWall: 'ward', holdLine: 'ward',
-  arcaneSurge: 'mana', drainLife: 'power', doom: 'power', sacrifice: 'power',
-  finale: 'power', duet: 'power', bloodbath: 'power', whirlwind: 'power',
-  sicEm: 'power', mendBeast: 'heal', standingOvation: 'power', bigTop: 'ward',
-  lunge: 'power', flurry: 'power', strongest: 'power', deadlift: 'ward',
-};
 
 interface CardProps {
   card: ResolvedCard;

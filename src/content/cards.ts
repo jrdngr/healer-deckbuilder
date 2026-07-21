@@ -15,6 +15,7 @@ import { registerCheck } from './validate/driver';
 import { CONTENT_TUNING as TUNING, CONTENT_TUNING_KEYS } from './tuning';
 import { NATIVE_NAMES } from './natives';
 import { validateActions } from './validate/actions';
+import { suggest } from './validate/report';
 import type { ErrorCollector } from './validate/report';
 
 export interface CardJson {
@@ -60,6 +61,25 @@ export const CARD_JSON: Record<string, CardJson> = Object.freeze(RAW);
 /** A card's type, straight off the JSON — used by the `cardType` hook condition. */
 export const CARD_TYPE_OF = (id: string): string | undefined => RAW[id]?.type;
 
+/**
+ * The visual families, as a closed set: heals green, protective wards gold, mana
+ * economy blue, aggressive power plays red-purple. Presentation only — but closed,
+ * because each one is a `.card.family-*` rule in styles.css and an unknown value
+ * would render an untinted card with no error.
+ */
+export const CARD_FAMILIES = ['heal', 'ward', 'mana', 'power'] as const;
+export type CardFamily = (typeof CARD_FAMILIES)[number];
+
+/**
+ * Every card's edge-tint family, read from cards.json. This used to be a second,
+ * hand-maintained table in Card.tsx keyed by card id — a card missing from it
+ * rendered `family-undefined` silently. The JSON is the one source now, and the
+ * check below refuses to start on an unknown value.
+ */
+export const CARD_FAMILY: Record<string, CardFamily> = Object.freeze(
+  Object.fromEntries(Object.entries(RAW).map(([id, def]) => [id, def.family as CardFamily])),
+);
+
 /** Card fields an action may reference via {"card": "…"}. */
 const CARD_AMOUNT_FIELDS = ['heal', 'regen', 'draw', 'refresh', 'refreshTurns', 'refreshCap', 'selfDamage', 'cost'];
 
@@ -74,6 +94,17 @@ registerCheck({
       if (def.id !== id) {
         errs.add({ category: 'ref', file: 'cards.json', path: id,
           message: `key ${JSON.stringify(id)} does not match its id field ${JSON.stringify(def.id)}` });
+      }
+
+      // The edge tint is a closed set of CSS rules. An unknown (or missing) family
+      // used to render an untinted card with no error at all; now it is a startup
+      // failure that names the nearest legal value.
+      if (!(CARD_FAMILIES as readonly string[]).includes(def.family as string)) {
+        errs.add({
+          category: 'ref', file: 'cards.json', path: `${id}.family`,
+          message: `unknown card family ${JSON.stringify(def.family ?? null)}`,
+          hint: suggest(String(def.family ?? ''), CARD_FAMILIES),
+        });
       }
 
       // Every desc placeholder must resolve. This is strictly stronger than the TS
