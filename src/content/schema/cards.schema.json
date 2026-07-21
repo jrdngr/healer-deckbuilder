@@ -150,6 +150,10 @@
       "noTaunt": {
         "type": "boolean"
       },
+      "noPotent": {
+        "type": "boolean",
+        "description": "Opts the card out of the Potent modifier."
+      },
       "needsBoar": {
         "type": "boolean"
       },

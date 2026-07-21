@@ -9,6 +9,8 @@ import eventsJson from './events.json';
 import upgradesJson from './upgrades.json';
 import modifiersJson from './modifiers.json';
 import { registerCheck } from './validate/driver';
+import { CARD_KNOWN_FIELDS } from './card-fields';
+import { suggest } from './validate/report';
 
 export interface EventChoiceJson { label: string; kind: string; detail?: string }
 export interface EventJson { id: string; title: string; text: string; choices: EventChoiceJson[] }
@@ -112,7 +114,48 @@ registerCheck({
       }
       if (!m.eligible) {
         errs.add({ category: 'ref', file: 'modifiers.json', path: `${id}.eligible`, message: 'eligibility rule is required' });
+      } else {
+        validateEligible(m.eligible, `${id}.eligible`, errs);
       }
     }
   },
 });
+
+/**
+ * Eligibility rules are checked in shape AND in the card fields they name, because
+ * evalEligible fails quiet in both directions:
+ *
+ *   - its final arm is a bare `return false`, so a rule whose shape it does not
+ *     recognise makes the modifier eligible for NOTHING — it simply stops appearing in
+ *     shops, with no error and nothing in the log to explain it;
+ *   - a rule naming a field that does not exist reads `undefined`, which is a perfectly
+ *     good answer to `anyFieldPresent` (no) or `fieldAbsent` (yes). So `"fieldAbsent":
+ *     "noPotnet"` does not fail — it silently answers yes for every card in the game.
+ *
+ * Both produce a modifier that looks configured and behaves wrongly, which is why the
+ * field names are pinned to the card field set rather than merely spell-checked.
+ */
+function validateEligible(
+  rule: EligibleRule, path: string,
+  errs: Parameters<NonNullable<Parameters<typeof registerCheck>[0]['run']>>[1],
+): void {
+  const field = (f: string, at: string) => {
+    if (!CARD_KNOWN_FIELDS.includes(f)) {
+      errs.add({ category: 'ref', file: 'modifiers.json', path: at,
+        message: `rule names ${JSON.stringify(f)}, which is not a card field — it would read undefined for every card`,
+        hint: suggest(f, CARD_KNOWN_FIELDS) });
+    }
+  };
+  if ('anyFieldPresent' in rule) {
+    rule.anyFieldPresent.forEach((f, i) => field(f, `${path}.anyFieldPresent[${i}]`));
+  } else if ('fieldAbsent' in rule) {
+    field(rule.fieldAbsent, `${path}.fieldAbsent`);
+  } else if ('fieldAbove' in rule) {
+    field(rule.fieldAbove.field, `${path}.fieldAbove.field`);
+  } else if ('allOf' in rule) {
+    rule.allOf.forEach((r, i) => validateEligible(r, `${path}.allOf[${i}]`, errs));
+  } else {
+    errs.add({ category: 'ref', file: 'modifiers.json', path,
+      message: `unrecognised eligibility rule — evalEligible would answer false for every card, so the modifier would never be offered. Expected one of: anyFieldPresent, fieldAbsent, fieldAbove, allOf.` });
+  }
+}

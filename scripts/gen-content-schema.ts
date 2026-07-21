@@ -143,6 +143,7 @@ const cards = idMap('cards.json — the card table', {
     exhaust: { type: 'boolean', description: 'Leaves play after one use.' },
     noDefense: { type: 'boolean' },
     noTaunt: { type: 'boolean' },
+    noPotent: { type: 'boolean', description: 'Opts the card out of the Potent modifier.' },
     needsBoar: { type: 'boolean' },
     needsRegen: { type: 'boolean' },
     needsPoison: { type: 'boolean' },

@@ -16,6 +16,7 @@ import { CONTENT_TUNING as TUNING, CONTENT_TUNING_KEYS } from './tuning';
 import { NATIVE_NAMES, CHANNEL_TICK_CARDS } from './natives';
 import { validateActions } from './validate/actions';
 import { suggest } from './validate/report';
+import { CARD_KNOWN_FIELDS } from './card-fields';
 import type { ErrorCollector } from './validate/report';
 
 export interface CardJson {
@@ -83,6 +84,7 @@ export const CARD_FAMILY: Record<string, CardFamily> = Object.freeze(
 /** Card fields an action may reference via {"card": "…"}. */
 const CARD_AMOUNT_FIELDS = ['heal', 'regen', 'draw', 'refresh', 'refreshTurns', 'refreshCap', 'selfDamage', 'cost'];
 
+
 // --- validation -------------------------------------------------------------
 
 registerCheck({
@@ -105,6 +107,17 @@ registerCheck({
           message: `unknown card family ${JSON.stringify(def.family ?? null)}`,
           hint: suggest(String(def.family ?? ''), CARD_FAMILIES),
         });
+      }
+
+      // An unrecognised field would be dropped by resolveCard and never reach the
+      // engine — see CARD_KNOWN_FIELDS. Catches typos ("healing") and genuinely new
+      // fields that have not been threaded through yet, which look identical from here.
+      for (const field of Object.keys(def)) {
+        if (!CARD_KNOWN_FIELDS.includes(field)) {
+          errs.add({ category: 'ref', file: 'cards.json', path: `${id}.${field}`,
+            message: `unknown card field ${JSON.stringify(field)} — it would be dropped by resolveCard and never reach the engine. If it is new, add it to CARD_KNOWN_FIELDS and thread it through resolveCard.`,
+            hint: suggest(field, CARD_KNOWN_FIELDS) });
+        }
       }
 
       // A channel whose per-tick behaviour has no engine arm counts down doing nothing.
