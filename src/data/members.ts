@@ -46,10 +46,11 @@ export const ROSTER_CAP = 3;
 // The pool the draft (#27 skeleton, #30 full) picks from — every hero in members.json.
 // Adding a hero to the JSON adds them to the draft; there is no second list to update.
 //
-// ORDER IS LOAD-BEARING: Run._rollMemberOffer does `shuffle([...pool], rng)`, so the
-// pool's order decides which heroes a given seed offers. It is members.json key order
-// now, which is why reordering that file is a balance change, not a tidy.
-export const DRAFT_POOL: MemberId[] = Object.keys(MEMBER_JSON);
+// SORTED, for the same reason CARD_POOL is: Run._rollMemberOffer does
+// `shuffle([...pool], rng)`, so the pool's ARRAY ORDER decides which heroes a given seed
+// offers. Sorting decouples that from members.json's key order, so the file can be
+// organised however reads best without silently changing every draft.
+export const DRAFT_POOL: MemberId[] = Object.keys(MEMBER_JSON).sort();
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.

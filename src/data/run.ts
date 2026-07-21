@@ -567,8 +567,14 @@ export const CARD_RARITY: Record<CardId, Rarity> = Object.freeze(
 // The cards a shop can sell. Quick Heal is dropped from the pool (flaw #6): as a
 // buffed 1-MP heal-2 it is a starter card, not a shop purchase. Per-member ability
 // cards (#44) are inserted per-fight, never bought — excluded here.
+// SORTED, deliberately. The pool feeds weightedPick with the run's seeded rng, so its
+// ARRAY ORDER decides which card a given roll lands on. Built from Object.keys(CARDS)
+// it was cards.json's key order — which made reordering that file a balance change
+// rather than a tidy, and silently: shops would simply start offering different cards.
+// Sorting decouples the two, so the JSON can be organised however reads best.
 export const CARD_POOL: CardId[] = (Object.keys(CARDS) as CardId[])
-  .filter((id) => id !== 'lowHeal' && !isAbilityCard(id));
+  .filter((id) => id !== 'lowHeal' && !isAbilityCard(id))
+  .sort();
 
 // Party member stat upgrades.
 export type PartyStat = 'maxHP' | 'damage' | 'ability';

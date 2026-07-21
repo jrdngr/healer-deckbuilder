@@ -448,7 +448,17 @@ import { check, eq, results } from './harness';
   //     vector drops, hardest late where the MP squeeze compounds: F0 180->172, F1 174->166,
   //     F2 151->141, F3 143->130, F4 139->124, F5 136->116, F6 135->111, F7 133->109, F8 125->97.
   //     Re-pinned on the new observed numbers; no other content was touched to compensate.
-  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([172, 166, 141, 130, 124, 116, 111, 109, 97]));
+  //   • CARD_POOL and DRAFT_POOL sorted (2026-07-21): NOT a balance change — a layout decoupling.
+  //     Both pools were built from Object.keys() and both feed seeded rng (weightedPick for the
+  //     shop, shuffle for member offers), so their ARRAY ORDER decided which card/hero each roll
+  //     landed on. That made reordering cards.json or members.json a silent balance change, which
+  //     is a bad trap to leave in a repo about to get a lot of hand content authoring. Sorting
+  //     fixes the order independently of the files, so they can now be organised however reads
+  //     best. The delta is pure rng-stream perturbation: F1 166->167, F2 141->135, F3 130->129,
+  //     F4 124->123, F5 116->117, F6 111->115, F7 109->111 (F0/F8 unchanged). At N=1000 the full
+  //     run moved 49.4% -> 47.0%, well inside its own ±3.1 CI. All band/CI/boss gates below still
+  //     hold. Re-pinned on the new observed numbers; no content was touched.
+  eq('N=200 per-fight wins', JSON.stringify(perFightWins), JSON.stringify([172, 167, 135, 129, 123, 117, 115, 111, 97]));
   // Full-run gate around the ~60% OPTIMAL ceiling the flawless STICK line now hits (#90 re-anchor).
   // CI-consistency, not a hard threshold, so subsample noise can't fail a healthy build while a
   // real drift (e.g. back up toward the old ~76% "too easy" baseline) still trips it.
