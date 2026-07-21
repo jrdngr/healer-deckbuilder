@@ -149,6 +149,71 @@ reporting **every** problem at once with file → JSON path → cause and a near
 suggestion. That covers the app, all test suites and every sim script, since they all
 reach `constants`.
 
+### The authoring loop
+
+Three loops, fastest first. Use the smallest one that answers your question:
+
+| command | ~time | answers |
+|---|---|---|
+| `npm run validate` | 0.4s | is my JSON well-formed and referentially sound? |
+| `npm run test:content` | 4s | did I break a content invariant? |
+| `npm test` | 12s | did I break anything at all? |
+
+`npm test` runs **every** suite and lists the failures together at the end — it does not
+stop at the first one, and new `test/**/*.test.ts` files are picked up automatically.
+
+Two more, for when the vocabulary is the question:
+
+- **`npm run content:ls [filter]`** — prints ops, selectors, amounts, conditions, status
+  tags, hooks, tuning constants (with their values) and every id set, read from the live
+  registries. `npm run content:ls poison` finds a term anywhere.
+- **`npm run schema`** — regenerates the editor JSON Schema. VS Code then autocompletes
+  `op`, `tune`, `tag` and the id fields inside the content files, and flags a misspelled
+  field as you type. Rerun it after changing `schema/dsl.ts`, a tuning constant, or an id
+  set; `test/content/schema-fresh.test.ts` fails if the committed schema falls behind.
+
+### Balance numbers live in four files
+
+They stay TypeScript because their comments carry sim-anchored rationale, but every
+constant is addressable from JSON as `{"tune": "NAME"}` (and `content:ls` lists them all
+with their current values):
+
+- `src/data/tuning.ts` — the bulk (~167 constants), grouped by the issue that added them.
+- `src/data/relics.ts` — per-relic magnitudes.
+- `src/data/enemies.ts` — enemy damage, HP, attack weights, per-boss constants.
+- `src/data/run.ts` — run-layer economy (prices, rewards, injury rules).
+
+### Adding content changes the sim baseline — that is expected
+
+`test/sim.test.ts` pins an exact 9-element wins vector, and new cards dilute the shop
+pool, so adding content moves it. That is the pin doing its job, not a failure.
+
+Run **`npm run sim:repin`** to re-measure and rewrite the vector; it prints the per-fight
+delta. Then write the comment above the pin explaining *why* it moved — the script
+deliberately leaves that to you, because whether a movement is an intended balance change
+or an unintended regression is the whole question.
+
+### What content still cannot do alone
+
+Everything below is a genuine multi-site TypeScript change, because each one *extends the
+vocabulary* rather than using it. The validator refuses to start rather than letting any
+of them fail quietly:
+
+- **A new op, status tag, condition or selector** — `schema/dsl.ts` plus an interpreter
+  arm (and, for a status, a `STATUS_WRITERS` entry and a `Member` field).
+- **A new event hook** — the `_hookEvent(...)` seam AND the name in `EVENT_HOOKS`;
+  `test/content/hook-sites.test.ts` fails a half-done one.
+- **A channeled card** — an arm in `Game._tickChannel` and its id in
+  `CHANNEL_TICK_CARDS`, else the channel ticks down doing nothing.
+- **A new card field** — `CARD_KNOWN_FIELDS` and a line in `resolveCard`, else the field
+  is silently dropped before the engine sees it.
+- **A new event choice kind** — `EventChoiceKind`, `IMPLEMENTED_CHOICE_KINDS`, a `Run`
+  method, and the `EventScreen.tsx` switch.
+
+A **new hero or enemy needs no TypeScript**: declare `artPlaceholder: true` and a `color`
+and they ship with generated (featureless) art until you draw their signature layers in
+`characterArt.ts` and a strike in `animations.ts`.
+
 ## Do not touch the design doc
 
 - `docs/healer-deckbuilder-spec.md` is a **historical artifact**. Do not reference it as a
