@@ -1,0 +1,4741 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "abilities.json — hero abilities",
+  "type": "object",
+  "propertyNames": {
+    "pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+  },
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "card",
+      "actions"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "card": {
+        "type": "string",
+        "enum": [
+          "aoeHeal",
+          "arcaneLens",
+          "arcaneSurge",
+          "barrier",
+          "battleHymn",
+          "beckon",
+          "bigTop",
+          "bloodBanner",
+          "bloodTithe",
+          "bloodbath",
+          "bloom",
+          "bolster",
+          "cleanse",
+          "concVenom",
+          "conduct",
+          "consecration",
+          "crimsonPact",
+          "deadlift",
+          "doom",
+          "doubleStrike",
+          "drainLife",
+          "dreadWhisper",
+          "duet",
+          "empower",
+          "enGarde",
+          "feint",
+          "finale",
+          "flurry",
+          "fontOfMana",
+          "guard",
+          "hemorrhage",
+          "hex",
+          "highHeal",
+          "holdLine",
+          "imbuePoison",
+          "incite",
+          "inspiration",
+          "lifebloom",
+          "lowHeal",
+          "lunge",
+          "martyrsGift",
+          "mendBeast",
+          "mendingStream",
+          "penance",
+          "phalanx",
+          "provoke",
+          "regen",
+          "resurrect",
+          "riposte",
+          "sacrifice",
+          "sap",
+          "scarletWard",
+          "sharpen",
+          "shield",
+          "shieldWall",
+          "sicEm",
+          "sporeburst",
+          "stagger",
+          "standingOvation",
+          "strongest",
+          "sunriseVigil",
+          "transfusion",
+          "twinShot",
+          "unleash",
+          "whirlwind"
+        ],
+        "description": "The card a deployed member carrying this ability contributes to the deck."
+      },
+      "actions": {
+        "$ref": "#/$defs/actions"
+      }
+    }
+  },
+  "$defs": {
+    "actions": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/act___schema0"
+      }
+    },
+    "hooks": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "when": {
+                "$ref": "#/$defs/hook___schema0"
+              },
+              "set": {
+                "$ref": "#/$defs/hook___schema1"
+              },
+              "mul": {
+                "$ref": "#/$defs/hook___schema1"
+              },
+              "add": {
+                "$ref": "#/$defs/hook___schema1"
+              },
+              "answer": {
+                "type": "boolean"
+              },
+              "consumes": {
+                "type": "string"
+              },
+              "consumesMember": {
+                "type": "string"
+              },
+              "clearsMember": {
+                "type": "string"
+              },
+              "onApply": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/hook___schema2"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/hook___schema2"
+            }
+          }
+        ]
+      }
+    },
+    "act___schema0": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "heal"
+            },
+            "to": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "direct": {
+              "type": "boolean"
+            },
+            "splash": {
+              "type": "boolean"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "to",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "damage"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "source": {
+              "type": "string"
+            },
+            "nuke": {
+              "type": "boolean"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "strike"
+            },
+            "from": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "times": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "from",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "bloodPay"
+            },
+            "from": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "from",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "drain"
+            },
+            "from": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "from",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "status"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "tag": {
+              "type": "string",
+              "enum": [
+                "taunt",
+                "defense",
+                "guard",
+                "shield",
+                "regen",
+                "riposte",
+                "poison",
+                "vulnerable",
+                "charge",
+                "stun",
+                "doom",
+                "strike",
+                "empower",
+                "drumPrimed",
+                "untargetable",
+                "bloomBurst",
+                "mark",
+                "heroPoison",
+                "boar",
+                "holdLine",
+                "feralPrimed"
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "turns": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "set",
+                "add",
+                "mul",
+                "keepStronger",
+                "keepLonger",
+                "keepStrongerIfActive"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "tag",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "clearStatus"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "taunt",
+                  "defense",
+                  "guard",
+                  "shield",
+                  "regen",
+                  "riposte",
+                  "poison",
+                  "vulnerable",
+                  "charge",
+                  "stun",
+                  "doom",
+                  "strike",
+                  "empower",
+                  "drumPrimed",
+                  "untargetable",
+                  "bloomBurst",
+                  "mark",
+                  "heroPoison",
+                  "boar",
+                  "holdLine",
+                  "feralPrimed"
+                ]
+              }
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "tags"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "consume"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "tag": {
+              "type": "string",
+              "const": "regen"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "deferEndHook": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "tag",
+            "bind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "enemyStatus"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "turns": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "set",
+                "add",
+                "mul",
+                "keepStronger",
+                "keepLonger",
+                "keepStrongerIfActive"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "tag",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "consumeEnemyStatus"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "tag",
+            "bind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "partyBuff"
+            },
+            "field": {
+              "type": "string"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "turns": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "set",
+                "add",
+                "mul",
+                "keepStronger",
+                "keepLonger",
+                "keepStrongerIfActive"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "field",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "draw"
+            },
+            "count": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "count"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "mp"
+            },
+            "delta": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "delta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "primeRefresh"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "turns": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "cap": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "op",
+            "amount",
+            "turns",
+            "cap"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "revive"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "hpFraction": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "hpFraction"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "purge"
+            },
+            "scope": {
+              "type": "string",
+              "const": "party"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "scope"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "telegraph"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "reduceDamage",
+                "retargetTo",
+                "stun"
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "to": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "floor": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "op",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "addStat"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "stat": {
+              "type": "string"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "cap": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "add",
+                "set"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "stat",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "queueDelayed"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "regenEnded"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "consumed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "consumed"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "healCardSplash"
+            },
+            "primary": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "amount": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "op",
+            "primary",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "let"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "letStr"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "letBool"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "when": {
+              "$ref": "#/$defs/act___schema2"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "when"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "collect"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "over": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "where": {
+              "$ref": "#/$defs/act___schema2"
+            },
+            "pick": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "over",
+            "pick"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "forEach"
+            },
+            "over": {
+              "$ref": "#/$defs/act___schema1"
+            },
+            "as": {
+              "type": "string"
+            },
+            "do": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema0"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "over",
+            "do"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "if"
+            },
+            "when": {
+              "$ref": "#/$defs/act___schema2"
+            },
+            "then": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema0"
+              }
+            },
+            "else": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema0"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "when",
+            "then"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "log"
+            },
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "text",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "emit"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "kind"
+          ],
+          "additionalProperties": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "native"
+            },
+            "fn": {
+              "type": "string",
+              "enum": [
+                "hexApply",
+                "tauntApply"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "fn"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "act___schema1": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "$target",
+            "$self",
+            "$targetOrSelf",
+            "$allLiving",
+            "$allLivingOther",
+            "$mostWoundedOther",
+            "$mostWounded",
+            "$lowestHp",
+            "$lowestHpFrac",
+            "$owner",
+            "$enemy"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sel": {
+              "type": "string",
+              "enum": [
+                "$target",
+                "$self",
+                "$targetOrSelf",
+                "$allLiving",
+                "$allLivingOther",
+                "$mostWoundedOther",
+                "$mostWounded",
+                "$lowestHp",
+                "$lowestHpFrac",
+                "$owner",
+                "$enemy"
+              ]
+            },
+            "where": {
+              "$ref": "#/$defs/act___schema2"
+            }
+          },
+          "required": [
+            "sel",
+            "where"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "act___schema2": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "hpFull": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "hpFull"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hpAtOrBelow": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "of": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "hpAtOrBelow",
+            "of"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hpBelowFrac": {
+              "type": "number"
+            },
+            "of": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "hpBelowFrac",
+            "of"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "alive": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "alive"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exists": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "exists"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hasStatus": {
+              "type": "string"
+            },
+            "on": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "hasStatus",
+            "on"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enemyHasStatus": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enemyHasStatus"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "telegraph": {
+              "type": "string",
+              "enum": [
+                "damaging",
+                "redirectable",
+                "interruptible"
+              ]
+            }
+          },
+          "required": [
+            "telegraph"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hasRelic": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "hasRelic"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "berserkerBandHot": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "berserkerBandHot"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "won": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "won"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "isSelf": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "isSelf"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "nonZero": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "nonZero"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "smallParty": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "smallParty"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bossFight": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "bossFight"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cardType": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "cardType"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cardsPlayedIs": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "cardsPlayedIs"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gte": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/act___schema3"
+                },
+                {
+                  "$ref": "#/$defs/act___schema3"
+                }
+              ]
+            }
+          },
+          "required": [
+            "gte"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channeling": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "channeling"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/act___schema2"
+            }
+          },
+          "required": [
+            "not"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema2"
+              }
+            }
+          },
+          "required": [
+            "all"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "any": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema2"
+              }
+            }
+          },
+          "required": [
+            "any"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "act___schema3": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tune": {
+              "type": "string",
+              "enum": [
+                "ABSOLUTION_HEAL",
+                "ACT_COUNT",
+                "ANVIL_STANCE_BONUS",
+                "ARCANE_SURGE_CHARGE",
+                "BARRIER_TURNS",
+                "BEACON_DRAW",
+                "BEGGARS_BOWL_GOLD",
+                "BEGGARS_BOWL_REWARD_SIZE",
+                "BENEDICTION_HEAL",
+                "BENEDICTION_PER_BUFF",
+                "BERSERKER_BAND1_HP",
+                "BERSERKER_BAND2_HP",
+                "BERSERKER_BAND_BONUS",
+                "BIG_TOP_DR",
+                "BIG_TOP_TURNS",
+                "BLOODBATH_PER_MISSING",
+                "BLOOD_ALTAR_DAMAGE",
+                "BLOOD_ALTAR_HP",
+                "BLOOD_ALTAR_MIN_HP",
+                "BLOOD_BANNER_BONUS",
+                "BLOOD_BANNER_HP",
+                "BLOOD_BANNER_TURNS",
+                "BLOOD_TITHE_MP",
+                "BLOOM_HEAL_PER_TURN",
+                "BOAR_HP",
+                "BOAR_STRIKE_BONUS",
+                "BOAR_TURNS",
+                "BOLT_BASE",
+                "BOLT_CHARGE_MULT",
+                "BRACE_AMOUNT",
+                "BRACE_TURNS",
+                "BRANCHES_PER_FORK",
+                "BULWARK_BRACE_TURNS",
+                "CARD_REMOVAL_PRICE",
+                "CARD_REWARD_SIZE",
+                "CASCADE_DISCOUNT_PER_ARCANE",
+                "CASCADE_DRAW",
+                "CASINO_SAFE_GOLD",
+                "CHANNEL_MP",
+                "CHARGE_MAX",
+                "CONC_VENOM_MULT",
+                "CONSECRATION_HEAL",
+                "CONSECRATION_STRIKE_BONUS",
+                "CONSECRATION_STRIKE_TURNS",
+                "CRACKED_HOURGLASS_ENRAGE",
+                "CRESCENDO_DRAW",
+                "CRIMSON_PACT_DRAW",
+                "CRIMSON_PACT_HP",
+                "CULTIVATE_STRENGTH",
+                "CURSED_CHEST_GOLD",
+                "CURSE_PRICE",
+                "CURSE_SHRINE_GOLD",
+                "DARK_BARGAIN_DMG",
+                "DARK_BARGAIN_POWER",
+                "DEADLIFT_TURNS",
+                "DEATH_AT",
+                "DEFAULT_MEMBER_SALARY",
+                "DEFENSE_AMOUNT",
+                "DEFENSE_TURNS",
+                "DOOM_BASE",
+                "DOOM_CAP",
+                "DOOM_DAMAGE",
+                "DOOM_DELAY",
+                "DOOM_PER_DEBUFF",
+                "DOOM_PER_VULN",
+                "DRAIN_DMG",
+                "DRAIN_LIFE_DMG",
+                "DRAIN_MAX_TURNS",
+                "DRAIN_MP_MAX",
+                "DRAIN_MP_MIN",
+                "DREAD_WHISPER_REDUCTION",
+                "DUPLICATE_PRICE",
+                "DUSK_CHIME_MIN",
+                "EMBERMARK_DMG",
+                "EMBOLDEN_BONUS",
+                "EMBOLDEN_TURNS",
+                "EMPOWER_BONUS",
+                "EMPTY_SEAT_GOLD_BONUS",
+                "ENRAGE_MULT",
+                "ENRAGE_TURN",
+                "EN_GARDE_TURNS",
+                "EVENT_CARD_OFFER_SIZE",
+                "FERAL_BOND_MULT",
+                "FERMENT_GROWTH",
+                "FERMENT_TURNS",
+                "FIELD_TRIAGE_BONUS",
+                "FIELD_TRIAGE_THRESHOLD",
+                "FIGHTS_PER_ACT",
+                "FIGHT_COUNT",
+                "FINALE_MULT",
+                "FLURRY_HITS",
+                "FLURRY_REDUCTION",
+                "FOCUS_HEAL",
+                "FOCUS_SMALL_BONUS",
+                "FOCUS_STONE_MP",
+                "FONT_MP_CAP",
+                "FORK_COUNT",
+                "GOLD_PER_FIGHT",
+                "GRAVE_CHILL_REDUCTION",
+                "GRIMOIRE_DMG",
+                "GRIM_HARVEST_DMG",
+                "GROUNDING_ROD_REDUCTION",
+                "GRUDGE_DIVISOR",
+                "GUARD_DR",
+                "GUARD_TURNS",
+                "HAGGLER_DISCOUNT_PCT",
+                "HAGGLER_PRICE_MULT",
+                "HAND_SIZE",
+                "HERO_HEAL_PCT",
+                "HERO_POISON_BASE",
+                "HERO_POISON_TURNS",
+                "HEX_TURNS",
+                "HEX_VULN_PER_POWER",
+                "HOLD_LINE_BANK_MULT",
+                "HOLD_LINE_DEFENSE",
+                "HOLD_LINE_TURNS",
+                "HOLY_RELIC_HEAL",
+                "HOURGLASS_POWER_BONUS",
+                "HYMN_BONUS",
+                "INCAPACITATE_AT",
+                "INFIRMARY_HP_PRICE",
+                "INFIRMARY_INJURY_PRICE",
+                "INTERLOCK_GUARD_DR",
+                "INTERLOCK_GUARD_TURNS",
+                "IRON_RELIC_DISCOUNT",
+                "LIFEBLOOM_BURST",
+                "LONE_WOLF_DMG",
+                "LUNGE_MULT",
+                "LUNGE_TAUNT_TURNS",
+                "MARK_TURNS",
+                "MAX_INJURIES",
+                "MAX_UPGRADE_SLOTS",
+                "MENDING_STREAM_HEAL",
+                "MENDING_STREAM_MAX_TURNS",
+                "MEND_BEAST_HEAL",
+                "MERCENARY_DAMAGE",
+                "MERCENARY_PRICE",
+                "MIN_SALARY",
+                "MOD_EFFICIENT_COST",
+                "MOD_LINGERING_TURNS",
+                "MOD_POTENT_STRENGTH",
+                "MP_MAX",
+                "MP_START",
+                "NIGHTFALL_BASE",
+                "NIGHTFALL_CAP",
+                "NIGHTFALL_PER_SHADOW",
+                "NODES_PER_BRANCH",
+                "OPEN_VEINS_DMG",
+                "OPEN_VEINS_HP",
+                "OSSUARY_REGEN",
+                "OSSUARY_THRESHOLD",
+                "PACT_PASSIVE_MP",
+                "PASSIVE_MP_CAP",
+                "PENANCE_HP",
+                "PENANCE_STRIKE_BONUS",
+                "PENANCE_STRIKE_TURNS",
+                "PHALANX_DEFENSE",
+                "PHALANX_TURNS",
+                "PILGRIM_FLASK_HEAL",
+                "POISON_BASE",
+                "POISON_TURNS",
+                "PRAYER_BEADS_MP",
+                "RADIANCE_HEAL",
+                "RALLY_DMG_PER_SEAT",
+                "RAMPAGE_SELF_DMG",
+                "REFRESH_CHANNEL_MAX_TURNS",
+                "REFRESH_CHANNEL_MP",
+                "REFRESH_MP_CAP",
+                "REFRESH_TURNS",
+                "RELIQUARY_REMOVALS_MAX",
+                "RELIQUARY_STOCK",
+                "RESERVE_UPKEEP_PER_TURN",
+                "ROOTBIND_BONUS_TURNS",
+                "RUSTY_CROWN_ATTACK",
+                "RUSTY_CROWN_GOLD",
+                "SACRIFICE_DMG",
+                "SACRIFICE_HP",
+                "SACRIFICE_POWER",
+                "SALARY_PER_INJURY",
+                "SALARY_PER_UPGRADE",
+                "SANGUINE_PACT_AUTO_BONUS",
+                "SANGUINE_PACT_SURCHARGE",
+                "SANGUINE_PACT_THRESHOLD",
+                "SAP_MAX_TURNS",
+                "SAP_VULN_CAP",
+                "SAP_VULN_PER_TICK",
+                "SAP_VULN_TURNS",
+                "SCARLET_WARD_HP",
+                "SHADOW_BOLT_DMG",
+                "SHADOW_RELIC_DMG",
+                "SHARPEN_BONUS",
+                "SHARPEN_TURNS",
+                "SHIELD_TURNS",
+                "SHIELD_WALL_DEFENSE",
+                "SHIELD_WALL_TURNS",
+                "SHOP_SALE_OFF",
+                "SIC_EM_MULT",
+                "SIPHON_AMOUNT",
+                "SIPHON_LIFE_DMG",
+                "SIPHON_LIFE_HEAL",
+                "SKALD_DMG_CAP",
+                "SKALD_DMG_PER_CARD",
+                "SKIP_REGEN",
+                "SMALL_PARTY_MAX",
+                "SPOILS_OFFER_SIZE",
+                "SPOREBURST_POISON",
+                "STARTER_DRAFT_OFFER_SIZE",
+                "STARTER_DRAFT_PICKS",
+                "STORMGLASS_MIN_HIT",
+                "STRONGEST_HP",
+                "SUNRISE_VIGIL_HEAL",
+                "SURGEON_THREAD_HEAL_PCT",
+                "TAPER_DISCOUNT",
+                "TAPER_MAX_COST",
+                "TAUNT_LITE_DEFENSE",
+                "TAUNT_LITE_TURNS",
+                "TAUNT_RETARGET_SURCHARGE",
+                "TAUNT_TURNS",
+                "THORNSKIN_REDUCTION",
+                "TITHE_CANDLE_FIGHT_CAP",
+                "TITHE_CANDLE_MP",
+                "TOXICOLOGIST_BONUS",
+                "TRANSFUSION_HEAL",
+                "TRANSFUSION_HP",
+                "TWIN_CENSER_SPLASH",
+                "TWIN_SHOT_HITS",
+                "UMBRAL_FEAST_PER_EFFECT",
+                "VANGUARD_BONUS",
+                "VENOM_GLAND_BONUS_TURNS",
+                "WARBAND_HP_PER_SEAT",
+                "WARD_MAX",
+                "WHETSTONE_BONUS",
+                "WHIRLWIND_HITS",
+                "WOUND_HEAL_FACTOR",
+                "WOUND_TURNS"
+              ]
+            }
+          },
+          "required": [
+            "tune"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "else": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "card"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stat": {
+              "type": "string"
+            },
+            "of": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "stat",
+            "of"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "auto": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "auto"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "abilityPower": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "abilityPower"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "missingHp": {
+              "$ref": "#/$defs/act___schema1"
+            }
+          },
+          "required": [
+            "missingHp"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "var": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "var"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enemyStat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enemyStat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gameStat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "gameStat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "emptySeats": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "emptySeats"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "telegraphStat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "telegraphStat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vulnerable": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "vulnerable"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bloodCost": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "bloodCost"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sanguineSurcharge": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "sanguineSurcharge"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "holyHealBonus": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "holyHealBonus"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sum": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema3"
+              }
+            }
+          },
+          "required": [
+            "sum"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mul": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema3"
+              }
+            }
+          },
+          "required": [
+            "mul"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "max": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema3"
+              }
+            }
+          },
+          "required": [
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/act___schema3"
+              }
+            }
+          },
+          "required": [
+            "min"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "div": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/act___schema3"
+                },
+                {
+                  "$ref": "#/$defs/act___schema3"
+                }
+              ]
+            }
+          },
+          "required": [
+            "div"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "if": {
+              "$ref": "#/$defs/act___schema2"
+            },
+            "then": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "else": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "if",
+            "then",
+            "else"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "floor": {
+              "$ref": "#/$defs/act___schema3"
+            }
+          },
+          "required": [
+            "floor"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "clampMin": {
+              "$ref": "#/$defs/act___schema3"
+            },
+            "atLeast": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "clampMin",
+            "atLeast"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "hook___schema0": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "hpFull": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "hpFull"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hpAtOrBelow": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "of": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "hpAtOrBelow",
+            "of"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hpBelowFrac": {
+              "type": "number"
+            },
+            "of": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "hpBelowFrac",
+            "of"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "alive": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "alive"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exists": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "exists"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hasStatus": {
+              "type": "string"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "hasStatus",
+            "on"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enemyHasStatus": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enemyHasStatus"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "telegraph": {
+              "type": "string",
+              "enum": [
+                "damaging",
+                "redirectable",
+                "interruptible"
+              ]
+            }
+          },
+          "required": [
+            "telegraph"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "hasRelic": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "hasRelic"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "berserkerBandHot": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "berserkerBandHot"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "won": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "won"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "isSelf": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "isSelf"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "nonZero": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "nonZero"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "smallParty": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "smallParty"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bossFight": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "bossFight"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cardType": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "cardType"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cardsPlayedIs": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "cardsPlayedIs"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gte": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/hook___schema1"
+                },
+                {
+                  "$ref": "#/$defs/hook___schema1"
+                }
+              ]
+            }
+          },
+          "required": [
+            "gte"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "channeling": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "channeling"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/hook___schema0"
+            }
+          },
+          "required": [
+            "not"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema0"
+              }
+            }
+          },
+          "required": [
+            "all"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "any": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema0"
+              }
+            }
+          },
+          "required": [
+            "any"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "hook___schema1": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tune": {
+              "type": "string",
+              "enum": [
+                "ABSOLUTION_HEAL",
+                "ACT_COUNT",
+                "ANVIL_STANCE_BONUS",
+                "ARCANE_SURGE_CHARGE",
+                "BARRIER_TURNS",
+                "BEACON_DRAW",
+                "BEGGARS_BOWL_GOLD",
+                "BEGGARS_BOWL_REWARD_SIZE",
+                "BENEDICTION_HEAL",
+                "BENEDICTION_PER_BUFF",
+                "BERSERKER_BAND1_HP",
+                "BERSERKER_BAND2_HP",
+                "BERSERKER_BAND_BONUS",
+                "BIG_TOP_DR",
+                "BIG_TOP_TURNS",
+                "BLOODBATH_PER_MISSING",
+                "BLOOD_ALTAR_DAMAGE",
+                "BLOOD_ALTAR_HP",
+                "BLOOD_ALTAR_MIN_HP",
+                "BLOOD_BANNER_BONUS",
+                "BLOOD_BANNER_HP",
+                "BLOOD_BANNER_TURNS",
+                "BLOOD_TITHE_MP",
+                "BLOOM_HEAL_PER_TURN",
+                "BOAR_HP",
+                "BOAR_STRIKE_BONUS",
+                "BOAR_TURNS",
+                "BOLT_BASE",
+                "BOLT_CHARGE_MULT",
+                "BRACE_AMOUNT",
+                "BRACE_TURNS",
+                "BRANCHES_PER_FORK",
+                "BULWARK_BRACE_TURNS",
+                "CARD_REMOVAL_PRICE",
+                "CARD_REWARD_SIZE",
+                "CASCADE_DISCOUNT_PER_ARCANE",
+                "CASCADE_DRAW",
+                "CASINO_SAFE_GOLD",
+                "CHANNEL_MP",
+                "CHARGE_MAX",
+                "CONC_VENOM_MULT",
+                "CONSECRATION_HEAL",
+                "CONSECRATION_STRIKE_BONUS",
+                "CONSECRATION_STRIKE_TURNS",
+                "CRACKED_HOURGLASS_ENRAGE",
+                "CRESCENDO_DRAW",
+                "CRIMSON_PACT_DRAW",
+                "CRIMSON_PACT_HP",
+                "CULTIVATE_STRENGTH",
+                "CURSED_CHEST_GOLD",
+                "CURSE_PRICE",
+                "CURSE_SHRINE_GOLD",
+                "DARK_BARGAIN_DMG",
+                "DARK_BARGAIN_POWER",
+                "DEADLIFT_TURNS",
+                "DEATH_AT",
+                "DEFAULT_MEMBER_SALARY",
+                "DEFENSE_AMOUNT",
+                "DEFENSE_TURNS",
+                "DOOM_BASE",
+                "DOOM_CAP",
+                "DOOM_DAMAGE",
+                "DOOM_DELAY",
+                "DOOM_PER_DEBUFF",
+                "DOOM_PER_VULN",
+                "DRAIN_DMG",
+                "DRAIN_LIFE_DMG",
+                "DRAIN_MAX_TURNS",
+                "DRAIN_MP_MAX",
+                "DRAIN_MP_MIN",
+                "DREAD_WHISPER_REDUCTION",
+                "DUPLICATE_PRICE",
+                "DUSK_CHIME_MIN",
+                "EMBERMARK_DMG",
+                "EMBOLDEN_BONUS",
+                "EMBOLDEN_TURNS",
+                "EMPOWER_BONUS",
+                "EMPTY_SEAT_GOLD_BONUS",
+                "ENRAGE_MULT",
+                "ENRAGE_TURN",
+                "EN_GARDE_TURNS",
+                "EVENT_CARD_OFFER_SIZE",
+                "FERAL_BOND_MULT",
+                "FERMENT_GROWTH",
+                "FERMENT_TURNS",
+                "FIELD_TRIAGE_BONUS",
+                "FIELD_TRIAGE_THRESHOLD",
+                "FIGHTS_PER_ACT",
+                "FIGHT_COUNT",
+                "FINALE_MULT",
+                "FLURRY_HITS",
+                "FLURRY_REDUCTION",
+                "FOCUS_HEAL",
+                "FOCUS_SMALL_BONUS",
+                "FOCUS_STONE_MP",
+                "FONT_MP_CAP",
+                "FORK_COUNT",
+                "GOLD_PER_FIGHT",
+                "GRAVE_CHILL_REDUCTION",
+                "GRIMOIRE_DMG",
+                "GRIM_HARVEST_DMG",
+                "GROUNDING_ROD_REDUCTION",
+                "GRUDGE_DIVISOR",
+                "GUARD_DR",
+                "GUARD_TURNS",
+                "HAGGLER_DISCOUNT_PCT",
+                "HAGGLER_PRICE_MULT",
+                "HAND_SIZE",
+                "HERO_HEAL_PCT",
+                "HERO_POISON_BASE",
+                "HERO_POISON_TURNS",
+                "HEX_TURNS",
+                "HEX_VULN_PER_POWER",
+                "HOLD_LINE_BANK_MULT",
+                "HOLD_LINE_DEFENSE",
+                "HOLD_LINE_TURNS",
+                "HOLY_RELIC_HEAL",
+                "HOURGLASS_POWER_BONUS",
+                "HYMN_BONUS",
+                "INCAPACITATE_AT",
+                "INFIRMARY_HP_PRICE",
+                "INFIRMARY_INJURY_PRICE",
+                "INTERLOCK_GUARD_DR",
+                "INTERLOCK_GUARD_TURNS",
+                "IRON_RELIC_DISCOUNT",
+                "LIFEBLOOM_BURST",
+                "LONE_WOLF_DMG",
+                "LUNGE_MULT",
+                "LUNGE_TAUNT_TURNS",
+                "MARK_TURNS",
+                "MAX_INJURIES",
+                "MAX_UPGRADE_SLOTS",
+                "MENDING_STREAM_HEAL",
+                "MENDING_STREAM_MAX_TURNS",
+                "MEND_BEAST_HEAL",
+                "MERCENARY_DAMAGE",
+                "MERCENARY_PRICE",
+                "MIN_SALARY",
+                "MOD_EFFICIENT_COST",
+                "MOD_LINGERING_TURNS",
+                "MOD_POTENT_STRENGTH",
+                "MP_MAX",
+                "MP_START",
+                "NIGHTFALL_BASE",
+                "NIGHTFALL_CAP",
+                "NIGHTFALL_PER_SHADOW",
+                "NODES_PER_BRANCH",
+                "OPEN_VEINS_DMG",
+                "OPEN_VEINS_HP",
+                "OSSUARY_REGEN",
+                "OSSUARY_THRESHOLD",
+                "PACT_PASSIVE_MP",
+                "PASSIVE_MP_CAP",
+                "PENANCE_HP",
+                "PENANCE_STRIKE_BONUS",
+                "PENANCE_STRIKE_TURNS",
+                "PHALANX_DEFENSE",
+                "PHALANX_TURNS",
+                "PILGRIM_FLASK_HEAL",
+                "POISON_BASE",
+                "POISON_TURNS",
+                "PRAYER_BEADS_MP",
+                "RADIANCE_HEAL",
+                "RALLY_DMG_PER_SEAT",
+                "RAMPAGE_SELF_DMG",
+                "REFRESH_CHANNEL_MAX_TURNS",
+                "REFRESH_CHANNEL_MP",
+                "REFRESH_MP_CAP",
+                "REFRESH_TURNS",
+                "RELIQUARY_REMOVALS_MAX",
+                "RELIQUARY_STOCK",
+                "RESERVE_UPKEEP_PER_TURN",
+                "ROOTBIND_BONUS_TURNS",
+                "RUSTY_CROWN_ATTACK",
+                "RUSTY_CROWN_GOLD",
+                "SACRIFICE_DMG",
+                "SACRIFICE_HP",
+                "SACRIFICE_POWER",
+                "SALARY_PER_INJURY",
+                "SALARY_PER_UPGRADE",
+                "SANGUINE_PACT_AUTO_BONUS",
+                "SANGUINE_PACT_SURCHARGE",
+                "SANGUINE_PACT_THRESHOLD",
+                "SAP_MAX_TURNS",
+                "SAP_VULN_CAP",
+                "SAP_VULN_PER_TICK",
+                "SAP_VULN_TURNS",
+                "SCARLET_WARD_HP",
+                "SHADOW_BOLT_DMG",
+                "SHADOW_RELIC_DMG",
+                "SHARPEN_BONUS",
+                "SHARPEN_TURNS",
+                "SHIELD_TURNS",
+                "SHIELD_WALL_DEFENSE",
+                "SHIELD_WALL_TURNS",
+                "SHOP_SALE_OFF",
+                "SIC_EM_MULT",
+                "SIPHON_AMOUNT",
+                "SIPHON_LIFE_DMG",
+                "SIPHON_LIFE_HEAL",
+                "SKALD_DMG_CAP",
+                "SKALD_DMG_PER_CARD",
+                "SKIP_REGEN",
+                "SMALL_PARTY_MAX",
+                "SPOILS_OFFER_SIZE",
+                "SPOREBURST_POISON",
+                "STARTER_DRAFT_OFFER_SIZE",
+                "STARTER_DRAFT_PICKS",
+                "STORMGLASS_MIN_HIT",
+                "STRONGEST_HP",
+                "SUNRISE_VIGIL_HEAL",
+                "SURGEON_THREAD_HEAL_PCT",
+                "TAPER_DISCOUNT",
+                "TAPER_MAX_COST",
+                "TAUNT_LITE_DEFENSE",
+                "TAUNT_LITE_TURNS",
+                "TAUNT_RETARGET_SURCHARGE",
+                "TAUNT_TURNS",
+                "THORNSKIN_REDUCTION",
+                "TITHE_CANDLE_FIGHT_CAP",
+                "TITHE_CANDLE_MP",
+                "TOXICOLOGIST_BONUS",
+                "TRANSFUSION_HEAL",
+                "TRANSFUSION_HP",
+                "TWIN_CENSER_SPLASH",
+                "TWIN_SHOT_HITS",
+                "UMBRAL_FEAST_PER_EFFECT",
+                "VANGUARD_BONUS",
+                "VENOM_GLAND_BONUS_TURNS",
+                "WARBAND_HP_PER_SEAT",
+                "WARD_MAX",
+                "WHETSTONE_BONUS",
+                "WHIRLWIND_HITS",
+                "WOUND_HEAL_FACTOR",
+                "WOUND_TURNS"
+              ]
+            }
+          },
+          "required": [
+            "tune"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "else": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "card"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stat": {
+              "type": "string"
+            },
+            "of": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "stat",
+            "of"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "auto": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "auto"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "abilityPower": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "abilityPower"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "missingHp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": [
+            "missingHp"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "var": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "var"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "enemyStat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enemyStat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gameStat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "gameStat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "emptySeats": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "emptySeats"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "telegraphStat": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "telegraphStat"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "vulnerable": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "vulnerable"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "bloodCost": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "bloodCost"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sanguineSurcharge": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "sanguineSurcharge"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "holyHealBonus": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "holyHealBonus"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sum": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema1"
+              }
+            }
+          },
+          "required": [
+            "sum"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mul": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema1"
+              }
+            }
+          },
+          "required": [
+            "mul"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "max": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema1"
+              }
+            }
+          },
+          "required": [
+            "max"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema1"
+              }
+            }
+          },
+          "required": [
+            "min"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "div": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/hook___schema1"
+                },
+                {
+                  "$ref": "#/$defs/hook___schema1"
+                }
+              ]
+            }
+          },
+          "required": [
+            "div"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "if": {
+              "$ref": "#/$defs/hook___schema0"
+            },
+            "then": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "else": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "if",
+            "then",
+            "else"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "floor": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "floor"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "clampMin": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "atLeast": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "clampMin",
+            "atLeast"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "hook___schema2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "heal"
+            },
+            "to": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "direct": {
+              "type": "boolean"
+            },
+            "splash": {
+              "type": "boolean"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "to",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "damage"
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "source": {
+              "type": "string"
+            },
+            "nuke": {
+              "type": "boolean"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "strike"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "times": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "from",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "bloodPay"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "from",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "drain"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "from",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "status"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "tag": {
+              "type": "string",
+              "enum": [
+                "taunt",
+                "defense",
+                "guard",
+                "shield",
+                "regen",
+                "riposte",
+                "poison",
+                "vulnerable",
+                "charge",
+                "stun",
+                "doom",
+                "strike",
+                "empower",
+                "drumPrimed",
+                "untargetable",
+                "bloomBurst",
+                "mark",
+                "heroPoison",
+                "boar",
+                "holdLine",
+                "feralPrimed"
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "turns": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "set",
+                "add",
+                "mul",
+                "keepStronger",
+                "keepLonger",
+                "keepStrongerIfActive"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "tag",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "clearStatus"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "taunt",
+                  "defense",
+                  "guard",
+                  "shield",
+                  "regen",
+                  "riposte",
+                  "poison",
+                  "vulnerable",
+                  "charge",
+                  "stun",
+                  "doom",
+                  "strike",
+                  "empower",
+                  "drumPrimed",
+                  "untargetable",
+                  "bloomBurst",
+                  "mark",
+                  "heroPoison",
+                  "boar",
+                  "holdLine",
+                  "feralPrimed"
+                ]
+              }
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "tags"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "consume"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "tag": {
+              "type": "string",
+              "const": "regen"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "deferEndHook": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "tag",
+            "bind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "enemyStatus"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "turns": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "set",
+                "add",
+                "mul",
+                "keepStronger",
+                "keepLonger",
+                "keepStrongerIfActive"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "tag",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "consumeEnemyStatus"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "tag",
+            "bind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "partyBuff"
+            },
+            "field": {
+              "type": "string"
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "turns": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "set",
+                "add",
+                "mul",
+                "keepStronger",
+                "keepLonger",
+                "keepStrongerIfActive"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "field",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "draw"
+            },
+            "count": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "count"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "mp"
+            },
+            "delta": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "delta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "primeRefresh"
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "turns": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "cap": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "op",
+            "amount",
+            "turns",
+            "cap"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "revive"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "hpFraction": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "hpFraction"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "purge"
+            },
+            "scope": {
+              "type": "string",
+              "const": "party"
+            },
+            "bind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "scope"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "telegraph"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "reduceDamage",
+                "retargetTo",
+                "stun"
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "to": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "floor": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "op",
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "addStat"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "stat": {
+              "type": "string"
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "cap": {
+              "$ref": "#/$defs/hook___schema1"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "add",
+                "set"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "stat",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "queueDelayed"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "regenEnded"
+            },
+            "on": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "consumed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "op",
+            "on",
+            "consumed"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "healCardSplash"
+            },
+            "primary": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "amount": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "op",
+            "primary",
+            "amount"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "let"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/hook___schema1"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "letStr"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "letBool"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "when": {
+              "$ref": "#/$defs/hook___schema0"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "when"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "collect"
+            },
+            "bind": {
+              "type": "string"
+            },
+            "over": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "where": {
+              "$ref": "#/$defs/hook___schema0"
+            },
+            "pick": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "bind",
+            "over",
+            "pick"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "forEach"
+            },
+            "over": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "$target",
+                    "$self",
+                    "$targetOrSelf",
+                    "$allLiving",
+                    "$allLivingOther",
+                    "$mostWoundedOther",
+                    "$mostWounded",
+                    "$lowestHp",
+                    "$lowestHpFrac",
+                    "$owner",
+                    "$enemy"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "sel": {
+                      "type": "string",
+                      "enum": [
+                        "$target",
+                        "$self",
+                        "$targetOrSelf",
+                        "$allLiving",
+                        "$allLivingOther",
+                        "$mostWoundedOther",
+                        "$mostWounded",
+                        "$lowestHp",
+                        "$lowestHpFrac",
+                        "$owner",
+                        "$enemy"
+                      ]
+                    },
+                    "where": {
+                      "$ref": "#/$defs/hook___schema0"
+                    }
+                  },
+                  "required": [
+                    "sel",
+                    "where"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "as": {
+              "type": "string"
+            },
+            "do": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema2"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "over",
+            "do"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "if"
+            },
+            "when": {
+              "$ref": "#/$defs/hook___schema0"
+            },
+            "then": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema2"
+              }
+            },
+            "else": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/hook___schema2"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "when",
+            "then"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "log"
+            },
+            "text": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "text",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "emit"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "kind"
+          ],
+          "additionalProperties": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "native"
+            },
+            "fn": {
+              "type": "string",
+              "enum": [
+                "hexApply",
+                "tauntApply"
+              ]
+            }
+          },
+          "required": [
+            "op",
+            "fn"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

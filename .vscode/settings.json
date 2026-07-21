@@ -1,0 +1,30 @@
+{
+  "// content schemas": [
+    "Maps each content file to its generated JSON Schema, giving autocomplete and",
+    "inline errors while authoring. Regenerate with `npm run schema` after changing",
+    "schema/dsl.ts, the tuning constants, or the entity id sets — test/content/",
+    "schema-fresh.test.ts fails if the committed schemas fall behind.",
+    "",
+    "The mapping lives here rather than as a `$schema` key inside each file because the",
+    "content files are flat id-keyed maps: a `$schema` key would parse as a card (or",
+    "relic, or hero) named `$schema` and fail the key-matches-id check."
+  ],
+  "json.schemas": [
+    {
+      "fileMatch": ["/src/content/cards.json"],
+      "url": "./src/content/schema/cards.schema.json"
+    },
+    {
+      "fileMatch": ["/src/content/abilities.json"],
+      "url": "./src/content/schema/abilities.schema.json"
+    },
+    {
+      "fileMatch": ["/src/content/relics.json"],
+      "url": "./src/content/schema/relics.schema.json"
+    },
+    {
+      "fileMatch": ["/src/content/members.json"],
+      "url": "./src/content/schema/members.schema.json"
+    }
+  ]
+}
