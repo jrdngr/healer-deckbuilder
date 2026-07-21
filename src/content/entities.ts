@@ -26,6 +26,16 @@ export interface RelicJson {
 }
 export interface MemberJson {
   id: string; name: string; slot: number; maxHP: number; damage: number; ability: string;
+  /**
+   * Draft data, read by src/data/members.ts. `draftRating` is the conservative damage
+   * rating the draft's viability check sums — NOT in-fight damage, which is `damage`
+   * above. The two flags decide whether a hero counts toward the healable floor and
+   * whether they are a self-sufficient striker. All three are required; the validator
+   * refuses a hero that omits any of them.
+   */
+  draftRating: number;
+  conventionallyHealable: boolean;
+  conventionalStriker: boolean;
   passiveFlavor?: { name: string; desc: string };
   /**
    * #103: the hero's passive as data. Compiled into the per-Game hook index tagged with
@@ -170,6 +180,21 @@ registerCheck({
       // A hero whose signature ability has no action list would silently do nothing.
       if (!m.ability) {
         errs.add({ category: 'ref', file: 'members.json', path: `${id}.ability`, message: 'ability is required' });
+      }
+      // Draft data. `draftRating` feeds partyMeetsDraftConstraints as a summand, so a
+      // missing one is not an absent hero — it is `undefined` in an addition, i.e. a NaN
+      // total that fails every viability check silently. The two flags default-read as
+      // false, which would quietly make a hero unhealable and non-striking. Require all
+      // three explicitly rather than letting a new hero inherit a wrong answer.
+      if (typeof m.draftRating !== 'number' || m.draftRating < 0) {
+        errs.add({ category: 'ref', file: 'members.json', path: `${id}.draftRating`,
+          message: 'draftRating must be a non-negative number (the draft viability rating)' });
+      }
+      for (const flag of ['conventionallyHealable', 'conventionalStriker'] as const) {
+        if (typeof m[flag] !== 'boolean') {
+          errs.add({ category: 'ref', file: 'members.json', path: `${id}.${flag}`,
+            message: `${flag} must be declared true or false` });
+        }
       }
       // A passive gets the same treatment a relic's hooks get — same shape, same checks.
       if (m.hooks) validateHookBlock(m.hooks, 'members.json', id, errs);

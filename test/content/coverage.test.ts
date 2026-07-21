@@ -11,7 +11,7 @@
 //     animator or the sim policy, so those tables cannot be checked at startup without
 //     creating exactly the import cycle this migration has spent its whole length
 //     avoiding. A test can import both sides freely.
-import { CARDS, RELIC_IDS, MEMBER_POOL, CARD_RARITY, CARD_TYPE } from '../../src/constants';
+import { CARDS, RELIC_IDS, MEMBER_POOL, CARD_RARITY, CARD_TYPE, DRAFT_FALLBACK_PAIRS, draftOfferViable } from '../../src/constants';
 import { CARD_JSON, CARD_JSON_IDS, RELIC_JSON_IDS, MEMBER_JSON_IDS, ABILITY_JSON_IDS, CARD_FAMILY, CARD_FAMILIES } from '../../src/content';
 import { MEMBER_STRIKE } from '../../src/animations';
 import { check, eq, finish } from '../harness';
@@ -45,6 +45,20 @@ const cardIds = Object.keys(CARDS).sort();
 }
 {
   eq('relics.json is the relic table', RELIC_JSON_IDS.join(','), [...RELIC_IDS].sort().join(','));
+}
+
+// --- draft data integrity ---------------------------------------------------
+// The per-hero draft data (draftRating / conventionallyHealable / conventionalStriker)
+// lives in members.json and is validated at startup. What startup CANNOT see is whether
+// the hand-written fallback offer still holds up against it: DRAFT_FALLBACK_PAIRS is the
+// guarantee that rollDraft always returns something viable, and cutting or re-rating a
+// hero could quietly reference a member who no longer exists, or leave the fallback
+// itself non-viable. Both would only surface as a wedged run.
+{
+  const known = new Set(Object.keys(MEMBER_POOL));
+  const unknown = DRAFT_FALLBACK_PAIRS.flat().filter((id) => !known.has(id));
+  eq('the draft fallback names only real heroes', unknown.join(','), '');
+  check('the draft fallback offer is itself viable', draftOfferViable(DRAFT_FALLBACK_PAIRS));
 }
 
 // --- referential integrity across content files ----------------------------

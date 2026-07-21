@@ -43,9 +43,13 @@ export const PARTY_SIZE = 3;
 // REPLACES a member (the dismissed hero returns to the recruit pool) rather than growing
 // it. Deploy already tops out at 3 slots, so this simply removes the reserve.
 export const ROSTER_CAP = 3;
-// The pool the draft (#27 skeleton, #30 full) picks from — grows as roster waves
-// land (#28 Berserker/Augur, #29 Beast Warden).
-export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'skald', 'berserker', 'beastWarden', 'sentinel', 'duelist', 'flagellant'];
+// The pool the draft (#27 skeleton, #30 full) picks from — every hero in members.json.
+// Adding a hero to the JSON adds them to the draft; there is no second list to update.
+//
+// ORDER IS LOAD-BEARING: Run._rollMemberOffer does `shuffle([...pool], rng)`, so the
+// pool's order decides which heroes a given seed offers. It is members.json key order
+// now, which is why reordering that file is a balance change, not a tidy.
+export const DRAFT_POOL: MemberId[] = Object.keys(MEMBER_JSON);
 
 // ---------------------------------------------------------------------------
 // Full draft (#30): three 1-of-2 picks from the pool of 8, then L/C/R assignment.
@@ -55,16 +59,19 @@ export const DRAFT_POOL: MemberId[] = ['ranger', 'tank', 'mage', 'warlock', 'ska
 
 // Conservative damage rating per member (the review's numbers), used only by the
 // draft generator's viability check — NOT the in-fight damage (that is on the pool).
-export const DRAFT_RATING: Record<MemberId, number> = {
-  ranger: 4, tank: 2, mage: 5, warlock: 4, berserker: 2, skald: 3, beastWarden: 3, sentinel: 2,
-  duelist: 3, flagellant: 2,
-};
+// Read from each hero's `draftRating` in members.json.
+export const DRAFT_RATING: Record<MemberId, number> = Object.freeze(
+  Object.fromEntries(Object.entries(MEMBER_JSON)
+    .map(([id, raw]) => [id, (raw as { draftRating: number }).draftRating])),
+) as Record<MemberId, number>;
 
-// Members healing works "conventionally" on. The Warlock burns himself regardless
-// and the Berserker wants to STAY low (healing him is friendly fire), so neither
-// counts toward the healable floor.
+// Members healing works "conventionally" on (`conventionallyHealable` in members.json).
+// The Warlock burns himself regardless and the Berserker wants to STAY low (healing him
+// is friendly fire), so neither counts toward the healable floor.
 export const CONVENTIONALLY_HEALABLE: Set<MemberId> = new Set<MemberId>(
-  ['ranger', 'tank', 'mage', 'skald', 'beastWarden', 'sentinel', 'duelist', 'flagellant'],
+  Object.entries(MEMBER_JSON)
+    .filter(([, raw]) => (raw as { conventionallyHealable?: boolean }).conventionallyHealable)
+    .map(([id]) => id),
 );
 
 export const DRAFT_PICKS = 3;             // number of 1-of-2 picks (one per slot)
@@ -75,7 +82,12 @@ export const DRAFT_MIN_HEALABLE = 2;      // a viable party needs >= 2 conventio
 // The members that deal reliable, self-sufficient damage (the #31 sweep showed a
 // comp with NO conventional striker floors out — the Skald/Warden/Berserker need
 // support the fixed policy can't always give). A viable draft needs at least one.
-export const CONVENTIONAL_STRIKERS: Set<MemberId> = new Set<MemberId>(['ranger', 'mage', 'warlock']);
+// `conventionalStriker` in members.json.
+export const CONVENTIONAL_STRIKERS: Set<MemberId> = new Set<MemberId>(
+  Object.entries(MEMBER_JSON)
+    .filter(([, raw]) => (raw as { conventionalStriker?: boolean }).conventionalStriker)
+    .map(([id]) => id),
+);
 
 // Roster acquisition (2026-07): the game no longer drafts a fixed trio up front.
 // The player collects members one at a time — a pick-one draft at run start and
@@ -126,6 +138,11 @@ export function rollDraft(shuffled: MemberId[]): MemberId[][] {
 // A known-viable offer used only if a roll somehow fails to (it cannot, with the
 // current pool — every 6-of-8 split contains a viable party — but the guarantee is
 // explicit): the classic trio each paired with a strong alternative.
+//
+// Stays in TypeScript deliberately, unlike the per-hero draft data that moved to
+// members.json: this is a PAIRING chosen to be viable together, not a fact about any
+// one hero, so there is no member entry it belongs on. Adding a hero does not require
+// touching it — the fallback only has to remain viable, which coverage.test.ts pins.
 export const DRAFT_FALLBACK_PAIRS: MemberId[][] = [
   ['ranger', 'warlock'], ['tank', 'berserker'], ['mage', 'skald'],
 ];
