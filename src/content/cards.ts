@@ -13,7 +13,7 @@ import type { Action } from './schema/dsl';
 import { renderTemplate } from './interpreter/template';
 import { registerCheck } from './validate/driver';
 import { CONTENT_TUNING as TUNING, CONTENT_TUNING_KEYS } from './tuning';
-import { NATIVE_NAMES } from './natives';
+import { NATIVE_NAMES, CHANNEL_TICK_CARDS } from './natives';
 import { validateActions } from './validate/actions';
 import { suggest } from './validate/report';
 import type { ErrorCollector } from './validate/report';
@@ -107,6 +107,13 @@ registerCheck({
         });
       }
 
+      // A channel whose per-tick behaviour has no engine arm counts down doing nothing.
+      // See CHANNEL_TICK_CARDS — this is the declared-exception check, not a ban.
+      if (def.channel && !CHANNEL_TICK_CARDS.includes(id)) {
+        errs.add({ category: 'coverage', file: 'cards.json', path: `${id}.channel`,
+          message: `declares a channel but has no arm in Game._tickChannel — it would occupy the channel slot and tick down doing nothing. Add the arm, then name it in CHANNEL_TICK_CARDS.` });
+      }
+
       // Every desc placeholder must resolve. This is strictly stronger than the TS
       // template literals it replaces: a renamed constant used to be a compile error,
       // but a WRONG one was invisible. Now both are caught.
@@ -134,6 +141,19 @@ registerCheck({
         natives: NATIVE_NAMES,
         declaredFields: CARD_AMOUNT_FIELDS.filter((f) => def[f] !== undefined),
       }, errs);
+    }
+
+    // The other direction: an engine arm for a card that no longer channels (or no
+    // longer exists) is dead code that reads as live support for a feature.
+    for (const id of CHANNEL_TICK_CARDS) {
+      if (!RAW[id]) {
+        errs.add({ category: 'coverage', file: 'cards.json', path: id,
+          message: `CHANNEL_TICK_CARDS names ${JSON.stringify(id)}, which is not a card`,
+          hint: suggest(id, CARD_JSON_IDS) });
+      } else if (!RAW[id].channel) {
+        errs.add({ category: 'coverage', file: 'cards.json', path: `${id}.channel`,
+          message: `CHANNEL_TICK_CARDS names ${JSON.stringify(id)}, but it declares no channel — the engine arm is dead` });
+      }
     }
   },
 });

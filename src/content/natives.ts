@@ -81,3 +81,21 @@ export const NATIVES: Record<string, NativeFn> = {
 };
 
 export const NATIVE_NAMES: readonly string[] = Object.freeze(Object.keys(NATIVES).sort());
+
+/**
+ * Cards whose PER-TICK channel behaviour is engine code — the `case` arms in
+ * `Game._tickChannel`. Declared here for the same reason the natives above are: so the
+ * gap is named rather than merely present.
+ *
+ * A channel's tick is not an action list. It runs on the enemy turn, outside a card
+ * play, with the channel's remembered target — so `_tickChannel` switches on the card
+ * id, and its `default` arm does nothing. That default is the trap this list closes:
+ * a JSON card with a `channel` block but no arm STARTS a channel, occupies the single
+ * channel slot, counts down, and emits its pulses, all while doing nothing at all. It
+ * looks like a working card.
+ *
+ * Enforced in both directions — cards.json's channel cards must equal this list — by
+ * the cards.json check, and kept honest against the actual switch by
+ * test/content/channel-sites.test.ts.
+ */
+export const CHANNEL_TICK_CARDS: readonly string[] = Object.freeze(['mendingStream', 'sap']);
