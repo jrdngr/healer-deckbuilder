@@ -541,10 +541,12 @@ button.danger:hover:not(:disabled) { color: #fff; }
    the hand's own width as `cqw` so the per-card overlap (below) is pure CSS. */
 .hand { flex: 1; display: flex; flex-wrap: nowrap; min-height: var(--card-h); padding-top: 16px; container-type: inline-size; }
 .card {
-  /* Fixed box (#92): every card is exactly 132×158 regardless of text length, so
-     the hand never renders ragged. Overflow is a backstop only — real card text is
-     kept short enough (in the card data) to fit without triggering the clip. */
-  width: var(--card-w); height: var(--card-h); overflow: hidden; background: var(--panel);
+  /* Fixed box (#92): every card is exactly --card-w × --card-h regardless of text
+     length, so the hand never renders ragged. The description clips as a backstop
+     (real card text is kept short enough to fit); the card itself does not, so the
+     cost bubble can overhang its corner. */
+  width: var(--card-w); height: var(--card-h); background: var(--panel);
+  display: flex; flex-direction: column;
   border: var(--bw-card) solid var(--ink); border-radius: var(--r-md);
   /* top padding reserves a strip for the family tick / heal pill so text starts below them */
   padding: 28px 10px 10px; cursor: pointer; transition: transform .14s ease; position: relative;
@@ -685,7 +687,8 @@ main.drag-board .enemy, main.drag-board .party {
 }
 .card .heal svg { color: #fff; }
 .card .cname { font-family: var(--f-disp); font-weight: 700; font-size: 15.5px; margin: 0 0 6px; text-align: center; }
-.card .cdesc { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.45; }
+.card .cdesc { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; line-height: 1.45;
+  flex: 1 1 auto; min-height: 0; overflow: hidden; }
 
 /* Status-effect keyword (#98): a distinct color + dotted underline signalling the
    hover-for-a-gloss tooltip. Inherits the surrounding font-size so it fits any label
