@@ -26,6 +26,8 @@ import { Topbar } from '../src/components/Topbar';
 import { MapScreen } from '../src/components/MapScreen';
 import { BranchScreen } from '../src/components/BranchScreen';
 import { EventScreen } from '../src/components/EventScreen';
+import { Tooltip } from '../src/components/Tooltip';
+import { LONG_PRESS_MS } from '../src/tooltip';
 import { makeDeckCard, resolveCard, partyFromMembers, MEMBER_PASSIVE_FLAVOR, MEMBER_POOL, ABILITY_CARD, CARDS, INCAPACITATE_AT, EVENTS, DRAFT_OFFER_SIZE, DRAFT_POOL } from '../src/constants';
 import type { MemberId } from '../src/constants';
 
@@ -571,6 +573,47 @@ async function openTooltipText(el: HTMLElement): Promise<string> {
   const overlay = rootEl.querySelector('.overlay') as HTMLElement;
   await act(async () => { overlay.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
   check('clicking the backdrop closes the deck view', rootEl.querySelector('.deck-view') === null);
+}
+
+// --- Touch: a long-press opens a tooltip and eats the tap that ends it ---------------
+// Phones have no hover, so holding a finger on a trigger is the only way to read a
+// keyword gloss or a hero passive. The tap that ends the hold must not also play the
+// card underneath, and an ordinary quick tap must still click through untouched.
+{
+  let clicks = 0;
+  await render(
+    <Tooltip content="Shield blocks the next hit">
+      <button className="lp-trigger" onClick={() => { clicks++; }}>Shield</button>
+    </Tooltip>,
+  );
+  const btn = rootEl.querySelector('.lp-trigger') as HTMLElement;
+  const touch = (type: string, target: EventTarget = btn) => new dom.window.PointerEvent(type, {
+    bubbles: true, pointerType: 'touch', pointerId: 7, clientX: 10, clientY: 10,
+  });
+  const tipText = () => document.body.querySelector('.tooltip-pop')?.textContent ?? null;
+  const wait = (ms: number) => act(async () => { await new Promise((r) => setTimeout(r, ms)); });
+
+  // A quick tap: no tooltip, and the click reaches the button.
+  await act(async () => { btn.dispatchEvent(touch('pointerdown')); btn.dispatchEvent(touch('pointerup')); });
+  await wait(LONG_PRESS_MS + 60);
+  await act(async () => { btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
+  check('a quick tap opens no tooltip', tipText() === null, String(tipText()));
+  check('a quick tap clicks through', clicks === 1, String(clicks));
+
+  // A held press opens the tooltip, and the click that ends it is swallowed.
+  await act(async () => { btn.dispatchEvent(touch('pointerdown')); });
+  await wait(LONG_PRESS_MS + 60);
+  check('a held press opens the tooltip', tipText() === 'Shield blocks the next hit', String(tipText()));
+  await act(async () => {
+    btn.dispatchEvent(touch('pointerup'));
+    btn.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+  });
+  check('the click ending a long-press is swallowed', clicks === 1, String(clicks));
+  check('the tooltip stays up after the finger lifts', tipText() !== null);
+
+  // The next touch anywhere closes it.
+  await act(async () => { document.body.dispatchEvent(touch('pointerdown', document.body)); });
+  check('the next touch closes a long-press tooltip', tipText() === null, String(tipText()));
 }
 
 await act(async () => { root.unmount(); });

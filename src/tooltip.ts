@@ -7,6 +7,20 @@
 // wants this snappier). Focus reveals immediately and does not use this.
 export const TOOLTIP_DELAY_MS = 250;
 
+// Touch has no hover, so a press held this long opens the tooltip instead. Short
+// enough to feel deliberate, long enough that an ordinary tap never trips it.
+export const LONG_PRESS_MS = 450;
+// A finger that drifts further than this (px) is scrolling or dragging, not holding.
+export const LONG_PRESS_SLOP = 10;
+// Mobile browsers replay a tap as mouseenter/mouseleave; hover events this soon (ms)
+// after a touch on the same trigger are that replay and are ignored.
+export const TOUCH_MOUSE_GHOST_MS = 800;
+
+// Has a held finger moved far enough from where it went down to stop being a press?
+export function longPressBroken(dx: number, dy: number, slop: number = LONG_PRESS_SLOP): boolean {
+  return Math.hypot(dx, dy) > slop;
+}
+
 // Gap between the trigger and the popover, and the minimum margin the popover keeps
 // from each viewport edge.
 export const TOOLTIP_GAP = 8;
