@@ -214,6 +214,22 @@ A **new hero or enemy needs no TypeScript**: declare `artPlaceholder: true` and 
 and they ship with generated (featureless) art until you draw their signature layers in
 `characterArt.ts` and a strike in `animations.ts`.
 
+## Playing on a phone — the Claude Artifact build
+
+The maintainer plays and tests the game on a phone, from a published Claude Artifact:
+**https://claude.ai/artifact/FBAFhXBvV8DPD8wtSje39J**
+
+- `npm run build:artifact` bundles the whole game into one self-contained page,
+  `dist-artifact/bandage-of-brothers.html` (gitignored). Artifacts allow no external
+  scripts or stylesheets except Google Fonts, so everything is inline.
+- After a change the maintainer should see, rebuild and republish to **that URL** with the
+  Artifact tool (pass it as `url`), so the phone link and its saved run stay the same.
+  Publishing without `url` creates a new artifact.
+- `styles.css` carries the phone layout under `@media (max-width: 640px)` and touch fixes
+  under `@media (hover: none)`. Touch has no hover, so tooltips open on a long-press
+  (`src/components/Tooltip.tsx`). Keep new UI usable by tap, and keep any new hover-only
+  information reachable by long-press.
+
 ## Do not touch the design doc
 
 - `docs/healer-deckbuilder-spec.md` is a **historical artifact**. Do not reference it as a
