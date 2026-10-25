@@ -20,6 +20,9 @@ npm run dev        # then open the printed URL (default http://localhost:5173)
 Production build: `npm run build` (type-checks, then bundles to `dist/`); preview it with
 `npm run preview`.
 
+Phone build: `npm run build:artifact` writes the whole game as one self-contained page,
+`dist-artifact/bandage-of-brothers.html`, for publishing as a Claude Artifact.
+
 ## How to play
 
 Turn order each round is **Enemy → Player → Party**:

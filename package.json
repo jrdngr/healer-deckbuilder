@@ -17,7 +17,8 @@
     "sim:repin": "tsx scripts/sim-repin.ts",
     "coverage": "tsx sim/exercise.ts",
     "trace": "tsx sim/trace.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:artifact": "tsx scripts/build-artifact.ts"
   },
   "dependencies": {
     "react": "^19.0.0",
